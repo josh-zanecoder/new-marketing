@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Campaign, SendStatus } from '~/types/campaign'
+import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
 const store = useCampaignStore()
@@ -9,6 +10,8 @@ const searchQuery = ref('')
 const statusFilter = ref<string>('all')
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
+const currentPage = ref(1)
+const PAGE_SIZE = 10
 
 const deleteModalMessage = computed(() =>
   campaignToDelete.value
@@ -36,6 +39,29 @@ const filteredCampaigns = computed(() => {
   return list
 })
 
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredCampaigns.value.length / PAGE_SIZE)))
+
+const paginatedCampaigns = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return filteredCampaigns.value.slice(start, start + PAGE_SIZE)
+})
+
+const paginationMeta = computed(() => {
+  const total = filteredCampaigns.value.length
+  if (!total) return { from: 0, to: 0, total: 0 }
+  const from = (currentPage.value - 1) * PAGE_SIZE + 1
+  const to = Math.min(currentPage.value * PAGE_SIZE, total)
+  return { from, to, total }
+})
+
+watch([searchQuery, statusFilter], () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, (pages) => {
+  if (currentPage.value > pages) currentPage.value = pages
+})
+
 function recipientCount(c: Campaign): string | number {
   if (c.recipientsType === 'manual') return c.recipients?.length ?? 0
   return c.recipientsListId ? 'List' : '–'
@@ -43,11 +69,18 @@ function recipientCount(c: Campaign): string | number {
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
+const sendSuccessSummary = ref<{
+  campaignName: string
+  sent: number
+  failed: number
+  campaignStatus: string
+} | null>(null)
+
 async function handleSend(c: Campaign) {
   if (c.status !== 'Draft') return
   if (!c.recipients?.length && c.recipientsType === 'manual') return
-  const ok = await store.sendCampaign(c)
-  if (ok) startPolling(c.id)
+  const { poll } = await store.sendCampaign(c)
+  if (poll) startPolling(c.id)
 }
 
 function startPolling(campaignId: string) {
@@ -59,9 +92,19 @@ function startPolling(campaignId: string) {
       })
       store.setSendStatus(res)
       if (res.done) {
+        const name = campaigns.value.find((c) => c.id === campaignId)?.name || 'campaign'
         store.setSendingCampaignId(null)
+        store.setSendStatus(null)
         if (pollTimer) clearInterval(pollTimer)
+        pollTimer = null
         await store.fetchCampaigns()
+        await nextTick()
+        sendSuccessSummary.value = {
+          campaignName: name,
+          sent: res.sent,
+          failed: res.failed,
+          campaignStatus: res.campaignStatus
+        }
       }
     } catch {
       store.clearSendModal()
@@ -102,6 +145,23 @@ function closeSendModal() {
     pollTimer = null
   }
 }
+
+function closeSendSuccessModal() {
+  sendSuccessSummary.value = null
+}
+
+const sendProgress = computed(() => {
+  const s = sendStatus.value
+  if (!s) return null
+  const processed = s.sent + s.failed
+  const pct = s.total > 0 ? (processed / s.total) * 100 : 0
+  return {
+    ...s,
+    processed,
+    pct,
+    remaining: s.pending
+  }
+})
 </script>
 
 <template>
@@ -119,6 +179,20 @@ function closeSendModal() {
           Create campaign
         </NuxtLink>
       </header>
+
+      <div
+        v-if="sendError && !sendingCampaignId"
+        class="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      >
+        <span class="flex-1">{{ sendError }}</span>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"
+          @click="store.clearSendModal()"
+        >
+          Dismiss
+        </button>
+      </div>
 
       <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div class="relative flex-1">
@@ -168,7 +242,7 @@ function closeSendModal() {
 
       <div v-else class="space-y-3">
         <div
-          v-for="c in filteredCampaigns"
+          v-for="c in paginatedCampaigns"
           :key="c.id"
           class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-300 sm:flex-row sm:items-center sm:gap-6"
         >
@@ -249,6 +323,30 @@ function closeSendModal() {
             </button>
           </div>
         </div>
+        <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Showing {{ paginationMeta.from }}-{{ paginationMeta.to }} of {{ paginationMeta.total }}
+          </span>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="currentPage === 1"
+              @click="currentPage -= 1"
+            >
+              Previous
+            </button>
+            <span class="text-slate-500">Page {{ currentPage }} of {{ totalPages }}</span>
+            <button
+              type="button"
+              class="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="currentPage === totalPages"
+              @click="currentPage += 1"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -273,65 +371,21 @@ function closeSendModal() {
       @cancel="campaignToDuplicate = null"
     />
 
-    <!-- Send progress modal -->
-    <Teleport to="body">
-      <div
-        v-if="sendingCampaignId"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
-        @click.self="closeSendModal"
-      >
-        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200/60">
-          <div class="flex items-center justify-between mb-5">
-            <h3 class="text-lg font-semibold text-slate-900">
-              Sending {{ campaigns.find(x => x.id === sendingCampaignId)?.name || 'campaign' }}
-            </h3>
-            <button
-              type="button"
-              class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-              @click="closeSendModal"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div v-if="sendError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {{ sendError }}
-          </div>
-          <div v-else-if="sendStatus" class="space-y-5">
-            <div class="flex gap-6 text-sm">
-              <span class="flex items-center gap-1.5 text-amber-600 font-medium">
-                <span class="h-2 w-2 rounded-full bg-amber-500" /> Pending: {{ sendStatus.pending }}
-              </span>
-              <span class="flex items-center gap-1.5 text-emerald-600 font-medium">
-                <span class="h-2 w-2 rounded-full bg-emerald-500" /> Sent: {{ sendStatus.sent }}
-              </span>
-              <span class="flex items-center gap-1.5 text-red-600 font-medium">
-                <span class="h-2 w-2 rounded-full bg-red-500" /> Failed: {{ sendStatus.failed }}
-              </span>
-            </div>
-            <div class="h-2.5 overflow-hidden rounded-full bg-slate-200">
-              <div
-                class="h-full rounded-full bg-slate-700 transition-all duration-500 ease-out"
-                :style="{ width: sendStatus.total ? `${((sendStatus.sent + sendStatus.failed) / sendStatus.total) * 100}%` : '0%' }"
-              />
-            </div>
-            <p v-if="sendStatus.done" class="text-sm font-medium text-slate-700">
-              Complete. Campaign status: {{ sendStatus.campaignStatus }}
-            </p>
-            <p v-else class="text-sm text-slate-500">
-              Sending {{ sendStatus.pending }} remaining...
-            </p>
-          </div>
-          <div v-else class="flex items-center gap-3 text-sm text-slate-500">
-            <svg class="h-5 w-5 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Starting...
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ClientSendProgressModal
+      :open="!!sendingCampaignId"
+      :campaign-name="campaigns.find((x) => x.id === sendingCampaignId)?.name || 'campaign'"
+      :send-error="sendError"
+      :send-progress="sendProgress"
+      @close="closeSendModal"
+    />
+
+    <ClientSendSuccessModal
+      :open="!!sendSuccessSummary"
+      :campaign-name="sendSuccessSummary?.campaignName ?? ''"
+      :sent="sendSuccessSummary?.sent ?? 0"
+      :failed="sendSuccessSummary?.failed ?? 0"
+      :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
+      @close="closeSendSuccessModal"
+    />
   </div>
 </template>

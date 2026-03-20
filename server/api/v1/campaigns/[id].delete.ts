@@ -1,8 +1,16 @@
-import type { Model } from 'mongoose'
+import type { Model, Types } from 'mongoose'
 import { Campaign } from '../../../models/Campaign'
 import { CampaignRecipient } from '../../../models/CampaignRecipient'
 import { ManualRecipient } from '../../../models/ManualRecipients'
 import { getRegistryConnection } from '../../../utils/db'
+
+interface CampaignDoc {
+  _id: Types.ObjectId
+}
+
+interface RecipientDoc {
+  campaign: Types.ObjectId
+}
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -10,14 +18,14 @@ export default defineEventHandler(async (event) => {
 
   await getRegistryConnection()
 
-  const campaign = await (Campaign as Model<any>).findById(id)
+  const campaign = await (Campaign as Model<CampaignDoc>).findById(id)
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   await Promise.all([
-    (CampaignRecipient as Model<any>).deleteMany({ campaign: id }),
-    (ManualRecipient as Model<any>).deleteMany({ campaign: id })
+    (CampaignRecipient as Model<RecipientDoc>).deleteMany({ campaign: id }),
+    (ManualRecipient as Model<RecipientDoc>).deleteMany({ campaign: id })
   ])
-  await (Campaign as Model<any>).findByIdAndDelete(id)
+  await (Campaign as Model<CampaignDoc>).findByIdAndDelete(id)
 
   return { ok: true }
 })

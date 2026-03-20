@@ -1,7 +1,14 @@
-import type { Model } from 'mongoose'
 import { Campaign } from '../../../models/Campaign'
 import { EmailTemplate } from '../../../models/EmailTemplate'
 import { ManualRecipient } from '../../../models/ManualRecipients'
+import type { CampaignLean, CampaignModel } from '../../../types/campaign.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/emailTemplate.model'
+import type {
+  ManualRecipientInsert,
+  ManualRecipientInsertManyCast,
+  ManualRecipientLean,
+  ManualRecipientModel
+} from '../../../types/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -11,12 +18,14 @@ export default defineEventHandler(async (event) => {
 
   await getRegistryConnection()
 
-  const source = await (Campaign as Model<any>).findById(campaignId).lean() as any
+  const source = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   let emailTemplateId: string | undefined
   if (source.emailTemplate) {
-    const template = await (EmailTemplate as Model<any>).findById(source.emailTemplate).lean() as any
+    const template = await (EmailTemplate as EmailTemplateModel)
+      .findById(source.emailTemplate)
+      .lean<EmailTemplateDoc | null>()
     if (template) {
       const newTemplate = await new EmailTemplate({
         name: `${source.name} (copy) - Template`,
@@ -27,7 +36,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const newCampaign = await new (Campaign as Model<any>)({
+  const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
     sender: source.sender,
     recipientsType: source.recipientsType,
@@ -39,11 +48,24 @@ export default defineEventHandler(async (event) => {
   }).save()
 
   if (source.recipientsType === 'manual') {
-    const manualRecipients = await (ManualRecipient as Model<any>).find({ campaign: source._id }).lean() as any[]
-    const emails = [...new Set(manualRecipients.map((r) => r.email?.trim?.().toLowerCase()).filter((e): e is string => !!e && e.includes('@')))]
+    const manualRecipients = await (ManualRecipient as ManualRecipientModel)
+      .find({ campaign: source._id })
+      .lean<ManualRecipientLean[]>()
+    const emails = [
+      ...new Set(
+        manualRecipients
+          .map((r) => r.email?.trim?.().toLowerCase())
+          .filter((e): e is string => !!e && e.includes('@'))
+      )
+    ]
     if (emails.length) {
-      await (ManualRecipient as Model<any>).insertMany(
-        emails.map((email) => ({ campaign: newCampaign._id, email, clientId: '' })) as any
+      const docs: ManualRecipientInsert[] = emails.map((email) => ({
+        campaign: newCampaign._id,
+        email,
+        clientId: ''
+      }))
+      await (ManualRecipient as ManualRecipientModel).insertMany(
+        docs as unknown as ManualRecipientInsertManyCast[]
       )
     }
   }

@@ -1,5 +1,5 @@
 import { getRegistryConnection } from '../../../../utils/db'
-import { processBatch } from '../../../../services/send-campaign.service'
+import { getCampaignSendProgress } from '../../../../services/send-campaign.service'
 
 export default defineEventHandler(async (event) => {
   const campaignId = getRouterParam(event, 'campaignId')
@@ -7,5 +7,5 @@ export default defineEventHandler(async (event) => {
 
   await getRegistryConnection()
 
-  return processBatch(campaignId)
+  return getCampaignSendProgress(campaignId)
 })

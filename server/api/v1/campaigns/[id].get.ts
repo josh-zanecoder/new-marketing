@@ -1,8 +1,11 @@
-import type { Model } from 'mongoose'
 import { Campaign } from '../../../models/Campaign'
 import { CampaignRecipient } from '../../../models/CampaignRecipient'
 import { EmailTemplate } from '../../../models/EmailTemplate'
 import { ManualRecipient } from '../../../models/ManualRecipients'
+import type { CampaignLean, CampaignModel } from '../../../types/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../types/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/emailTemplate.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -11,11 +14,15 @@ export default defineEventHandler(async (event) => {
 
   await getRegistryConnection()
 
-  const campaign = await (Campaign as Model<any>).findById(id).lean() as any
+  const campaign = await (Campaign as CampaignModel)
+    .findById(id)
+    .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   let recipients: { email: string; status?: string; sentAt?: string; error?: string }[] = []
-  const campaignRecipients = await (CampaignRecipient as Model<any>).find({ campaign: campaign._id }).lean() as any[]
+  const campaignRecipients = await (CampaignRecipient as CampaignRecipientModel)
+    .find({ campaign: campaign._id })
+    .lean<CampaignRecipientLean[]>()
   if (campaignRecipients.length) {
     recipients = campaignRecipients.map((r) => ({
       email: r.email,
@@ -24,14 +31,18 @@ export default defineEventHandler(async (event) => {
       error: r.error
     }))
   } else if (campaign.recipientsType === 'manual') {
-    const docs = await (ManualRecipient as Model<any>).find({ campaign: campaign._id }).lean()
-    recipients = (docs as any[]).map((r) => ({ email: r.email }))
+    const docs = await (ManualRecipient as ManualRecipientModel)
+      .find({ campaign: campaign._id })
+      .lean<ManualRecipientLean[]>()
+    recipients = docs.map((r) => ({ email: r.email }))
   }
 
   let emailTemplate: { html: string; name: string } | null = null
   let templateHtml: string | null = null
   if (campaign.emailTemplate) {
-    const template = await (EmailTemplate as Model<any>).findById(campaign.emailTemplate).lean() as any
+    const template = await (EmailTemplate as EmailTemplateModel)
+      .findById(campaign.emailTemplate)
+      .lean<EmailTemplateDoc | null>()
     if (template) {
       emailTemplate = { name: template.name, html: template.html }
       // Support legacy docs with separate css field

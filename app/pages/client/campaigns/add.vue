@@ -2,18 +2,45 @@
   <div class="min-h-screen bg-gradient-to-b from-slate-50 to-white">
     <div class="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:px-8">
       <NuxtLink
-        to="/client/campaigns"
+        :to="cancelOrBackHref"
         class="mb-10 inline-flex items-center gap-2.5 text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
-        Back to campaigns
+        {{ cancelOrBackLabel }}
       </NuxtLink>
 
+      <div v-if="showEditSkeleton" class="mb-12 space-y-10 animate-pulse">
+        <header class="space-y-4">
+          <div class="h-4 w-40 rounded-md bg-slate-200" />
+          <div class="h-11 max-w-md rounded-lg bg-slate-200" />
+          <div class="h-5 max-w-xl rounded-md bg-slate-200" />
+          <div class="h-5 w-2/3 max-w-lg rounded-md bg-slate-200" />
+        </header>
+        <div class="space-y-3">
+          <div class="h-5 w-36 rounded bg-slate-200" />
+          <div class="h-14 w-full rounded-xl bg-slate-200" />
+        </div>
+        <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60">
+          <div v-for="n in 4" :key="n" class="flex items-center gap-4 border-b border-slate-100 px-8 py-5 last:border-b-0">
+            <div class="h-12 w-12 shrink-0 rounded-xl bg-slate-200" />
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="h-5 w-32 rounded bg-slate-200" />
+              <div class="h-4 max-w-sm rounded bg-slate-200" />
+            </div>
+            <div class="h-10 w-28 shrink-0 rounded-lg bg-slate-200" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-4 pt-4">
+          <div class="h-12 w-28 rounded-xl bg-slate-200" />
+          <div class="h-12 w-44 rounded-xl bg-slate-200" />
+        </div>
+      </div>
+
+      <template v-else>
       <header class="mb-12">
-        <nav class="mb-3 flex items-center gap-2 text-base text-slate-500">
-        </nav>
+        <nav class="mb-3 flex items-center gap-2 text-base text-slate-500" />
         <h1 class="text-4xl font-bold text-slate-900 tracking-tight">{{ isEditMode ? 'Edit campaign' : 'Create campaign' }}</h1>
         <p class="mt-2 text-lg text-slate-600">
           Configure your campaign step by step. Start with the name, then add sender, recipients, subject, and design.
@@ -388,7 +415,7 @@
       </div>
       <div class="flex items-center justify-end gap-4 pt-10">
         <NuxtLink
-          to="/client/campaigns"
+          :to="cancelOrBackHref"
           class="rounded-xl border border-slate-200 px-6 py-3.5 text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           :class="{ 'pointer-events-none opacity-50': isSaving }"
         >
@@ -404,11 +431,15 @@
         </button>
       </div>
     </div>
+      </template>
   </div>
   </div>  
 </template>
 <script setup lang="ts">
+import type { WorkSheet } from 'xlsx'
 import { useCampaignStore } from '~/store/campaignStore'
+
+type XlsxModule = typeof import('xlsx')
 
 const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
@@ -456,9 +487,19 @@ const existingTemplates = [
 const route = useRoute()
 const editId = computed(() => (route.query.id as string) || '')
 const isEditMode = computed(() => !!editId.value)
+const cancelOrBackHref = computed(() =>
+  isEditMode.value && editId.value ? `/client/campaigns/${editId.value}` : '/client/campaigns'
+)
+const cancelOrBackLabel = computed(() => (isEditMode.value ? 'Back to campaign' : 'Back to campaigns'))
+const editLoadPending = ref(false)
+const showEditSkeleton = computed(() => isEditMode.value && editLoadPending.value)
 
 async function loadEditCampaign() {
-  if (!editId.value) return
+  if (!editId.value) {
+    editLoadPending.value = false
+    return
+  }
+  editLoadPending.value = true
   try {
     const res = await $fetch<{ campaign: {
       name: string
@@ -485,7 +526,11 @@ async function loadEditCampaign() {
     const fromEditor = route.query.fromEditor === '1'
     if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
     designOpen.value = !!c.templateHtml || fromEditor
-  } catch {}
+  } catch {
+    /* ignore load errors; form stays empty */
+  } finally {
+    editLoadPending.value = false
+  }
 }
 
 watch(editId, loadEditCampaign, { immediate: true })
@@ -522,14 +567,18 @@ async function loadFromEditorReturn() {
         templateMode: form.value.templateMode,
         selectedTemplateId: form.value.selectedTemplateId
       }
-    } catch {}
+    } catch {
+      /* ignore prefetch errors; session path may still apply */
+    }
   } else if (typeof window !== 'undefined') {
     const stored = window.sessionStorage.getItem(PENDING_CAMPAIGN_KEY)
     if (stored) {
       try {
         const { form: storedForm } = JSON.parse(stored)
         if (storedForm) form.value = { ...form.value, ...storedForm }
-      } catch {}
+      } catch {
+        /* ignore invalid stored JSON */
+      }
     }
   }
   designOpen.value = true
@@ -573,7 +622,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-function extractEmailsFromSheet(sheet: any, XLSX: any): string[] {
+function extractEmailsFromSheet(sheet: WorkSheet, XLSX: XlsxModule): string[] {
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as (string | number)[][]
   const emails: string[] = []
   for (const row of rows) {
@@ -614,8 +663,9 @@ async function handleBulkUpload(e: Event) {
       ...toAdd
     ]
     if (form.value.recipientsManual.length === 0) form.value.recipientsManual = ['']
-  } catch (err: any) {
-    bulkUploadError.value = err?.message || 'Failed to parse file. Use .xlsx or .xls format.'
+  } catch (err: unknown) {
+    bulkUploadError.value =
+      err instanceof Error ? err.message : 'Failed to parse file. Use .xlsx or .xls format.'
   } finally {
     isUploading.value = false
   }
@@ -719,9 +769,14 @@ async function handleCreate() {
         const store = useCampaignStore()
         await store.fetchCampaigns()
         await navigateTo(isEditMode.value ? `/client/campaigns/${editId.value}` : '/client/campaigns')
-      } catch (e: any) {
-        const err = e?.data?.message ?? e?.data?.statusMessage ?? e?.message ?? 'Failed to save campaign'
-        saveError.value = typeof err === 'string' ? err : 'Failed to save campaign'
+      } catch (e: unknown) {
+        const data =
+          e && typeof e === 'object' && 'data' in e
+            ? (e as { data?: { message?: string; statusMessage?: string } }).data
+            : undefined
+        const raw = data?.message ?? data?.statusMessage ?? (e instanceof Error ? e.message : undefined)
+        const err = typeof raw === 'string' ? raw : 'Failed to save campaign'
+        saveError.value = err
       } finally {
         isSaving.value = false
       }
@@ -748,8 +803,19 @@ async function handleCreate() {
     }
   }
   navigateTo(`/client/email-editor?${params.toString()}`)
-  } catch (e: any) {
-    saveError.value = e?.message || 'Something went wrong'
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      saveError.value = e.message
+    } else if (
+      typeof e === 'object'
+      && e !== null
+      && 'message' in e
+      && typeof (e as { message: unknown }).message === 'string'
+    ) {
+      saveError.value = (e as { message: string }).message
+    } else {
+      saveError.value = 'Something went wrong'
+    }
   }
 }
 

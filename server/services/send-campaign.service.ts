@@ -1,7 +1,9 @@
-import type { Model } from 'mongoose'
 import { Campaign } from '../models/Campaign'
 import { CampaignRecipient } from '../models/CampaignRecipient'
 import { EmailTemplate } from '../models/EmailTemplate'
+import type { CampaignLean, CampaignModel } from '../types/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../types/emailTemplate.model'
 import { sendEmail } from './brevo.service'
 
 const BATCH_SIZE = 25
@@ -16,24 +18,51 @@ export interface ProcessBatchResult {
   done: boolean
 }
 
+/** Read-only progress for API polling (sending happens in the BullMQ worker). */
+export async function getCampaignSendProgress(campaignId: string): Promise<ProcessBatchResult> {
+  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  if (!campaign) {
+    throw createError({ statusCode: 404, message: 'Campaign not found' })
+  }
+
+  const [pendingCount, sentCount, failedCount] = await Promise.all([
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'pending' }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'sent' }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'failed' })
+  ])
+
+  return {
+    campaignId,
+    campaignStatus: campaign.status,
+    pending: pendingCount,
+    sent: sentCount,
+    failed: failedCount,
+    total: pendingCount + sentCount + failedCount,
+    done: pendingCount === 0
+  }
+}
+
+/** Processes up to BATCH_SIZE pending recipients (invoked by the email worker). */
 export async function processBatch(campaignId: string): Promise<ProcessBatchResult> {
-  const campaign = await (Campaign as Model<any>).findById(campaignId).lean() as any
+  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
   if (!campaign) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
   let templateHtml: string | null = null
   if (campaign.emailTemplate) {
-    const template = await (EmailTemplate as Model<any>).findById(campaign.emailTemplate).lean() as any
+    const template = await (EmailTemplate as EmailTemplateModel)
+      .findById(campaign.emailTemplate)
+      .lean<EmailTemplateDoc | null>()
     if (template) {
       templateHtml = template.html
     }
   }
 
-  const pending = await (CampaignRecipient as Model<any>)
+  const pending = await (CampaignRecipient as CampaignRecipientModel)
     .find({ campaign: campaignId, status: 'pending' })
     .limit(BATCH_SIZE)
-    .lean() as any[]
+    .lean<CampaignRecipientLean[]>()
 
   if (pending.length > 0 && (!templateHtml || !campaign.sender?.email)) {
     console.warn('[SendCampaign] Missing template or sender:', {
@@ -45,7 +74,7 @@ export async function processBatch(campaignId: string): Promise<ProcessBatchResu
 
   for (const r of pending) {
     if (!templateHtml || !campaign.sender?.email) {
-      await (CampaignRecipient as Model<any>).updateOne(
+      await (CampaignRecipient as CampaignRecipientModel).updateOne(
         { _id: r._id },
         { status: 'failed', error: 'Missing email template or sender' }
       )
@@ -56,16 +85,17 @@ export async function processBatch(campaignId: string): Promise<ProcessBatchResu
       sender: campaign.sender,
       to: [{ email: r.email }],
       subject: campaign.subject || '(No subject)',
-      htmlContent: templateHtml
+      htmlContent: templateHtml,
+      tags: [`campaign:${campaignId}`]
     })
 
     if (result.error) {
-      await (CampaignRecipient as Model<any>).updateOne(
+      await (CampaignRecipient as CampaignRecipientModel).updateOne(
         { _id: r._id },
         { status: 'failed', error: result.error }
       )
     } else {
-      await (CampaignRecipient as Model<any>).updateOne(
+      await (CampaignRecipient as CampaignRecipientModel).updateOne(
         { _id: r._id },
         { status: 'sent', sentAt: new Date() }
       )
@@ -73,18 +103,21 @@ export async function processBatch(campaignId: string): Promise<ProcessBatchResu
   }
 
   const [pendingCount, sentCount, failedCount] = await Promise.all([
-    (CampaignRecipient as Model<any>).countDocuments({ campaign: campaignId, status: 'pending' }),
-    (CampaignRecipient as Model<any>).countDocuments({ campaign: campaignId, status: 'sent' }),
-    (CampaignRecipient as Model<any>).countDocuments({ campaign: campaignId, status: 'failed' })
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'pending' }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'sent' }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'failed' })
   ])
 
   if (pendingCount === 0) {
     const total = sentCount + failedCount
     const newStatus = failedCount === total ? 'Failed' : 'Sent'
-    await (Campaign as Model<any>).updateOne({ _id: campaignId }, { status: newStatus })
+    await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: newStatus })
   }
 
-  const campaignUpdated = await (Campaign as Model<any>).findById(campaignId).lean() as any
+  const campaignUpdated = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  if (!campaignUpdated) {
+    throw createError({ statusCode: 404, message: 'Campaign not found' })
+  }
 
   return {
     campaignId,

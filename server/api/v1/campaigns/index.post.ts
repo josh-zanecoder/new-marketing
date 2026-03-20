@@ -1,6 +1,7 @@
 import { Campaign } from '../../../models/Campaign'
 import { EmailTemplate } from '../../../models/EmailTemplate'
 import { ManualRecipient } from '../../../models/ManualRecipients'
+import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/manualRecipient.model'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -56,8 +57,13 @@ export default defineEventHandler(async (event) => {
       .filter((e): e is string => !!e && e.includes('@'))
     const emails = [...new Set(raw)]
     if (emails.length) {
-      await ManualRecipient.insertMany(
-        emails.map((email) => ({ campaign: campaign._id, email, clientId: '' })) as any
+      const docs: ManualRecipientInsert[] = emails.map((email) => ({
+        campaign: campaign._id,
+        email,
+        clientId: ''
+      }))
+      await (ManualRecipient as ManualRecipientModel).insertMany(
+        docs as unknown as ManualRecipientInsertManyCast[]
       )
     }
   }

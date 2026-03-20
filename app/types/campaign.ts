@@ -26,7 +26,6 @@ export interface Campaign {
   createdAt: string
   updatedAt: string
 }
-
 export interface SendStatus {
   campaignId?: string
   campaignStatus: string
@@ -36,3 +35,4 @@ export interface SendStatus {
   total: number
   done: boolean
 }
+

@@ -1,11 +1,21 @@
 import { BrevoClient } from '@getbrevo/brevo'
-import { getBrevoApiKey } from '../utils/brevo'
+
+function getBrevoApiKey(): string {
+  try {
+    const config = useRuntimeConfig()
+    const key = config.brevoApiKey || process.env.BREVO_API_KEY || ''
+    return key
+  } catch {
+    return process.env.BREVO_API_KEY || ''
+  }
+}
 
 export interface SendEmailParams {
   sender: { name: string; email: string }
   to: { email: string; name?: string }[]
   subject: string
   htmlContent: string
+  tags?: string[]
 }
 
 let brevoClient: BrevoClient | null = null
@@ -20,13 +30,30 @@ function getBrevoClient(): BrevoClient | null {
   return brevoClient
 }
 
-function extractBrevoError(e: any): string {
-  if (!e) return 'Unknown Brevo error'
-  const msg = e?.body?.message ?? e?.message ?? e?.data?.message ?? e?.data?.code
-  if (msg) return String(msg)
-  if (e?.body && typeof e.body === 'object') return JSON.stringify(e.body)
-  if (e?.data && typeof e.data === 'object') return JSON.stringify(e.data)
-  return e?.message || 'Unknown Brevo error'
+function extractBrevoError(e: unknown): string {
+  if (e == null) return 'Unknown Brevo error'
+  if (typeof e !== 'object') return String(e)
+  const o = e as Record<string, unknown>
+  const body = o.body
+  const data = o.data
+  const bodyMsg =
+    body && typeof body === 'object' && body !== null && 'message' in body
+      ? (body as { message: unknown }).message
+      : undefined
+  const dataMsg =
+    data && typeof data === 'object' && data !== null && 'message' in data
+      ? (data as { message: unknown }).message
+      : undefined
+  const dataCode =
+    data && typeof data === 'object' && data !== null && 'code' in data
+      ? (data as { code: unknown }).code
+      : undefined
+  const msg = bodyMsg ?? o.message ?? dataMsg ?? dataCode
+  if (msg != null) return String(msg)
+  if (body && typeof body === 'object') return JSON.stringify(body)
+  if (data && typeof data === 'object') return JSON.stringify(data)
+  if (typeof o.message === 'string') return o.message
+  return 'Unknown Brevo error'
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: string; error?: string }> {
@@ -42,6 +69,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
       to: params.to.map((r) => ({ email: r.email, name: r.name })),
       subject: params.subject,
       htmlContent: params.htmlContent,
+      ...(params.tags?.length ? { tags: params.tags } : {})
     })
     const messageId = result?.messageId || undefined
 
@@ -49,9 +77,14 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
       console.log('[Brevo] Email sent:', { messageId, to: params.to[0]?.email })
     }
     return { messageId }
-  } catch (e: any) {
+  } catch (e: unknown) {
     const err = extractBrevoError(e)
-    const status = e?.statusCode ?? e?.response?.status
+    const status =
+      typeof e === 'object' && e !== null && 'statusCode' in e
+        ? (e as { statusCode?: unknown }).statusCode
+        : typeof e === 'object' && e !== null && 'response' in e
+          ? (e as { response?: { status?: unknown } }).response?.status
+          : undefined
     console.error('[Brevo] Send failed:', err, { to: params.to[0]?.email, statusCode: status })
     return { error: err }
   }

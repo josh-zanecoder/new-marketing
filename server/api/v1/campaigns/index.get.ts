@@ -1,23 +1,26 @@
-import type { Model } from 'mongoose'
 import { Campaign } from '../../../models/Campaign'
 import { ManualRecipient } from '../../../models/ManualRecipients'
+import type { CampaignLean, CampaignModel } from '../../../types/campaign.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async () => {
   await getRegistryConnection()
 
-  const campaigns = await (Campaign as Model<any>).find({}).sort({ createdAt: -1 }).lean()
+  const campaigns = await (Campaign as CampaignModel).find({}).sort({ createdAt: -1 }).lean<CampaignLean[]>()
   const campaignIds = campaigns.map((c) => c._id)
 
-  const recipientDocs = await (ManualRecipient as Model<any>).find({ campaign: { $in: campaignIds } }).lean()
+  const recipientDocs = await (ManualRecipient as ManualRecipientModel)
+    .find({ campaign: { $in: campaignIds } })
+    .lean<ManualRecipientLean[]>()
   const recipientsByCampaign = new Map<string, { email: string }[]>()
-  for (const r of recipientDocs as unknown as { campaign: unknown; email: string }[]) {
+  for (const r of recipientDocs) {
     const id = String(r.campaign)
     if (!recipientsByCampaign.has(id)) recipientsByCampaign.set(id, [])
     recipientsByCampaign.get(id)!.push({ email: r.email })
   }
 
-  const campaignsWithRecipients = (campaigns as unknown as { _id: unknown; name: string; sender: object; recipientsType: string; recipientsListId: string; subject: string; status: string; createdAt: unknown; updatedAt: unknown }[]).map((c) => {
+  const campaignsWithRecipients = campaigns.map((c) => {
     const id = String(c._id)
     const recipients = c.recipientsType === 'manual' ? (recipientsByCampaign.get(id) || []) : []
     return {

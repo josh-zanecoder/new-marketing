@@ -7,23 +7,33 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "validate": "eslint .",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@getbrevo/brevo": "^5.0.1",
     "@nuxtjs/tailwindcss": "^6.14.0",
     "@pinia/nuxt": "^0.11.3",
+    "bullmq": "^5.71.0",
     "grapesjs": "^0.22.13",
     "grapesjs-preset-newsletter": "^1.0.2",
     "grapesjs-preset-webpage": "^1.0.3",
     "mongoose": "^8.0.0",
     "nuxt": "^4.4.2",
     "pinia": "^3.0.4",
+    "redis": "^4.7.1",
     "vue": "^3.5.30",
     "vue-router": "^5.0.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0"
+    "@nuxt/eslint": "^1.9.0",
+    "@types/node": "^25.5.0",
+    "eslint": "^9.17.0"
+  },
+  "overrides": {
+    "serialize-javascript": "7.0.3",
+    "underscore": "1.13.8"
   }
 }

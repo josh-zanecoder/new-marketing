@@ -3,6 +3,15 @@ import type { Campaign, SendStatus } from '~/types/campaign'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
 
+function fetchErrorMessage(e: unknown, fallback: string): string {
+  if (e && typeof e === 'object' && 'data' in e) {
+    const data = (e as { data?: { message?: string } }).data
+    if (typeof data?.message === 'string' && data.message) return data.message
+  }
+  if (e instanceof Error && e.message) return e.message
+  return fallback
+}
+
 export const useCampaignStore = defineStore('campaigns', () => {
   const campaigns = ref<Campaign[]>([])
   const sendingCampaignId = ref<string | null>(null)
@@ -15,22 +24,70 @@ export const useCampaignStore = defineStore('campaigns', () => {
     return campaigns.value
   }
 
-  async function sendCampaign(c: Campaign) {
-    if (c.status !== 'Draft') return
+  async function sendCampaign(c: Campaign): Promise<{ poll: boolean }> {
+    if (c.status !== 'Draft') return { poll: false }
     sendError.value = null
     sendingCampaignId.value = c.id
     sendStatus.value = null
     try {
-      await $fetch('/api/v1/send-campaign/send', {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        valid: number
+        invalid: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/send-campaign/send', {
         method: 'POST',
         body: { campaignId: c.id },
         timeout: 30000
       })
-      return true
-    } catch (e: any) {
-      sendError.value = e?.data?.message || e?.message || 'Failed to start send'
+
+
+      sendStatus.value = {
+        campaignId: c.id,
+        total: res.total,
+        sent: res.sent,
+        failed: res.failed,
+        pending: res.pending,
+        done: false,
+        campaignStatus: 'Sending'
+      }
+
+      if (!res.queued) {
+        sendingCampaignId.value = null
+        sendStatus.value = {
+          campaignStatus: 'Draft',
+          pending: 0,
+          sent: 0,
+          failed: res.invalid,
+          total: res.total,
+          done: true
+        }
+        if (res.invalid > 0) {
+          sendError.value =
+            'No valid email addresses. Invalid addresses were marked as failed—fix them and send again.'
+        }
+        await fetchCampaigns()
+        return { poll: false }
+      }
+
+      sendStatus.value = {
+        campaignStatus: 'Sending',
+        pending: res.queued,
+        sent: 0,
+        failed: res.invalid,
+        total: res.total,
+        done: false
+      }
+
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to start send')
       sendingCampaignId.value = null
-      return false
+      return { poll: false }
     }
   }
 
@@ -39,7 +96,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       await $fetch(`/api/v1/campaigns/${c.id}`, { method: 'DELETE' })
       await fetchCampaigns()
       return true
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Delete failed:', e)
       return false
     }
@@ -54,7 +111,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       })
       await fetchCampaigns()
       return res.id
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Duplicate failed:', e)
       return null
     }

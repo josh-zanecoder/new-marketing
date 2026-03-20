@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Editor } from 'grapesjs'
+
 definePageMeta({
   layout: false
 })
@@ -44,7 +46,7 @@ const DEFAULT_EMAIL_TEMPLATE = `
 
 const route = useRoute()
 const editorContainerRef = ref<HTMLDivElement | null>(null)
-const editorRef = ref<any>(null)
+const editorRef = ref<Editor | null>(null)
 const initialHtml = ref<string | null>(null)
 const htmlReady = ref(false)
 const isMounted = ref(false)
@@ -52,7 +54,6 @@ const isMounted = ref(false)
 const htmlFromUrl = computed(() => route.query.html as string)
 const builderId = computed(() => route.query.builderId as string)
 const campaignId = computed(() => route.query.campaignId as string)
-const token = computed(() => route.query.token as string)
 
 onMounted(() => {
   isMounted.value = true
@@ -66,7 +67,9 @@ watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
   if (htmlFromUrl.value) {
     try {
       resolved = decodeURIComponent(htmlFromUrl.value)
-    } catch {}
+    } catch {
+      /* invalid query encoding */
+    }
   }
 
   if (!resolved && builderId.value && typeof window !== 'undefined') {
@@ -76,14 +79,18 @@ watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
         resolved = stored
         window.sessionStorage.removeItem(builderId.value)
       }
-    } catch {}
+    } catch {
+      /* sessionStorage blocked or unavailable */
+    }
   }
 
   if (!resolved && campaignId.value && typeof window !== 'undefined') {
     try {
       const stored = window.sessionStorage.getItem(`campaign-template-${campaignId.value}`)
       if (stored) resolved = stored
-    } catch {}
+    } catch {
+      /* sessionStorage blocked or unavailable */
+    }
   }
 
   initialHtml.value = resolved
@@ -112,7 +119,7 @@ watch([isMounted, htmlReady], () => {
       fromElement: false,
       noticeOnUnload: false,
       plugins: [
-        (editorInstance: any) =>
+        (editorInstance: Editor) =>
           presetNewsletter(editorInstance, {
             modalLabelImport: 'Paste all your code here below and click import',
             modalLabelExport: 'Copy the code and use it wherever you want',
@@ -159,7 +166,9 @@ watch([isMounted, htmlReady], () => {
             ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
             : '/client/campaigns'
           navigateTo(url)
-        } catch {}
+        } catch {
+          /* navigation / storage failed */
+        }
       }
     })
 
@@ -189,7 +198,9 @@ ${html}
           link.click()
           document.body.removeChild(link)
           URL.revokeObjectURL(url)
-        } catch {}
+        } catch {
+          /* download failed */
+        }
       }
     })
 
@@ -262,7 +273,9 @@ function handleSaveAndExit() {
       ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
       : '/client/campaigns'
     navigateTo(url)
-  } catch {}
+  } catch {
+    /* save / navigation failed */
+  }
 }
 </script>
 

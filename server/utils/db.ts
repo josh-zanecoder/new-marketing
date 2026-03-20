@@ -7,8 +7,18 @@ export async function getRegistryConnection(): Promise<mongoose.Connection> {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection
   }
-  const config = useRuntimeConfig()
-  const uri = config.mongodbUri
+  let uri = process.env.MONGODB_URI
+  if (!uri) {
+    try {
+      const config = useRuntimeConfig()
+      uri = config.mongodbUri as string
+    } catch {
+      /* BullMQ worker jobs run outside a request context */
+    }
+  }
+  if (!uri) {
+    throw new Error('MONGODB_URI is not configured')
+  }
   await mongoose.connect(uri)
   return mongoose.connection
 }

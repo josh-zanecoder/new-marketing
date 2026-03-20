@@ -1,7 +1,13 @@
-import type { Model } from 'mongoose'
 import { Campaign } from '../../../models/Campaign'
 import { EmailTemplate } from '../../../models/EmailTemplate'
 import { ManualRecipient } from '../../../models/ManualRecipients'
+import type { CampaignModel } from '../../../types/campaign.model'
+import type { EmailTemplateModel } from '../../../types/emailTemplate.model'
+import type {
+  ManualRecipientInsert,
+  ManualRecipientInsertManyCast,
+  ManualRecipientModel
+} from '../../../types/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -25,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   await getRegistryConnection()
 
-  const campaign = await (Campaign as Model<any>).findById(id)
+  const campaign = await (Campaign as CampaignModel).findById(id)
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (!['Draft', 'Sent', 'Failed'].includes(campaign.status)) {
     throw createError({ statusCode: 400, message: 'Only Draft, Sent, or Failed campaigns can be updated' })
@@ -35,7 +41,7 @@ export default defineEventHandler(async (event) => {
   const recipientsListId = body.recipientsListId || ''
 
   if (body.templateHtml && campaign.emailTemplate) {
-    await (EmailTemplate as Model<any>).updateOne(
+    await (EmailTemplate as EmailTemplateModel).updateOne(
       { _id: campaign.emailTemplate },
       { $set: { html: body.templateHtml } }
     )
@@ -59,14 +65,19 @@ export default defineEventHandler(async (event) => {
   await campaign.save()
 
   if (recipientsType === 'manual') {
-    await (ManualRecipient as Model<any>).deleteMany({ campaign: campaign._id })
+    await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
     const raw = (body.recipientsManual || [])
       .map((e) => e?.trim?.().toLowerCase())
       .filter((e): e is string => !!e && e.includes('@'))
     const emails = [...new Set(raw)]
     if (emails.length) {
-      await ManualRecipient.insertMany(
-        emails.map((email) => ({ campaign: campaign._id, email, clientId: '' })) as any
+      const docs: ManualRecipientInsert[] = emails.map((email) => ({
+        campaign: campaign._id,
+        email,
+        clientId: ''
+      }))
+      await (ManualRecipient as ManualRecipientModel).insertMany(
+        docs as unknown as ManualRecipientInsertManyCast[]
       )
     }
   }
