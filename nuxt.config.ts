@@ -7,6 +7,15 @@ export default defineNuxtConfig({
   runtimeConfig: {
     mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/mortdash-registry',
     brevoApiKey: process.env.BREVO_API_KEY || '',
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
+    public: {
+      firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
+      firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+      firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || ''
+    },
     redisHost: process.env.REDIS_HOST || '127.0.0.1',
     redisPort: Number(process.env.REDIS_PORT) || 6379,
     redisPassword: (process.env.REDIS_PASSWORD || '').trim(),
