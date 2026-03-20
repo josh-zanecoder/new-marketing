@@ -3,7 +3,6 @@ import mongoose from 'mongoose'
 const emailTemplateSchema = new mongoose.Schema({
   name: { type: String, required: true },
   html: { type: String, required: true },
-  css: { type: String, default: '' },
   clientId: { type: String, default: '' }
 }, { timestamps: true })
 

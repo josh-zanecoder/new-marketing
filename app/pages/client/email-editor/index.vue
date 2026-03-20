@@ -154,7 +154,11 @@ watch([isMounted, htmlReady], () => {
               }))
             }
           }
-          navigateTo(targetId ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1` : '/client/campaigns')
+          const isRealId = targetId && /^[a-f0-9]{24}$/i.test(targetId)
+          const url = targetId
+            ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
+            : '/client/campaigns'
+          navigateTo(url)
         } catch {}
       }
     })
@@ -253,7 +257,11 @@ function handleSaveAndExit() {
         }))
       }
     }
-    navigateTo(targetId ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1` : '/client/campaigns')
+    const isRealId = targetId && /^[a-f0-9]{24}$/i.test(targetId)
+    const url = targetId
+      ? `/client/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
+      : '/client/campaigns'
+    navigateTo(url)
   } catch {}
 }
 </script>

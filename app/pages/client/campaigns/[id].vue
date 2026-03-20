@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useCampaignStore } from '~/store/campaignStore'
+
 const route = useRoute()
+const campaignStore = useCampaignStore()
 const id = route.params.id as string
 
 const { data, error } = await useFetch<{
@@ -12,7 +15,7 @@ const { data, error } = await useFetch<{
     subject: string
     status: string
     recipients: { email: string; status?: string; sentAt?: string; error?: string }[]
-    emailTemplate?: { name: string; html: string; css: string }
+    emailTemplate?: { name: string; html: string }
     templateHtml?: string | null
     createdAt: string
     updatedAt: string
@@ -41,6 +44,7 @@ function formatDate(d: string) {
       <NuxtLink
         to="/client/campaigns"
         class="mb-10 inline-flex items-center gap-2.5 text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
+        @click="campaignStore.fetchCampaigns()"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -65,68 +69,84 @@ function formatDate(d: string) {
               Created {{ formatDate(campaign.createdAt) }}
             </p>
           </div>
-          <span
-            class="inline-flex shrink-0 rounded-full px-5 py-2 text-base font-semibold"
-            :class="{
-              'bg-amber-100 text-amber-700': campaign.status === 'Draft',
-              'bg-blue-100 text-blue-700': campaign.status === 'Scheduled' || campaign.status === 'Sending',
-              'bg-emerald-100 text-emerald-700': campaign.status === 'Sent',
-              'bg-red-100 text-red-700': campaign.status === 'Failed',
-              'bg-slate-100 text-slate-600': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
-            }"
-          >
-            {{ campaign.status }}
-          </span>
+          <div class="flex shrink-0 items-center gap-3">
+            <NuxtLink
+              v-if="campaign.status === 'Draft' || campaign.status === 'Failed'"
+              :to="`/client/campaigns/add?id=${campaign.id}`"
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              Edit
+            </NuxtLink>
+            <span
+              class="inline-flex rounded-full px-5 py-2 text-base font-semibold"
+              :class="{
+                'bg-amber-100 text-amber-700': campaign.status === 'Draft',
+                'bg-blue-100 text-blue-700': campaign.status === 'Scheduled' || campaign.status === 'Sending',
+                'bg-emerald-100 text-emerald-700': campaign.status === 'Sent',
+                'bg-red-100 text-red-700': campaign.status === 'Failed',
+                'bg-slate-100 text-slate-600': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
+              }"
+            >
+              {{ campaign.status }}
+            </span>
+          </div>
         </header>
 
-        <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
-        <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5">
-          <h2 class="text-base font-semibold text-slate-600 uppercase tracking-wider">Details</h2>
-        </div>
-        <dl class="divide-y divide-slate-100">
-          <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
-            <dt class="text-base font-medium text-slate-500">Sender</dt>
-            <dd class="text-base text-slate-900 sm:col-span-2">
-              {{ campaign.sender?.name }} &lt;{{ campaign.sender?.email }}&gt;
-            </dd>
+        <div
+          class="grid grid-cols-1 gap-10"
+          :class="{ 'lg:grid-cols-2': campaign.recipientsType === 'manual' && campaign.recipients?.length }"
+        >
+          <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
+            <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5">
+              <h2 class="text-base font-semibold text-slate-600 uppercase tracking-wider">Details</h2>
+            </div>
+            <dl class="divide-y divide-slate-100">
+              <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
+                <dt class="text-base font-medium text-slate-500">Sender</dt>
+                <dd class="text-base text-slate-900 sm:col-span-2">
+                  {{ campaign.sender?.name }} &lt;{{ campaign.sender?.email }}&gt;
+                </dd>
+              </div>
+              <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
+                <dt class="text-base font-medium text-slate-500">Subject</dt>
+                <dd class="text-base text-slate-900 sm:col-span-2">
+                  {{ campaign.subject || '–' }}
+                </dd>
+              </div>
+              <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
+                <dt class="text-base font-medium text-slate-500">Recipients</dt>
+                <dd class="text-base text-slate-900 sm:col-span-2">
+                  <span v-if="campaign.recipientsType === 'manual'">
+                    {{ campaign.recipients?.length ?? 0 }} manual recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }}
+                  </span>
+                  <span v-else>
+                    List: {{ campaign.recipientsListId || '–' }}
+                  </span>
+                </dd>
+              </div>
+              <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
+                <dt class="text-base font-medium text-slate-500">Updated</dt>
+                <dd class="text-base text-slate-900 sm:col-span-2">
+                  {{ formatDate(campaign.updatedAt) }}
+                </dd>
+              </div>
+            </dl>
           </div>
-          <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
-            <dt class="text-base font-medium text-slate-500">Subject</dt>
-            <dd class="text-base text-slate-900 sm:col-span-2">
-              {{ campaign.subject || '–' }}
-            </dd>
-          </div>
-          <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
-            <dt class="text-base font-medium text-slate-500">Recipients</dt>
-            <dd class="text-base text-slate-900 sm:col-span-2">
-              <span v-if="campaign.recipientsType === 'manual'">
-                {{ campaign.recipients?.length ?? 0 }} manual recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }}
-              </span>
-              <span v-else>
-                List: {{ campaign.recipientsListId || '–' }}
-              </span>
-            </dd>
-          </div>
-          <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
-            <dt class="text-base font-medium text-slate-500">Updated</dt>
-            <dd class="text-base text-slate-900 sm:col-span-2">
-              {{ formatDate(campaign.updatedAt) }}
-            </dd>
-          </div>
-        </dl>
-      </div>
 
-      <div v-if="campaign.recipientsType === 'manual' && campaign.recipients?.length" class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
-        <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-slate-700 uppercase tracking-wider">Recipients ({{ campaign.recipients.length }})</h2>
-          <div v-if="campaign.recipients.some(r => r.status)" class="flex gap-4 text-sm">
-            <span class="text-amber-600">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
-            <span class="text-green-600">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
-            <span class="text-red-600">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
-          </div>
-        </div>
-        <ul class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-          <li v-for="(r, i) in campaign.recipients" :key="i" class="px-8 py-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+          <div v-if="campaign.recipientsType === 'manual' && campaign.recipients?.length" class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
+            <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5 flex items-center justify-between">
+              <h2 class="text-base font-semibold text-slate-700 uppercase tracking-wider">Recipients ({{ campaign.recipients.length }})</h2>
+              <div v-if="campaign.recipients.some(r => r.status)" class="flex gap-4 text-sm">
+                <span class="text-amber-600">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
+                <span class="text-green-600">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
+                <span class="text-red-600">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
+              </div>
+            </div>
+            <ul class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+              <li v-for="(r, i) in campaign.recipients" :key="i" class="px-8 py-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
             <div class="min-w-0 flex-1">
               <span class="text-base text-slate-900">{{ r.email }}</span>
               <p v-if="r.status === 'failed' && r.error" class="mt-1 text-sm text-red-600 truncate" :title="r.error">
@@ -144,9 +164,10 @@ function formatDate(d: string) {
             >
               {{ r.status }}
             </span>
-          </li>
-        </ul>
-      </div>
+              </li>
+            </ul>
+          </div>
+        </div>
 
       <div v-if="campaign.templateHtml" class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
         <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5">

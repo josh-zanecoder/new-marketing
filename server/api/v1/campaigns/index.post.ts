@@ -2,14 +2,6 @@ import { Campaign } from '../../../models/Campaign'
 import { EmailTemplate } from '../../../models/EmailTemplate'
 import { ManualRecipient } from '../../../models/ManualRecipients'
 
-function parseTemplateHtml(fullHtml: string): { html: string; css: string } {
-  const styleMatch = fullHtml.match(/<style>([\s\S]*?)<\/style>([\s\S]*)/)
-  if (styleMatch?.[1] != null && styleMatch?.[2] != null) {
-    return { css: styleMatch[1].trim(), html: styleMatch[2].trim() }
-  }
-  return { css: '', html: fullHtml }
-}
-
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
     name: string
@@ -31,11 +23,9 @@ export default defineEventHandler(async (event) => {
   let emailTemplateId: string | undefined
 
   if (body.templateHtml) {
-    const { html, css } = parseTemplateHtml(body.templateHtml)
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
-      html,
-      css,
+      html: body.templateHtml,
       clientId: ''
     }).save()
     emailTemplateId = template._id.toString()
@@ -48,7 +38,7 @@ export default defineEventHandler(async (event) => {
     name: body.name.trim(),
     sender: {
       name: body.senderName?.trim() || 'Mortdash',
-      email: body.senderEmail?.trim() || 'hello@mortdash.com'
+      email: body.senderEmail?.trim() || 'joshdanielsaraa@gmail.com'
     },
     recipientsType,
     recipientsListId,
@@ -61,9 +51,10 @@ export default defineEventHandler(async (event) => {
   const campaign = await new Campaign(campaignData).save()
 
   if (recipientsType === 'manual' && body.recipientsManual?.length) {
-    const emails = (body.recipientsManual || [])
-      .map((e) => e?.trim?.())
+    const raw = (body.recipientsManual || [])
+      .map((e) => e?.trim?.().toLowerCase())
       .filter((e): e is string => !!e && e.includes('@'))
+    const emails = [...new Set(raw)]
     if (emails.length) {
       await ManualRecipient.insertMany(
         emails.map((email) => ({ campaign: campaign._id, email, clientId: '' })) as any

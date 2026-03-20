@@ -28,19 +28,16 @@ export default defineEventHandler(async (event) => {
     recipients = (docs as any[]).map((r) => ({ email: r.email }))
   }
 
-  let emailTemplate: { html: string; css: string; name: string } | null = null
+  let emailTemplate: { html: string; name: string } | null = null
+  let templateHtml: string | null = null
   if (campaign.emailTemplate) {
     const template = await (EmailTemplate as Model<any>).findById(campaign.emailTemplate).lean() as any
     if (template) {
-      emailTemplate = {
-        name: template.name,
-        html: template.html,
-        css: template.css || ''
-      }
+      emailTemplate = { name: template.name, html: template.html }
+      // Support legacy docs with separate css field
+      templateHtml = template.css ? `<style>${template.css}</style>${template.html}` : template.html
     }
   }
-
-  const templateHtml = emailTemplate ? `<style>${emailTemplate.css}</style>${emailTemplate.html}` : null
 
   return {
     campaign: {

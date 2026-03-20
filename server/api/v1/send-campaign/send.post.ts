@@ -25,7 +25,8 @@ export default defineEventHandler(async (event) => {
   let emails: string[] = []
   if (campaign.recipientsType === 'manual') {
     const docs = await (ManualRecipient as Model<any>).find({ campaign: campaignId }).lean() as any[]
-    emails = docs.map((r) => r.email)
+    const raw = docs.map((r) => r.email?.trim?.().toLowerCase()).filter((e): e is string => !!e && e.includes('@'))
+    emails = [...new Set(raw)]
   }
   if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
 
