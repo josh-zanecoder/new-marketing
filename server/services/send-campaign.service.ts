@@ -1,9 +1,9 @@
-import { Campaign } from '../models/Campaign'
-import { CampaignRecipient } from '../models/CampaignRecipient'
-import { EmailTemplate } from '../models/EmailTemplate'
-import type { CampaignLean, CampaignModel } from '../types/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/campaignRecipient.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../types/emailTemplate.model'
+import { Campaign } from '../models/clients/Campaign'
+import { CampaignRecipient } from '../models/clients/CampaignRecipient'
+import { EmailTemplate } from '../models/clients/EmailTemplate'
+import type { CampaignLean, CampaignModel } from '../types/clients/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/clients/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../types/clients/emailTemplate.model'
 import { sendEmail } from './brevo.service'
 
 const BATCH_SIZE = 25

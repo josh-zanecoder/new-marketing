@@ -1,8 +1,8 @@
 import { verifyFirebaseIdToken } from '../services/firebase.service'
-import User from '../models/User'
+import User from '../models/admin/User'
 import type { Model } from 'mongoose'
 import type { H3Event } from 'h3'
-import type { IUser } from '../types/user.model'
+import type { IUser } from '../types/admin/user.model'
 import { getRegistryConnection } from '../utils/db'
 import { findClientByClientKey } from '../utils/roles'
 

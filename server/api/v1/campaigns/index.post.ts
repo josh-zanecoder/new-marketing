@@ -1,7 +1,7 @@
-import { Campaign } from '../../../models/Campaign'
-import { EmailTemplate } from '../../../models/EmailTemplate'
-import { ManualRecipient } from '../../../models/ManualRecipients'
-import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/manualRecipient.model'
+import { Campaign } from '../../../models/clients/Campaign'
+import { EmailTemplate } from '../../../models/clients/EmailTemplate'
+import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{

@@ -1,13 +1,13 @@
-import { Campaign } from '../../../models/Campaign'
-import { CampaignRecipient } from '../../../models/CampaignRecipient'
-import { ManualRecipient } from '../../../models/ManualRecipients'
+import { Campaign } from '../../../models/clients/Campaign'
+import { CampaignRecipient } from '../../../models/clients/CampaignRecipient'
+import { ManualRecipient } from '../../../models/clients/ManualRecipients'
 import { enqueueCampaignBatch } from '../../../queue/emailQueue'
-import type { CampaignLean, CampaignModel } from '../../../types/campaign.model'
+import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
 import type {
   CampaignRecipientInsertRow,
   CampaignRecipientModel
-} from '../../../types/campaignRecipient.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/manualRecipient.model'
+} from '../../../types/clients/campaignRecipient.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../helpers/marketingEmail'
 

@@ -1,7 +1,7 @@
 import type { Model, Types } from 'mongoose'
-import { Campaign } from '../../../models/Campaign'
-import { CampaignRecipient } from '../../../models/CampaignRecipient'
-import { ManualRecipient } from '../../../models/ManualRecipients'
+import { Campaign } from '../../../models/clients/Campaign'
+import { CampaignRecipient } from '../../../models/clients/CampaignRecipient'
+import { ManualRecipient } from '../../../models/clients/ManualRecipients'
 import { getRegistryConnection } from '../../../utils/db'
 
 interface CampaignDoc {

@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import type { Connection } from 'mongoose'
 import { generateClientKey, hashClientKey, getClientKeyPrefix } from './clientKey'
-import type { EnsureClientResult } from './clientDb.types'
+import type { EnsureClientResult } from '../types/clients/clientDb.types'
 
 export function toClientDbName(clientName: string): string {
   const base = clientName
@@ -26,12 +27,15 @@ export type { EnsureClientResult }
 export async function ensureClientDatabaseInitialized(
   registryConn: Connection,
   clientName: string,
-  clientEmail: string | null
+  clientEmail: string | null,
+  tenantIdFromBody: string | null = null
 ): Promise<EnsureClientResult> {
   const dbName = toClientDbName(clientName)
   const dbConn = registryConn.useDb(dbName)
 
-  const existing = await registryConn.collection('clients').findOne({ dbName })
+  const existing = (await registryConn.collection('clients').findOne({ dbName })) as {
+    tenantId?: string
+  } | null
   const isNew = !existing
 
   let clientKey: string | null = null
@@ -39,10 +43,26 @@ export async function ensureClientDatabaseInitialized(
     clientKey = generateClientKey()
   }
 
+  const trimmedTenant = tenantIdFromBody?.trim() || null
+  let tenantId =
+    typeof existing?.tenantId === 'string' && existing.tenantId
+      ? existing.tenantId
+      : trimmedTenant || randomUUID()
+
+  if (!existing?.tenantId && trimmedTenant) {
+    const dup = await registryConn.collection('clients').findOne({
+      tenantId,
+      dbName: { $ne: dbName }
+    })
+    if (dup) {
+      throw createError({ statusCode: 409, message: 'tenantId is already in use' })
+    }
+  }
+
   await dbConn.collection('clients').updateOne(
     { name: clientName },
     {
-      $set: { email: clientEmail },
+      $set: { email: clientEmail, tenantId },
       $setOnInsert: { createdAt: new Date() }
     },
     { upsert: true }
@@ -55,6 +75,7 @@ export async function ensureClientDatabaseInitialized(
         name: clientName,
         email: clientEmail,
         dbName,
+        tenantId,
         ...(isNew && clientKey
           ? {
               clientKeyHash: hashClientKey(clientKey),
@@ -67,6 +88,6 @@ export async function ensureClientDatabaseInitialized(
     { upsert: true }
   )
 
-  return { dbName, clientKey }
+  return { dbName, clientKey, tenantId }
 }
 

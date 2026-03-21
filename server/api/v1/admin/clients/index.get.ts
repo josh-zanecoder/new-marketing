@@ -1,11 +1,13 @@
 import { getRegistryConnection } from '../../../../utils/db'
 import { isAdminAuthContext } from '../../../../utils/roles'
-import type { ClientResponse, RegistryClientDoc } from './clientTypes'
+import type { ClientResponse, RegistryClientDoc } from '../../../../types/clients/registryClient.types'
 
 function toClientResponse(doc: RegistryClientDoc): ClientResponse | null {
   const name = typeof doc.name === 'string' ? doc.name : ''
   const email = typeof doc.email === 'string' ? doc.email : null
   const dbName = typeof doc.dbName === 'string' ? doc.dbName : ''
+  const tenantId =
+    typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : null
   const clientKeyPrefix =
     typeof doc.clientKeyPrefix === 'string' && doc.clientKeyPrefix
       ? doc.clientKeyPrefix
@@ -20,7 +22,7 @@ function toClientResponse(doc: RegistryClientDoc): ClientResponse | null {
         : null
 
   if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, clientKeyPrefix, createdAt }
+  return { name, email, dbName, tenantId, clientKeyPrefix, createdAt }
 }
 
 export default defineEventHandler(async (event) => {

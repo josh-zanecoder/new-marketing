@@ -1,7 +1,7 @@
-import { Campaign } from '../../../models/Campaign'
-import { ManualRecipient } from '../../../models/ManualRecipients'
-import type { CampaignLean, CampaignModel } from '../../../types/campaign.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/manualRecipient.model'
+import { Campaign } from '../../../models/clients/Campaign'
+import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async () => {

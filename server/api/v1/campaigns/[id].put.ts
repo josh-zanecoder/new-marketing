@@ -1,13 +1,13 @@
-import { Campaign } from '../../../models/Campaign'
-import { EmailTemplate } from '../../../models/EmailTemplate'
-import { ManualRecipient } from '../../../models/ManualRecipients'
-import type { CampaignModel } from '../../../types/campaign.model'
-import type { EmailTemplateModel } from '../../../types/emailTemplate.model'
+import { Campaign } from '../../../models/clients/Campaign'
+import { EmailTemplate } from '../../../models/clients/EmailTemplate'
+import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import type { CampaignModel } from '../../../types/clients/campaign.model'
+import type { EmailTemplateModel } from '../../../types/clients/emailTemplate.model'
 import type {
   ManualRecipientInsert,
   ManualRecipientInsertManyCast,
   ManualRecipientModel
-} from '../../../types/manualRecipient.model'
+} from '../../../types/clients/manualRecipient.model'
 import { getRegistryConnection } from '../../../utils/db'
 
 export default defineEventHandler(async (event) => {
