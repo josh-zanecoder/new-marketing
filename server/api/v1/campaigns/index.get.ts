@@ -1,13 +1,16 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getRegistryConnection } from '../../../utils/db'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
-export default defineEventHandler(async () => {
-  await getRegistryConnection()
+export default defineEventHandler(async (event) => {
+  const conn = await getTenantConnectionFromEvent(event)
+  const { Campaign, ManualRecipient } = getTenantClientModels(conn)
 
-  const campaigns = await (Campaign as CampaignModel).find({}).sort({ createdAt: -1 }).lean<CampaignLean[]>()
+  const campaigns = await (Campaign as CampaignModel)
+    .find({})
+    .sort({ createdAt: -1 })
+    .lean<CampaignLean[]>()
   const campaignIds = campaigns.map((c) => c._id)
 
   const recipientDocs = await (ManualRecipient as ManualRecipientModel)

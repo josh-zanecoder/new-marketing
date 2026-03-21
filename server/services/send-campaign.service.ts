@@ -1,6 +1,4 @@
-import { Campaign } from '../models/clients/Campaign'
-import { CampaignRecipient } from '../models/clients/CampaignRecipient'
-import { EmailTemplate } from '../models/clients/EmailTemplate'
+import type { TenantClientModels } from '../models/clients/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/clients/campaign.model'
 import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/clients/campaignRecipient.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/clients/emailTemplate.model'
@@ -19,16 +17,31 @@ export interface ProcessBatchResult {
 }
 
 /** Read-only progress for API polling (sending happens in the BullMQ worker). */
-export async function getCampaignSendProgress(campaignId: string): Promise<ProcessBatchResult> {
-  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+export async function getCampaignSendProgress(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<ProcessBatchResult> {
+  const { Campaign, CampaignRecipient } = models
+  const campaign = await (Campaign as CampaignModel)
+    .findById(campaignId)
+    .lean<CampaignLean | null>()
   if (!campaign) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
   const [pendingCount, sentCount, failedCount] = await Promise.all([
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'pending' }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'sent' }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'failed' })
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'pending'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'sent'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'failed'
+    })
   ])
 
   return {
@@ -43,8 +56,14 @@ export async function getCampaignSendProgress(campaignId: string): Promise<Proce
 }
 
 /** Processes up to BATCH_SIZE pending recipients (invoked by the email worker). */
-export async function processBatch(campaignId: string): Promise<ProcessBatchResult> {
-  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+export async function processBatch(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<ProcessBatchResult> {
+  const { Campaign, CampaignRecipient, EmailTemplate } = models
+  const campaign = await (Campaign as CampaignModel)
+    .findById(campaignId)
+    .lean<CampaignLean | null>()
   if (!campaign) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
@@ -103,9 +122,18 @@ export async function processBatch(campaignId: string): Promise<ProcessBatchResu
   }
 
   const [pendingCount, sentCount, failedCount] = await Promise.all([
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'pending' }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'sent' }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({ campaign: campaignId, status: 'failed' })
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'pending'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'sent'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'failed'
+    })
   ])
 
   if (pendingCount === 0) {
@@ -114,7 +142,9 @@ export async function processBatch(campaignId: string): Promise<ProcessBatchResu
     await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: newStatus })
   }
 
-  const campaignUpdated = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  const campaignUpdated = await (Campaign as CampaignModel)
+    .findById(campaignId)
+    .lean<CampaignLean | null>()
   if (!campaignUpdated) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }

@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 const campaignStatusEnum = ['Draft', 'Scheduled', 'Sending', 'Sent', 'Failed'] as const
 const recipientsTypeEnum = ['manual', 'list'] as const
 
-const campaignSchema = new mongoose.Schema({
+export const campaignSchema = new mongoose.Schema({
   name: { type: String, required: true },
   sender: {
     name: { type: String, required: true },
@@ -16,5 +16,3 @@ const campaignSchema = new mongoose.Schema({
   status: { type: String, enum: campaignStatusEnum, default: 'Draft' },
   clientId: { type: String, default: '' }
 }, { timestamps: true })
-
-export const Campaign = mongoose.models.Campaign || mongoose.model('Campaign', campaignSchema)

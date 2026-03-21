@@ -4,7 +4,10 @@ import type { Model } from 'mongoose'
 import type { H3Event } from 'h3'
 import type { IUser } from '../types/admin/user.model'
 import { getRegistryConnection } from '../utils/db'
-import { findClientByClientKey } from '../utils/roles'
+import {
+  findClientByClientKey,
+  findClientByTenantId
+} from '../utils/roles'
 
 const PUBLIC_API_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/sso']
 
@@ -39,7 +42,8 @@ export default defineEventHandler(async (event) => {
         type: 'clientKey',
         role: 'client',
         clientName: client.clientName,
-        dbName: client.dbName
+        dbName: client.dbName,
+        ...(client.tenantId ? { tenantId: client.tenantId } : {})
       }
       return
     }
@@ -59,6 +63,32 @@ export default defineEventHandler(async (event) => {
   const dbUser = await UserModel.findOne({ firebaseUid: decoded.uid }).lean()
   if (!dbUser) {
     throw createError({ statusCode: 403, message: 'User not found in app database' })
+  }
+
+  if (dbUser.role === 'client') {
+    const tenantId =
+      typeof dbUser.tenantId === 'string' ? dbUser.tenantId.trim() : ''
+    if (!tenantId) {
+      throw createError({
+        statusCode: 403,
+        message: 'Client account is missing tenantId'
+      })
+    }
+    const tenantClient = await findClientByTenantId(registryConn, tenantId)
+    if (!tenantClient) {
+      throw createError({
+        statusCode: 403,
+        message: 'No client registered for this tenantId'
+      })
+    }
+    event.context.auth = {
+      uid: decoded.uid,
+      email: decoded.email || '',
+      role: 'client',
+      tenantId: tenantClient.tenantId,
+      dbName: tenantClient.dbName
+    }
+    return
   }
 
   event.context.auth = {

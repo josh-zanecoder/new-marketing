@@ -5,6 +5,8 @@ export interface RegistryClientDoc {
   dbName?: unknown
   tenantId?: unknown
   clientKeyPrefix?: unknown
+  /** Legacy field on some registry docs */
+  apiKeyPrefix?: unknown
   createdAt?: unknown
 }
 

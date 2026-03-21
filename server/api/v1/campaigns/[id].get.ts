@@ -1,18 +1,17 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { CampaignRecipient } from '../../../models/clients/CampaignRecipient'
-import { EmailTemplate } from '../../../models/clients/EmailTemplate'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
 import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../types/clients/campaignRecipient.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/clients/emailTemplate.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getRegistryConnection } from '../../../utils/db'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, message: 'Campaign ID is required' })
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const { Campaign, CampaignRecipient, ManualRecipient, EmailTemplate } =
+    getTenantClientModels(conn)
 
   const campaign = await (Campaign as CampaignModel)
     .findById(id)

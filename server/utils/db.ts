@@ -2,24 +2,43 @@ import mongoose from 'mongoose'
 
 const clientConnections = new Map<string, mongoose.Connection>()
 
-/** Connect to the shared Registry DB (clients, api keys, connection strings) */
-export async function getRegistryConnection(): Promise<mongoose.Connection> {
-  if (mongoose.connection.readyState === 1) {
-    return mongoose.connection
-  }
-  let uri = process.env.MONGODB_URI
-  if (!uri) {
-    try {
-      const config = useRuntimeConfig()
-      uri = config.mongodbUri as string
-    } catch {
-      /* BullMQ worker jobs run outside a request context */
+function resolveRegistryMongoConfig(): { uri: string; dbName: string } {
+  try {
+    const config = useRuntimeConfig()
+    const uri =
+      (config.mongodbUri as string) || process.env.MONGODB_URI || ''
+    const dbName =
+      (config.mongodbDbName as string) ||
+      process.env.MONGODB_DB_NAME ||
+      'marketing'
+    return { uri, dbName }
+  } catch {
+    return {
+      uri: process.env.MONGODB_URI || '',
+      dbName: process.env.MONGODB_DB_NAME || 'marketing'
     }
   }
+}
+
+/** Connect to the shared Registry DB (clients, api keys, connection strings) */
+export async function getRegistryConnection(): Promise<mongoose.Connection> {
+  const { uri, dbName: resolvedDbName } = resolveRegistryMongoConfig()
   if (!uri) {
-    throw new Error('MONGODB_URI is not configured')
+    throw new Error('MONGODB_URI is not configured (nuxt.config runtimeConfig.mongodbUri or MONGODB_URI)')
   }
-  await mongoose.connect(uri)
+
+  const conn = mongoose.connection
+  const onCorrectDb =
+    conn.readyState === 1 && conn.db?.databaseName === resolvedDbName
+
+  if (onCorrectDb) {
+    return conn
+  }
+
+  if (conn.readyState !== 0) {
+    await mongoose.disconnect()
+  }
+  await mongoose.connect(uri, { dbName: resolvedDbName })
   return mongoose.connection
 }
 

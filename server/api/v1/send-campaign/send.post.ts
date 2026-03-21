@@ -1,6 +1,4 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { CampaignRecipient } from '../../../models/clients/CampaignRecipient'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import { enqueueCampaignBatch } from '../../../queue/emailQueue'
 import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
 import type {
@@ -8,15 +6,22 @@ import type {
   CampaignRecipientModel
 } from '../../../types/clients/campaignRecipient.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getRegistryConnection } from '../../../utils/db'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../helpers/marketingEmail'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
   const campaignId = body?.campaignId
   if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const models = getTenantClientModels(conn)
+  const { Campaign, CampaignRecipient, ManualRecipient } = models
+
+  const dbName = conn.db?.databaseName
+  if (!dbName) {
+    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
+  }
 
   const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -89,7 +94,7 @@ export default defineEventHandler(async (event) => {
   await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: 'Sending' })
 
   try {
-    await enqueueCampaignBatch(campaignId)
+    await enqueueCampaignBatch(campaignId, dbName)
   } catch (e: unknown) {
     await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
     await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: 'Draft' })

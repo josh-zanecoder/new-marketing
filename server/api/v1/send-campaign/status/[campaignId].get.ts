@@ -1,11 +1,13 @@
-import { getRegistryConnection } from '../../../../utils/db'
+import { getTenantClientModels } from '../../../../models/clients/tenantClientModels'
 import { getCampaignSendProgress } from '../../../../services/send-campaign.service'
+import { getTenantConnectionFromEvent } from '../../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const campaignId = getRouterParam(event, 'campaignId')
   if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const models = getTenantClientModels(conn)
 
-  return getCampaignSendProgress(campaignId)
+  return getCampaignSendProgress(models, campaignId)
 })

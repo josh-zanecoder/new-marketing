@@ -1,7 +1,6 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { EmailTemplate } from '../../../models/clients/EmailTemplate'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -19,7 +18,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Campaign name is required' })
   }
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const { Campaign, EmailTemplate, ManualRecipient } = getTenantClientModels(conn)
 
   let emailTemplateId: string | undefined
 
@@ -68,5 +68,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { id: campaign._id.toString(), campaign }
+  return { id: String(campaign._id), campaign }
 })

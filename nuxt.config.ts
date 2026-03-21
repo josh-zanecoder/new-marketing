@@ -5,7 +5,10 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
+    /** Registry cluster URI; `server/utils/db.ts` reads via `useRuntimeConfig()` first. */
     mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/mortdash-registry',
+    /** Default DB name on that cluster (e.g. `marketing`). */
+    mongodbDbName: process.env.MONGODB_DB_NAME || 'marketing',
     brevoApiKey: process.env.BREVO_API_KEY || '',
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',

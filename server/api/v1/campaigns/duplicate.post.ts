@@ -1,6 +1,4 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { EmailTemplate } from '../../../models/clients/EmailTemplate'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/clients/emailTemplate.model'
 import type {
@@ -9,14 +7,15 @@ import type {
   ManualRecipientLean,
   ManualRecipientModel
 } from '../../../types/clients/manualRecipient.model'
-import { getRegistryConnection } from '../../../utils/db'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
   const campaignId = body?.campaignId
   if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const { Campaign, EmailTemplate, ManualRecipient } = getTenantClientModels(conn)
 
   const source = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -70,5 +69,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { id: newCampaign._id.toString(), campaign: newCampaign }
+  return { id: String(newCampaign._id), campaign: newCampaign }
 })

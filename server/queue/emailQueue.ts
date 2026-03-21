@@ -15,10 +15,10 @@ export function getEmailQueue(): Queue {
   return emailQueue
 }
 
-export async function enqueueCampaignBatch(campaignId: string) {
+export async function enqueueCampaignBatch(campaignId: string, dbName: string) {
   await getEmailQueue().add(
     EMAIL_JOB_PROCESS_BATCH,
-    { campaignId },
+    { campaignId, dbName },
     {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },

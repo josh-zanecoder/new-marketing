@@ -1,6 +1,4 @@
-import { Campaign } from '../../../models/clients/Campaign'
-import { EmailTemplate } from '../../../models/clients/EmailTemplate'
-import { ManualRecipient } from '../../../models/clients/ManualRecipients'
+import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
 import type { CampaignModel } from '../../../types/clients/campaign.model'
 import type { EmailTemplateModel } from '../../../types/clients/emailTemplate.model'
 import type {
@@ -8,7 +6,7 @@ import type {
   ManualRecipientInsertManyCast,
   ManualRecipientModel
 } from '../../../types/clients/manualRecipient.model'
-import { getRegistryConnection } from '../../../utils/db'
+import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -29,7 +27,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Campaign name is required' })
   }
 
-  await getRegistryConnection()
+  const conn = await getTenantConnectionFromEvent(event)
+  const { Campaign, EmailTemplate, ManualRecipient } = getTenantClientModels(conn)
 
   const campaign = await (Campaign as CampaignModel).findById(id)
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -82,5 +81,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { id: campaign._id.toString(), campaign }
+  return { id: String(campaign._id), campaign }
 })

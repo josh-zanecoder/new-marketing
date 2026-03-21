@@ -1,8 +1,9 @@
 import { Worker } from 'bullmq'
-import { getRegistryConnection } from '../utils/db'
 import { getBullMqConnectionOptions } from '../utils/bullmqConnection'
+import { getTenantClientModels } from '../models/clients/tenantClientModels'
 import { EMAIL_JOB_PROCESS_BATCH, EMAIL_QUEUE_NAME, getEmailQueue } from '../queue/emailQueue'
 import { processBatch } from '../services/send-campaign.service'
+import { getTenantConnectionByDbName } from '../utils/tenantDb'
 
 let worker: Worker | null = null
 
@@ -16,15 +17,19 @@ export function startEmailWorker() {
     async (job) => {
       if (job.name !== EMAIL_JOB_PROCESS_BATCH) return
 
-      const { campaignId } = job.data as { campaignId: string }
-      await getRegistryConnection()
+      const { campaignId, dbName } = job.data as { campaignId: string; dbName: string }
+      if (!dbName) {
+        throw new Error('Email job missing dbName (tenant database)')
+      }
+      const tenantConn = await getTenantConnectionByDbName(dbName)
+      const models = getTenantClientModels(tenantConn)
 
-      const result = await processBatch(campaignId)
+      const result = await processBatch(models, campaignId)
 
       if (!result.done) {
         await getEmailQueue().add(
           EMAIL_JOB_PROCESS_BATCH,
-          { campaignId },
+          { campaignId, dbName },
           {
             attempts: 3,
             backoff: { type: 'exponential', delay: 5000 },
