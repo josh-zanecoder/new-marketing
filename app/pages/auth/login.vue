@@ -58,8 +58,8 @@ async function handleLogin() {
       return
     }
 
-    if (role === 'client') {
-      await navigateTo('/client/dashboard')
+    if (role === 'tenant' || role === 'client') {
+      await navigateTo('/tenant/dashboard')
       return
     }
 

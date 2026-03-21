@@ -16,7 +16,7 @@ async function handleLogout() {
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
         <NuxtLink
-          to="/client/dashboard"
+          to="/tenant/dashboard"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors"
           active-class="!bg-slate-100 !text-slate-900"
         >
@@ -26,7 +26,7 @@ async function handleLogout() {
           <span>Dashboard</span>
         </NuxtLink>
         <NuxtLink
-          to="/client/campaigns"
+          to="/tenant/campaigns"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors relative after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-6 after:w-0.5 after:rounded-l after:bg-emerald-500 after:opacity-0 after:content-['']"
           active-class="!bg-emerald-50 !text-emerald-800 hover:!bg-emerald-100 after:!opacity-100"
         >
@@ -36,7 +36,7 @@ async function handleLogout() {
           <span>Campaigns</span>
         </NuxtLink>
         <NuxtLink
-          to="/client/email-editor"
+          to="/tenant/email-editor"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors"
           active-class="!bg-slate-100 !text-slate-900"
         >

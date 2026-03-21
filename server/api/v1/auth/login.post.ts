@@ -1,3 +1,4 @@
+import { getRegistryConnection } from '../../../lib/mongoose'
 import User from '../../../models/admin/User'
 import type { Model } from 'mongoose'
 import type { IUser } from '../../../types/admin/user.model'

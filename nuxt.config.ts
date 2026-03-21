@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
-    /** Registry cluster URI; `server/utils/db.ts` reads via `useRuntimeConfig()` first. */
+    /** Registry cluster URI; `server/lib/mongoose.ts` reads via `useRuntimeConfig()` first. */
     mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/mortdash-registry',
     /** Default DB name on that cluster (e.g. `marketing`). */
     mongodbDbName: process.env.MONGODB_DB_NAME || 'marketing',
@@ -32,6 +32,6 @@ export default defineNuxtConfig({
     }
   },
   routeRules: {
-    '/': { redirect: '/client/dashboard' }
+    '/': { redirect: '/tenant/dashboard' }
   }
 })

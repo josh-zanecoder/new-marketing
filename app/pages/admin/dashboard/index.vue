@@ -7,7 +7,7 @@
 
     <div class="stats-grid">
       <article class="stat-card">
-        <span>Total Clients</span>
+        <span>Total tenants</span>
         <strong>0</strong>
       </article>
       <article class="stat-card">

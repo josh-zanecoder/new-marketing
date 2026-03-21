@@ -1,9 +1,9 @@
-import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../types/clients/campaignRecipient.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/clients/emailTemplate.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
+import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '../../../types/tenant/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../types/tenant/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/tenant/emailTemplate.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../tenant/connection'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

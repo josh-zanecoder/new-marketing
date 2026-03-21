@@ -1,7 +1,7 @@
-import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../types/clients/campaign.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
+import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '../../../types/tenant/campaign.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../tenant/connection'
 
 export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)

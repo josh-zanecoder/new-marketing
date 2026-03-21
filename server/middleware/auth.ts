@@ -3,11 +3,11 @@ import User from '../models/admin/User'
 import type { Model } from 'mongoose'
 import type { H3Event } from 'h3'
 import type { IUser } from '../types/admin/user.model'
-import { getRegistryConnection } from '../utils/db'
+import { getRegistryConnection } from '../lib/mongoose'
 import {
-  findClientByClientKey,
-  findClientByTenantId
-} from '../utils/roles'
+  findRegistryTenantByApiKey,
+  findRegistryTenantByTenantId
+} from '../tenant/registry-auth'
 
 const PUBLIC_API_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/sso']
 
@@ -19,7 +19,8 @@ function getBearerToken(event: H3Event): string {
   return authorization.slice(7).trim()
 }
 
-function getClientKey(event: H3Event): string {
+/** Reads tenant API key from headers or `nmk_` Bearer token. */
+function getTenantApiKeyFromEvent(event: H3Event): string {
   const header = getHeader(event, 'x-client-key') || getHeader(event, 'x-api-key') || ''
   if (header) return header.trim()
   const bearer = getBearerToken(event)
@@ -27,23 +28,27 @@ function getClientKey(event: H3Event): string {
   return ''
 }
 
+function isTenantUserRole(role: string): boolean {
+  return role === 'tenant' || role === 'client'
+}
+
 export default defineEventHandler(async (event) => {
   const path = event.path || ''
   if (!path.startsWith('/api/')) return
   if (PUBLIC_API_PREFIXES.some((prefix) => path.startsWith(prefix))) return
 
-  const clientKey = getClientKey(event)
+  const apiKey = getTenantApiKeyFromEvent(event)
   const registryConn = await getRegistryConnection()
 
-  if (clientKey && !path.startsWith(ADMIN_API_PREFIX)) {
-    const client = await findClientByClientKey(registryConn, clientKey)
-    if (client) {
+  if (apiKey && !path.startsWith(ADMIN_API_PREFIX)) {
+    const row = await findRegistryTenantByApiKey(registryConn, apiKey)
+    if (row) {
       event.context.auth = {
-        type: 'clientKey',
-        role: 'client',
-        clientName: client.clientName,
-        dbName: client.dbName,
-        ...(client.tenantId ? { tenantId: client.tenantId } : {})
+        type: 'tenantApiKey',
+        role: 'tenant',
+        tenantName: row.tenantName,
+        dbName: row.dbName,
+        ...(row.tenantId ? { tenantId: row.tenantId } : {})
       }
       return
     }
@@ -65,28 +70,28 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'User not found in app database' })
   }
 
-  if (dbUser.role === 'client') {
+  if (isTenantUserRole(dbUser.role)) {
     const tenantId =
       typeof dbUser.tenantId === 'string' ? dbUser.tenantId.trim() : ''
     if (!tenantId) {
       throw createError({
         statusCode: 403,
-        message: 'Client account is missing tenantId'
+        message: 'Tenant account is missing tenantId'
       })
     }
-    const tenantClient = await findClientByTenantId(registryConn, tenantId)
-    if (!tenantClient) {
+    const row = await findRegistryTenantByTenantId(registryConn, tenantId)
+    if (!row) {
       throw createError({
         statusCode: 403,
-        message: 'No client registered for this tenantId'
+        message: 'No tenant registered for this tenantId'
       })
     }
     event.context.auth = {
       uid: decoded.uid,
       email: decoded.email || '',
-      role: 'client',
-      tenantId: tenantClient.tenantId,
-      dbName: tenantClient.dbName
+      role: 'tenant',
+      tenantId: row.tenantId,
+      dbName: row.dbName
     }
     return
   }

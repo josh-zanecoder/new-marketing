@@ -26,14 +26,14 @@ async function handleLogout() {
           <span>Dashboard</span>
         </NuxtLink>
         <NuxtLink
-          to="/admin/clients"
+          to="/admin/tenants"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors"
           active-class="!bg-slate-100 !text-slate-900"
         >
           <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5V4H2v16h5m10 0v-2a4 4 0 10-8 0v2m8 0H9m3-8a3 3 0 100-6 3 3 0 000 6z" />
           </svg>
-          <span>Clients</span>
+          <span>Tenants</span>
         </NuxtLink>
       </nav>
       <div class="p-3 border-t border-slate-200/80">

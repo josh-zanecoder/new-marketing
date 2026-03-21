@@ -1,9 +1,9 @@
 import { Worker } from 'bullmq'
-import { getBullMqConnectionOptions } from '../utils/bullmqConnection'
-import { getTenantClientModels } from '../models/clients/tenantClientModels'
+import { getBullMqConnectionOptions } from '../lib/bullmq'
+import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import { EMAIL_JOB_PROCESS_BATCH, EMAIL_QUEUE_NAME, getEmailQueue } from '../queue/emailQueue'
 import { processBatch } from '../services/send-campaign.service'
-import { getTenantConnectionByDbName } from '../utils/tenantDb'
+import { getTenantConnectionByDbName } from '../tenant/connection'
 
 let worker: Worker | null = null
 

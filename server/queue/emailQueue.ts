@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq'
-import { getBullMqConnectionOptions } from '../utils/bullmqConnection'
+import { getBullMqConnectionOptions } from '../lib/bullmq'
 
 export const EMAIL_QUEUE_NAME = 'emailQueue'
 export const EMAIL_JOB_PROCESS_BATCH = 'processCampaignBatch'

@@ -3,6 +3,16 @@ import type { Campaign, SendStatus } from '~/types/campaign'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
 
+/** SSR: internal API calls must forward the browser cookie or auth middleware returns 401. */
+function serverAuthHeaders(): { headers?: HeadersInit } {
+  if (!import.meta.server) return {}
+  try {
+    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
+  } catch {
+    return {}
+  }
+}
+
 function fetchErrorMessage(e: unknown, fallback: string): string {
   if (e && typeof e === 'object' && 'data' in e) {
     const data = (e as { data?: { message?: string } }).data
@@ -19,7 +29,10 @@ export const useCampaignStore = defineStore('campaigns', () => {
   const sendError = ref<string | null>(null)
 
   async function fetchCampaigns() {
-    const res = await $fetch<{ campaigns: Campaign[] }>('/api/v1/campaigns')
+    const res = await $fetch<{ campaigns: Campaign[] }>(
+      '/api/v1/campaigns',
+      serverAuthHeaders()
+    )
     campaigns.value = res?.campaigns ?? []
     return campaigns.value
   }
@@ -42,7 +55,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }>('/api/v1/send-campaign/send', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 30000
+        timeout: 30000,
+        ...serverAuthHeaders()
       })
 
 

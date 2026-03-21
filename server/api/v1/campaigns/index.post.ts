@@ -1,6 +1,6 @@
-import { getTenantClientModels } from '../../../models/clients/tenantClientModels'
-import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/clients/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../utils/tenantDb'
+import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
+import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../tenant/connection'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{

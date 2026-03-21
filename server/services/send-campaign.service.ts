@@ -1,7 +1,7 @@
-import type { TenantClientModels } from '../models/clients/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../types/clients/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/clients/campaignRecipient.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../types/clients/emailTemplate.model'
+import type { TenantClientModels } from '../models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { sendEmail } from './brevo.service'
 
 const BATCH_SIZE = 25
