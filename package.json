@@ -21,6 +21,7 @@
     "grapesjs": "^0.22.13",
     "grapesjs-preset-newsletter": "^1.0.2",
     "grapesjs-preset-webpage": "^1.0.3",
+    "kafkajs": "^2.2.4",
     "mongoose": "^8.0.0",
     "nuxt": "^4.4.2",
     "pinia": "^3.0.4",

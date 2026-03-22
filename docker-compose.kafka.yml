@@ -1,0 +1,40 @@
+# Local event stream: Redpanda (Kafka API). Usage:
+#   docker compose -f docker-compose.kafka.yml up -d
+#   docker exec new-marketing-redpanda rpk topic create marketing.events
+# Realtime UI: open http://localhost:8080 → Topics → marketing.events → Messages (live).
+# Realtime CLI (streams until Ctrl+C): docker exec -it new-marketing-redpanda rpk topic consume marketing.events -o :end -f '%v\n'
+# Then in .env: KAFKA_BROKERS=127.0.0.1:19092 and KAFKA_SSL=false (leave user/pass empty).
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.11
+    container_name: new-marketing-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://127.0.0.1:19092
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --mode
+      - dev-container
+    ports:
+      - "19092:19092"
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v3.6.0
+    container_name: new-marketing-console
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redpanda

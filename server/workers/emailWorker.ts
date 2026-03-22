@@ -3,6 +3,7 @@ import { getBullMqConnectionOptions } from '../lib/bullmq'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import { EMAIL_JOB_PROCESS_BATCH, EMAIL_QUEUE_NAME, getEmailQueue } from '../queue/emailQueue'
 import { processBatch } from '../services/send-campaign.service'
+import { publishCampaignSendCompleted } from '../services/kafkaProducer'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 
 let worker: Worker | null = null
@@ -37,6 +38,15 @@ export function startEmailWorker() {
             removeOnFail: 5000
           }
         )
+      } else {
+        await publishCampaignSendCompleted({
+          tenantDbName: dbName,
+          campaignId,
+          campaignStatus: result.campaignStatus,
+          sent: result.sent,
+          failed: result.failed,
+          total: result.total
+        })
       }
     },
     {

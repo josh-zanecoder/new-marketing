@@ -23,7 +23,19 @@ export default defineNuxtConfig({
     redisPort: Number(process.env.REDIS_PORT) || 6379,
     redisPassword: (process.env.REDIS_PASSWORD || '').trim(),
     redisDb: Number(process.env.REDIS_DB) || 0,
-    redisUsername: process.env.REDIS_USERNAME || 'default'
+    redisUsername: process.env.REDIS_USERNAME || 'default',
+    /**
+     * GCP Managed Service for Apache Kafka: same region/VPC as the app; TLS required.
+     * KAFKA_USERNAME = service account email; KAFKA_PASSWORD = base64 (no wraps) of SA JSON key (SASL/PLAIN).
+     * https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka
+     */
+    kafkaBrokers: process.env.KAFKA_BROKERS || '',
+    kafkaClientId: process.env.KAFKA_CLIENT_ID || 'new-marketing',
+    kafkaTopicEvents: process.env.KAFKA_TOPIC_MARKETING_EVENTS || 'marketing.events',
+    kafkaUsername: process.env.KAFKA_USERNAME || '',
+    kafkaPassword: process.env.KAFKA_PASSWORD || '',
+    kafkaSsl: process.env.KAFKA_SSL !== 'false',
+    kafkaSaslMechanism: process.env.KAFKA_SASL_MECHANISM || 'plain'
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {
