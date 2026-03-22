@@ -93,4 +93,23 @@ Send a draft campaign from the **campaigns** list (paper plane). When the email 
 
 ## Production (GCP)
 
-For **Google Cloud Managed Service for Apache Kafka**, use TLS and SASL per [Google’s SASL guide](https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka). See `nuxt.config.ts` `runtimeConfig` comments for env variable names.
+For **Google Cloud Managed Service for Apache Kafka**, use TLS and SASL per [Google’s SASL guide](https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka).
+
+### Option A: SA vitals in .env (no JSON file)
+
+Put the service account key fields directly in `.env`:
+
+```bash
+KAFKA_BROKERS=bootstrap.CLUSTER_ID.REGION.managedkafka.PROJECT_ID.cloud.goog:9092
+KAFKA_SSL=true
+KAFKA_TOPIC_MARKETING_EVENTS=marketing.events
+KAFKA_SA_CLIENT_EMAIL=your-sa@PROJECT_ID.iam.gserviceaccount.com
+KAFKA_SA_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+KAFKA_SA_PROJECT_ID=your-gcp-project-id
+```
+
+`KAFKA_SA_PRIVATE_KEY` can use literal `\n` for newlines; the app converts them.
+
+### Option B: Base64 of full JSON
+
+Use `KAFKA_USERNAME` (SA email) and `KAFKA_PASSWORD` (base64 of the entire SA key JSON, single line).
