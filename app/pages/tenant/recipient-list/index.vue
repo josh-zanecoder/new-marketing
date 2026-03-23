@@ -233,7 +233,7 @@ async function load() {
   pending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<RecipientListIndexPayload>('/api/v1/recipient-list', {
+    const res = await $fetch<RecipientListIndexPayload>('/api/v1/tenant/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()
     })

@@ -35,7 +35,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function fetchCampaigns() {
     const res = await $fetch<{ campaigns: Campaign[] }>(
-      '/api/v1/campaigns',
+      '/api/v1/tenant/campaigns',
       {
         ...apiFetchOptions(),
         ...serverAuthHeaders()
@@ -60,7 +60,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         sent: number
         failed: number
         pending: number
-      }>('/api/v1/send-campaign/send', {
+      }>('/api/v1/tenant/send-campaign/send', {
         method: 'POST',
         body: { campaignId: c.id },
         timeout: 30000,
@@ -120,7 +120,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function deleteCampaign(c: Campaign) {
     try {
-      await $fetch(`/api/v1/campaigns/${c.id}`, {
+      await $fetch(`/api/v1/tenant/campaigns/${c.id}`, {
         method: 'DELETE',
         ...apiFetchOptions(),
         ...serverAuthHeaders()
@@ -135,7 +135,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function duplicateCampaign(c: Campaign) {
     try {
-      const res = await $fetch<{ id: string }>('/api/v1/campaigns/duplicate', {
+      const res = await $fetch<{ id: string }>('/api/v1/tenant/campaigns/duplicate', {
         method: 'POST',
         body: { campaignId: c.id },
         timeout: 10000,

@@ -1,7 +1,7 @@
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{

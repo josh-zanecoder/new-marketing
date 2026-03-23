@@ -20,7 +20,7 @@ const { data, error, pending } = await useFetch<{
     createdAt: string
     updatedAt: string
   }
-}>(`/api/v1/campaigns/${id}`)
+}>(`/api/v1/tenant/campaigns/${id}`)
 
 const campaign = computed(() => data.value?.campaign ?? null)
 

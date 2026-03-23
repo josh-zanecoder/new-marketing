@@ -1,14 +1,14 @@
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import { enqueueCampaignBatch } from '../../../queue/emailQueue'
-import type { CampaignLean, CampaignModel } from '../../../types/tenant/campaign.model'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { enqueueCampaignBatch } from '../../../../queue/emailQueue'
+import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
 import type {
   CampaignRecipientInsertRow,
   CampaignRecipientModel
-} from '../../../types/tenant/campaignRecipient.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
-import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../helpers/marketingEmail'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
+} from '../../../../types/tenant/campaignRecipient.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
+import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../../helpers/marketingEmail'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)

@@ -1,10 +1,33 @@
 import mongoose from 'mongoose'
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import { isRegisteredTenantAuthContext } from '../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { normalizeRecipientListDoc } from '../../../utils/recipientListDocument'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { isRegisteredTenantAuthContext } from '../../../../tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 
 const MAX_PAGE_SIZE = 100
+type RecipientListDoc = {
+  _id: mongoose.Types.ObjectId
+  name?: string
+  listType?: string
+  createdAt?: Date | null
+  updatedAt?: Date | null
+} & Record<string, unknown>
+
+type RecipientListMemberRow = {
+  contactId?: mongoose.Types.ObjectId | null
+}
+
+type ContactRow = {
+  _id: mongoose.Types.ObjectId
+  name?: string
+  email?: string
+  phone?: string | null
+  contactKind?: string
+  company?: string | null
+  channel?: string | null
+  source?: string | null
+  address?: Record<string, unknown> | null
+}
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -23,14 +46,12 @@ export default defineEventHandler(async (event) => {
   const { RecipientList, RecipientListMember, Contact } =
     getTenantClientModels(tenantConn)
 
-  const doc = await RecipientList.findById(listId).lean().exec()
+  const doc = (await RecipientList.findById(listId).lean().exec()) as RecipientListDoc | null
   if (!doc) {
     throw createError({ statusCode: 404, message: 'List not found' })
   }
 
-  const { audience, filters, filterMode } = normalizeRecipientListDoc(
-    doc as Record<string, unknown>
-  )
+  const { audience, filters, filterMode } = normalizeRecipientListDoc(doc)
 
   const query = getQuery(event)
   const page = Math.max(1, parseInt(String(query.page ?? '1'), 10) || 1)
@@ -44,20 +65,20 @@ export default defineEventHandler(async (event) => {
     recipientListId: listId
   })
 
-  const memberRows = await RecipientListMember.find({ recipientListId: listId })
+  const memberRows = (await RecipientListMember.find({ recipientListId: listId })
     .select('contactId')
     .sort({ createdAt: 1 })
     .skip(skip)
     .limit(pageSize)
     .lean()
-    .exec()
+    .exec()) as RecipientListMemberRow[]
 
   const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
 
-  const contacts =
+  const contacts: ContactRow[] =
     contactIds.length === 0
       ? []
-      : await Contact.find({
+      : ((await Contact.find({
           _id: { $in: contactIds },
           deletedAt: null
         })
@@ -72,7 +93,7 @@ export default defineEventHandler(async (event) => {
             address: 1
           })
           .lean()
-          .exec()
+          .exec()) as ContactRow[])
 
   const byId = new Map(contacts.map((c) => [String(c._id), c]))
   const items = contactIds
@@ -80,10 +101,10 @@ export default defineEventHandler(async (event) => {
     .filter(Boolean)
     .map((c) => ({
       id: String(c!._id),
-      name: c!.name,
-      email: c!.email,
+      name: c!.name ?? '',
+      email: c!.email ?? '',
       phone: c!.phone ?? '',
-      contactKind: c!.contactKind,
+      contactKind: c!.contactKind ?? '',
       company: c!.company ?? '',
       channel: c!.channel ?? '',
       source: c!.source ?? '',
@@ -93,8 +114,8 @@ export default defineEventHandler(async (event) => {
   return {
     list: {
       id: String(doc._id),
-      name: doc.name,
-      listType: doc.listType,
+      name: doc.name ?? '',
+      listType: doc.listType ?? '',
       audience,
       filters,
       filterMode,

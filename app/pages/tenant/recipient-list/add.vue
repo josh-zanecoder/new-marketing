@@ -497,7 +497,7 @@ async function load() {
   loadPending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<RecipientListFormPayload>('/api/v1/recipient-list', {
+    const res = await $fetch<RecipientListFormPayload>('/api/v1/tenant/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()
     })
@@ -537,7 +537,7 @@ async function submitCreate() {
       filterMode: showCombineCriteria.value ? form.filterMode : 'and'
     }
 
-    await $fetch('/api/v1/recipient-list', {
+    await $fetch('/api/v1/tenant/recipient-list', {
       method: 'POST',
       credentials: 'include',
       ...serverAuthHeaders(),

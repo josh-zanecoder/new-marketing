@@ -1,15 +1,33 @@
-import { getRegistryConnection } from '../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../models/registry/RecipientFilter'
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
+import { getRegistryConnection } from '../../../../lib/mongoose'
+import { getRecipientFilterModel } from '../../../../models/registry/RecipientFilter'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
   resolveTenantIdForTenantAuth
-} from '../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { canonicalRecipientFilterFieldsFromDoc } from '../../../utils/recipientFilterValidation'
-import { normalizeRecipientListDoc } from '../../../utils/recipientListDocument'
+} from '../../../../tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
+import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 
 const CONTACT_LIMIT = 3000
+type ContactRow = {
+  _id: unknown
+  name?: string
+  email?: string
+  contactKind?: string
+  company?: string | null
+  channel?: string | null
+  source?: string | null
+  address?: Record<string, unknown> | null
+}
+
+type RecipientListDoc = {
+  _id: unknown
+  name?: string
+  listType?: string
+  createdAt?: Date | null
+  updatedAt?: Date | null
+} & Record<string, unknown>
 
 function serializeRegistryFilter(f: {
   _id: unknown
@@ -50,7 +68,7 @@ export default defineEventHandler(async (event) => {
   const tenantConn = await getTenantConnectionFromEvent(event)
   const { Contact, RecipientList } = getTenantClientModels(tenantConn)
 
-  const [contactTotal, contacts, kindCounts, lists] = await Promise.all([
+  const [contactTotal, contactsRaw, kindCounts, listsRaw] = await Promise.all([
     Contact.countDocuments({ deletedAt: null }),
     Contact.find({ deletedAt: null })
       .select({
@@ -76,6 +94,8 @@ export default defineEventHandler(async (event) => {
       .lean()
       .exec()
   ])
+  const contacts = contactsRaw as ContactRow[]
+  const lists = listsRaw as RecipientListDoc[]
 
   const byKind: Record<string, number> = {}
   for (const row of kindCounts) {
@@ -97,9 +117,9 @@ export default defineEventHandler(async (event) => {
     tenantIdConfigured: Boolean(tenantId),
     contacts: contacts.map((c) => ({
       id: String(c._id),
-      name: c.name,
-      email: c.email,
-      contactKind: c.contactKind,
+      name: c.name ?? '',
+      email: c.email ?? '',
+      contactKind: c.contactKind ?? '',
       company: c.company ?? '',
       channel: c.channel ?? '',
       source: c.source ?? '',
@@ -114,13 +134,11 @@ export default defineEventHandler(async (event) => {
     },
     recipientFilters,
     lists: lists.map((doc) => {
-      const { audience, filters, filterMode } = normalizeRecipientListDoc(
-        doc as Record<string, unknown>
-      )
+      const { audience, filters, filterMode } = normalizeRecipientListDoc(doc)
       return {
         id: String(doc._id),
-        name: doc.name,
-        listType: doc.listType,
+        name: doc.name ?? '',
+        listType: doc.listType ?? '',
         audience,
         filters,
         filterMode,

@@ -251,7 +251,7 @@ async function load(p: number) {
   loadError.value = ''
   try {
     const res = await $fetch<ListDetailPayload>(
-      `/api/v1/recipient-list/${encodeURIComponent(id)}`,
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`,
       {
         credentials: 'include',
         ...serverAuthHeaders(),

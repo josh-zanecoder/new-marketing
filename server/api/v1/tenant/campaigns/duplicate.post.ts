@@ -1,14 +1,14 @@
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../types/tenant/campaign.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/tenant/emailTemplate.model'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../../../../types/tenant/emailTemplate.model'
 import type {
   ManualRecipientInsert,
   ManualRecipientInsertManyCast,
   ManualRecipientLean,
   ManualRecipientModel
-} from '../../../types/tenant/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
+} from '../../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)

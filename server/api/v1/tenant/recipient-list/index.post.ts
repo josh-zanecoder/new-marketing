@@ -1,22 +1,31 @@
 import mongoose from 'mongoose'
-import { getRegistryConnection } from '../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../models/registry/RecipientFilter'
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import type { ContactKind } from '../../../types/tenant/contact.model'
+import { getRegistryConnection } from '../../../../lib/mongoose'
+import { getRecipientFilterModel } from '../../../../models/registry/RecipientFilter'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import type { ContactKind } from '../../../../types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListFilterMode
-} from '../../../types/tenant/recipientList.model'
+} from '../../../../types/tenant/recipientList.model'
 import {
   isRegisteredTenantAuthContext,
   resolveTenantIdForTenantAuth
-} from '../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { canonicalRecipientFilterFieldsFromDoc } from '../../../utils/recipientFilterValidation'
-import { buildContactFilterQuery } from '../../../utils/recipientListContactQuery'
-import { registryDocToCriteria } from '../../../utils/recipientListDocument'
+} from '../../../../tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
+import { buildContactFilterQuery } from '../../../../utils/recipientListContactQuery'
+import { registryDocToCriteria } from '../../../../utils/recipientListDocument'
 
 const MEMBER_INSERT_BATCH = 1000
+type CreatedRecipientList = {
+  name?: string
+  listType?: string
+  audience?: string
+  filters?: unknown[]
+  filterMode?: string
+  createdAt?: Date | null
+  updatedAt?: Date | null
+}
 
 const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
 
@@ -236,14 +245,14 @@ export default defineEventHandler(async (event) => {
     memberCount += batch.length
   }
 
-  const lean = created.toObject()
+  const lean = created.toObject() as CreatedRecipientList
 
   return {
     list: {
       id: String(created._id),
-      name: lean.name,
-      listType: lean.listType,
-      audience: lean.audience,
+      name: lean.name ?? '',
+      listType: lean.listType ?? '',
+      audience: lean.audience ?? '',
       filters: lean.filters ?? [],
       filterMode: lean.filterMode === 'or' ? 'or' : 'and',
       memberCount,

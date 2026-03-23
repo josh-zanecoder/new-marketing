@@ -1,10 +1,10 @@
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../types/tenant/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../types/tenant/campaignRecipient.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/tenant/emailTemplate.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../../types/tenant/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '../../../../types/tenant/emailTemplate.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

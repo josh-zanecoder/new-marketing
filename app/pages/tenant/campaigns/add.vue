@@ -563,7 +563,7 @@ function startPollingAfterWizard(campaignId: string) {
   async function poll() {
     if (!sendingCampaignId.value) return
     try {
-      const res = await $fetch<SendStatus>(`/api/v1/send-campaign/status/${campaignId}`, {
+      const res = await $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
         timeout: 60000,
         credentials: 'include',
         ...serverAuthHeaders()
@@ -623,7 +623,7 @@ async function loadRecipientLists() {
   recipientListsPending.value = true
   recipientListsError.value = ''
   try {
-    const res = await $fetch<{ lists?: RecipientListOption[] }>('/api/v1/recipient-list', {
+    const res = await $fetch<{ lists?: RecipientListOption[] }>('/api/v1/tenant/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()
     })
@@ -673,7 +673,7 @@ async function loadEditCampaign() {
       subject: string
       recipients: { email: string }[]
       templateHtml?: string | null
-    } }>(`/api/v1/campaigns/${editId.value}`)
+    } }>(`/api/v1/tenant/campaigns/${editId.value}`)
     const c = res.campaign
     form.value = {
       name: c.name,
@@ -718,7 +718,7 @@ async function loadFromEditorReturn() {
         recipientsListId?: string
         subject: string
         recipients: { email: string }[]
-      } }>(`/api/v1/campaigns/${campaignId}`)
+      } }>(`/api/v1/tenant/campaigns/${campaignId}`)
       const c = res.campaign
       form.value = {
         name: c.name,
@@ -942,10 +942,10 @@ async function persistSavedCampaign(): Promise<string> {
   }
 
   if (isEditMode.value && editId.value) {
-    await $fetch(`/api/v1/campaigns/${editId.value}`, { method: 'PUT', body })
+    await $fetch(`/api/v1/tenant/campaigns/${editId.value}`, { method: 'PUT', body })
     return editId.value
   }
-  const res = await $fetch<{ id: string }>('/api/v1/campaigns', { method: 'POST', body })
+  const res = await $fetch<{ id: string }>('/api/v1/tenant/campaigns', { method: 'POST', body })
   return res.id
 }
 

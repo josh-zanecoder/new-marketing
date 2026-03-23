@@ -1,6 +1,6 @@
 import type { Model, Types } from 'mongoose'
-import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
-import { getTenantConnectionFromEvent } from '../../../tenant/connection'
+import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 
 interface CampaignDoc {
   _id: Types.ObjectId
