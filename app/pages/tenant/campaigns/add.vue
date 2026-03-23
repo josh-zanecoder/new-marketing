@@ -43,69 +43,43 @@
         <nav class="mb-3 flex items-center gap-2 text-base text-slate-500" />
         <h1 class="text-4xl font-bold text-slate-900 tracking-tight">{{ isEditMode ? 'Edit campaign' : 'Create campaign' }}</h1>
         <p class="mt-2 text-lg text-slate-600">
-          Configure your campaign step by step. Start with the name, then add sender, recipients, subject, and design.
+          Configure your campaign step by step: name, recipients, design, and subject.
         </p>
       </header>
 
       <div class="space-y-6">
         <div>
-          <label class="mb-2.5 block text-base font-semibold text-slate-700">Campaign name</label>
+          <label class="mb-2.5 block text-base font-semibold text-slate-700">
+            Campaign name
+            <span class="ml-0.5 text-red-600" aria-hidden="true">*</span>
+            <span class="sr-only">(required)</span>
+          </label>
           <input
             v-model="form.name"
             type="text"
+            required
+            aria-required="true"
+            autocomplete="off"
             placeholder="e.g. Q1 Newsletter"
             class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
           >
         </div>
 
         <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
-        <!-- Sender -->
+        <!-- Sender (read-only; values from account defaults or existing campaign) -->
         <div class="border-b border-slate-100 last:border-b-0">
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/60 transition-colors"
-            @click="senderOpen = !senderOpen"
-          >
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
-                :class="senderComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
-              >
-                <svg v-if="senderComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <div>
-                <div class="text-lg font-semibold text-slate-900">Sender</div>
-                <div class="mt-0.5 text-base text-slate-500">
-                  {{ form.senderName && form.senderEmail ? `${form.senderName} • ${form.senderEmail}` : 'Add sender name and email' }}
-                </div>
-              </div>
+          <div class="flex w-full items-center gap-4 px-8 py-5">
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
             </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ senderOpen ? 'Close' : 'Manage sender' }}</span>
-          </button>
-          <div v-if="senderOpen" class="border-t border-slate-100 bg-slate-50/60 px-8 py-6">
-            <div class="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label class="mb-2 block text-base font-medium text-slate-700">Sender name</label>
-                <input
-                  v-model="form.senderName"
-                  type="text"
-                  placeholder="Sender name"
-                  class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                >
-              </div>
-              <div>
-                <label class="mb-2 block text-base font-medium text-slate-700">Sender email</label>
-                <input
-                  v-model="form.senderEmail"
-                  type="email"
-                  placeholder="sender@example.com"
-                  class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                >
+            <div class="min-w-0 flex-1">
+              <div class="text-lg font-semibold text-slate-900">Sender</div>
+              <div class="mt-0.5 text-base text-slate-600">
+                {{ form.senderName }} &lt;{{ form.senderEmail }}&gt;
               </div>
             </div>
           </div>
@@ -171,11 +145,38 @@
                 <label class="mb-2 block text-base font-medium text-slate-700">Recipient list</label>
                 <select
                   v-model="form.recipientsListId"
-                  class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                  :disabled="recipientListsPending"
                 >
-                  <option value="">Choose a list</option>
-                  <option v-for="list in recipientLists" :key="list.id" :value="list.id">{{ list.name }}</option>
+                  <option value="">
+                    {{ recipientListsPending ? 'Loading lists…' : 'Choose a list' }}
+                  </option>
+                  <option
+                    v-for="list in recipientLists"
+                    :key="list.id"
+                    :value="list.id"
+                  >
+                    {{ list.name }}
+                  </option>
                 </select>
+                <p
+                  v-if="recipientListsError"
+                  class="mt-2 text-sm text-red-600"
+                >
+                  {{ recipientListsError }}
+                </p>
+                <p
+                  v-else-if="!recipientListsPending && !recipientLists.length"
+                  class="mt-2 text-sm text-slate-500"
+                >
+                  No recipient lists yet.
+                  <NuxtLink
+                    to="/tenant/recipient-list/add"
+                    class="font-medium text-slate-700 underline hover:text-slate-900"
+                  >
+                    Create one
+                  </NuxtLink>
+                </p>
               </div>
               <div v-else class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -236,54 +237,8 @@
           </div>
         </div>
 
-        <!-- Subject -->
-        <div class="border-b border-slate-100 last:border-b-0">
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
-            @click="subjectOpen = !subjectOpen"
-          >
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
-                :class="subjectComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
-              >
-                <svg v-if="subjectComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <div class="text-lg font-semibold text-slate-900">Subject</div>
-                <div class="mt-0.5 text-base text-slate-500">{{ form.subject || 'Add a subject line for this campaign' }}</div>
-              </div>
-            </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ subjectOpen ? 'Close' : 'Manage' }}</span>
-          </button>
-          <div v-if="subjectOpen" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
-            <label class="mb-2 block text-base font-medium text-slate-700">Subject line</label>
-            <div class="flex gap-3">
-              <input
-                v-model="form.subject"
-                type="text"
-                placeholder="Enter email subject line"
-                class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-              >
-              <select
-                v-model="subjectVariable"
-                class="w-44 shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-              >
-                <option value="">Insert variable</option>
-                <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
         <!-- Design -->
-        <div ref="designSectionRef">
+        <div ref="designSectionRef" class="border-b border-slate-100">
           <button
             type="button"
             class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
@@ -408,36 +363,128 @@
             </div>
           </div>
         </div>
+
+        <!-- Subject -->
+        <div class="border-b border-slate-100 last:border-b-0">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
+            @click="subjectOpen = !subjectOpen"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
+                :class="subjectComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
+              >
+                <svg v-if="subjectComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <div class="text-lg font-semibold text-slate-900">Subject</div>
+                <div class="mt-0.5 text-base text-slate-500">{{ form.subject || 'Add a subject line for this campaign' }}</div>
+              </div>
+            </div>
+            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ subjectOpen ? 'Close' : 'Manage' }}</span>
+          </button>
+          <div v-if="subjectOpen" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
+            <label class="mb-2 block text-base font-medium text-slate-700">Subject line</label>
+            <div class="flex gap-3">
+              <input
+                v-model="form.subject"
+                type="text"
+                placeholder="Enter email subject line"
+                class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+              <select
+                v-model="subjectVariable"
+                class="w-44 shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+                <option value="">Insert variable</option>
+                <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-base text-red-700">
         {{ saveError }}
       </div>
-      <div class="flex items-center justify-end gap-4 pt-10">
+      <div
+        v-if="sendError && !sendingCampaignId"
+        class="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-900"
+      >
+        <div class="flex items-start gap-3">
+          <span class="flex-1">{{ sendError }}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-amber-800 hover:bg-amber-100"
+            @click="campaignStore.clearSendModal()"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+      <div class="flex flex-col items-stretch gap-4 pt-10 sm:flex-row sm:items-center sm:justify-end">
         <NuxtLink
           :to="cancelOrBackHref"
-          class="rounded-xl border border-slate-200 px-6 py-3.5 text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-          :class="{ 'pointer-events-none opacity-50': isSaving }"
+          class="rounded-xl border border-slate-200 px-6 py-3.5 text-center text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors sm:text-left"
+          :class="{ 'pointer-events-none opacity-50': wizardSendBusy }"
         >
           Cancel
         </NuxtLink>
-        <button
-          type="button"
-          class="rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl transition-all disabled:opacity-50"
-          :disabled="isSaving"
-          @click.prevent="handleCreate"
-        >
-          {{ isSaving ? 'Saving...' : savedTemplateHtml ? 'Save campaign' : 'Continue to design' }}
-        </button>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <button
+            v-if="campaignFormComplete"
+            type="button"
+            class="rounded-xl border border-emerald-200 bg-emerald-50 px-8 py-3.5 text-base font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100 transition-all disabled:opacity-50"
+            :disabled="wizardSendBusy"
+            @click.prevent="handleSendFromWizard"
+          >
+            {{
+              isSaving
+                ? 'Saving...'
+                : sendingCampaignId
+                  ? 'Sending...'
+                  : 'Send'
+            }}
+          </button>
+          <button
+            type="button"
+            class="rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl transition-all disabled:opacity-50"
+            :disabled="saveCampaignActionDisabled"
+            @click.prevent="handleCreate"
+          >
+            {{ isSaving ? 'Saving...' : 'Save campaign' }}
+          </button>
+        </div>
       </div>
     </div>
       </template>
+
+    <ClientSendProgressModal
+      :open="!!sendingCampaignId"
+      :campaign-name="campaignNameForSendModal"
+      :send-error="sendError"
+      :send-progress="sendProgress"
+      @close="closeSendModal"
+    />
   </div>
   </div>  
 </template>
 <script setup lang="ts">
+import type { Campaign, SendStatus } from '~/types/campaign'
 import type { WorkSheet } from 'xlsx'
+import { storeToRefs } from 'pinia'
+import { refreshMarketingTokenIfNeeded } from '~/composables/useMarketingTokenRefresh'
 import { useCampaignStore } from '~/store/campaignStore'
+
+const campaignStore = useCampaignStore()
+const { campaigns, sendingCampaignId, sendStatus, sendError } = storeToRefs(campaignStore)
 
 type XlsxModule = typeof import('xlsx')
 
@@ -455,7 +502,6 @@ const form = ref({
   selectedTemplateId: ''
 })
 
-const senderOpen = ref(false)
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
 const designOpen = ref(false)
@@ -465,12 +511,132 @@ const savedTemplateHtml = ref<string | null>(null)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
-const recipientLists = [
-  { id: 'all', name: 'All contacts' },
-  { id: 'prospects', name: 'Prospects' },
-  { id: 'customers', name: 'Customers' },
-  { id: 'reengagement', name: 'Re-engagement' }
-]
+interface RecipientListOption {
+  id: string
+  name: string
+}
+
+const recipientLists = ref<RecipientListOption[]>([])
+const recipientListsPending = ref(false)
+const recipientListsError = ref('')
+
+function serverAuthHeaders(): { headers?: HeadersInit } {
+  if (!import.meta.server) return {}
+  try {
+    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
+  } catch {
+    return {}
+  }
+}
+
+let sendPollTimer: ReturnType<typeof setInterval> | null = null
+
+const wizardSendBusy = computed(() => isSaving.value || !!sendingCampaignId.value)
+
+const campaignNameForSendModal = computed(() => {
+  const id = sendingCampaignId.value
+  if (!id) return 'campaign'
+  return campaigns.value.find((c) => c.id === id)?.name || form.value.name.trim() || 'campaign'
+})
+
+const sendProgress = computed(() => {
+  const s = sendStatus.value
+  if (!s) return null
+  const processed = s.sent + s.failed
+  const pct = s.total > 0 ? (processed / s.total) * 100 : 0
+  return {
+    ...s,
+    processed,
+    pct,
+    remaining: s.pending
+  }
+})
+
+function closeSendModal() {
+  campaignStore.clearSendModal()
+  if (sendPollTimer) {
+    clearInterval(sendPollTimer)
+    sendPollTimer = null
+  }
+}
+
+function startPollingAfterWizard(campaignId: string) {
+  async function poll() {
+    if (!sendingCampaignId.value) return
+    try {
+      const res = await $fetch<SendStatus>(`/api/v1/send-campaign/status/${campaignId}`, {
+        timeout: 60000,
+        credentials: 'include',
+        ...serverAuthHeaders()
+      })
+      campaignStore.setSendStatus(res)
+      if (res.done) {
+        campaignStore.setSendingCampaignId(null)
+        campaignStore.setSendStatus(null)
+        if (sendPollTimer) {
+          clearInterval(sendPollTimer)
+          sendPollTimer = null
+        }
+        await campaignStore.fetchCampaigns()
+        await navigateTo(`/tenant/campaigns/${campaignId}`)
+      }
+    } catch {
+      campaignStore.clearSendModal()
+      if (sendPollTimer) {
+        clearInterval(sendPollTimer)
+        sendPollTimer = null
+      }
+    }
+  }
+  poll()
+  // Frequent polls so we detect completion soon after the worker finishes (5s felt sluggish).
+  sendPollTimer = setInterval(poll, 1500)
+}
+
+onBeforeUnmount(() => {
+  if (sendPollTimer) {
+    clearInterval(sendPollTimer)
+    sendPollTimer = null
+  }
+})
+
+function buildCampaignForSend(savedId: string): Campaign {
+  const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
+  if (fromStore) return fromStore
+  const manualEmails = form.value.recipientsManual
+    .map((e) => e?.trim())
+    .filter((e): e is string => !!e && e.includes('@'))
+  return {
+    id: savedId,
+    name: form.value.name.trim(),
+    sender: { name: form.value.senderName, email: form.value.senderEmail },
+    recipientsType: form.value.recipientsMode,
+    recipientsListId: form.value.recipientsListId || undefined,
+    recipients: manualEmails.map((email) => ({ email })),
+    subject: form.value.subject,
+    status: 'Draft',
+    createdAt: '',
+    updatedAt: ''
+  }
+}
+
+async function loadRecipientLists() {
+  recipientListsPending.value = true
+  recipientListsError.value = ''
+  try {
+    await refreshMarketingTokenIfNeeded()
+    const res = await $fetch<{ lists?: RecipientListOption[] }>('/api/v1/recipient-list', {
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
+    recipientLists.value = Array.isArray(res.lists) ? res.lists : []
+  } catch {
+    recipientListsError.value = 'Could not load recipient lists.'
+    recipientLists.value = []
+  } finally {
+    recipientListsPending.value = false
+  }
+}
 
 const subjectVariables = [
   { value: '{{user.firstName}}', label: 'First name' },
@@ -588,7 +754,10 @@ async function loadFromEditorReturn() {
 
 const designSectionRef = ref<HTMLElement | null>(null)
 
-onMounted(loadFromEditorReturn)
+onMounted(() => {
+  loadFromEditorReturn()
+  loadRecipientLists()
+})
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
 
 const recipientsDescription = computed(() => {
@@ -596,17 +765,40 @@ const recipientsDescription = computed(() => {
     const count = form.value.recipientsManual.filter(v => v.trim().length > 0).length
     return count > 0 ? `${count} manual recipient${count === 1 ? '' : 's'}` : 'Add recipients manually'
   }
-  const selected = recipientLists.find(l => l.id === form.value.recipientsListId)
+  const selected = recipientLists.value.find((l) => l.id === form.value.recipientsListId)
   return selected ? `List: ${selected.name}` : 'Select a recipient list'
 })
 
-const senderComplete = computed(() => !!(form.value.senderName?.trim() && form.value.senderEmail?.trim()))
 const recipientsComplete = computed(() => {
   if (form.value.recipientsMode === 'list') return !!form.value.recipientsListId
   return form.value.recipientsManual.some(v => v.trim().length > 0)
 })
 const subjectComplete = computed(() => !!form.value.subject?.trim())
 const designComplete = computed(() => !!savedTemplateHtml.value || (form.value.templateMode === 'existing' && form.value.selectedTemplateId))
+
+const campaignFormComplete = computed(
+  () =>
+    !!form.value.name?.trim()
+    && recipientsComplete.value
+    && subjectComplete.value
+    && designComplete.value
+)
+
+/** Name, recipients, subject, and template — required before "Save campaign" is enabled. */
+const readyToSaveCampaign = computed(
+  () =>
+    !!form.value.name?.trim()
+    && recipientsComplete.value
+    && subjectComplete.value
+    && designComplete.value
+)
+
+const saveCampaignActionDisabled = computed(
+  () =>
+    isSaving.value
+    || !!sendingCampaignId.value
+    || !readyToSaveCampaign.value
+)
 
 function addManualRecipient() {
   form.value.recipientsManual = [...form.value.recipientsManual, '']
@@ -714,6 +906,107 @@ function handleUseTemplate(template: { id: string; name: string; html: string })
   navigateTo(`/tenant/email-editor?campaignId=${campaignId}&builderId=${builderId}&token=local`)
 }
 
+function applyStoredOrSelectedTemplate() {
+  const cid = returnCampaignId.value || (route.query.campaignId as string)
+  if (!savedTemplateHtml.value && cid && typeof window !== 'undefined') {
+    const template = window.sessionStorage.getItem(`campaign-template-${cid}`)
+    if (template) savedTemplateHtml.value = template
+  }
+  if (!savedTemplateHtml.value && form.value.templateMode === 'existing' && form.value.selectedTemplateId) {
+    const template = existingTemplates.find(t => t.id === form.value.selectedTemplateId)
+    if (template) savedTemplateHtml.value = template.html
+  }
+}
+
+function clearCampaignSessionStorage() {
+  if (typeof window !== 'undefined') {
+    if (returnCampaignId.value) {
+      window.sessionStorage.removeItem(`campaign-template-${returnCampaignId.value}`)
+    }
+    window.sessionStorage.removeItem(PENDING_CAMPAIGN_KEY)
+  }
+}
+
+async function persistSavedCampaign(): Promise<string> {
+  const recipientsManual = form.value.recipientsMode === 'manual'
+    ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
+    : []
+
+  const body = {
+    name: form.value.name.trim(),
+    senderName: form.value.senderName,
+    senderEmail: form.value.senderEmail,
+    subject: form.value.subject,
+    recipientsType: form.value.recipientsMode,
+    recipientsListId: form.value.recipientsListId || undefined,
+    recipientsManual,
+    templateHtml: savedTemplateHtml.value!
+  }
+
+  if (isEditMode.value && editId.value) {
+    await $fetch(`/api/v1/campaigns/${editId.value}`, { method: 'PUT', body })
+    return editId.value
+  }
+  const res = await $fetch<{ id: string }>('/api/v1/campaigns', { method: 'POST', body })
+  return res.id
+}
+
+function setSaveErrorFromCatch(e: unknown) {
+  const data =
+    e && typeof e === 'object' && 'data' in e
+      ? (e as { data?: { message?: string; statusMessage?: string } }).data
+      : undefined
+  const raw = data?.message ?? data?.statusMessage ?? (e instanceof Error ? e.message : undefined)
+  saveError.value = typeof raw === 'string' ? raw : 'Failed to save campaign'
+}
+
+async function handleSendFromWizard() {
+  if (!campaignFormComplete.value) return
+  saveError.value = null
+  if (!form.value.name.trim()) {
+    saveError.value = 'Campaign name is required'
+    return
+  }
+  try {
+    applyStoredOrSelectedTemplate()
+    if (!savedTemplateHtml.value) {
+      saveError.value = 'Complete the email design before sending.'
+      return
+    }
+    isSaving.value = true
+    try {
+      const id = await persistSavedCampaign()
+      clearCampaignSessionStorage()
+      await refreshMarketingTokenIfNeeded()
+      const campaign = buildCampaignForSend(id)
+      const { poll } = await campaignStore.sendCampaign(campaign)
+      if (!poll) {
+        if (sendError.value) return
+        await navigateTo(`/tenant/campaigns/${id}`)
+        return
+      }
+      startPollingAfterWizard(id)
+    } catch (e: unknown) {
+      setSaveErrorFromCatch(e)
+    } finally {
+      isSaving.value = false
+    }
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      saveError.value = e.message
+    } else if (
+      typeof e === 'object'
+      && e !== null
+      && 'message' in e
+      && typeof (e as { message: unknown }).message === 'string'
+    ) {
+      saveError.value = (e as { message: string }).message
+    } else {
+      saveError.value = 'Something went wrong'
+    }
+  }
+}
+
 async function handleCreate() {
   saveError.value = null
   if (!form.value.name.trim()) {
@@ -722,87 +1015,24 @@ async function handleCreate() {
   }
 
   try {
-    // Re-read template from sessionStorage if we have campaignId but template wasn't loaded (e.g. route timing)
-    const cid = returnCampaignId.value || (route.query.campaignId as string)
-    if (!savedTemplateHtml.value && cid && typeof window !== 'undefined') {
-      const template = window.sessionStorage.getItem(`campaign-template-${cid}`)
-      if (template) savedTemplateHtml.value = template
-    }
+    applyStoredOrSelectedTemplate()
 
-    // If existing template selected but no editor visit, use template HTML directly (don't go to editor)
-    if (!savedTemplateHtml.value && form.value.templateMode === 'existing' && form.value.selectedTemplateId) {
-      const template = existingTemplates.find(t => t.id === form.value.selectedTemplateId)
-      if (template) savedTemplateHtml.value = template.html
-    }
-
-    // If we have a saved template (returned from editor or selected template), save to DB
-    if (savedTemplateHtml.value) {
-      isSaving.value = true
-      try {
-        const recipientsManual = form.value.recipientsMode === 'manual'
-          ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
-          : []
-
-        const body = {
-          name: form.value.name.trim(),
-          senderName: form.value.senderName,
-          senderEmail: form.value.senderEmail,
-          subject: form.value.subject,
-          recipientsType: form.value.recipientsMode,
-          recipientsListId: form.value.recipientsListId || undefined,
-          recipientsManual,
-          templateHtml: savedTemplateHtml.value
-        }
-
-        if (isEditMode.value && editId.value) {
-          await $fetch(`/api/v1/campaigns/${editId.value}`, { method: 'PUT', body })
-        } else {
-          await $fetch<{ id: string }>('/api/v1/campaigns', { method: 'POST', body })
-        }
-
-        if (typeof window !== 'undefined') {
-          if (returnCampaignId.value) {
-            window.sessionStorage.removeItem(`campaign-template-${returnCampaignId.value}`)
-          }
-          window.sessionStorage.removeItem(PENDING_CAMPAIGN_KEY)
-        }
-        const store = useCampaignStore()
-        await store.fetchCampaigns()
-        await navigateTo(isEditMode.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns')
-      } catch (e: unknown) {
-        const data =
-          e && typeof e === 'object' && 'data' in e
-            ? (e as { data?: { message?: string; statusMessage?: string } }).data
-            : undefined
-        const raw = data?.message ?? data?.statusMessage ?? (e instanceof Error ? e.message : undefined)
-        const err = typeof raw === 'string' ? raw : 'Failed to save campaign'
-        saveError.value = err
-      } finally {
-        isSaving.value = false
-      }
+    if (!savedTemplateHtml.value) {
+      saveError.value = 'Add an email design before saving.'
       return
     }
 
-  // No design yet - go to editor (only for scratch; existing template without selection falls through)
-  const campaignId = returnCampaignId.value || editId.value || `temp-${Date.now()}`
-  if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: form.value, campaignId }))
-  }
-  const params = new URLSearchParams()
-  params.set('campaignId', campaignId)
-  params.set('token', 'local')
-  if (form.value.templateMode === 'existing') {
-    const templateId = form.value.selectedTemplateId || existingTemplates[0]?.id
-    const template = existingTemplates.find(t => t.id === templateId)
-    if (template) {
-      const builderId = `builder-${campaignId}-${Date.now()}`
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(builderId, template.html)
-      }
-      params.set('builderId', builderId)
+    isSaving.value = true
+    try {
+      await persistSavedCampaign()
+      clearCampaignSessionStorage()
+      await campaignStore.fetchCampaigns()
+      await navigateTo(isEditMode.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns')
+    } catch (e: unknown) {
+      setSaveErrorFromCatch(e)
+    } finally {
+      isSaving.value = false
     }
-  }
-  navigateTo(`/tenant/email-editor?${params.toString()}`)
   } catch (e: unknown) {
     if (e instanceof Error) {
       saveError.value = e.message

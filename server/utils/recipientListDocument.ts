@@ -1,5 +1,8 @@
 import type { ContactKind } from '../types/tenant/contact.model'
-import type { RecipientListCriterion } from '../types/tenant/recipientList.model'
+import type {
+  RecipientListCriterion,
+  RecipientListFilterMode
+} from '../types/tenant/recipientList.model'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
 
 const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
@@ -72,9 +75,17 @@ function mapCriteriaRows(
   }))
 }
 
+function filterModeFromDoc(doc: Record<string, unknown>): RecipientListFilterMode {
+  return doc.filterMode === 'or' ? 'or' : 'and'
+}
+
 export function normalizeRecipientListDoc(
   doc: Record<string, unknown>
-): { audience: ContactKind; filters: RecipientListCriterion[] } {
+): {
+  audience: ContactKind
+  filters: RecipientListCriterion[]
+  filterMode: RecipientListFilterMode
+} {
   const rows = Array.isArray(doc.filters)
     ? (doc.filters as RecipientListCriterion[])
     : []
@@ -87,19 +98,30 @@ export function normalizeRecipientListDoc(
     typeof doc.audience === 'string' &&
     AUDIENCES.has(doc.audience as ContactKind)
   ) {
-    return { audience: doc.audience as ContactKind, filters: mapCriteriaRows(rows) }
+    return {
+      audience: doc.audience as ContactKind,
+      filters: mapCriteriaRows(rows),
+      filterMode: filterModeFromDoc(doc)
+    }
   }
 
   const legacy = doc.filter
   if (legacy && typeof legacy === 'object' && Object.keys(legacy as object).length > 0) {
-    return legacyFilterToAudienceAndCriteria(legacy as Record<string, unknown>)
+    const legacyResult = legacyFilterToAudienceAndCriteria(
+      legacy as Record<string, unknown>
+    )
+    return { ...legacyResult, filterMode: 'and' }
   }
 
   if (typeof doc.audience === 'string' && AUDIENCES.has(doc.audience as ContactKind)) {
-    return { audience: doc.audience as ContactKind, filters: mapCriteriaRows(rows) }
+    return {
+      audience: doc.audience as ContactKind,
+      filters: mapCriteriaRows(rows),
+      filterMode: filterModeFromDoc(doc)
+    }
   }
 
-  return { audience: 'prospect', filters: [] }
+  return { audience: 'prospect', filters: [], filterMode: 'and' }
 }
 
 /** Build criteria from a registry recipient_filter row (after value is resolved). */

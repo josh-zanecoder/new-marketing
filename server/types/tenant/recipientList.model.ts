@@ -7,12 +7,19 @@ export interface RecipientListCriterion {
   value: string
 }
 
+/**
+ * How criteria combine: `and` = **AND** across different fields; **OR** among multiple values
+ * for the same field (same field cannot hold two values). `or` = any criterion row matches.
+ */
+export type RecipientListFilterMode = 'and' | 'or'
+
 /** List definition. Contact membership is stored in `recipient_list_members` (see RecipientListMember). */
 export interface RecipientListLean {
   _id: Types.ObjectId
   name: string
   audience: ContactKind
   filters: RecipientListCriterion[]
+  filterMode?: RecipientListFilterMode
   /** Kept for campaign / static flows; default dynamic for criteria-based lists. */
   listType?: 'static' | 'dynamic' | 'hybrid'
   clientId?: string

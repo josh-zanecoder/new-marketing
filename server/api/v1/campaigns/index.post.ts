@@ -1,6 +1,7 @@
 import { getTenantClientModels } from '../../../models/tenant/tenantClientModels'
 import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -56,6 +57,18 @@ export default defineEventHandler(async (event) => {
       .map((e) => e?.trim?.().toLowerCase())
       .filter((e): e is string => !!e && e.includes('@'))
     const emails = [...new Set(raw)]
+    if (emails.length) {
+      const docs: ManualRecipientInsert[] = emails.map((email) => ({
+        campaign: campaign._id,
+        email,
+        clientId: ''
+      }))
+      await (ManualRecipient as ManualRecipientModel).insertMany(
+        docs as unknown as ManualRecipientInsertManyCast[]
+      )
+    }
+  } else if (recipientsType === 'list' && recipientsListId) {
+    const emails = await resolveRecipientListEmails(conn, recipientsListId)
     if (emails.length) {
       const docs: ManualRecipientInsert[] = emails.map((email) => ({
         campaign: campaign._id,

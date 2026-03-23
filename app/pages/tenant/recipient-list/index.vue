@@ -77,9 +77,10 @@
       </div>
 
       <div v-else-if="data" class="space-y-3">
-        <div
+        <NuxtLink
           v-for="row in paginatedLists"
           :key="row.id"
+          :to="`/tenant/recipient-list/${row.id}`"
           class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-300 sm:flex-row sm:items-center sm:gap-6"
         >
           <div class="min-w-0 flex-1">
@@ -95,10 +96,10 @@
               <span v-if="row.updatedAt">{{ formatDate(row.updatedAt) }}</span>
             </div>
             <p class="mt-2 text-sm text-slate-600 line-clamp-2">
-              {{ formatFilters(row.filters) }}
+              {{ formatFilters(row.filters, row.filterMode) }}
             </p>
           </div>
-        </div>
+        </NuxtLink>
 
         <div
           v-if="filteredLists.length"
@@ -150,6 +151,7 @@ interface ListRow {
   listType: string
   audience: string
   filters: ListCriterion[]
+  filterMode?: 'and' | 'or'
   updatedAt: string | null
 }
 
@@ -205,9 +207,16 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
-function formatFilters(filters: ListCriterion[] | undefined): string {
+function formatFilters(
+  filters: ListCriterion[] | undefined,
+  filterMode?: 'and' | 'or'
+): string {
   if (!filters?.length) return 'No filter criteria'
-  return filters.map((f) => `${f.property} = ${f.value}`).join(' · ')
+  const joined =
+    filters.length >= 2 && filterMode === 'or'
+      ? filters.map((f) => `${f.property} = ${f.value}`).join(' OR ')
+      : filters.map((f) => `${f.property} = ${f.value}`).join(' · ')
+  return joined
 }
 
 function formatDate(iso: string): string {

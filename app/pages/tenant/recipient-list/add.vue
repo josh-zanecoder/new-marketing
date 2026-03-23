@@ -16,7 +16,7 @@
           New recipient list
         </h1>
         <p class="mt-2 text-lg text-slate-600">
-          Pick an audience from your configured recipient filters, then optionally narrow with a specific filter rule.
+          Pick an audience, then optionally add filters to narrow who’s included.
         </p>
       </header>
 
@@ -89,86 +89,156 @@
               </p>
             </div>
 
-            <div>
-              <label for="rl-filter" class="mb-2.5 block text-base font-semibold text-slate-700">Filter</label>
-              <select
-                id="rl-filter"
-                v-model="form.recipientFilterId"
-                class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
-              >
-                <option value="">
-                  All {{ audienceLabel }}s
-                </option>
-                <option
-                  v-for="f in filtersForAudience"
-                  :key="f.id"
-                  :value="f.id"
-                >
-                  {{ filterOptionLabel(f) }}
-                </option>
-              </select>
+            <div class="space-y-6">
               <p
                 v-if="data.tenantIdConfigured && !filtersForAudience.length"
-                class="mt-2 text-base text-slate-500"
+                class="text-base text-slate-500"
               >
-                No enabled recipient filters for this audience. Ask an admin to add filters or leave “All”.
+                No enabled recipient filters for this audience. Ask an admin to add filters, or create the list with audience only.
               </p>
-            </div>
 
-            <div
-              v-if="showPropertyRow"
-              class="rounded-xl border border-slate-100 bg-slate-50/60 px-6 py-5"
-            >
-              <p class="mb-4 text-base font-semibold text-slate-700">
-                Match rule
-              </p>
               <div
-                class="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)] sm:gap-4"
+                v-for="(row, idx) in form.filterRows"
+                :key="idx"
+                class="space-y-3"
               >
-                <div class="text-base font-medium text-slate-800">
-                  {{ propertyColumnLabel }}
-                </div>
-                <div class="text-center text-sm font-semibold uppercase tracking-wide text-slate-400 sm:px-1">
-                  equals
-                </div>
-                <div class="min-w-0">
-                  <template v-if="registryValueTokens.length > 1">
-                    <select
-                      id="rl-list-property-value"
-                      v-model="form.listPropertyValue"
-                      required
-                      class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                    >
-                      <option disabled value="">
-                        Select a value
-                      </option>
-                      <option
-                        v-for="opt in registryValueTokens"
-                        :key="opt"
-                        :value="opt"
-                      >
-                        {{ opt }}
-                      </option>
-                    </select>
-                  </template>
-                  <p
-                    v-else-if="registryValueTokens.length === 1"
-                    class="break-words rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                  <label
+                    :for="`rl-filter-${idx}`"
+                    class="mb-0 block text-base font-semibold text-slate-700"
                   >
-                    {{ registryValueTokens[0] }}
-                  </p>
-                  <input
-                    v-else
-                    id="rl-list-property-value"
-                    v-model="form.listPropertyValue"
-                    type="text"
+                    {{ idx === 0 ? 'Filter' : 'Additional filter' }}
+                  </label>
+                  <button
+                    type="button"
+                    class="text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                    @click="removeFilterRow(idx)"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <template v-if="!row.recipientFilterId">
+                  <select
+                    :id="`rl-filter-${idx}`"
+                    v-model="row.recipientFilterId"
                     required
-                    maxlength="2000"
-                    class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                    :placeholder="propertyValuePlaceholder"
+                    class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+                    @change="onRowFilterChange(row)"
                   >
+                    <option disabled value="">
+                      Choose a filter
+                    </option>
+                    <option
+                      v-for="f in selectableFiltersForRow(idx)"
+                      :key="f.id"
+                      :value="f.id"
+                    >
+                      {{ filterOptionLabel(f) }}
+                    </option>
+                  </select>
+                </template>
+
+                <div
+                  v-else
+                  class="rounded-xl border border-slate-100 bg-slate-50/60 px-6 py-5"
+                >
+                  <p class="mb-4 text-base font-semibold text-slate-700">
+                    Match rule
+                  </p>
+                  <div
+                    class="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)] sm:gap-4"
+                  >
+                    <div class="min-w-0">
+                      <select
+                        :id="`rl-filter-${idx}`"
+                        v-model="row.recipientFilterId"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        @change="onRowFilterChange(row)"
+                      >
+                        <option
+                          v-for="f in selectableFiltersForRow(idx)"
+                          :key="f.id"
+                          :value="f.id"
+                        >
+                          {{ filterOptionLabel(f) }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="text-center text-sm font-semibold uppercase tracking-wide text-slate-400 sm:px-1">
+                      equals
+                    </div>
+                    <div class="min-w-0">
+                      <template v-if="showPropertyRowFor(row) && rowRegistryTokens(row).length > 1">
+                        <select
+                          :id="`rl-list-property-value-${idx}`"
+                          v-model="row.listPropertyValue"
+                          required
+                          class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        >
+                          <option disabled value="">
+                            Select a value
+                          </option>
+                          <option
+                            v-for="opt in rowRegistryTokens(row)"
+                            :key="opt"
+                            :value="opt"
+                          >
+                            {{ opt }}
+                          </option>
+                        </select>
+                      </template>
+                      <p
+                        v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
+                        class="break-words rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+                      >
+                        {{ rowRegistryTokens(row)[0] }}
+                      </p>
+                      <input
+                        v-else-if="showPropertyRowFor(row)"
+                        :id="`rl-list-property-value-${idx}`"
+                        v-model="row.listPropertyValue"
+                        type="text"
+                        required
+                        maxlength="2000"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        :placeholder="propertyValuePlaceholderFor(row)"
+                      >
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <button
+                v-if="filtersForAudience.length && canAddFilter"
+                type="button"
+                class="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-5 py-3.5 text-base font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                @click="addFilterRow"
+              >
+                {{ form.filterRows.length ? 'Add another filter' : 'Add filter' }}
+              </button>
+            </div>
+
+            <div v-if="showCombineCriteria">
+              <label for="rl-filter-mode" class="mb-2.5 block text-base font-semibold text-slate-700">
+                Combine criteria with
+              </label>
+              <select
+                id="rl-filter-mode"
+                v-model="form.filterMode"
+                class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+              >
+                <option value="and">
+                  AND — must match all conditions
+                </option>
+                <option value="or">
+                  OR — match any one of the conditions
+                </option>
+              </select>
+              <p class="mt-2 text-sm text-slate-500">
+                <strong class="font-medium text-slate-600">AND</strong> = must match all conditions.
+                <strong class="font-medium text-slate-600">OR</strong> = match any one of the conditions.
+              </p>
             </div>
           </div>
         </div>
@@ -219,6 +289,11 @@ interface RecipientListFormPayload {
   recipientFilters: RegistryFilterRow[]
 }
 
+interface FilterRow {
+  recipientFilterId: string
+  listPropertyValue: string
+}
+
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
   try {
@@ -237,8 +312,8 @@ const data = ref<RecipientListFormPayload | null>(null)
 const form = reactive({
   name: '',
   audience: '',
-  recipientFilterId: '',
-  listPropertyValue: ''
+  filterRows: [] as FilterRow[],
+  filterMode: 'and' as 'and' | 'or'
 })
 
 /** Distinct `contactType` values from enabled registry filters (source of truth for audience). */
@@ -264,11 +339,6 @@ const audienceOptions = computed((): { value: string; label: string }[] => {
   }))
 })
 
-const audienceLabel = computed(() => {
-  const o = audienceOptions.value.find((x) => x.value === form.audience)
-  return o?.label ?? form.audience
-})
-
 watch(
   audienceOptions,
   (opts) => {
@@ -291,25 +361,24 @@ const filtersForAudience = computed(() => {
   )
 })
 
-const selectedFilter = computed((): RegistryFilterRow | null => {
-  const id = form.recipientFilterId
+/** Every registry filter for this audience — same row type can be chosen more than once (e.g. two Channel rules). */
+function selectableFiltersForRow(_rowIdx: number): RegistryFilterRow[] {
+  return filtersForAudience.value
+}
+
+/** Show Add filter while this audience has at least one registry filter to attach. */
+const canAddFilter = computed(() => filtersForAudience.value.length > 0)
+
+function rowFilter(row: FilterRow): RegistryFilterRow | null {
+  const id = row.recipientFilterId
   if (!id) return null
   return filtersForAudience.value.find((f) => f.id === id) ?? null
-})
+}
 
-const showPropertyRow = computed(
-  () => selectedFilter.value != null && selectedFilter.value.property !== 'none'
-)
-
-const propertyColumnLabel = computed(() => {
-  const f = selectedFilter.value
-  if (!f || f.property === 'none') return ''
-  const typeOk = Boolean(f.propertyType && f.propertyType !== 'none')
-  if (typeOk) {
-    return propertyTypeLabel(f.propertyType)
-  }
-  return propertyFieldLabel(f.property)
-})
+function showPropertyRowFor(row: FilterRow): boolean {
+  const f = rowFilter(row)
+  return f != null && f.property !== 'none'
+}
 
 function tokenizePropertyValue(raw: string): string[] {
   return raw
@@ -318,15 +387,14 @@ function tokenizePropertyValue(raw: string): string[] {
     .filter(Boolean)
 }
 
-/** Tokenized preset values from the registry filter only (no contact sampling). */
-const registryValueTokens = computed((): string[] => {
-  const f = selectedFilter.value
+function rowRegistryTokens(row: FilterRow): string[] {
+  const f = rowFilter(row)
   if (!f || f.property === 'none') return []
   return tokenizePropertyValue(f.propertyValue ?? '')
-})
+}
 
-const propertyValuePlaceholder = computed(() => {
-  const f = selectedFilter.value
+function propertyValuePlaceholderFor(row: FilterRow): string {
+  const f = rowFilter(row)
   if (!f) return 'Value'
   if (f.property === 'source') return 'e.g. webinar, import'
   if (f.property === 'address' && f.propertyType === 'county') {
@@ -336,46 +404,59 @@ const propertyValuePlaceholder = computed(() => {
     return 'e.g. TX'
   }
   return 'Enter value to match'
-})
+}
+
+/** At least two filter rows with a selected registry filter — then AND/OR matters. */
+const showCombineCriteria = computed(
+  () =>
+    form.filterRows.filter((r) => String(r.recipientFilterId ?? '').trim()).length >= 2
+)
 
 const canSubmitPropertyValue = computed(() => {
-  if (!showPropertyRow.value) return true
-  const tokens = registryValueTokens.value
-  if (tokens.length > 1) return Boolean(form.listPropertyValue.trim())
-  if (tokens.length === 1) return true
-  return Boolean(form.listPropertyValue.trim())
+  for (const row of form.filterRows) {
+    if (!row.recipientFilterId.trim()) return false
+    const f = rowFilter(row)
+    if (!f || f.property === 'none') continue
+    const tokens = rowRegistryTokens(row)
+    if (tokens.length > 1) {
+      if (!row.listPropertyValue.trim()) return false
+    } else if (tokens.length === 1) {
+      /* preset single value ok */
+    } else {
+      if (!row.listPropertyValue.trim()) return false
+    }
+  }
+  return true
 })
 
 watch(
   () => form.audience,
   () => {
-    form.recipientFilterId = ''
-    form.listPropertyValue = ''
+    form.filterRows = []
   }
 )
 
-watch(
-  [selectedFilter, registryValueTokens],
-  ([f, tokens]) => {
-    if (!f || f.property === 'none') {
-      form.listPropertyValue = ''
-      return
-    }
-    if (tokens.length === 1) {
-      form.listPropertyValue = tokens[0] ?? ''
-      return
-    }
-    if (tokens.length > 1) {
-      const first = tokens[0] ?? ''
-      form.listPropertyValue = tokens.includes(form.listPropertyValue)
-        ? form.listPropertyValue
-        : first
-      return
-    }
-    form.listPropertyValue = ''
-  },
-  { flush: 'post' }
-)
+function onRowFilterChange(row: FilterRow) {
+  row.listPropertyValue = ''
+  const f = rowFilter(row)
+  if (!f || f.property === 'none') return
+  const tokens = tokenizePropertyValue(f.propertyValue ?? '')
+  if (tokens.length === 1) {
+    row.listPropertyValue = tokens[0] ?? ''
+  }
+  if (tokens.length > 1) {
+    const first = tokens[0] ?? ''
+    row.listPropertyValue = first
+  }
+}
+
+function addFilterRow() {
+  form.filterRows.push({ recipientFilterId: '', listPropertyValue: '' })
+}
+
+function removeFilterRow(idx: number) {
+  form.filterRows.splice(idx, 1)
+}
 
 const PROPERTY_FIELD_LABELS: Record<string, string> = {
   none: 'None',
@@ -450,14 +531,13 @@ async function submitCreate() {
     const body: Record<string, unknown> = {
       name: form.name.trim(),
       audience: form.audience,
-      recipientFilterId: form.recipientFilterId || undefined
-    }
-    if (
-      form.recipientFilterId &&
-      selectedFilter.value &&
-      selectedFilter.value.property !== 'none'
-    ) {
-      body.listPropertyValue = form.listPropertyValue.trim()
+      filterRows: form.filterRows
+        .filter((r) => r.recipientFilterId.trim())
+        .map((r) => ({
+          recipientFilterId: r.recipientFilterId.trim(),
+          listPropertyValue: r.listPropertyValue.trim()
+        })),
+      filterMode: showCombineCriteria.value ? form.filterMode : 'and'
     }
 
     await $fetch('/api/v1/recipient-list', {

@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 const contactKindEnum = ['prospect', 'client', 'contact'] as const
 const listTypeEnum = ['static', 'dynamic', 'hybrid'] as const
+const filterModeEnum = ['and', 'or'] as const
 
 const recipientListCriterionSchema = new mongoose.Schema(
   {
@@ -30,6 +31,11 @@ export const recipientListSchema = new mongoose.Schema(
     filters: {
       type: [recipientListCriterionSchema],
       default: () => []
+    },
+    filterMode: {
+      type: String,
+      enum: filterModeEnum,
+      default: 'and'
     },
     /** Legacy shape only (`contactKinds`, `state`, …). New lists omit this. */
     filter: { type: mongoose.Schema.Types.Mixed }
