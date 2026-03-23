@@ -62,9 +62,8 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
-function recipientCount(c: Campaign): string | number {
-  if (c.recipientsType === 'manual') return c.recipients?.length ?? 0
-  return c.recipientsListId ? 'List' : '–'
+function recipientCount(c: Campaign): number {
+  return c.recipients?.length ?? 0
 }
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -76,9 +75,17 @@ const sendSuccessSummary = ref<{
   campaignStatus: string
 } | null>(null)
 
+function canSendDraft(c: Campaign): boolean {
+  if (c.status !== 'Draft') return false
+  if (c.recipientsType === 'manual') return (c.recipients?.length ?? 0) > 0
+  if (c.recipientsType === 'list') {
+    return (c.recipients?.length ?? 0) > 0 || !!c.recipientsListId?.trim()
+  }
+  return false
+}
+
 async function handleSend(c: Campaign) {
-  if (c.status !== 'Draft') return
-  if (!c.recipients?.length && c.recipientsType === 'manual') return
+  if (!canSendDraft(c)) return
   const { poll } = await store.sendCampaign(c)
   if (poll) startPolling(c.id)
 }
@@ -112,7 +119,7 @@ function startPolling(campaignId: string) {
     }
   }
   poll()
-  pollTimer = setInterval(poll, 5000)
+  pollTimer = setInterval(poll, 1500)
 }
 
 function openDeleteModal(c: Campaign) {
@@ -289,12 +296,12 @@ const sendProgress = computed(() => {
           </NuxtLink>
           <div class="flex items-center gap-1.5">
             <button
-              v-if="c.status === 'Draft' && c.recipientsType === 'manual' && (c.recipients?.length ?? 0) > 0"
+              v-if="canSendDraft(c)"
               type="button"
               class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="!!sendingCampaignId"
               title="Send"
-              @click="handleSend(c)"
+              @click.stop="handleSend(c)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />

@@ -8,6 +8,7 @@ import type {
 import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../helpers/marketingEmail'
 import { getTenantConnectionFromEvent } from '../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -40,13 +41,26 @@ export default defineEventHandler(async (event) => {
   await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
 
   let emails: string[] = []
-  if (campaign.recipientsType === 'manual') {
-    const docs = await (ManualRecipient as ManualRecipientModel)
-      .find({ campaign: campaignId })
-      .lean<ManualRecipientLean[]>()
-    const raw = docs.map((r) => normalizeMarketingEmail(r.email)).filter((e): e is string => !!e)
-    emails = [...new Set(raw)]
+  const manualDocs = await (ManualRecipient as ManualRecipientModel)
+    .find({ campaign: campaignId })
+    .lean<ManualRecipientLean[]>()
+  const fromManual = manualDocs
+    .map((r) => normalizeMarketingEmail(r.email))
+    .filter((e): e is string => !!e)
+  emails = [...new Set(fromManual)]
+
+  if (
+    !emails.length &&
+    campaign.recipientsType === 'list' &&
+    campaign.recipientsListId?.trim()
+  ) {
+    const fromList = await resolveRecipientListEmails(conn, campaign.recipientsListId)
+    const normalized = fromList
+      .map((e) => normalizeMarketingEmail(e))
+      .filter((e): e is string => !!e)
+    emails = [...new Set(normalized)]
   }
+
   if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
 
   const valid: string[] = []

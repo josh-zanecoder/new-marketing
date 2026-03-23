@@ -68,6 +68,31 @@ export function isFirebaseTenantAuthContext(
   )
 }
 
+/**
+ * Resolves registry `tenantId` for tenant API routes (Firebase session or API key).
+ * API-key sessions may omit `tenantId` on the auth object; then we read `clients.tenantId` by `dbName`.
+ */
+export async function resolveTenantIdForTenantAuth(
+  registryConn: Connection,
+  auth: RegisteredTenantAuthContext
+): Promise<string | null> {
+  if (isFirebaseTenantAuthContext(auth)) {
+    return auth.tenantId.trim()
+  }
+  if (isTenantApiKeyAuthContext(auth)) {
+    if (typeof auth.tenantId === 'string' && auth.tenantId.trim()) {
+      return auth.tenantId.trim()
+    }
+  }
+  const doc = await registryConn
+    .collection('clients')
+    .findOne({ dbName: auth.dbName })
+    .then((d) => d as { tenantId?: string } | null)
+  const tid =
+    doc && typeof doc.tenantId === 'string' ? doc.tenantId.trim() : ''
+  return tid || null
+}
+
 export async function findRegistryTenantByTenantId(
   registryConn: Connection,
   tenantId: string

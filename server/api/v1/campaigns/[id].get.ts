@@ -4,6 +4,7 @@ import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../typ
 import type { EmailTemplateDoc, EmailTemplateModel } from '../../../types/tenant/emailTemplate.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -29,11 +30,20 @@ export default defineEventHandler(async (event) => {
       sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : undefined,
       error: r.error
     }))
-  } else if (campaign.recipientsType === 'manual') {
+  } else if (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list') {
     const docs = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: campaign._id })
       .lean<ManualRecipientLean[]>()
     recipients = docs.map((r) => ({ email: r.email }))
+  }
+
+  if (
+    !recipients.length &&
+    campaign.recipientsType === 'list' &&
+    String(campaign.recipientsListId ?? '').trim()
+  ) {
+    const emails = await resolveRecipientListEmails(conn, String(campaign.recipientsListId))
+    recipients = emails.map((email) => ({ email }))
   }
 
   let emailTemplate: { html: string; name: string } | null = null

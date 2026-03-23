@@ -28,7 +28,14 @@
         </thead>
         <tbody>
           <tr v-for="t in tenants" :key="t.dbName">
-            <td>{{ t.name }}</td>
+            <td>
+              <NuxtLink
+                class="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
+                :to="`/admin/tenants/${encodeURIComponent(t.dbName)}`"
+              >
+                {{ t.name }}
+              </NuxtLink>
+            </td>
             <td>{{ t.email || '-' }}</td>
             <td class="font-mono text-xs text-slate-600">
               {{ t.apiKeyPrefix || '-' }}
@@ -142,6 +149,7 @@ async function fetchTenants() {
         name: string
         email: string | null
         dbName: string
+        tenantId: string | null
         apiKeyPrefix: string | null
         createdAt: string
       }[]
@@ -151,6 +159,7 @@ async function fetchTenants() {
       name: t.name,
       email: t.email,
       dbName: t.dbName,
+      tenantId: t.tenantId,
       apiKeyPrefix: t.apiKeyPrefix,
       status: 'Ready'
     }))

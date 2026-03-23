@@ -152,7 +152,11 @@ function formatDate(d: string) {
 
         <div
           class="grid grid-cols-1 gap-10"
-          :class="{ 'lg:grid-cols-2': campaign.recipientsType === 'manual' && campaign.recipients?.length }"
+          :class="{
+            'lg:grid-cols-2':
+              campaign.recipients?.length &&
+              (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
+          }"
         >
           <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
             <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5">
@@ -177,9 +181,10 @@ function formatDate(d: string) {
                   <span v-if="campaign.recipientsType === 'manual'">
                     {{ campaign.recipients?.length ?? 0 }} manual recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }}
                   </span>
-                  <span v-else>
-                    List: {{ campaign.recipientsListId || '–' }}
+                  <span v-else-if="campaign.recipientsType === 'list'">
+                    {{ campaign.recipients?.length ?? 0 }} recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }} from list
                   </span>
+                  <span v-else>–</span>
                 </dd>
               </div>
               <div class="grid grid-cols-1 gap-3 px-8 py-5 sm:grid-cols-3 sm:gap-4">
@@ -191,7 +196,13 @@ function formatDate(d: string) {
             </dl>
           </div>
 
-          <div v-if="campaign.recipientsType === 'manual' && campaign.recipients?.length" class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
+          <div
+            v-if="
+              campaign.recipients?.length &&
+              (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
+            "
+            class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden"
+          >
             <div class="border-b border-slate-100 bg-slate-50/80 px-8 py-5 flex items-center justify-between">
               <h2 class="text-base font-semibold text-slate-700 uppercase tracking-wider">Recipients ({{ campaign.recipients.length }})</h2>
               <div v-if="campaign.recipients.some(r => r.status)" class="flex gap-4 text-sm">

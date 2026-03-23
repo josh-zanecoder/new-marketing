@@ -7,6 +7,7 @@ import type {
   ManualRecipientModel
 } from '../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../tenant/connection'
+import { resolveRecipientListEmails } from '../../../utils/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -78,6 +79,21 @@ export default defineEventHandler(async (event) => {
       await (ManualRecipient as ManualRecipientModel).insertMany(
         docs as unknown as ManualRecipientInsertManyCast[]
       )
+    }
+  } else if (recipientsType === 'list') {
+    await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
+    if (recipientsListId) {
+      const emails = await resolveRecipientListEmails(conn, recipientsListId)
+      if (emails.length) {
+        const docs: ManualRecipientInsert[] = emails.map((email) => ({
+          campaign: campaign._id,
+          email,
+          clientId: ''
+        }))
+        await (ManualRecipient as ManualRecipientModel).insertMany(
+          docs as unknown as ManualRecipientInsertManyCast[]
+        )
+      }
     }
   }
 

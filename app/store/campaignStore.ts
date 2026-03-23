@@ -13,6 +13,11 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
   }
 }
 
+/** Client: send session cookie; Firebase ID token in cookie may be stale without refresh. */
+function apiFetchOptions(): { credentials: RequestCredentials } {
+  return { credentials: 'include' as RequestCredentials }
+}
+
 function fetchErrorMessage(e: unknown, fallback: string): string {
   if (e && typeof e === 'object' && 'data' in e) {
     const data = (e as { data?: { message?: string } }).data
@@ -29,9 +34,13 @@ export const useCampaignStore = defineStore('campaigns', () => {
   const sendError = ref<string | null>(null)
 
   async function fetchCampaigns() {
+    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<{ campaigns: Campaign[] }>(
       '/api/v1/campaigns',
-      serverAuthHeaders()
+      {
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      }
     )
     campaigns.value = res?.campaigns ?? []
     return campaigns.value
@@ -56,6 +65,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         method: 'POST',
         body: { campaignId: c.id },
         timeout: 30000,
+        ...apiFetchOptions(),
         ...serverAuthHeaders()
       })
 
@@ -107,7 +117,12 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function deleteCampaign(c: Campaign) {
     try {
-      await $fetch(`/api/v1/campaigns/${c.id}`, { method: 'DELETE' })
+      await refreshMarketingTokenIfNeeded()
+      await $fetch(`/api/v1/campaigns/${c.id}`, {
+        method: 'DELETE',
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
       await fetchCampaigns()
       return true
     } catch (e: unknown) {
@@ -118,10 +133,13 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function duplicateCampaign(c: Campaign) {
     try {
+      await refreshMarketingTokenIfNeeded()
       const res = await $fetch<{ id: string }>('/api/v1/campaigns/duplicate', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 10000
+        timeout: 10000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
       })
       await fetchCampaigns()
       return res.id

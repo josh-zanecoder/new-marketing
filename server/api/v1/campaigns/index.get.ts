@@ -25,7 +25,9 @@ export default defineEventHandler(async (event) => {
 
   const campaignsWithRecipients = campaigns.map((c) => {
     const id = String(c._id)
-    const recipients = c.recipientsType === 'manual' ? (recipientsByCampaign.get(id) || []) : []
+    const stored = recipientsByCampaign.get(id) || []
+    const recipients =
+      c.recipientsType === 'manual' || c.recipientsType === 'list' ? stored : []
     return {
       id,
       name: c.name,
