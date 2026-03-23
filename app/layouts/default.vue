@@ -26,6 +26,16 @@ async function handleLogout() {
           <span>Dashboard</span>
         </NuxtLink>
         <NuxtLink
+          to="/tenant/recipient-list"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          active-class="!bg-slate-100 !text-slate-900"
+        >
+          <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          <span>Recipient list</span>
+        </NuxtLink>
+        <NuxtLink
           to="/tenant/campaigns"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors relative after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-6 after:w-0.5 after:rounded-l after:bg-emerald-500 after:opacity-0 after:content-['']"
           active-class="!bg-emerald-50 !text-emerald-800 hover:!bg-emerald-100 after:!opacity-100"

@@ -1,6 +1,6 @@
-import { getRegistryConnection } from '../../../../lib/mongoose'
-import { isAdminAuthContext } from '../../../../tenant/registry-auth'
-import type { RegistryTenantDoc, TenantAdminRow } from '../../../../types/registry/registryTenant.types'
+import { getRegistryConnection } from '../../../../../../lib/mongoose'
+import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
+import type { RegistryTenantDoc, TenantAdminRow } from '../../../../../../types/registry/registryTenant.types'
 
 function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
   const name = typeof doc.name === 'string' ? doc.name : ''
@@ -22,27 +22,32 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
         : null
 
   if (!name || !dbName || !createdAt) return null
-  /** `tenantId` is included for admin UI and APIs keyed by registry id (e.g. recipient filters). */
   return { name, email, dbName, tenantId, apiKeyPrefix, createdAt }
 }
 
+/** Resolve a tenant by registry database name (for admin URLs that use `dbName` in the path). */
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
   if (!isAdminAuthContext(auth)) {
     throw createError({ statusCode: 403, message: 'Admin access required' })
   }
 
+  const raw = getRouterParam(event, 'dbName') ?? ''
+  const dbName = decodeURIComponent(raw)
+  if (!dbName) {
+    throw createError({ statusCode: 400, message: 'Missing tenant db name' })
+  }
+
   const registryConn = await getRegistryConnection()
+  const doc = await registryConn.collection('clients').findOne({ dbName })
+  if (!doc) {
+    throw createError({ statusCode: 404, message: 'Tenant not found' })
+  }
 
-  const rawDocs = (await registryConn
-    .collection('clients')
-    .find({})
-    .sort({ createdAt: -1 })
-    .toArray()) as unknown[]
+  const tenant = toTenantAdminRow(doc as RegistryTenantDoc)
+  if (!tenant) {
+    throw createError({ statusCode: 404, message: 'Tenant not found' })
+  }
 
-  const tenants: TenantAdminRow[] = rawDocs
-    .map((d) => toTenantAdminRow(d as RegistryTenantDoc))
-    .filter((c): c is TenantAdminRow => !!c)
-
-  return { tenants }
+  return { tenant }
 })

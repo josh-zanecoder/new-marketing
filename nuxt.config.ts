@@ -38,7 +38,15 @@ export default defineNuxtConfig({
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {
     optimizeDeps: {
-      include: ['@vue/devtools-core', '@vue/devtools-kit', 'xlsx', 'grapesjs', 'grapesjs-preset-newsletter']
+      include: [
+        '@vue/devtools-core',
+        '@vue/devtools-kit',
+        'xlsx',
+        'grapesjs',
+        'grapesjs-preset-newsletter',
+        'firebase/app',
+        'firebase/auth'
+      ]
     }
   },
   routeRules: {
