@@ -1,4 +1,4 @@
-import { Kafka, type Producer, type SASLOptions } from 'kafkajs'
+import { Kafka, type KafkaConfig, type Producer, type SASLOptions } from 'kafkajs'
 import type { MarketingKafkaEnvelope } from '../types/marketingKafkaEvent'
 
 let producer: Producer | null = null
@@ -10,6 +10,9 @@ type KafkaRuntime = {
   kafkaTopicEvents: string
   kafkaUsername: string
   kafkaPassword: string
+  kafkaSaClientEmail: string
+  kafkaSaPrivateKey: string
+  kafkaSaProjectId: string
   kafkaSsl: boolean
   kafkaSaslMechanism: string
 }
@@ -23,6 +26,9 @@ function resolveKafkaRuntime(): KafkaRuntime {
       kafkaTopicEvents: String(c.kafkaTopicEvents || 'marketing.events'),
       kafkaUsername: String(c.kafkaUsername || ''),
       kafkaPassword: String(c.kafkaPassword || ''),
+      kafkaSaClientEmail: String(c.kafkaSaClientEmail || ''),
+      kafkaSaPrivateKey: String(c.kafkaSaPrivateKey || ''),
+      kafkaSaProjectId: String(c.kafkaSaProjectId || ''),
       kafkaSsl: c.kafkaSsl !== false && String(c.kafkaSsl) !== 'false',
       kafkaSaslMechanism: String(c.kafkaSaslMechanism || 'plain')
     }
@@ -33,6 +39,9 @@ function resolveKafkaRuntime(): KafkaRuntime {
       kafkaTopicEvents: process.env.KAFKA_TOPIC_MARKETING_EVENTS || 'marketing.events',
       kafkaUsername: process.env.KAFKA_USERNAME || '',
       kafkaPassword: process.env.KAFKA_PASSWORD || '',
+      kafkaSaClientEmail: process.env.KAFKA_SA_CLIENT_EMAIL || '',
+      kafkaSaPrivateKey: process.env.KAFKA_SA_PRIVATE_KEY || '',
+      kafkaSaProjectId: process.env.KAFKA_SA_PROJECT_ID || '',
       kafkaSsl: process.env.KAFKA_SSL !== 'false',
       kafkaSaslMechanism: process.env.KAFKA_SASL_MECHANISM || 'plain'
     }
@@ -48,8 +57,45 @@ export function isKafkaConfigured(): boolean {
   return parseBrokers(resolveKafkaRuntime().kafkaBrokers).length > 0
 }
 
-function buildSasl(username: string, password: string, mechanism: string): SASLOptions | undefined {
-  if (!username || !password) return undefined
+function buildSaslCredentials(cfg: KafkaRuntime): { username: string; password: string } | null {
+  const email = cfg.kafkaSaClientEmail.trim()
+  const key = cfg.kafkaSaPrivateKey.trim()
+  if (email && key) {
+    const privateKey = key.replace(/\\n/g, '\n')
+    const projectId = cfg.kafkaSaProjectId.trim() || 'default'
+    const saJson = JSON.stringify({
+      type: 'service_account',
+      project_id: projectId,
+      private_key_id: '',
+      private_key: privateKey,
+      client_email: email,
+      client_id: '',
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+      client_x509_cert_url: ''
+    })
+    const password = Buffer.from(saJson, 'utf8').toString('base64')
+    return { username: email, password }
+  }
+  if (cfg.kafkaUsername && cfg.kafkaPassword) {
+    return { username: cfg.kafkaUsername, password: cfg.kafkaPassword }
+  }
+  return null
+}
+
+function isLocalBroker(cfg: KafkaRuntime): boolean {
+  const brokers = parseBrokers(cfg.kafkaBrokers)
+  return brokers.some((b) => b.includes('127.0.0.1') || b.includes('localhost'))
+}
+
+function buildSasl(cfg: KafkaRuntime): SASLOptions | undefined {
+  if (isLocalBroker(cfg)) return undefined
+  if (!cfg.kafkaSsl) return undefined
+  const creds = buildSaslCredentials(cfg)
+  if (!creds) return undefined
+  const { username, password } = creds
+  const mechanism = cfg.kafkaSaslMechanism
   if (mechanism === 'plain') return { mechanism: 'plain', username, password }
   if (mechanism === 'scram-sha-256') return { mechanism: 'scram-sha-256', username, password }
   return { mechanism: 'scram-sha-512', username, password }
@@ -58,19 +104,26 @@ function buildSasl(username: string, password: string, mechanism: string): SASLO
 async function getProducer(): Promise<Producer | null> {
   const cfg = resolveKafkaRuntime()
   const brokers = parseBrokers(cfg.kafkaBrokers)
-  if (brokers.length === 0) return null
+  if (brokers.length === 0) {
+    console.log('[Kafka] No brokers configured, skip')
+    return null
+  }
   if (producer) return producer
   if (connectPromise) return connectPromise
+  const sasl = buildSasl(cfg)
+  const useSsl = !isLocalBroker(cfg) && cfg.kafkaSsl
   connectPromise = (async () => {
-    const kafka = new Kafka({
+    const kafkaConfig: KafkaConfig = {
       clientId: cfg.kafkaClientId,
       brokers,
-      ssl: cfg.kafkaSsl,
-      sasl: buildSasl(cfg.kafkaUsername, cfg.kafkaPassword, cfg.kafkaSaslMechanism)
-    })
-    const p = kafka.producer({ allowAutoTopicCreation: false })
+      ssl: useSsl,
+      ...(sasl && { sasl })
+    }
+    const kafka = new Kafka(kafkaConfig)
+    const p = kafka.producer({ allowAutoTopicCreation: true })
     await p.connect()
     producer = p
+    console.log('[Kafka] Producer connected to', brokers.join(', '))
     return p
   })().finally(() => {
     connectPromise = null
@@ -111,6 +164,7 @@ export async function publishCampaignSendCompleted(params: {
   }
   try {
     await publishMarketingEnvelope(envelope)
+    console.log('[Kafka] campaign.send.completed published', { campaignId: params.campaignId, tenantDbName: params.tenantDbName })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[Kafka] publish campaign.send.completed failed:', msg)
