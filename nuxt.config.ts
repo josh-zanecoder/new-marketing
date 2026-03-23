@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
     /** Registry cluster URI; `server/lib/mongoose.ts` reads via `useRuntimeConfig()` first. */
-    mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/mortdash-registry',
+    mongodbUri: process.env.MONGODB_URI || 'mongodb+srv://josh_db_user:ZSQbOPOr8HZa3VdB@cluster0.qphzwve.mongodb.net/',
     /** Default DB name on that cluster (e.g. `marketing`). */
     mongodbDbName: process.env.MONGODB_DB_NAME || 'marketing',
     brevoApiKey: process.env.BREVO_API_KEY || '',

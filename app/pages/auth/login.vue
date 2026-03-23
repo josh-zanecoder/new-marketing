@@ -81,7 +81,7 @@ async function handleLogin() {
           autocomplete="email"
           required
           placeholder="you@company.com"
-        />
+        >
       </div>
 
       <div class="field">
@@ -93,7 +93,7 @@ async function handleLogin() {
           autocomplete="current-password"
           required
           placeholder="••••••••"
-        />
+        >
       </div>
 
       <button type="submit" :disabled="loading">

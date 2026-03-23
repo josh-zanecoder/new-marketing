@@ -61,8 +61,8 @@
             <button
               type="button"
               class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-              @click="emit('close')"
               :disabled="isSubmitting"
+              @click="emit('close')"
             >
               Cancel
             </button>

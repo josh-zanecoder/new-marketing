@@ -48,7 +48,7 @@ export async function ensureTenantDatabaseInitialized(
   }
 
   const trimmedTenant = tenantIdFromBody?.trim() || null
-  let tenantId =
+  const tenantId =
     typeof existing?.tenantId === 'string' && existing.tenantId
       ? existing.tenantId
       : trimmedTenant || randomUUID()

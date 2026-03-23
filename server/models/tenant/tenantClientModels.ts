@@ -8,13 +8,13 @@ import { recipientListSchema } from './RecipientList'
 import { recipientListMemberSchema } from './RecipientListMember'
 
 export type TenantClientModels = {
-  Campaign: Model<any>
-  CampaignRecipient: Model<any>
-  ManualRecipient: Model<any>
-  EmailTemplate: Model<any>
-  Contact: Model<any>
-  RecipientList: Model<any>
-  RecipientListMember: Model<any>
+  Campaign: Model<unknown>
+  CampaignRecipient: Model<unknown>
+  ManualRecipient: Model<unknown>
+  EmailTemplate: Model<unknown>
+  Contact: Model<unknown>
+  RecipientList: Model<unknown>
+  RecipientListMember: Model<unknown>
 }
 
 export function getTenantClientModels(conn: Connection): TenantClientModels {
