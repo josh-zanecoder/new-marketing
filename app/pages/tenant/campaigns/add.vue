@@ -480,7 +480,6 @@
 import type { Campaign, SendStatus } from '~/types/campaign'
 import type { WorkSheet } from 'xlsx'
 import { storeToRefs } from 'pinia'
-import { refreshMarketingTokenIfNeeded } from '~/composables/useMarketingTokenRefresh'
 import { useCampaignStore } from '~/store/campaignStore'
 
 const campaignStore = useCampaignStore()
@@ -624,7 +623,6 @@ async function loadRecipientLists() {
   recipientListsPending.value = true
   recipientListsError.value = ''
   try {
-    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<{ lists?: RecipientListOption[] }>('/api/v1/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()
@@ -977,8 +975,7 @@ async function handleSendFromWizard() {
     try {
       const id = await persistSavedCampaign()
       clearCampaignSessionStorage()
-      await refreshMarketingTokenIfNeeded()
-      const campaign = buildCampaignForSend(id)
+        const campaign = buildCampaignForSend(id)
       const { poll } = await campaignStore.sendCampaign(campaign)
       if (!poll) {
         if (sendError.value) return

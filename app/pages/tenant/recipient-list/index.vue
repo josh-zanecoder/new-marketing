@@ -134,7 +134,6 @@
 </template>
 
 <script setup lang="ts">
-import { refreshMarketingTokenIfNeeded } from '~/composables/useMarketingTokenRefresh'
 
 definePageMeta({ layout: 'default' })
 
@@ -234,7 +233,6 @@ async function load() {
   pending.value = true
   loadError.value = ''
   try {
-    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<RecipientListIndexPayload>('/api/v1/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()

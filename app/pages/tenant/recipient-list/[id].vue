@@ -161,7 +161,6 @@
 </template>
 
 <script setup lang="ts">
-import { refreshMarketingTokenIfNeeded } from '~/composables/useMarketingTokenRefresh'
 
 definePageMeta({ layout: 'default' })
 
@@ -251,7 +250,6 @@ async function load(p: number) {
   if (!isInitial) pageLoading.value = true
   loadError.value = ''
   try {
-    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<ListDetailPayload>(
       `/api/v1/recipient-list/${encodeURIComponent(id)}`,
       {

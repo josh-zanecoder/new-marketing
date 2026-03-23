@@ -13,7 +13,7 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
   }
 }
 
-/** Client: send session cookie; Firebase ID token in cookie may be stale without refresh. */
+/** Client: send session cookie with each request. */
 function apiFetchOptions(): { credentials: RequestCredentials } {
   return { credentials: 'include' as RequestCredentials }
 }
@@ -34,7 +34,6 @@ export const useCampaignStore = defineStore('campaigns', () => {
   const sendError = ref<string | null>(null)
 
   async function fetchCampaigns() {
-    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<{ campaigns: Campaign[] }>(
       '/api/v1/campaigns',
       {
@@ -69,6 +68,10 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...serverAuthHeaders()
       })
 
+      if (res == null) {
+        sendingCampaignId.value = null
+        return { poll: false }
+      }
 
       sendStatus.value = {
         campaignId: c.id,
@@ -117,7 +120,6 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function deleteCampaign(c: Campaign) {
     try {
-      await refreshMarketingTokenIfNeeded()
       await $fetch(`/api/v1/campaigns/${c.id}`, {
         method: 'DELETE',
         ...apiFetchOptions(),
@@ -133,7 +135,6 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function duplicateCampaign(c: Campaign) {
     try {
-      await refreshMarketingTokenIfNeeded()
       const res = await $fetch<{ id: string }>('/api/v1/campaigns/duplicate', {
         method: 'POST',
         body: { campaignId: c.id },
@@ -141,6 +142,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...apiFetchOptions(),
         ...serverAuthHeaders()
       })
+      if (res == null) return null
       await fetchCampaigns()
       return res.id
     } catch (e: unknown) {

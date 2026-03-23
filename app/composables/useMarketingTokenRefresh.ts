@@ -1,48 +1,76 @@
-/**
- * Firebase ID tokens expire in ~1h; `marketing_token` cookie maxAge is longer.
- * Refresh from the Firebase session and update the cookie before API calls (client only).
- */
-export async function refreshMarketingTokenIfNeeded(): Promise<void> {
-  if (!import.meta.client) return
+import type { Auth, User } from 'firebase/auth'
 
-  const token = useCookie<string | null>('marketing_token')
-  if (!token.value?.trim()) return
+let sessionLogoutPromise: Promise<void> | null = null
+let authPromise: Promise<Auth> | null = null
 
-  try {
-    const parts = token.value.split('.')
-    const payloadPart = parts[1]
-    if (parts.length === 3 && payloadPart) {
-      const b64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/')
-      const payload = JSON.parse(atob(b64)) as { exp?: number }
-      const exp = typeof payload.exp === 'number' ? payload.exp : 0
-      const now = Math.floor(Date.now() / 1000)
-      if (exp > now + 120) return
-    }
-  } catch {
-    /* attempt refresh below */
-  }
+export async function getMarketingFirebaseAuth(): Promise<Auth> {
+  if (authPromise) return authPromise
+  authPromise = (async () => {
+    const config = useRuntimeConfig()
+    const publicConfig = config.public as Record<string, unknown>
+    const [{ getApps, initializeApp }, { browserLocalPersistence, getAuth, setPersistence }] = await Promise.all([
+      import('firebase/app'),
+      import('firebase/auth')
+    ])
 
-  const config = useRuntimeConfig()
-  const publicConfig = config.public as Record<string, unknown>
+    const app =
+      getApps()[0] ||
+      initializeApp({
+        apiKey: String(publicConfig.firebaseApiKey || ''),
+        authDomain: String(publicConfig.firebaseAuthDomain || ''),
+        projectId: String(publicConfig.firebaseProjectId || ''),
+        appId: String(publicConfig.firebaseAppId || '')
+      })
 
-  const [{ getApps, initializeApp }, { getAuth }] = await Promise.all([
-    import('firebase/app'),
-    import('firebase/auth')
-  ])
-
-  const firebaseApp =
-    getApps()[0] ||
-    initializeApp({
-      apiKey: String(publicConfig.firebaseApiKey || ''),
-      authDomain: String(publicConfig.firebaseAuthDomain || ''),
-      projectId: String(publicConfig.firebaseProjectId || ''),
-      appId: String(publicConfig.firebaseAppId || '')
-    })
-
-  const auth = getAuth(firebaseApp)
-  const user = auth.currentUser
-  if (!user) return
-
-  const fresh = await user.getIdToken(true)
-  token.value = fresh
+    const auth = getAuth(app)
+    await setPersistence(auth, browserLocalPersistence)
+    return auth
+  })()
+  return authPromise
 }
+
+export function isMarketingUnauthorizedError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const code =
+    'statusCode' in err && typeof (err as { statusCode?: number }).statusCode === 'number'
+      ? (err as { statusCode: number }).statusCode
+      : 'status' in err && typeof (err as { status?: number }).status === 'number'
+        ? (err as { status: number }).status
+        : undefined
+  return code === 401
+}
+
+export async function syncMarketingTokenCookieFromFirebaseUser(user: User | null): Promise<void> {
+  if (!import.meta.client) return
+  const token = useCookie<string | null>('marketing_token', {
+    sameSite: 'lax',
+    secure: location.protocol === 'https:',
+    maxAge: 60 * 60 * 24 * 7
+  })
+  token.value = user ? await user.getIdToken() : null
+}
+
+/** Clears cookie + Firebase session and sends the user to login (e.g. expired or revoked token). */
+export function logoutMarketingSession(): Promise<void> {
+  if (!import.meta.client) return Promise.resolve()
+  if (sessionLogoutPromise) return sessionLogoutPromise
+
+  sessionLogoutPromise = (async () => {
+    await syncMarketingTokenCookieFromFirebaseUser(null)
+
+    try {
+      const { getAuth, signOut } = await import('firebase/auth')
+      const auth = await getMarketingFirebaseAuth()
+      await signOut(getAuth(auth.app))
+    } catch {
+      /* ignore */
+    }
+
+    await navigateTo('/auth/login')
+  })()
+
+  return sessionLogoutPromise.finally(() => {
+    sessionLogoutPromise = null
+  })
+}
+

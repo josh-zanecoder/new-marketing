@@ -3,8 +3,6 @@ definePageMeta({
   layout: false
 })
 
-const config = useRuntimeConfig()
-const publicConfig = config.public as Record<string, unknown>
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -16,41 +14,37 @@ interface LoginResponse {
   }
 }
 
+function loginErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const message =
+      'data' in error &&
+      error.data &&
+      typeof error.data === 'object' &&
+      'message' in error.data &&
+      typeof error.data.message === 'string'
+        ? error.data.message
+        : null
+    if (message) return message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return 'Login failed'
+}
+
 async function handleLogin() {
   errorMessage.value = ''
   loading.value = true
 
   try {
-    if (!process.client) return
-
-    const [{ initializeApp, getApps }, { getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword }] = await Promise.all([
-      import('firebase/app'),
-      import('firebase/auth')
+    const [{ signInWithEmailAndPassword }, auth] = await Promise.all([
+      import('firebase/auth'),
+      getMarketingFirebaseAuth()
     ])
-
-    const firebaseApp = getApps()[0] || initializeApp({
-      apiKey: String(publicConfig.firebaseApiKey || ''),
-      authDomain: String(publicConfig.firebaseAuthDomain || ''),
-      projectId: String(publicConfig.firebaseProjectId || ''),
-      appId: String(publicConfig.firebaseAppId || '')
-    })
-    const auth = getAuth(firebaseApp)
-
-    await setPersistence(auth, browserLocalPersistence)
-    const credential = await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
-    const idToken = await credential.user.getIdToken()
+    await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
 
     const loginResponse = await $fetch<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',
       body: { email: email.value.trim() }
     })
-
-    const token = useCookie<string>('marketing_token', {
-      sameSite: 'lax',
-      secure: process.client ? location.protocol === 'https:' : false,
-      maxAge: 60 * 60 * 24 * 7
-    })
-    token.value = idToken
 
     const role = (loginResponse?.user?.role || '').toLowerCase()
     if (role === 'admin') {
@@ -64,8 +58,8 @@ async function handleLogin() {
     }
 
     errorMessage.value = 'Unknown user role'
-  } catch (error: any) {
-    errorMessage.value = error?.data?.message || error?.message || 'Login failed'
+  } catch (error: unknown) {
+    errorMessage.value = loginErrorMessage(error)
   } finally {
     loading.value = false
   }

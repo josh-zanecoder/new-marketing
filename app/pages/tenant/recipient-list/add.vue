@@ -269,7 +269,6 @@
 </template>
 
 <script setup lang="ts">
-import { refreshMarketingTokenIfNeeded } from '~/composables/useMarketingTokenRefresh'
 
 definePageMeta({ layout: 'default' })
 
@@ -498,7 +497,6 @@ async function load() {
   loadPending.value = true
   loadError.value = ''
   try {
-    await refreshMarketingTokenIfNeeded()
     const res = await $fetch<RecipientListFormPayload>('/api/v1/recipient-list', {
       credentials: 'include',
       ...serverAuthHeaders()
@@ -527,7 +525,6 @@ async function submitCreate() {
   saveError.value = ''
   saving.value = true
   try {
-    await refreshMarketingTokenIfNeeded()
     const body: Record<string, unknown> = {
       name: form.name.trim(),
       audience: form.audience,
