@@ -26,6 +26,7 @@ export function useAdminTenantsCreateDb() {
   async function createTenantDb(payload: {
     name: string
     email: string
+    subdomain: string
   }): Promise<{ ok: boolean; apiKey?: string }> {
     resetError()
 
@@ -34,7 +35,7 @@ export function useAdminTenantsCreateDb() {
         '/api/v1/admin/tenants/create-db',
         {
           method: 'POST',
-          body: { name: payload.name, email: payload.email }
+          body: { name: payload.name, email: payload.email, subdomain: payload.subdomain }
         }
       )
 

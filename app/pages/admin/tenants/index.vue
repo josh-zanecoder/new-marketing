@@ -20,6 +20,7 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Subdomain</th>
             <th>Email</th>
             <th>API key</th>
             <th>Status</th>
@@ -29,6 +30,7 @@
         <tbody>
           <tr v-for="t in tenants" :key="t.dbName">
             <td>{{ t.name }}</td>
+            <td class="font-mono text-sm">{{ t.subdomain || '-' }}</td>
             <td>{{ t.email || '-' }}</td>
             <td class="font-mono text-xs text-slate-600">
               {{ t.apiKeyPrefix || '-' }}
@@ -70,7 +72,7 @@
             </td>
           </tr>
           <tr v-if="!tenants.length">
-            <td colspan="5">
+            <td colspan="6">
               No tenants yet
             </td>
           </tr>
@@ -142,6 +144,7 @@ async function fetchTenants() {
         name: string
         email: string | null
         dbName: string
+        subdomain: string | null
         apiKeyPrefix: string | null
         createdAt: string
       }[]
@@ -151,6 +154,7 @@ async function fetchTenants() {
       name: t.name,
       email: t.email,
       dbName: t.dbName,
+      subdomain: t.subdomain ?? null,
       apiKeyPrefix: t.apiKeyPrefix,
       status: 'Ready'
     }))
@@ -159,7 +163,7 @@ async function fetchTenants() {
   }
 }
 
-async function handleAddTenantSubmit(payload: { name: string; email: string }) {
+async function handleAddTenantSubmit(payload: { name: string; email: string; subdomain: string }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
 

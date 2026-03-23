@@ -4,6 +4,7 @@ export interface RegistryTenantDoc {
   name?: unknown
   email?: unknown
   dbName?: unknown
+  subdomain?: unknown
   tenantId?: unknown
   clientKeyPrefix?: unknown
   /** Legacy field on some registry docs */
@@ -16,6 +17,7 @@ export interface TenantAdminRow {
   name: string
   email: string | null
   dbName: string
+  subdomain: string | null
   tenantId: string | null
   /** Masked prefix for the tenant API key (from `clientKeyPrefix` in Mongo). */
   apiKeyPrefix: string | null

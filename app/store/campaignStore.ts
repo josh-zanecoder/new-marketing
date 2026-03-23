@@ -3,13 +3,16 @@ import type { Campaign, SendStatus } from '~/types/campaign'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
 
-/** SSR: internal API calls must forward the browser cookie or auth middleware returns 401. */
 function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
+  const tenantHeaders = useTenantApiHeaders()
+  if (!import.meta.server) {
+    return Object.keys(tenantHeaders).length ? { headers: tenantHeaders } : {}
+  }
   try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
+    const h = useRequestHeaders(['cookie', 'x-tenant-subdomain', 'host']) as Record<string, string>
+    return { headers: { ...h, ...tenantHeaders } }
   } catch {
-    return {}
+    return Object.keys(tenantHeaders).length ? { headers: tenantHeaders } : {}
   }
 }
 
@@ -107,7 +110,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   async function deleteCampaign(c: Campaign) {
     try {
-      await $fetch(`/api/v1/campaigns/${c.id}`, { method: 'DELETE' })
+      await $fetch(`/api/v1/campaigns/${c.id}`, { method: 'DELETE', ...serverAuthHeaders() })
       await fetchCampaigns()
       return true
     } catch (e: unknown) {
@@ -121,7 +124,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
       const res = await $fetch<{ id: string }>('/api/v1/campaigns/duplicate', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 10000
+        timeout: 10000,
+        ...serverAuthHeaders()
       })
       await fetchCampaigns()
       return res.id

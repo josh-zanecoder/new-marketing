@@ -106,3 +106,41 @@ export async function findRegistryTenantByApiKey(
   }
   return out
 }
+
+export type RegistryTenantRow = {
+  tenantName: string
+  dbName: string
+  tenantId: string
+  subdomain: string
+}
+
+export async function findRegistryTenantBySubdomain(
+  registryConn: Connection,
+  subdomain: string
+): Promise<RegistryTenantRow | null> {
+  const normalized = subdomain.trim().toLowerCase()
+  if (!normalized) return null
+  const doc = await registryConn
+    .collection('clients')
+    .findOne({ subdomain: normalized })
+    .then(
+      (d) =>
+        d as {
+          name?: string
+          dbName?: string
+          tenantId?: string
+          subdomain?: string
+        } | null
+    )
+  if (!doc?.name || !doc?.dbName || !doc?.subdomain) return null
+  const tenantId =
+    typeof doc.tenantId === 'string' && doc.tenantId
+      ? doc.tenantId
+      : String(doc._id)
+  return {
+    tenantName: doc.name,
+    dbName: doc.dbName,
+    tenantId,
+    subdomain: doc.subdomain
+  }
+}

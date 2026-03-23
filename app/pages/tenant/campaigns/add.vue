@@ -501,6 +501,7 @@ async function loadEditCampaign() {
   }
   editLoadPending.value = true
   try {
+    const opts = useTenantFetchOptions()
     const res = await $fetch<{ campaign: {
       name: string
       sender: { name: string; email: string }
@@ -509,7 +510,7 @@ async function loadEditCampaign() {
       subject: string
       recipients: { email: string }[]
       templateHtml?: string | null
-    } }>(`/api/v1/campaigns/${editId.value}`)
+    } }>(`/api/v1/campaigns/${editId.value}`, opts)
     const c = res.campaign
     form.value = {
       name: c.name,
@@ -547,6 +548,7 @@ async function loadFromEditorReturn() {
   const isRealCampaignId = /^[a-f0-9]{24}$/i.test(campaignId)
   if (isRealCampaignId) {
     try {
+      const opts = useTenantFetchOptions()
       const res = await $fetch<{ campaign: {
         name: string
         sender: { name: string; email: string }
@@ -554,7 +556,7 @@ async function loadFromEditorReturn() {
         recipientsListId?: string
         subject: string
         recipients: { email: string }[]
-      } }>(`/api/v1/campaigns/${campaignId}`)
+      } }>(`/api/v1/campaigns/${campaignId}`, opts)
       const c = res.campaign
       form.value = {
         name: c.name,
@@ -754,10 +756,11 @@ async function handleCreate() {
           templateHtml: savedTemplateHtml.value
         }
 
+        const opts = useTenantFetchOptions()
         if (isEditMode.value && editId.value) {
-          await $fetch(`/api/v1/campaigns/${editId.value}`, { method: 'PUT', body })
+          await $fetch(`/api/v1/campaigns/${editId.value}`, { method: 'PUT', body, ...opts })
         } else {
-          await $fetch<{ id: string }>('/api/v1/campaigns', { method: 'POST', body })
+          await $fetch<{ id: string }>('/api/v1/campaigns', { method: 'POST', body, ...opts })
         }
 
         if (typeof window !== 'undefined') {

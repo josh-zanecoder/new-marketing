@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ middleware: ['tenant-guard'] })
 const token = useCookie<string | null>('marketing_token')
 
 async function handleLogout() {

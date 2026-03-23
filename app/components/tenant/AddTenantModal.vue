@@ -41,6 +41,37 @@
           </div>
 
           <div class="space-y-2">
+            <label for="tenant-subdomain" class="block text-sm font-medium text-slate-700">Subdomain</label>
+            <input
+              id="tenant-subdomain"
+              v-model="subdomain"
+              type="text"
+              autocomplete="off"
+              required
+              placeholder="acme"
+              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+            <p class="text-xs text-slate-500">
+              Lowercase letters, numbers, hyphens only (DNS label for multi-tenant routing).
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <label for="tenant-db" class="block text-sm font-medium text-slate-700">Tenant DB</label>
+            <input
+              id="tenant-db"
+              :value="tenantDbPreview"
+              type="text"
+              readonly
+              tabindex="-1"
+              class="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-600 cursor-default"
+            >
+            <p class="text-xs text-slate-500">
+              Derived from tenant name (read-only).
+            </p>
+          </div>
+
+          <div class="space-y-2">
             <label for="tenant-email" class="block text-sm font-medium text-slate-700">Contact email</label>
             <input
               id="tenant-email"
@@ -94,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import { toTenantDbName } from '~/utils/tenantDb'
 import { useSubmitting } from '~/composables/useSubmitting'
 
 const props = defineProps<{
@@ -103,19 +135,22 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  submit: [{ name: string; email: string }]
+  submit: [{ name: string; email: string; subdomain: string }]
 }>()
 
 const name = ref('')
 const email = ref('')
+const subdomain = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
 const displayError = computed(() => errorMessage.value || props.serverError || null)
+const tenantDbPreview = computed(() => toTenantDbName(name.value))
 
 function resetForm() {
   name.value = ''
   email.value = ''
+  subdomain.value = ''
   errorMessage.value = null
   stopSubmitting()
 }
@@ -139,6 +174,7 @@ function handleSubmit() {
 
   const trimmedName = name.value.trim()
   const trimmedEmail = email.value.trim()
+  const trimmedSubdomain = subdomain.value.trim().toLowerCase()
 
   if (!trimmedName) {
     errorMessage.value = 'Tenant name is required.'
@@ -155,8 +191,19 @@ function handleSubmit() {
     return
   }
 
+  if (!trimmedSubdomain) {
+    errorMessage.value = 'Subdomain is required.'
+    return
+  }
+
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(trimmedSubdomain)) {
+    errorMessage.value =
+      'Subdomain: use lowercase letters, numbers, hyphens only (1–63 chars, no leading or trailing hyphen).'
+    return
+  }
+
   startSubmitting()
-  emit('submit', { name: trimmedName, email: trimmedEmail })
+  emit('submit', { name: trimmedName, email: trimmedEmail, subdomain: trimmedSubdomain })
 }
 </script>
 

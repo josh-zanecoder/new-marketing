@@ -87,8 +87,10 @@ function startPolling(campaignId: string) {
   async function poll() {
     if (!sendingCampaignId.value) return
     try {
+      const opts = useTenantFetchOptions()
       const res = await $fetch<SendStatus>(`/api/v1/send-campaign/status/${campaignId}`, {
-        timeout: 60000
+        timeout: 60000,
+        ...opts
       })
       store.setSendStatus(res)
       if (res.done) {

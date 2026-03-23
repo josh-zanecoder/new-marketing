@@ -6,6 +6,7 @@ import {
   getTenantApiKeyPrefix
 } from './api-key'
 import type { EnsureTenantResult } from '../types/registry/provision.types'
+import { normalizeTenantSubdomain } from './subdomain'
 
 export function toTenantDbName(displayName: string): string {
   const base = displayName
@@ -32,15 +33,36 @@ export async function ensureTenantDatabaseInitialized(
   registryConn: Connection,
   displayName: string,
   contactEmail: string | null,
-  tenantIdFromBody: string | null = null
+  tenantIdFromBody: string | null = null,
+  subdomainRaw: string | null = null
 ): Promise<EnsureTenantResult> {
   const dbName = toTenantDbName(displayName)
   const dbConn = registryConn.useDb(dbName)
 
   const existing = (await registryConn.collection('clients').findOne({ dbName })) as {
     tenantId?: string
+    subdomain?: string
   } | null
   const isNew = !existing
+
+  let subdomain: string | null = null
+  if (subdomainRaw != null && subdomainRaw.trim() !== '') {
+    subdomain = normalizeTenantSubdomain(subdomainRaw)
+  } else if (isNew) {
+    throw createError({ statusCode: 400, message: 'subdomain is required for new tenants' })
+  } else if (typeof existing?.subdomain === 'string' && existing.subdomain) {
+    subdomain = existing.subdomain
+  }
+
+  if (subdomain) {
+    const dup = await registryConn.collection('clients').findOne({
+      subdomain,
+      dbName: { $ne: dbName }
+    })
+    if (dup) {
+      throw createError({ statusCode: 409, message: 'subdomain is already in use' })
+    }
+  }
 
   let apiKey: string | null = null
   if (isNew) {
@@ -80,6 +102,7 @@ export async function ensureTenantDatabaseInitialized(
         email: contactEmail,
         dbName,
         tenantId,
+        ...(subdomain ? { subdomain } : {}),
         ...(isNew && apiKey
           ? {
               clientKeyHash: hashTenantApiKey(apiKey),

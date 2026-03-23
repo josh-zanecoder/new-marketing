@@ -5,6 +5,8 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
+    /** Base domain for subdomain extraction (e.g. `marketing.example.com`). Empty for localhost. */
+    tenantBaseDomain: process.env.TENANT_BASE_DOMAIN || '',
     /** Registry cluster URI; `server/lib/mongoose.ts` reads via `useRuntimeConfig()` first. */
     mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/mortdash-registry',
     /** Default DB name on that cluster (e.g. `marketing`). */
@@ -14,6 +16,7 @@ export default defineNuxtConfig({
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
     public: {
+      tenantBaseDomain: process.env.NUXT_PUBLIC_TENANT_BASE_DOMAIN || process.env.TENANT_BASE_DOMAIN || '',
       firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
@@ -37,11 +40,11 @@ export default defineNuxtConfig({
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {
+    server: {
+      allowedHosts: ['marketing.local', '.marketing.local']
+    },
     optimizeDeps: {
       include: ['@vue/devtools-core', '@vue/devtools-kit', 'xlsx', 'grapesjs', 'grapesjs-preset-newsletter']
     }
-  },
-  routeRules: {
-    '/': { redirect: '/tenant/dashboard' }
   }
 })

@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await getRegistryConnection()
+  const registry = await getRegistryConnection()
   const mongoUser = await UserModel.findOne({ email }).lean()
 
   if (!mongoUser) {
@@ -27,6 +27,13 @@ export default defineEventHandler(async (event) => {
       statusCode: 403,
       message: 'User is not allowed to access this app'
     })
+  }
+
+  let subdomain: string | null = null
+  const tenantId = typeof mongoUser.tenantId === 'string' ? mongoUser.tenantId.trim() : ''
+  if (tenantId) {
+    const doc = await registry.collection('clients').findOne({ tenantId }) as { subdomain?: string } | null
+    if (typeof doc?.subdomain === 'string' && doc.subdomain) subdomain = doc.subdomain
   }
 
   return {
@@ -37,7 +44,8 @@ export default defineEventHandler(async (event) => {
       role: mongoUser.role,
       name: '',
       photoURL: '',
-      emailVerified: true
+      emailVerified: true,
+      ...(subdomain ? { subdomain } : {})
     }
   }
 })

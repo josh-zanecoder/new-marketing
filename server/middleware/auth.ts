@@ -79,7 +79,24 @@ export default defineEventHandler(async (event) => {
         message: 'Tenant account is missing tenantId'
       })
     }
-    const row = await findRegistryTenantByTenantId(registryConn, tenantId)
+
+    const tenantFromSub = event.context.tenantFromSubdomain
+    if (!path.startsWith(ADMIN_API_PREFIX)) {
+      if (!tenantFromSub) {
+        throw createError({
+          statusCode: 400,
+          message: 'Tenant subdomain required. Access tenant data via your tenant subdomain.'
+        })
+      }
+      if (tenantFromSub.tenantId !== tenantId) {
+        throw createError({
+          statusCode: 403,
+          message: 'Tenant subdomain does not match your account'
+        })
+      }
+    }
+
+    const row = tenantFromSub ?? await findRegistryTenantByTenantId(registryConn, tenantId)
     if (!row) {
       throw createError({
         statusCode: 403,

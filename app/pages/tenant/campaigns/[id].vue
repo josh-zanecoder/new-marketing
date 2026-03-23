@@ -5,6 +5,7 @@ const route = useRoute()
 const campaignStore = useCampaignStore()
 const id = route.params.id as string
 
+const tenantOpts = useTenantFetchOptions()
 const { data, error, pending } = await useFetch<{
   campaign: {
     id: string
@@ -20,7 +21,7 @@ const { data, error, pending } = await useFetch<{
     createdAt: string
     updatedAt: string
   }
-}>(`/api/v1/campaigns/${id}`)
+}>(`/api/v1/campaigns/${id}`, tenantOpts)
 
 const campaign = computed(() => data.value?.campaign ?? null)
 

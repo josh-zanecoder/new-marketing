@@ -13,6 +13,7 @@ const errorMessage = ref('')
 interface LoginResponse {
   user?: {
     role?: string
+    subdomain?: string
   }
 }
 
@@ -53,12 +54,18 @@ async function handleLogin() {
     token.value = idToken
 
     const role = (loginResponse?.user?.role || '').toLowerCase()
+    const subdomain = loginResponse?.user?.subdomain
+
     if (role === 'admin') {
+      const { setSelectedTenant } = useTenant()
+      setSelectedTenant('')
       await navigateTo('/admin/dashboard')
       return
     }
 
     if (role === 'tenant' || role === 'client') {
+      const { setSelectedTenant } = useTenant()
+      if (subdomain) setSelectedTenant(subdomain)
       await navigateTo('/tenant/dashboard')
       return
     }
