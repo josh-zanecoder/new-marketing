@@ -53,6 +53,20 @@
             >
           </div>
 
+          <div class="space-y-2">
+            <label for="tenant-subdomain" class="block text-sm font-medium text-slate-700">Subdomain</label>
+            <input
+              id="tenant-subdomain"
+              v-model="subdomain"
+              type="text"
+              autocomplete="off"
+              required
+              placeholder="ameritrust"
+              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+            <p class="text-xs text-slate-500">Will be used as <code class="font-mono">subdomain.marketing.local</code></p>
+          </div>
+
           <div v-if="displayError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ displayError }}
           </div>
@@ -103,11 +117,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  submit: [{ name: string; email: string }]
+  submit: [{ name: string; email: string; subdomain: string }]
 }>()
 
 const name = ref('')
 const email = ref('')
+const subdomain = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -116,6 +131,7 @@ const displayError = computed(() => errorMessage.value || props.serverError || n
 function resetForm() {
   name.value = ''
   email.value = ''
+  subdomain.value = ''
   errorMessage.value = null
   stopSubmitting()
 }
@@ -139,6 +155,7 @@ function handleSubmit() {
 
   const trimmedName = name.value.trim()
   const trimmedEmail = email.value.trim()
+  const normalizedSubdomain = subdomain.value.trim().toLowerCase()
 
   if (!trimmedName) {
     errorMessage.value = 'Tenant name is required.'
@@ -154,9 +171,17 @@ function handleSubmit() {
     errorMessage.value = 'Please enter a valid email address.'
     return
   }
+  if (!normalizedSubdomain) {
+    errorMessage.value = 'Subdomain is required.'
+    return
+  }
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalizedSubdomain)) {
+    errorMessage.value = 'Subdomain must use lowercase letters, numbers, and hyphens only.'
+    return
+  }
 
   startSubmitting()
-  emit('submit', { name: trimmedName, email: trimmedEmail })
+  emit('submit', { name: trimmedName, email: trimmedEmail, subdomain: normalizedSubdomain })
 }
 </script>
 

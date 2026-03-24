@@ -6,6 +6,8 @@ export interface RegistryTenantDoc {
   dbName?: unknown
   subdomain?: unknown
   tenantId?: unknown
+  subdomain?: unknown
+  firebaseTenantId?: unknown
   clientKeyPrefix?: unknown
   /** Legacy field on some registry docs */
   apiKeyPrefix?: unknown
@@ -19,6 +21,8 @@ export interface TenantAdminRow {
   dbName: string
   subdomain: string | null
   tenantId: string | null
+  subdomain: string | null
+  firebaseTenantId: string | null
   /** Masked prefix for the tenant API key (from `clientKeyPrefix` in Mongo). */
   apiKeyPrefix: string | null
   createdAt: string

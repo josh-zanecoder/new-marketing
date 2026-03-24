@@ -23,6 +23,15 @@ export async function getMarketingFirebaseAuth(): Promise<Auth> {
       })
 
     const auth = getAuth(app)
+    try {
+      const tenantContext = await $fetch<{
+        ok: boolean
+        tenant?: { firebaseTenantId?: string | null } | null
+      }>('/api/v1/auth/tenant-context')
+      auth.tenantId = tenantContext?.tenant?.firebaseTenantId || null
+    } catch {
+      auth.tenantId = null
+    }
     await setPersistence(auth, browserLocalPersistence)
     return auth
   })()

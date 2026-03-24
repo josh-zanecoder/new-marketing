@@ -54,6 +54,14 @@
             <dd class="font-mono text-xs">{{ tenant.tenantId || '—' }}</dd>
           </div>
           <div class="overview-item">
+            <dt>Subdomain</dt>
+            <dd class="font-mono text-xs">{{ tenant.subdomain ? `${tenant.subdomain}.marketing.local` : '—' }}</dd>
+          </div>
+          <div class="overview-item">
+            <dt>Identity tenant</dt>
+            <dd class="font-mono text-xs">{{ tenant.firebaseTenantId || '—' }}</dd>
+          </div>
+          <div class="overview-item">
             <dt>API key prefix</dt>
             <dd class="font-mono text-xs">{{ tenant.apiKeyPrefix || '—' }}</dd>
           </div>
@@ -336,6 +344,8 @@ interface TenantDetail {
   email: string | null
   dbName: string
   tenantId: string | null
+  subdomain: string | null
+  firebaseTenantId: string | null
   apiKeyPrefix: string | null
   createdAt: string
 }

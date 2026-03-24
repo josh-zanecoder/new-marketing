@@ -6,8 +6,15 @@ import type { IUser } from '../types/admin/user.model'
 import { getRegistryConnection } from '../lib/mongoose'
 import {
   findRegistryTenantByApiKey,
+  findRegistryTenantBySubdomain,
   findRegistryTenantByTenantId
 } from '../tenant/registry-auth'
+import {
+  extractSubdomainFromHost,
+  getHostFromEvent,
+  isAdminSubdomain,
+  isTenantSubdomain
+} from '../utils/tenant-host'
 
 const PUBLIC_API_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/sso']
 
@@ -44,23 +51,33 @@ export default defineEventHandler(async (event) => {
 
   const apiKey = getTenantApiKeyFromEvent(event)
   const registryConn = await getRegistryConnection()
+  const host = getHostFromEvent(event)
+  const hostSubdomain = extractSubdomainFromHost(host)
+  const hasTenantHost = isTenantSubdomain(hostSubdomain)
+  const isAdminHost = !hostSubdomain || isAdminSubdomain(hostSubdomain)
 
   if (apiKey && !path.startsWith(ADMIN_API_PREFIX)) {
     const row = await findRegistryTenantByApiKey(registryConn, apiKey)
     if (row) {
+<<<<<<< Updated upstream
       const tenantFromSub = event.context.tenantFromSubdomain
       if (!isLocalHostRequest(event) && (!tenantFromSub || tenantFromSub.dbName !== row.dbName)) {
         throw createError({
           statusCode: 403,
           message: 'Tenant subdomain does not match API key tenant'
         })
+=======
+      if (hasTenantHost && row.subdomain && row.subdomain !== hostSubdomain) {
+        throw createError({ statusCode: 403, message: 'Tenant host does not match API key tenant' })
+>>>>>>> Stashed changes
       }
       event.context.auth = {
         type: 'tenantApiKey',
         role: 'tenant',
         tenantName: row.tenantName,
         dbName: row.dbName,
-        ...(row.tenantId ? { tenantId: row.tenantId } : {})
+        ...(row.tenantId ? { tenantId: row.tenantId } : {}),
+        ...(row.subdomain ? { subdomain: row.subdomain } : {})
       }
       return
     }
@@ -83,6 +100,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (isTenantUserRole(dbUser.role)) {
+<<<<<<< Updated upstream
     const tenantId =
       typeof dbUser.tenantId === 'string' ? dbUser.tenantId.trim() : ''
     if (!tenantId) {
@@ -107,18 +125,27 @@ export default defineEventHandler(async (event) => {
       }
     }
     const row = await findRegistryTenantByTenantId(registryConn, tenantId)
+=======
+    const tenantId = typeof dbUser.tenantId === 'string' ? dbUser.tenantId.trim() : ''
+    const row = hasTenantHost ? await findRegistryTenantBySubdomain(registryConn, hostSubdomain) : await findRegistryTenantByTenantId(registryConn, tenantId)
+>>>>>>> Stashed changes
     if (!row) {
       throw createError({
         statusCode: 403,
-        message: 'No tenant registered for this tenantId'
+        message: hasTenantHost ? 'No tenant registered for this subdomain' : 'No tenant registered for this tenantId'
       })
+    }
+    if (!row.tenantId) throw createError({ statusCode: 403, message: 'Tenant account is missing tenantId' })
+    if (!hasTenantHost && isAdminHost && tenantId && row.tenantId !== tenantId) {
+      throw createError({ statusCode: 403, message: 'Tenant account does not match registry tenant' })
     }
     event.context.auth = {
       uid: decoded.uid,
       email: decoded.email || '',
       role: 'tenant',
       tenantId: row.tenantId,
-      dbName: row.dbName
+      dbName: row.dbName,
+      ...(row.subdomain ? { subdomain: row.subdomain } : {})
     }
     return
   }

@@ -10,6 +10,10 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
     typeof doc.subdomain === 'string' && doc.subdomain ? doc.subdomain : null
   const tenantId =
     typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : null
+  const subdomain =
+    typeof doc.subdomain === 'string' && doc.subdomain ? doc.subdomain : null
+  const firebaseTenantId =
+    typeof doc.firebaseTenantId === 'string' && doc.firebaseTenantId ? doc.firebaseTenantId : null
   const apiKeyPrefix =
     typeof doc.clientKeyPrefix === 'string' && doc.clientKeyPrefix
       ? doc.clientKeyPrefix
@@ -25,7 +29,11 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
 
   if (!name || !dbName || !createdAt) return null
   /** `tenantId` is included for admin UI and APIs keyed by registry id (e.g. recipient filters). */
+<<<<<<< Updated upstream
   return { name, email, dbName, subdomain, tenantId, apiKeyPrefix, createdAt }
+=======
+  return { name, email, dbName, tenantId, subdomain, firebaseTenantId, apiKeyPrefix, createdAt }
+>>>>>>> Stashed changes
 }
 
 export default defineEventHandler(async (event) => {

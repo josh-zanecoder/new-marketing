@@ -22,6 +22,7 @@
             <th>Name</th>
             <th>Subdomain</th>
             <th>Email</th>
+            <th>Subdomain</th>
             <th>API key</th>
             <th>Status</th>
             <th class="th-actions" />
@@ -39,6 +40,7 @@
             </td>
             <td class="font-mono text-xs text-slate-600">{{ t.subdomain || '-' }}</td>
             <td>{{ t.email || '-' }}</td>
+            <td class="font-mono text-xs text-slate-700">{{ t.subdomain ? `${t.subdomain}.marketing.local` : '-' }}</td>
             <td class="font-mono text-xs text-slate-600">
               {{ t.apiKeyPrefix || '-' }}
             </td>
@@ -153,6 +155,8 @@ async function fetchTenants() {
         dbName: string
         subdomain: string | null
         tenantId: string | null
+        subdomain: string | null
+        firebaseTenantId: string | null
         apiKeyPrefix: string | null
         createdAt: string
       }[]
@@ -164,6 +168,8 @@ async function fetchTenants() {
       dbName: t.dbName,
       subdomain: t.subdomain,
       tenantId: t.tenantId,
+      subdomain: t.subdomain,
+      firebaseTenantId: t.firebaseTenantId,
       apiKeyPrefix: t.apiKeyPrefix,
       status: 'Ready'
     }))

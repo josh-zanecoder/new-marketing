@@ -5,6 +5,8 @@ export interface AdminTenantRow {
   subdomain: string | null
   /** Registry `clients.tenantId`; null if not set. */
   tenantId: string | null
+  subdomain: string | null
+  firebaseTenantId: string | null
   apiKeyPrefix: string | null
   status: string
 }

@@ -3,6 +3,10 @@ export default defineNuxtConfig({
   srcDir: 'app',
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  devServer: {
+    host: process.env.NUXT_HOST || '0.0.0.0',
+    port: Number(process.env.NUXT_PORT || 3000)
+  },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
     tenantBaseDomain: process.env.TENANT_BASE_DOMAIN || '',
@@ -19,7 +23,8 @@ export default defineNuxtConfig({
       firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || ''
+      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
+      tenantBaseDomain: process.env.NUXT_PUBLIC_TENANT_BASE_DOMAIN || 'marketing.local'
     },
     redisHost: process.env.REDIS_HOST || '127.0.0.1',
     redisPort: Number(process.env.REDIS_PORT) || 6379,

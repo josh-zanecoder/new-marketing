@@ -12,6 +12,7 @@ export type TenantApiKeyAuthContext = {
   tenantName: string
   dbName: string
   tenantId?: string
+  subdomain?: string
 }
 
 /** Firebase session for a tenant user (registry row resolved). */
@@ -21,6 +22,7 @@ export type FirebaseTenantAuthContext = {
   role: typeof TENANT_ROLE
   tenantId: string
   dbName: string
+  subdomain?: string
 }
 
 export function isAdminAuthContext(value: unknown): value is RoleAuthContext {
@@ -96,39 +98,71 @@ export async function resolveTenantIdForTenantAuth(
 export async function findRegistryTenantByTenantId(
   registryConn: Connection,
   tenantId: string
-): Promise<{ tenantName: string; dbName: string; tenantId: string } | null> {
+): Promise<{ tenantName: string; dbName: string; tenantId: string; subdomain?: string; firebaseTenantId?: string } | null> {
   const doc = await registryConn
     .collection('clients')
     .findOne({ tenantId })
     .then(
       (d) =>
-        d as { name?: string; dbName?: string; tenantId?: string } | null
+        d as { name?: string; dbName?: string; tenantId?: string; subdomain?: string; firebaseTenantId?: string } | null
     )
   if (!doc?.name || !doc?.dbName) return null
   const id =
     typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : tenantId
-  return { tenantName: doc.name, dbName: doc.dbName, tenantId: id }
+  const out: { tenantName: string; dbName: string; tenantId: string; subdomain?: string; firebaseTenantId?: string } = {
+    tenantName: doc.name,
+    dbName: doc.dbName,
+    tenantId: id
+  }
+  if (typeof doc.subdomain === 'string' && doc.subdomain) out.subdomain = doc.subdomain
+  if (typeof doc.firebaseTenantId === 'string' && doc.firebaseTenantId) out.firebaseTenantId = doc.firebaseTenantId
+  return out
 }
 
 export async function findRegistryTenantByApiKey(
   registryConn: Connection,
   apiKey: string
-): Promise<{ tenantName: string; dbName: string; tenantId?: string } | null> {
+): Promise<{ tenantName: string; dbName: string; tenantId?: string; subdomain?: string; firebaseTenantId?: string } | null> {
   const hash = hashTenantApiKey(apiKey)
   const doc = await registryConn
     .collection('clients')
     .findOne({ $or: [{ clientKeyHash: hash }, { apiKeyHash: hash }] })
     .then(
-      (d) => d as { name?: string; dbName?: string; tenantId?: string } | null
+      (d) => d as { name?: string; dbName?: string; tenantId?: string; subdomain?: string; firebaseTenantId?: string } | null
     )
   if (!doc?.name || !doc?.dbName) return null
-  const out: { tenantName: string; dbName: string; tenantId?: string } = {
+  const out: { tenantName: string; dbName: string; tenantId?: string; subdomain?: string; firebaseTenantId?: string } = {
     tenantName: doc.name,
     dbName: doc.dbName
   }
   if (typeof doc.tenantId === 'string' && doc.tenantId) {
     out.tenantId = doc.tenantId
   }
+  if (typeof doc.subdomain === 'string' && doc.subdomain) out.subdomain = doc.subdomain
+  if (typeof doc.firebaseTenantId === 'string' && doc.firebaseTenantId) out.firebaseTenantId = doc.firebaseTenantId
+  return out
+}
+
+export async function findRegistryTenantBySubdomain(
+  registryConn: Connection,
+  subdomain: string
+): Promise<{ tenantName: string; dbName: string; tenantId?: string; subdomain: string; firebaseTenantId?: string } | null> {
+  const normalized = subdomain.trim().toLowerCase()
+  if (!normalized) return null
+  const doc = await registryConn
+    .collection('clients')
+    .findOne({ subdomain: normalized })
+    .then(
+      (d) => d as { name?: string; dbName?: string; tenantId?: string; subdomain?: string; firebaseTenantId?: string } | null
+    )
+  if (!doc?.name || !doc?.dbName || !doc?.subdomain) return null
+  const out: { tenantName: string; dbName: string; tenantId?: string; subdomain: string; firebaseTenantId?: string } = {
+    tenantName: doc.name,
+    dbName: doc.dbName,
+    subdomain: doc.subdomain
+  }
+  if (typeof doc.tenantId === 'string' && doc.tenantId) out.tenantId = doc.tenantId
+  if (typeof doc.firebaseTenantId === 'string' && doc.firebaseTenantId) out.firebaseTenantId = doc.firebaseTenantId
   return out
 }
 

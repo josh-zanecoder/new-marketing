@@ -6,7 +6,11 @@ import {
   getTenantApiKeyPrefix
 } from './api-key'
 import type { EnsureTenantResult } from '../types/registry/provision.types'
+<<<<<<< Updated upstream
 import { normalizeTenantSubdomain } from './subdomain'
+=======
+import { normalizeTenantSubdomainInput } from '../utils/tenant-host'
+>>>>>>> Stashed changes
 
 export function toTenantDbName(displayName: string): string {
   const base = displayName
@@ -34,7 +38,11 @@ export async function ensureTenantDatabaseInitialized(
   displayName: string,
   contactEmail: string | null,
   tenantIdFromBody: string | null = null,
+<<<<<<< Updated upstream
   subdomainRaw: string | null = null
+=======
+  subdomainFromBody: string | null = null
+>>>>>>> Stashed changes
 ): Promise<EnsureTenantResult> {
   const dbName = toTenantDbName(displayName)
   const dbConn = registryConn.useDb(dbName)
@@ -70,6 +78,12 @@ export async function ensureTenantDatabaseInitialized(
     typeof existing?.tenantId === 'string' && existing.tenantId
       ? existing.tenantId
       : trimmedTenant || randomUUID()
+  const trimmedSubdomain = subdomainFromBody ? normalizeTenantSubdomainInput(subdomainFromBody) : null
+  const subdomain =
+    typeof existing?.subdomain === 'string' && existing.subdomain
+      ? existing.subdomain
+      : trimmedSubdomain
+  if (!subdomain) throw createError({ statusCode: 400, message: 'subdomain is required' })
 
   if (!existing?.tenantId && trimmedTenant) {
     const dup = await registryConn.collection('clients').findOne({
@@ -80,11 +94,18 @@ export async function ensureTenantDatabaseInitialized(
       throw createError({ statusCode: 409, message: 'tenantId is already in use' })
     }
   }
+  if (!(typeof existing?.subdomain === 'string' && existing.subdomain) && trimmedSubdomain) {
+    const dupSubdomain = await registryConn.collection('clients').findOne({
+      subdomain,
+      dbName: { $ne: dbName }
+    })
+    if (dupSubdomain) throw createError({ statusCode: 409, message: 'subdomain is already in use' })
+  }
 
   await dbConn.collection('clients').updateOne(
     { name: displayName },
     {
-      $set: { email: contactEmail, tenantId },
+      $set: { email: contactEmail, tenantId, subdomain },
       $setOnInsert: { createdAt: new Date() }
     },
     { upsert: true }
@@ -98,7 +119,11 @@ export async function ensureTenantDatabaseInitialized(
         email: contactEmail,
         dbName,
         tenantId,
+<<<<<<< Updated upstream
         ...(subdomain ? { subdomain } : {}),
+=======
+        subdomain,
+>>>>>>> Stashed changes
         ...(isNew && apiKey
           ? {
               clientKeyHash: hashTenantApiKey(apiKey),
@@ -111,5 +136,5 @@ export async function ensureTenantDatabaseInitialized(
     { upsert: true }
   )
 
-  return { dbName, apiKey, tenantId }
+  return { dbName, apiKey, tenantId, subdomain }
 }
