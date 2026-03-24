@@ -5,11 +5,13 @@ export type { Campaign, SendStatus } from '~/types/campaign'
 
 /** SSR: internal API calls must forward the browser cookie or auth middleware returns 401. */
 function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
+  const tenantHeaders = useTenantApiHeaders()
+  if (!import.meta.server) return Object.keys(tenantHeaders).length ? { headers: tenantHeaders } : {}
   try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
+    const base = useRequestHeaders(['cookie']) as Record<string, string>
+    return { headers: { ...base, ...tenantHeaders } as HeadersInit }
   } catch {
-    return {}
+    return Object.keys(tenantHeaders).length ? { headers: tenantHeaders } : {}
   }
 }
 

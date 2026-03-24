@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await getRegistryConnection()
+  const registryConn = await getRegistryConnection()
   const mongoUser = await UserModel.findOne({ email }).lean()
 
   if (!mongoUser) {
@@ -29,12 +29,23 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  let subdomain: string | null = null
+  const tenantId = typeof mongoUser.tenantId === 'string' ? mongoUser.tenantId.trim() : ''
+  if (tenantId) {
+    const row = await registryConn
+      .collection('clients')
+      .findOne({ tenantId })
+      .then((d) => d as { subdomain?: string } | null)
+    if (typeof row?.subdomain === 'string' && row.subdomain) subdomain = row.subdomain
+  }
+
   return {
     ok: true,
     user: {
       uid: mongoUser.firebaseUid || '',
       email: mongoUser.email || '',
       role: mongoUser.role,
+      ...(subdomain ? { subdomain } : {}),
       name: '',
       photoURL: '',
       emailVerified: true

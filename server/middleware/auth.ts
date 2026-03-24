@@ -13,6 +13,11 @@ const PUBLIC_API_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/sso']
 
 const ADMIN_API_PREFIX = '/api/v1/admin'
 
+function isLocalHostRequest(event: H3Event): boolean {
+  const host = (getHeader(event, 'host') || '').toLowerCase()
+  return host.includes('localhost') || host.includes('127.0.0.1')
+}
+
 function getBearerToken(event: H3Event): string {
   const authorization = getHeader(event, 'authorization') || ''
   if (!authorization.startsWith('Bearer ')) return ''
@@ -43,6 +48,13 @@ export default defineEventHandler(async (event) => {
   if (apiKey && !path.startsWith(ADMIN_API_PREFIX)) {
     const row = await findRegistryTenantByApiKey(registryConn, apiKey)
     if (row) {
+      const tenantFromSub = event.context.tenantFromSubdomain
+      if (!isLocalHostRequest(event) && (!tenantFromSub || tenantFromSub.dbName !== row.dbName)) {
+        throw createError({
+          statusCode: 403,
+          message: 'Tenant subdomain does not match API key tenant'
+        })
+      }
       event.context.auth = {
         type: 'tenantApiKey',
         role: 'tenant',
@@ -78,6 +90,21 @@ export default defineEventHandler(async (event) => {
         statusCode: 403,
         message: 'Tenant account is missing tenantId'
       })
+    }
+    if (!path.startsWith(ADMIN_API_PREFIX) && !isLocalHostRequest(event)) {
+      const tenantFromSub = event.context.tenantFromSubdomain
+      if (!tenantFromSub) {
+        throw createError({
+          statusCode: 400,
+          message: 'Tenant subdomain required. Access tenant routes from your tenant subdomain.'
+        })
+      }
+      if (tenantFromSub.tenantId !== tenantId) {
+        throw createError({
+          statusCode: 403,
+          message: 'Tenant subdomain does not match your account'
+        })
+      }
     }
     const row = await findRegistryTenantByTenantId(registryConn, tenantId)
     if (!row) {

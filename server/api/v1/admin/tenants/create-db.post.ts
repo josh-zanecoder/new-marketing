@@ -9,10 +9,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Admin access required' })
   }
 
-  const body = await readBody<{ name?: string; email?: string; tenantId?: string }>(event)
+  const body = await readBody<{ name?: string; email?: string; tenantId?: string; subdomain?: string }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()
   const tenantId = body?.tenantId?.trim() || null
+  const subdomain = body?.subdomain?.trim() ? body.subdomain : null
 
   if (!displayName) {
     throw createError({ statusCode: 400, message: 'name is required' })
@@ -24,7 +25,8 @@ export default defineEventHandler(async (event) => {
       registryConn,
       displayName,
       contactEmail || null,
-      tenantId
+      tenantId,
+      subdomain
     )
   let kafkaTopic: string | null = null
   try {

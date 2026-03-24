@@ -11,6 +11,7 @@ const errorMessage = ref('')
 interface LoginResponse {
   user?: {
     role?: string
+    subdomain?: string
   }
 }
 
@@ -47,12 +48,16 @@ async function handleLogin() {
     })
 
     const role = (loginResponse?.user?.role || '').toLowerCase()
+    const subdomain = (loginResponse?.user?.subdomain || '').toLowerCase()
+    const { setSelectedTenant } = useTenant()
     if (role === 'admin') {
+      setSelectedTenant('')
       await navigateTo('/admin/dashboard')
       return
     }
 
     if (role === 'tenant' || role === 'client') {
+      if (subdomain) setSelectedTenant(subdomain)
       await navigateTo('/tenant/dashboard')
       return
     }

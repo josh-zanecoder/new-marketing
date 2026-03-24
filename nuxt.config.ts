@@ -5,6 +5,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
   runtimeConfig: {
+    tenantBaseDomain: process.env.TENANT_BASE_DOMAIN || '',
     /** Registry cluster URI; `server/lib/mongoose.ts` reads via `useRuntimeConfig()` first. */
     mongodbUri: process.env.MONGODB_URI || 'mongodb+srv://josh_db_user:ZSQbOPOr8HZa3VdB@cluster0.qphzwve.mongodb.net/',
     /** Default DB name on that cluster (e.g. `marketing`). */
@@ -14,6 +15,7 @@ export default defineNuxtConfig({
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
     public: {
+      tenantBaseDomain: process.env.NUXT_PUBLIC_TENANT_BASE_DOMAIN || process.env.TENANT_BASE_DOMAIN || '',
       firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
@@ -37,6 +39,9 @@ export default defineNuxtConfig({
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {
+    server: {
+      allowedHosts: ['marketing.local', '.marketing.local']
+    },
     optimizeDeps: {
       include: [
         '@vue/devtools-core',
@@ -49,7 +54,5 @@ export default defineNuxtConfig({
       ]
     }
   },
-  routeRules: {
-    '/': { redirect: '/tenant/dashboard' }
-  }
+  routeRules: {}
 })
