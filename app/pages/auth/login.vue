@@ -40,6 +40,7 @@ async function handleLogin() {
       getMarketingFirebaseAuth()
     ])
     await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
+    await syncMarketingTokenCookieFromFirebaseUser(auth.currentUser)
 
     const loginResponse = await $fetch<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',

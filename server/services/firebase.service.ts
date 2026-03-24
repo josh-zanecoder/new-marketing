@@ -9,9 +9,21 @@ interface FirebaseEnv {
 
 function getFirebaseEnv(): FirebaseEnv {
   const config = useRuntimeConfig()
-  const projectId = config.firebaseProjectId || ''
-  const clientEmail = config.firebaseClientEmail || ''
-  const privateKeyRaw = config.firebasePrivateKey || ''
+  const projectId =
+    (config.firebaseProjectId as string) ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NUXT_FIREBASE_PROJECT_ID ||
+    ''
+  const clientEmail =
+    (config.firebaseClientEmail as string) ||
+    process.env.FIREBASE_CLIENT_EMAIL ||
+    process.env.NUXT_FIREBASE_CLIENT_EMAIL ||
+    ''
+  const privateKeyRaw =
+    (config.firebasePrivateKey as string) ||
+    process.env.FIREBASE_PRIVATE_KEY ||
+    process.env.NUXT_FIREBASE_PRIVATE_KEY ||
+    ''
 
   if (!projectId || !clientEmail || !privateKeyRaw) {
     throw createError({
@@ -53,7 +65,16 @@ export function getFirebaseAuth(): Auth {
 }
 
 export async function verifyFirebaseIdToken(idToken: string) {
-  return await getFirebaseAuth().verifyIdToken(idToken)
+  try {
+    return await getFirebaseAuth().verifyIdToken(idToken)
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? String((err as { code: unknown }).code)
+        : 'unknown'
+    console.error('Firebase verifyIdToken failed', code)
+    return null
+  }
 }
 
 export async function getFirebaseUserByUid(uid: string) {

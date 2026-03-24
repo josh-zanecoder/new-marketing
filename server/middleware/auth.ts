@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
-  const decoded = await verifyFirebaseIdToken(idToken).catch(() => null)
+  const decoded = await verifyFirebaseIdToken(idToken)
   if (!decoded) {
     throw createError({ statusCode: 401, message: 'Invalid token' })
   }
