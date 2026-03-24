@@ -25,16 +25,18 @@ function resolveKafkaRuntime(): KafkaRuntime {
   try {
     const c = useRuntimeConfig()
     return {
-      kafkaBrokers: String(c.kafkaBrokers || ''),
-      kafkaClientId: String(c.kafkaClientId || 'new-marketing'),
-      kafkaTopicEvents: String(c.kafkaTopicEvents || 'marketing.events'),
-      kafkaUsername: String(c.kafkaUsername || ''),
-      kafkaPassword: String(c.kafkaPassword || ''),
-      kafkaSaClientEmail: String(c.kafkaSaClientEmail || ''),
-      kafkaSaPrivateKey: String(c.kafkaSaPrivateKey || ''),
-      kafkaSaProjectId: String(c.kafkaSaProjectId || ''),
+      kafkaBrokers: String(c.kafkaBrokers || process.env.KAFKA_BROKERS || ''),
+      kafkaClientId: String(c.kafkaClientId || process.env.KAFKA_CLIENT_ID || 'new-marketing'),
+      kafkaTopicEvents: String(
+        c.kafkaTopicEvents || process.env.KAFKA_TOPIC_MARKETING_EVENTS || 'marketing.events'
+      ),
+      kafkaUsername: String(c.kafkaUsername || process.env.KAFKA_USERNAME || ''),
+      kafkaPassword: String(c.kafkaPassword || process.env.KAFKA_PASSWORD || ''),
+      kafkaSaClientEmail: String(c.kafkaSaClientEmail || process.env.KAFKA_SA_CLIENT_EMAIL || ''),
+      kafkaSaPrivateKey: String(c.kafkaSaPrivateKey || process.env.KAFKA_SA_PRIVATE_KEY || ''),
+      kafkaSaProjectId: String(c.kafkaSaProjectId || process.env.KAFKA_SA_PROJECT_ID || ''),
       kafkaSsl: c.kafkaSsl !== false && String(c.kafkaSsl) !== 'false',
-      kafkaSaslMechanism: String(c.kafkaSaslMechanism || 'plain')
+      kafkaSaslMechanism: String(c.kafkaSaslMechanism || process.env.KAFKA_SASL_MECHANISM || 'plain')
     }
   } catch {
     return {
@@ -88,6 +90,10 @@ async function getTenantEventTopicByDbName(tenantDbName: string): Promise<string
   return topic
 }
 
+function hasSaslCredentials(cfg: KafkaRuntime): boolean {
+  return buildSaslCredentials(cfg) !== null
+}
+
 function buildSaslCredentials(cfg: KafkaRuntime): { username: string; password: string } | null {
   const email = cfg.kafkaSaClientEmail.trim()
   const key = cfg.kafkaSaPrivateKey.trim()
@@ -122,7 +128,6 @@ function isLocalBroker(cfg: KafkaRuntime): boolean {
 
 function buildSasl(cfg: KafkaRuntime): SASLOptions | undefined {
   if (isLocalBroker(cfg)) return undefined
-  if (!cfg.kafkaSsl) return undefined
   const creds = buildSaslCredentials(cfg)
   if (!creds) return undefined
   const { username, password } = creds
@@ -130,6 +135,13 @@ function buildSasl(cfg: KafkaRuntime): SASLOptions | undefined {
   if (mechanism === 'plain') return { mechanism: 'plain', username, password }
   if (mechanism === 'scram-sha-256') return { mechanism: 'scram-sha-256', username, password }
   return { mechanism: 'scram-sha-512', username, password }
+}
+
+/** Managed Kafka requires TLS when using SASL; do not tie SASL to kafkaSsl only. */
+function useTlsForRemote(cfg: KafkaRuntime): boolean {
+  if (isLocalBroker(cfg)) return false
+  if (hasSaslCredentials(cfg)) return true
+  return cfg.kafkaSsl !== false && String(cfg.kafkaSsl) !== 'false'
 }
 
 async function getProducer(): Promise<Producer | null> {
@@ -142,7 +154,7 @@ async function getProducer(): Promise<Producer | null> {
   if (producer) return producer
   if (connectPromise) return connectPromise
   const sasl = buildSasl(cfg)
-  const useSsl = !isLocalBroker(cfg) && cfg.kafkaSsl
+  const useSsl = useTlsForRemote(cfg)
   connectPromise = (async () => {
     const kafkaConfig: KafkaConfig = {
       clientId: cfg.kafkaClientId,
@@ -169,7 +181,7 @@ async function getAdmin(): Promise<Admin | null> {
   if (admin) return admin
   if (adminConnectPromise) return adminConnectPromise
   const sasl = buildSasl(cfg)
-  const useSsl = !isLocalBroker(cfg) && cfg.kafkaSsl
+  const useSsl = useTlsForRemote(cfg)
   adminConnectPromise = (async () => {
     const kafkaConfig: KafkaConfig = {
       clientId: `${cfg.kafkaClientId}-admin`,
@@ -188,14 +200,24 @@ async function getAdmin(): Promise<Admin | null> {
   return adminConnectPromise
 }
 
+function topicReplicationFactor(): number {
+  const raw = process.env.KAFKA_TOPIC_REPLICATION_FACTOR
+  const n = raw ? parseInt(raw, 10) : 1
+  return Number.isFinite(n) && n > 0 ? n : 1
+}
+
 export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promise<string | null> {
-  if (!isKafkaConfigured()) return null
+  if (!isKafkaConfigured()) {
+    console.warn('[Kafka] KAFKA_BROKERS is empty; skip tenant topic creation')
+    return null
+  }
   const topic = getTenantEventTopic(tenantNameOrDbName)
   const a = await getAdmin()
   if (!a) return null
+  const replicationFactor = topicReplicationFactor()
   await a.createTopics({
     waitForLeaders: true,
-    topics: [{ topic, numPartitions: 1, replicationFactor: 1 }]
+    topics: [{ topic, numPartitions: 1, replicationFactor }]
   })
   return topic
 }
