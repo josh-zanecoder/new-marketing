@@ -201,9 +201,14 @@ async function getAdmin(): Promise<Admin | null> {
 }
 
 function topicReplicationFactor(): number {
-  const raw = process.env.KAFKA_TOPIC_REPLICATION_FACTOR
-  const n = raw ? parseInt(raw, 10) : 1
-  return Number.isFinite(n) && n > 0 ? n : 1
+  const raw = (process.env.KAFKA_TOPIC_REPLICATION_FACTOR || '').trim()
+  if (raw) {
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? n : 1
+  }
+  const brokers = parseBrokers(resolveKafkaRuntime().kafkaBrokers)
+  if (brokers.some((b) => b.includes('managedkafka'))) return 3
+  return 1
 }
 
 export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promise<string | null> {
@@ -215,6 +220,7 @@ export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promis
   const a = await getAdmin()
   if (!a) return null
   const replicationFactor = topicReplicationFactor()
+  console.log('[Kafka] ensure topic', topic, 'replicationFactor', replicationFactor)
   await a.createTopics({
     waitForLeaders: true,
     topics: [{ topic, numPartitions: 1, replicationFactor }]
