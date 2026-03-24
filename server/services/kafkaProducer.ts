@@ -1,8 +1,12 @@
-import { Kafka, type KafkaConfig, type Producer, type SASLOptions } from 'kafkajs'
+import { Kafka, type Admin, type KafkaConfig, type Producer, type SASLOptions } from 'kafkajs'
 import type { MarketingKafkaEnvelope } from '../types/marketingKafkaEvent'
+import { getRegistryConnection } from '../lib/mongoose'
 
 let producer: Producer | null = null
 let connectPromise: Promise<Producer | null> | null = null
+let admin: Admin | null = null
+let adminConnectPromise: Promise<Admin | null> | null = null
+const tenantTopicCache = new Map<string, string>()
 
 type KafkaRuntime = {
   kafkaBrokers: string
@@ -55,6 +59,33 @@ function parseBrokers(raw: string): string[] {
 /** True when `KAFKA_BROKERS` resolves to at least one broker (producer will attempt connect). */
 export function isKafkaConfigured(): boolean {
   return parseBrokers(resolveKafkaRuntime().kafkaBrokers).length > 0
+}
+
+function toTopicSuffix(value: string): string {
+  const s = value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_')
+  return s || 'tenant'
+}
+
+export function getTenantEventTopic(tenantDbName: string): string {
+  const base = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
+  return `${base}.${toTopicSuffix(tenantDbName)}`
+}
+
+async function getTenantEventTopicByDbName(tenantDbName: string): Promise<string> {
+  const cached = tenantTopicCache.get(tenantDbName)
+  if (cached) return cached
+  let topic = getTenantEventTopic(tenantDbName)
+  try {
+    const registry = await getRegistryConnection()
+    const row = await registry
+      .collection('clients')
+      .findOne({ dbName: tenantDbName })
+      .then((d) => d as { name?: string } | null)
+    const tenantName = typeof row?.name === 'string' ? row.name.trim() : ''
+    if (tenantName) topic = getTenantEventTopic(tenantName)
+  } catch {}
+  tenantTopicCache.set(tenantDbName, topic)
+  return topic
 }
 
 function buildSaslCredentials(cfg: KafkaRuntime): { username: string; password: string } | null {
@@ -131,11 +162,48 @@ async function getProducer(): Promise<Producer | null> {
   return connectPromise
 }
 
-export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope): Promise<void> {
+async function getAdmin(): Promise<Admin | null> {
   const cfg = resolveKafkaRuntime()
+  const brokers = parseBrokers(cfg.kafkaBrokers)
+  if (brokers.length === 0) return null
+  if (admin) return admin
+  if (adminConnectPromise) return adminConnectPromise
+  const sasl = buildSasl(cfg)
+  const useSsl = !isLocalBroker(cfg) && cfg.kafkaSsl
+  adminConnectPromise = (async () => {
+    const kafkaConfig: KafkaConfig = {
+      clientId: `${cfg.kafkaClientId}-admin`,
+      brokers,
+      ssl: useSsl,
+      ...(sasl && { sasl })
+    }
+    const kafka = new Kafka(kafkaConfig)
+    const a = kafka.admin()
+    await a.connect()
+    admin = a
+    return a
+  })().finally(() => {
+    adminConnectPromise = null
+  })
+  return adminConnectPromise
+}
+
+export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promise<string | null> {
+  if (!isKafkaConfigured()) return null
+  const topic = getTenantEventTopic(tenantNameOrDbName)
+  const a = await getAdmin()
+  if (!a) return null
+  await a.createTopics({
+    waitForLeaders: true,
+    topics: [{ topic, numPartitions: 1, replicationFactor: 1 }]
+  })
+  return topic
+}
+
+export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope): Promise<void> {
   const p = await getProducer()
   if (!p) return
-  const topic = cfg.kafkaTopicEvents
+  const topic = await getTenantEventTopicByDbName(envelope.tenantDbName)
   await p.send({
     topic,
     messages: [{ key: envelope.tenantDbName, value: JSON.stringify(envelope) }]
