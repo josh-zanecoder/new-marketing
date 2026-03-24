@@ -1,6 +1,7 @@
 import { getRegistryConnection } from '../../../../lib/mongoose'
 import { ensureTenantDatabaseInitialized } from '../../../../tenant/provisioning'
 import { isAdminAuthContext } from '../../../../tenant/registry-auth'
+import { ensureTenantEventTopic } from '../../../../services/kafkaProducer'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -25,11 +26,18 @@ export default defineEventHandler(async (event) => {
       contactEmail || null,
       tenantId
     )
+  let kafkaTopic: string | null = null
+  try {
+    kafkaTopic = await ensureTenantEventTopic(displayName)
+  } catch (err) {
+    console.error('[Kafka] failed to ensure tenant topic:', err)
+  }
 
   return {
     ok: true,
     dbName,
     tenantId: resolvedTenantId,
-    apiKey: apiKey ?? undefined
+    apiKey: apiKey ?? undefined,
+    kafkaTopic: kafkaTopic ?? undefined
   }
 })
