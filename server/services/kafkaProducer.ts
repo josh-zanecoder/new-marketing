@@ -1,4 +1,11 @@
-import { Kafka, type Admin, type KafkaConfig, type Producer, type SASLOptions } from 'kafkajs'
+import {
+  Kafka,
+  Partitioners,
+  type Admin,
+  type KafkaConfig,
+  type Producer,
+  type SASLOptions
+} from 'kafkajs'
 import type { MarketingKafkaEnvelope } from '../types/marketingKafkaEvent'
 import { getRegistryConnection } from '../lib/mongoose'
 
@@ -144,6 +151,46 @@ function useTlsForRemote(cfg: KafkaRuntime): boolean {
   return cfg.kafkaSsl !== false && String(cfg.kafkaSsl) !== 'false'
 }
 
+/** KafkaJS defaults connectionTimeout to 1000ms; VPC + TLS + SASL needs much more (esp. Cloud Run). */
+function buildKafkaClientConfig(cfg: KafkaRuntime, clientId: string): KafkaConfig {
+  const brokers = parseBrokers(cfg.kafkaBrokers)
+  const sasl = buildSasl(cfg)
+  const useSsl = useTlsForRemote(cfg)
+  const gcp = brokers.some((b) => b.includes('managedkafka'))
+  const base: KafkaConfig = {
+    clientId,
+    brokers,
+    ssl: useSsl,
+    ...(sasl && { sasl })
+  }
+  if (isLocalBroker(cfg)) return base
+  return {
+    ...base,
+    connectionTimeout: 30000,
+    authenticationTimeout: 30000,
+    requestTimeout: gcp ? 90000 : 45000,
+    retry: {
+      retries: gcp ? 10 : 5,
+      initialRetryTime: 400,
+      maxRetryTime: 40000,
+      multiplier: 2
+    }
+  }
+}
+
+async function resetProducerConnection(): Promise<void> {
+  try {
+    if (producer) await producer.disconnect()
+  } catch {}
+  producer = null
+  connectPromise = null
+}
+
+function isKafkaConnectionError(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err)
+  return /timeout|Connection|ECONNRESET|ECONNREFUSED|socket|TLS|ETIMEDOUT|disconnected/i.test(m)
+}
+
 async function getProducer(): Promise<Producer | null> {
   const cfg = resolveKafkaRuntime()
   const brokers = parseBrokers(cfg.kafkaBrokers)
@@ -153,17 +200,12 @@ async function getProducer(): Promise<Producer | null> {
   }
   if (producer) return producer
   if (connectPromise) return connectPromise
-  const sasl = buildSasl(cfg)
-  const useSsl = useTlsForRemote(cfg)
   connectPromise = (async () => {
-    const kafkaConfig: KafkaConfig = {
-      clientId: cfg.kafkaClientId,
-      brokers,
-      ssl: useSsl,
-      ...(sasl && { sasl })
-    }
-    const kafka = new Kafka(kafkaConfig)
-    const p = kafka.producer({ allowAutoTopicCreation: true })
+    const kafka = new Kafka(buildKafkaClientConfig(cfg, cfg.kafkaClientId))
+    const p = kafka.producer({
+      allowAutoTopicCreation: true,
+      createPartitioner: Partitioners.LegacyPartitioner
+    })
     await p.connect()
     producer = p
     console.log('[Kafka] Producer connected to', brokers.join(', '))
@@ -180,16 +222,8 @@ async function getAdmin(): Promise<Admin | null> {
   if (brokers.length === 0) return null
   if (admin) return admin
   if (adminConnectPromise) return adminConnectPromise
-  const sasl = buildSasl(cfg)
-  const useSsl = useTlsForRemote(cfg)
   adminConnectPromise = (async () => {
-    const kafkaConfig: KafkaConfig = {
-      clientId: `${cfg.kafkaClientId}-admin`,
-      brokers,
-      ssl: useSsl,
-      ...(sasl && { sasl })
-    }
-    const kafka = new Kafka(kafkaConfig)
+    const kafka = new Kafka(buildKafkaClientConfig(cfg, `${cfg.kafkaClientId}-admin`))
     const a = kafka.admin()
     await a.connect()
     admin = a
@@ -229,13 +263,26 @@ export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promis
 }
 
 export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope): Promise<void> {
-  const p = await getProducer()
-  if (!p) return
-  const topic = await getTenantEventTopicByDbName(envelope.tenantDbName)
-  await p.send({
-    topic,
-    messages: [{ key: envelope.tenantDbName, value: JSON.stringify(envelope) }]
-  })
+  const sendOnce = async () => {
+    const p = await getProducer()
+    if (!p) return
+    const topic = await getTenantEventTopicByDbName(envelope.tenantDbName)
+    await p.send({
+      topic,
+      messages: [{ key: envelope.tenantDbName, value: JSON.stringify(envelope) }]
+    })
+  }
+  try {
+    await sendOnce()
+  } catch (err) {
+    if (isKafkaConnectionError(err) && !isLocalBroker(resolveKafkaRuntime())) {
+      console.warn('[Kafka] producer send failed, reconnecting once', err instanceof Error ? err.message : err)
+      await resetProducerConnection()
+      await sendOnce()
+      return
+    }
+    throw err
+  }
 }
 
 export async function publishCampaignSendCompleted(params: {
