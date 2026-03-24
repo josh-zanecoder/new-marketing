@@ -13,6 +13,8 @@ env:
   SECRET_NAME: marketing-test
   ARTIFACT_REGISTRY_NAME: marketing-test
   REGION: us-west1
+  VPC_CONNECTOR: marketing-run-kafka
+  VPC_EGRESS: private-ranges-only
 
 jobs:
   deploy:
@@ -135,6 +137,8 @@ jobs:
               --platform managed \
               --allow-unauthenticated \
               --service-account ${{ env.SERVICE_ACCOUNT }} \
+              --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+              --vpc-egress=${{ env.VPC_EGRESS }} \
               --min-instances 1 \
               --max-instances 10 \
               --memory 1Gi \
@@ -154,6 +158,8 @@ jobs:
               --platform managed \
               --allow-unauthenticated \
               --service-account ${{ env.SERVICE_ACCOUNT }} \
+              --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+              --vpc-egress=${{ env.VPC_EGRESS }} \
               --min-instances 1 \
               --max-instances 10 \
               --memory 1Gi \
