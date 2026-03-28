@@ -2,18 +2,31 @@ import {
   Kafka,
   Partitioners,
   type Admin,
+  type Consumer,
   type KafkaConfig,
   type Producer,
   type SASLOptions
 } from 'kafkajs'
 import type { MarketingKafkaEnvelope } from '../types/marketingKafkaEvent'
 import { getRegistryConnection } from '../lib/mongoose'
+import { logger } from '../utils/logger'
+import {
+  CONTACT_EVENT_TYPES,
+  parseContactDeletedEventEnvelope,
+  parseContactEventEnvelope
+} from '../schemas/events/contactEvents'
+import {
+  createContactFromCreatedEvent,
+  softDeleteContactFromDeletedEvent,
+  updateContactFromUpdatedEvent
+} from '../kafka/handlers/inboundContacts'
+import {
+  deleteMarketingEmailTemplateFromDeletedEvent,
+  saveMarketingEmailTemplateFromCreatedEvent,
+  saveMarketingEmailTemplateFromUpdatedEvent
+} from '../kafka/handlers/inboundEmailTemplates'
 
-let producer: Producer | null = null
-let connectPromise: Promise<Producer | null> | null = null
-let admin: Admin | null = null
-let adminConnectPromise: Promise<Admin | null> | null = null
-const tenantTopicCache = new Map<string, string>()
+// --- Runtime / client config -------------------------------------------------
 
 type KafkaRuntime = {
   kafkaBrokers: string
@@ -70,37 +83,6 @@ export function isKafkaConfigured(): boolean {
   return parseBrokers(resolveKafkaRuntime().kafkaBrokers).length > 0
 }
 
-function toTopicSuffix(value: string): string {
-  const s = value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_')
-  return s || 'tenant'
-}
-
-export function getTenantEventTopic(tenantDbName: string): string {
-  const base = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
-  return `${base}.${toTopicSuffix(tenantDbName)}`
-}
-
-async function getTenantEventTopicByDbName(tenantDbName: string): Promise<string> {
-  const cached = tenantTopicCache.get(tenantDbName)
-  if (cached) return cached
-  let topic = getTenantEventTopic(tenantDbName)
-  try {
-    const registry = await getRegistryConnection()
-    const row = await registry
-      .collection('clients')
-      .findOne({ dbName: tenantDbName })
-      .then((d) => d as { name?: string } | null)
-    const tenantName = typeof row?.name === 'string' ? row.name.trim() : ''
-    if (tenantName) topic = getTenantEventTopic(tenantName)
-  } catch {}
-  tenantTopicCache.set(tenantDbName, topic)
-  return topic
-}
-
-function hasSaslCredentials(cfg: KafkaRuntime): boolean {
-  return buildSaslCredentials(cfg) !== null
-}
-
 function buildSaslCredentials(cfg: KafkaRuntime): { username: string; password: string } | null {
   const email = cfg.kafkaSaClientEmail.trim()
   const key = cfg.kafkaSaPrivateKey.trim()
@@ -133,6 +115,10 @@ function isLocalBroker(cfg: KafkaRuntime): boolean {
   return brokers.some((b) => b.includes('127.0.0.1') || b.includes('localhost'))
 }
 
+function hasSaslCredentials(cfg: KafkaRuntime): boolean {
+  return buildSaslCredentials(cfg) !== null
+}
+
 function buildSasl(cfg: KafkaRuntime): SASLOptions | undefined {
   if (isLocalBroker(cfg)) return undefined
   const creds = buildSaslCredentials(cfg)
@@ -144,14 +130,12 @@ function buildSasl(cfg: KafkaRuntime): SASLOptions | undefined {
   return { mechanism: 'scram-sha-512', username, password }
 }
 
-/** Managed Kafka requires TLS when using SASL; do not tie SASL to kafkaSsl only. */
 function useTlsForRemote(cfg: KafkaRuntime): boolean {
   if (isLocalBroker(cfg)) return false
   if (hasSaslCredentials(cfg)) return true
   return cfg.kafkaSsl !== false && String(cfg.kafkaSsl) !== 'false'
 }
 
-/** KafkaJS defaults connectionTimeout to 1000ms; VPC + TLS + SASL needs much more (esp. Cloud Run). */
 function buildKafkaClientConfig(cfg: KafkaRuntime, clientId: string): KafkaConfig {
   const brokers = parseBrokers(cfg.kafkaBrokers)
   const sasl = buildSasl(cfg)
@@ -178,10 +162,84 @@ function buildKafkaClientConfig(cfg: KafkaRuntime, clientId: string): KafkaConfi
   }
 }
 
+function createKafkaJsInstance(clientId: string, cfg?: KafkaRuntime): Kafka | null {
+  const c = cfg ?? resolveKafkaRuntime()
+  const brokers = parseBrokers(c.kafkaBrokers)
+  if (brokers.length === 0) return null
+  return new Kafka(buildKafkaClientConfig(c, clientId))
+}
+
+// --- Per-tenant topics ---------------------------------------------------------
+
+const tenantTopicCache = new Map<string, string>()
+
+function toTopicSuffix(value: string): string {
+  const s = value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_')
+  return s || 'tenant'
+}
+
+export function getTenantEventTopic(tenantNameOrDbName: string): string {
+  const base = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
+  return `${base}.${toTopicSuffix(tenantNameOrDbName)}`
+}
+
+export async function getTenantEventTopicByDbName(tenantDbName: string): Promise<string> {
+  const cached = tenantTopicCache.get(tenantDbName)
+  if (cached) return cached
+  let topic = getTenantEventTopic(tenantDbName)
+  try {
+    const registry = await getRegistryConnection()
+    const row = await registry
+      .collection('clients')
+      .findOne({ dbName: tenantDbName })
+      .then((d) => d as { name?: string } | null)
+    const tenantName = typeof row?.name === 'string' ? row.name.trim() : ''
+    if (tenantName) topic = getTenantEventTopic(tenantName)
+  } catch {
+    /* registry unavailable */
+  }
+  tenantTopicCache.set(tenantDbName, topic)
+  return topic
+}
+
+export function clearTenantTopicCache(): void {
+  tenantTopicCache.clear()
+}
+
+export function invalidateTenantTopicCacheForDbName(dbName: string): void {
+  const key = dbName.trim()
+  if (key) tenantTopicCache.delete(key)
+}
+
+async function listInboundSubscriptionTopics(): Promise<string[]> {
+  const cfg = resolveKafkaRuntime()
+  const topics = new Set<string>()
+  topics.add(cfg.kafkaTopicEvents || 'marketing.events')
+  try {
+    const registry = await getRegistryConnection()
+    const rows = await registry.collection('clients').find({}).toArray()
+    for (const row of rows) {
+      const dbName = typeof row.dbName === 'string' ? row.dbName.trim() : ''
+      if (!dbName) continue
+      topics.add(await getTenantEventTopicByDbName(dbName))
+    }
+  } catch {
+    /* base topic only */
+  }
+  return [...topics]
+}
+
+// --- Producer ------------------------------------------------------------------
+
+let producer: Producer | null = null
+let connectPromise: Promise<Producer | null> | null = null
+
 async function resetProducerConnection(): Promise<void> {
   try {
     if (producer) await producer.disconnect()
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   producer = null
   connectPromise = null
 }
@@ -195,7 +253,7 @@ async function getProducer(): Promise<Producer | null> {
   const cfg = resolveKafkaRuntime()
   const brokers = parseBrokers(cfg.kafkaBrokers)
   if (brokers.length === 0) {
-    console.log('[Kafka] No brokers configured, skip')
+    logger.debug('No brokers configured, skip producer')
     return null
   }
   if (producer) return producer
@@ -208,13 +266,18 @@ async function getProducer(): Promise<Producer | null> {
     })
     await p.connect()
     producer = p
-    console.log('[Kafka] Producer connected to', brokers.join(', '))
+    logger.info('Kafka producer connected', { brokers: brokers.join(', ') })
     return p
   })().finally(() => {
     connectPromise = null
   })
   return connectPromise
 }
+
+// --- Admin ---------------------------------------------------------------------
+
+let admin: Admin | null = null
+let adminConnectPromise: Promise<Admin | null> | null = null
 
 async function getAdmin(): Promise<Admin | null> {
   const cfg = resolveKafkaRuntime()
@@ -223,7 +286,8 @@ async function getAdmin(): Promise<Admin | null> {
   if (admin) return admin
   if (adminConnectPromise) return adminConnectPromise
   adminConnectPromise = (async () => {
-    const kafka = new Kafka(buildKafkaClientConfig(cfg, `${cfg.kafkaClientId}-admin`))
+    const kafka = createKafkaJsInstance(`${cfg.kafkaClientId}-admin`, cfg)
+    if (!kafka) return null
     const a = kafka.admin()
     await a.connect()
     admin = a
@@ -247,20 +311,22 @@ function topicReplicationFactor(): number {
 
 export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promise<string | null> {
   if (!isKafkaConfigured()) {
-    console.warn('[Kafka] KAFKA_BROKERS is empty; skip tenant topic creation')
+    logger.warn('Kafka: KAFKA_BROKERS is empty; skip tenant topic creation')
     return null
   }
   const topic = getTenantEventTopic(tenantNameOrDbName)
   const a = await getAdmin()
   if (!a) return null
   const replicationFactor = topicReplicationFactor()
-  console.log('[Kafka] ensure topic', topic, 'replicationFactor', replicationFactor)
+  logger.info('Kafka: ensure topic', { topic, replicationFactor })
   await a.createTopics({
     waitForLeaders: true,
     topics: [{ topic, numPartitions: 1, replicationFactor }]
   })
   return topic
 }
+
+// --- Publish -------------------------------------------------------------------
 
 export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope): Promise<void> {
   const sendOnce = async () => {
@@ -276,7 +342,9 @@ export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope)
     await sendOnce()
   } catch (err) {
     if (isKafkaConnectionError(err) && !isLocalBroker(resolveKafkaRuntime())) {
-      console.warn('[Kafka] producer send failed, reconnecting once', err instanceof Error ? err.message : err)
+      logger.warn('Kafka producer send failed, reconnecting once', {
+        err: err instanceof Error ? err.message : String(err)
+      })
       await resetProducerConnection()
       await sendOnce()
       return
@@ -287,6 +355,7 @@ export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope)
 
 export async function publishCampaignSendCompleted(params: {
   tenantDbName: string
+  tenantId?: string
   campaignId: string
   campaignStatus: string
   sent: number
@@ -297,6 +366,7 @@ export async function publishCampaignSendCompleted(params: {
     eventType: 'campaign.send.completed',
     occurredAt: new Date().toISOString(),
     tenantDbName: params.tenantDbName,
+    tenantId: params.tenantId,
     payload: {
       campaignId: params.campaignId,
       campaignStatus: params.campaignStatus,
@@ -307,9 +377,211 @@ export async function publishCampaignSendCompleted(params: {
   }
   try {
     await publishMarketingEnvelope(envelope)
-    console.log('[Kafka] campaign.send.completed published', { campaignId: params.campaignId, tenantDbName: params.tenantDbName })
+    logger.info('campaign.send.completed published', {
+      campaignId: params.campaignId,
+      tenantDbName: params.tenantDbName
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[Kafka] publish campaign.send.completed failed:', msg)
+    logger.error('publish campaign.send.completed failed', msg)
   }
+}
+
+// --- Inbound consumer + routing (handlers: kafka/handlers/*) -------------------
+
+function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
+  const et = typeof parsed.eventType === 'string' ? parsed.eventType : ''
+  const tenantId = typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
+  return (
+    tenantId.length > 0 &&
+    (et.startsWith('contact.') ||
+      et.startsWith('account.') ||
+      et === 'marketing.email_template.created' ||
+      et === 'marketing.email_template.updated' ||
+      et === 'marketing.email_template.deleted')
+  )
+}
+
+async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promise<void> {
+  const eventType = typeof parsed.eventType === 'string' ? parsed.eventType : ''
+  const contactEvent = parseContactEventEnvelope(parsed)
+  const deletedEvent = parseContactDeletedEventEnvelope(parsed)
+
+  switch (eventType) {
+    case CONTACT_EVENT_TYPES.CREATED:
+      if (!contactEvent) {
+        logger.warn('Invalid contact.created schema', { parsed })
+        break
+      }
+      logger.info('Kafka inbound contact.created', {
+        occurredAt: contactEvent.occurredAt,
+        dBname: contactEvent.dBname,
+        tenantId: contactEvent.tenantId,
+        externalId: contactEvent.payload.externalId,
+        name: contactEvent.payload.name,
+        email: contactEvent.payload.email,
+        phone: contactEvent.payload.phone ?? '',
+        company: contactEvent.payload.company || '',
+        address: contactEvent.payload.address,
+        contactType: contactEvent.payload.contactType,
+        channel: contactEvent.payload.channel
+      })
+      await createContactFromCreatedEvent(contactEvent)
+      logger.info('Contact inserted from Kafka', {
+        dBname: contactEvent.dBname,
+        tenantId: contactEvent.tenantId,
+        externalId: contactEvent.payload.externalId,
+        email: contactEvent.payload.email,
+        company: contactEvent.payload.company || ''
+      })
+      break
+    case CONTACT_EVENT_TYPES.UPDATED:
+      if (!contactEvent) {
+        logger.warn('Invalid contact.updated schema', { parsed })
+        break
+      }
+      logger.info('Kafka inbound contact.updated', {
+        occurredAt: contactEvent.occurredAt,
+        dBname: contactEvent.dBname,
+        tenantId: contactEvent.tenantId,
+        externalId: contactEvent.payload.externalId,
+        name: contactEvent.payload.name,
+        email: contactEvent.payload.email,
+        phone: contactEvent.payload.phone ?? '',
+        company: contactEvent.payload.company || '',
+        address: contactEvent.payload.address,
+        contactType: contactEvent.payload.contactType,
+        channel: contactEvent.payload.channel
+      })
+      await updateContactFromUpdatedEvent(contactEvent)
+      logger.info('Contact upserted from Kafka update', {
+        dBname: contactEvent.dBname,
+        tenantId: contactEvent.tenantId,
+        externalId: contactEvent.payload.externalId,
+        email: contactEvent.payload.email,
+        contactType: contactEvent.payload.contactType,
+        company: contactEvent.payload.company || ''
+      })
+      break
+    case CONTACT_EVENT_TYPES.DELETED:
+      if (!deletedEvent) {
+        logger.warn('Invalid contact.deleted schema', { parsed })
+        break
+      }
+      logger.info('Kafka inbound contact.deleted', {
+        occurredAt: deletedEvent.occurredAt,
+        dBname: deletedEvent.dBname,
+        tenantId: deletedEvent.tenantId,
+        externalId: deletedEvent.payload.externalId
+      })
+      await softDeleteContactFromDeletedEvent(deletedEvent)
+      logger.info('Contact soft-deleted from Kafka', {
+        dBname: deletedEvent.dBname,
+        tenantId: deletedEvent.tenantId,
+        externalId: deletedEvent.payload.externalId
+      })
+      break
+    case 'marketing.email_template.created':
+      await saveMarketingEmailTemplateFromCreatedEvent(parsed)
+      logger.info('Marketing email template upserted from Kafka', {
+        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
+        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
+        externalId:
+          parsed.payload &&
+          typeof parsed.payload === 'object' &&
+          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
+            ? (parsed.payload as Record<string, unknown>).externalId
+            : ''
+      })
+      break
+    case 'marketing.email_template.updated':
+      await saveMarketingEmailTemplateFromUpdatedEvent(parsed)
+      logger.info('Marketing email template updated from Kafka', {
+        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
+        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
+        externalId:
+          parsed.payload &&
+          typeof parsed.payload === 'object' &&
+          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
+            ? (parsed.payload as Record<string, unknown>).externalId
+            : ''
+      })
+      break
+    case 'marketing.email_template.deleted':
+      await deleteMarketingEmailTemplateFromDeletedEvent(parsed)
+      logger.info('Marketing email template deleted from Kafka', {
+        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
+        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
+        externalId:
+          parsed.payload &&
+          typeof parsed.payload === 'object' &&
+          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
+            ? (parsed.payload as Record<string, unknown>).externalId
+            : ''
+      })
+      break
+    default:
+      logger.info('Kafka inbound (unhandled eventType)', { eventType })
+  }
+}
+
+let inboundEventsConsumer: Consumer | null = null
+
+export async function startInboundEventsConsumer(): Promise<void> {
+  const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
+  if (g.__marketingInboundKafkaConsumerStarted || inboundEventsConsumer) return
+  if (!isKafkaConfigured()) {
+    logger.debug('Kafka inbound consumer skipped (no brokers)')
+    return
+  }
+
+  const cfg = resolveKafkaRuntime()
+  const kafka = createKafkaJsInstance(`${cfg.kafkaClientId}-inbound`, cfg)
+  if (!kafka) return
+
+  const topics = await listInboundSubscriptionTopics()
+  const groupId =
+    process.env.KAFKA_CONSUMER_GROUP_ID?.trim() || 'new-marketing-inbound-events'
+  const fromBeginning = process.env.KAFKA_CONSUMER_FROM_BEGINNING === 'true'
+
+  g.__marketingInboundKafkaConsumerStarted = true
+
+  inboundEventsConsumer = kafka.consumer({
+    groupId,
+    allowAutoTopicCreation: true
+  })
+
+  await inboundEventsConsumer.connect()
+  await inboundEventsConsumer.subscribe({ topics, fromBeginning })
+
+  void inboundEventsConsumer
+    .run({
+      eachMessage: async ({ topic: t, partition, message }) => {
+        const raw = message.value?.toString()
+        if (!raw) return
+        let parsed: Record<string, unknown>
+        try {
+          parsed = JSON.parse(raw) as Record<string, unknown>
+        } catch {
+          logger.warn('Kafka inbound consumer skip non-JSON message', { topic: t, partition })
+          return
+        }
+
+        if (!isInboundPlatformEnvelope(parsed)) return
+
+        try {
+          await handleInboundKafkaMessage(parsed)
+        } catch (err) {
+          logger.error('Kafka inbound handler error', {
+            err: err instanceof Error ? err.message : String(err),
+            eventType: parsed.eventType
+          })
+        }
+      }
+    })
+    .catch((err) => {
+      logger.error('Kafka inbound consumer run failed', err instanceof Error ? err.message : String(err))
+    })
+
+  logger.info('Kafka inbound consumer running', { topics, groupId, fromBeginning })
 }

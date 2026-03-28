@@ -6,6 +6,7 @@ import {
   getTenantApiKeyPrefix
 } from './api-key'
 import type { EnsureTenantResult } from '../types/registry/provision.types'
+import { invalidateTenantTopicCacheForDbName } from '../services/kafkaProducer'
 
 export function toTenantDbName(displayName: string): string {
   const base = displayName
@@ -91,6 +92,8 @@ export async function ensureTenantDatabaseInitialized(
     },
     { upsert: true }
   )
+
+  invalidateTenantTopicCacheForDbName(dbName)
 
   return { dbName, apiKey, tenantId }
 }

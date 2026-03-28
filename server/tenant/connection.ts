@@ -2,12 +2,15 @@ import type { Connection } from 'mongoose'
 import type { H3Event } from 'h3'
 import { getRegistryConnection } from '../lib/mongoose'
 import {
+  findRegistryTenantByTenantId,
   isAdminAuthContext,
   isRegisteredTenantAuthContext
 } from './registry-auth'
 
 /** Matches tenant DB names produced by `toTenantDbName` and typical Mongo naming. */
 const TENANT_DB_NAME = /^[a-z0-9][a-z0-9_]{0,62}$/i
+
+const MAX_REGISTRY_TENANT_ID_LEN = 128
 
 function normalizeAndAssertTenantDbName(raw: string): string {
   const dbName = raw.trim()
@@ -60,4 +63,25 @@ export async function getTenantConnectionByDbName(
   const normalized = normalizeAndAssertTenantDbName(dbName)
   const registry = await getRegistryConnection()
   return registry.useDb(normalized)
+}
+
+/**
+ * Resolves `clients.tenantId` in the registry to that row's `dbName`, then opens that Mongo database.
+ * Use for Kafka inbound handlers and other trusted server paths keyed by marketing tenantId.
+ * Returns null if the id is invalid, the client row is missing, or `dbName` fails normalization.
+ */
+export async function getTenantConnectionByTenantId(
+  tenantIdRaw: string
+): Promise<Connection | null> {
+  const tenantId = tenantIdRaw.trim()
+  if (!tenantId || tenantId.length > MAX_REGISTRY_TENANT_ID_LEN) return null
+  const registry = await getRegistryConnection()
+  const row = await findRegistryTenantByTenantId(registry, tenantId)
+  if (!row?.dbName) return null
+  try {
+    const normalized = normalizeAndAssertTenantDbName(row.dbName)
+    return registry.useDb(normalized)
+  } catch {
+    return null
+  }
 }

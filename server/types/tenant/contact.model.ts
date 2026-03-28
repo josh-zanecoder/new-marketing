@@ -13,23 +13,22 @@ export interface ContactAddress {
 
 export interface ContactLean {
   _id: Types.ObjectId
+  externalId?: string
+  source?: string
   contactKind: ContactKind
   name: string
   email: string
+  /** Preferred outreach channel (e.g. email for campaigns). */
+  channel: string
   phone?: string
   address?: ContactAddress
   company?: string
-  /** Preferred outreach channel (e.g. email for campaigns). */
-  channel: string
   /** CRM / Kafka idempotency; optional until integrations land. */
-  externalId?: string
-  source?: string
-  clientId?: string
   /** Arbitrary key-value data from CRM/Kafka (not indexed by default). */
   metadata?: Record<string, unknown>
-  deletedAt?: Date | null
   createdAt?: Date
   updatedAt?: Date
+  deletedAt?: Date | null
 }
 
 export type ContactModel = Model<ContactLean>

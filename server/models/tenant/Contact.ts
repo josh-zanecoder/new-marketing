@@ -14,6 +14,8 @@ const addressSchema = new mongoose.Schema(
 
 export const contactSchema = new mongoose.Schema(
   {
+    externalId: { type: String, default: '' },
+    source: { type: String, default: '' },
     contactKind: {
       type: String,
       enum: contactKindEnum,
@@ -27,12 +29,9 @@ export const contactSchema = new mongoose.Schema(
     company: { type: String, default: '', trim: true },
     /** Outreach / attribution channel (e.g. email, sms, linkedin); free-form for CRM sync. */
     channel: { type: String, default: 'email', trim: true },
-    externalId: { type: String, default: '' },
-    source: { type: String, default: '' },
-    clientId: { type: String, default: '' },
     /** CRM / integration extras (tags, custom fields, raw sync payload slices). */
     metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
-    deletedAt: { type: Date, default: null }
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 )

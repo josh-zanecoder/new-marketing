@@ -3,5 +3,6 @@ export interface MarketingKafkaEnvelope {
   eventType: string
   occurredAt: string
   tenantDbName: string
+  tenantId?: string
   payload: Record<string, unknown>
 }
