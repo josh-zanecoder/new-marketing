@@ -2,43 +2,22 @@ import {
   getTenantClientModels,
   type TenantClientModels
 } from '../../models/tenant/tenantClientModels'
+import {
+  EMAIL_TEMPLATE_EVENT_TYPES,
+  type EmailTemplateDeletedEventEnvelope,
+  type EmailTemplateUpsertEventEnvelope
+} from '../../schemas/events/emailTemplateEvents'
 import { logger } from '../../utils/logger'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 
 export async function saveMarketingEmailTemplateFromCreatedEvent(
-  parsed: Record<string, unknown>
+  event: EmailTemplateUpsertEventEnvelope
 ): Promise<void> {
-  const tenantId = typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
-  const dBname = typeof parsed.dBname === 'string' ? parsed.dBname : ''
-  const payload =
-    parsed.payload && typeof parsed.payload === 'object'
-      ? (parsed.payload as Record<string, unknown>)
-      : null
-
-  if (!tenantId || !payload) {
-    logger.warn('Invalid marketing.email_template.created schema', { parsed })
-    return
-  }
-
-  const externalId = typeof payload.externalId === 'string' ? payload.externalId : ''
-  const name = typeof payload.name === 'string' ? payload.name : ''
-  const subject = typeof payload.subject === 'string' ? payload.subject : ''
-  const htmlTemplate = typeof payload.htmlTemplate === 'string' ? payload.htmlTemplate : ''
-  const description = typeof payload.description === 'string' ? payload.description : ''
-
-  if (!externalId || !name || !subject || !htmlTemplate) {
-    logger.warn('Invalid marketing.email_template.created payload fields', {
-      tenantId,
-      dBname,
-      externalId,
-      name,
-      subject
-    })
-    return
-  }
+  const { tenantId, dBname, payload } = event
+  const { externalId, name, subject, htmlTemplate, description } = payload
 
   const tenantConn = await getTenantConnectionForInboundEvent(tenantId, {
-    eventType: 'marketing.email_template.created',
+    eventType: EMAIL_TEMPLATE_EVENT_TYPES.CREATED,
     dBname
   })
   if (!tenantConn) return
@@ -65,39 +44,13 @@ export async function saveMarketingEmailTemplateFromCreatedEvent(
 }
 
 export async function saveMarketingEmailTemplateFromUpdatedEvent(
-  parsed: Record<string, unknown>
+  event: EmailTemplateUpsertEventEnvelope
 ): Promise<void> {
-  const tenantId = typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
-  const dBname = typeof parsed.dBname === 'string' ? parsed.dBname : ''
-  const payload =
-    parsed.payload && typeof parsed.payload === 'object'
-      ? (parsed.payload as Record<string, unknown>)
-      : null
-
-  if (!tenantId || !payload) {
-    logger.warn('Invalid marketing.email_template.updated schema', { parsed })
-    return
-  }
-
-  const externalId = typeof payload.externalId === 'string' ? payload.externalId : ''
-  const name = typeof payload.name === 'string' ? payload.name : ''
-  const subject = typeof payload.subject === 'string' ? payload.subject : ''
-  const htmlTemplate = typeof payload.htmlTemplate === 'string' ? payload.htmlTemplate : ''
-  const description = typeof payload.description === 'string' ? payload.description : ''
-
-  if (!externalId || !name || !subject || !htmlTemplate) {
-    logger.warn('Invalid marketing.email_template.updated payload fields', {
-      tenantId,
-      dBname,
-      externalId,
-      name,
-      subject
-    })
-    return
-  }
+  const { tenantId, dBname, payload } = event
+  const { externalId, name, subject, htmlTemplate, description } = payload
 
   const tenantConn = await getTenantConnectionForInboundEvent(tenantId, {
-    eventType: 'marketing.email_template.updated',
+    eventType: EMAIL_TEMPLATE_EVENT_TYPES.UPDATED,
     dBname
   })
   if (!tenantConn) return
@@ -124,23 +77,13 @@ export async function saveMarketingEmailTemplateFromUpdatedEvent(
 }
 
 export async function deleteMarketingEmailTemplateFromDeletedEvent(
-  parsed: Record<string, unknown>
+  event: EmailTemplateDeletedEventEnvelope
 ): Promise<void> {
-  const tenantId = typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
-  const dBname = typeof parsed.dBname === 'string' ? parsed.dBname : ''
-  const payload =
-    parsed.payload && typeof parsed.payload === 'object'
-      ? (parsed.payload as Record<string, unknown>)
-      : null
-  const externalId = payload && typeof payload.externalId === 'string' ? payload.externalId : ''
-
-  if (!tenantId || !externalId) {
-    logger.warn('Invalid marketing.email_template.deleted schema', { parsed })
-    return
-  }
+  const { tenantId, dBname, payload } = event
+  const { externalId } = payload
 
   const tenantConn = await getTenantConnectionForInboundEvent(tenantId, {
-    eventType: 'marketing.email_template.deleted',
+    eventType: EMAIL_TEMPLATE_EVENT_TYPES.DELETED,
     dBname
   })
   if (!tenantConn) return

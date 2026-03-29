@@ -16,6 +16,12 @@ import {
   parseContactEventEnvelope
 } from '../schemas/events/contactEvents'
 import {
+  EMAIL_TEMPLATE_EVENT_TYPES,
+  parseEmailTemplateCreatedEventEnvelope,
+  parseEmailTemplateDeletedEventEnvelope,
+  parseEmailTemplateUpdatedEventEnvelope
+} from '../schemas/events/emailTemplateEvents'
+import {
   createContactFromCreatedEvent,
   softDeleteContactFromDeletedEvent,
   updateContactFromUpdatedEvent
@@ -396,9 +402,9 @@ function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
     tenantId.length > 0 &&
     (et.startsWith('contact.') ||
       et.startsWith('account.') ||
-      et === 'marketing.email_template.created' ||
-      et === 'marketing.email_template.updated' ||
-      et === 'marketing.email_template.deleted')
+      et === EMAIL_TEMPLATE_EVENT_TYPES.CREATED ||
+      et === EMAIL_TEMPLATE_EVENT_TYPES.UPDATED ||
+      et === EMAIL_TEMPLATE_EVENT_TYPES.DELETED)
   )
 }
 
@@ -481,45 +487,51 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
         externalId: deletedEvent.payload.externalId
       })
       break
-    case 'marketing.email_template.created':
-      await saveMarketingEmailTemplateFromCreatedEvent(parsed)
+    case EMAIL_TEMPLATE_EVENT_TYPES.CREATED: {
+      const emailTplEvent = parseEmailTemplateCreatedEventEnvelope(parsed)
+      if (!emailTplEvent) {
+        logger.warn('Invalid marketing.email_template.created schema', { parsed })
+        break
+      }
+      await saveMarketingEmailTemplateFromCreatedEvent(emailTplEvent)
       logger.info('Marketing email template upserted from Kafka', {
-        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
-        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
-        externalId:
-          parsed.payload &&
-          typeof parsed.payload === 'object' &&
-          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
-            ? (parsed.payload as Record<string, unknown>).externalId
-            : ''
+        occurredAt: emailTplEvent.occurredAt,
+        tenantId: emailTplEvent.tenantId,
+        dBname: emailTplEvent.dBname,
+        externalId: emailTplEvent.payload.externalId
       })
       break
-    case 'marketing.email_template.updated':
-      await saveMarketingEmailTemplateFromUpdatedEvent(parsed)
+    }
+    case EMAIL_TEMPLATE_EVENT_TYPES.UPDATED: {
+      const emailTplEvent = parseEmailTemplateUpdatedEventEnvelope(parsed)
+      if (!emailTplEvent) {
+        logger.warn('Invalid marketing.email_template.updated schema', { parsed })
+        break
+      }
+      await saveMarketingEmailTemplateFromUpdatedEvent(emailTplEvent)
       logger.info('Marketing email template updated from Kafka', {
-        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
-        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
-        externalId:
-          parsed.payload &&
-          typeof parsed.payload === 'object' &&
-          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
-            ? (parsed.payload as Record<string, unknown>).externalId
-            : ''
+        occurredAt: emailTplEvent.occurredAt,
+        tenantId: emailTplEvent.tenantId,
+        dBname: emailTplEvent.dBname,
+        externalId: emailTplEvent.payload.externalId
       })
       break
-    case 'marketing.email_template.deleted':
-      await deleteMarketingEmailTemplateFromDeletedEvent(parsed)
+    }
+    case EMAIL_TEMPLATE_EVENT_TYPES.DELETED: {
+      const emailTplDeleted = parseEmailTemplateDeletedEventEnvelope(parsed)
+      if (!emailTplDeleted) {
+        logger.warn('Invalid marketing.email_template.deleted schema', { parsed })
+        break
+      }
+      await deleteMarketingEmailTemplateFromDeletedEvent(emailTplDeleted)
       logger.info('Marketing email template deleted from Kafka', {
-        tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : '',
-        dBname: typeof parsed.dBname === 'string' ? parsed.dBname : '',
-        externalId:
-          parsed.payload &&
-          typeof parsed.payload === 'object' &&
-          typeof (parsed.payload as Record<string, unknown>).externalId === 'string'
-            ? (parsed.payload as Record<string, unknown>).externalId
-            : ''
+        occurredAt: emailTplDeleted.occurredAt,
+        tenantId: emailTplDeleted.tenantId,
+        dBname: emailTplDeleted.dBname,
+        externalId: emailTplDeleted.payload.externalId
       })
       break
+    }
     default:
       logger.info('Kafka inbound (unhandled eventType)', { eventType })
   }
