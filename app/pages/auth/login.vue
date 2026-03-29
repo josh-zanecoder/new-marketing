@@ -8,12 +8,6 @@ const password = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
-interface LoginResponse {
-  user?: {
-    role?: string
-  }
-}
-
 function loginErrorMessage(error: unknown): string {
   if (error && typeof error === 'object') {
     const message =
@@ -42,12 +36,8 @@ async function handleLogin() {
     await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
     await syncMarketingTokenCookieFromFirebaseUser(auth.currentUser)
 
-    const loginResponse = await $fetch<LoginResponse>('/api/v1/auth/login', {
-      method: 'POST',
-      body: { email: email.value.trim() }
-    })
-
-    const role = (loginResponse?.user?.role || '').toLowerCase()
+    const { user } = await $fetch<MarketingMeResponse>('/api/v1/auth/me')
+    const role = user.authType === 'firebase' ? user.role.toLowerCase() : 'tenant'
     if (role === 'admin') {
       await navigateTo('/admin/dashboard')
       return

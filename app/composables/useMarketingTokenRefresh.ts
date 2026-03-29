@@ -57,6 +57,7 @@ export function logoutMarketingSession(): Promise<void> {
 
   sessionLogoutPromise = (async () => {
     await syncMarketingTokenCookieFromFirebaseUser(null)
+    await clearNuxtData('marketing-me')
 
     try {
       const { getAuth, signOut } = await import('firebase/auth')

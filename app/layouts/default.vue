@@ -1,9 +1,22 @@
 <script setup lang="ts">
-const token = useCookie<string | null>('marketing_token')
+const { data: me, pending } = useMarketingMe()
+
+const sidebarAccount = computed(() => {
+  if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }
+  if (me.value.authType === 'apiKey') {
+    return { primary: me.value.tenantName, secondary: 'API key session' }
+  }
+  const roleLabel =
+    me.value.role === 'admin'
+      ? 'Admin'
+      : me.value.role === 'client'
+        ? 'Client'
+        : 'Tenant'
+  return { primary: me.value.email, secondary: roleLabel }
+})
 
 async function handleLogout() {
-  token.value = null
-  await navigateTo('/auth/login')
+  await logoutMarketingSession()
 }
 </script>
 
@@ -13,6 +26,16 @@ async function handleLogout() {
       <div class="p-5 border-b border-slate-200/80">
         <h1 class="text-lg font-semibold text-slate-800 tracking-tight">Mortdash</h1>
         <p class="text-xs text-slate-500 mt-0.5">Marketing</p>
+        <p
+          v-if="sidebarAccount.primary"
+          class="text-xs text-slate-600 mt-2 font-medium truncate"
+          :title="sidebarAccount.primary"
+        >
+          {{ sidebarAccount.primary }}
+        </p>
+        <p v-if="sidebarAccount.secondary" class="text-[11px] text-slate-400 mt-0.5">
+          {{ sidebarAccount.secondary }}
+        </p>
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
         <NuxtLink
