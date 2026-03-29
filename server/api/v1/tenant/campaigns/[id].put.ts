@@ -43,13 +43,18 @@ export default defineEventHandler(async (event) => {
   if (body.templateHtml && campaign.emailTemplate) {
     await (EmailTemplate as EmailTemplateModel).updateOne(
       { _id: campaign.emailTemplate },
-      { $set: { html: body.templateHtml } }
+      {
+        $set: {
+          htmlTemplate: body.templateHtml,
+          subject: body.subject?.trim() || campaign.subject || body.name.trim()
+        }
+      }
     )
   } else if (body.templateHtml) {
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
-      html: body.templateHtml,
-      clientId: ''
+      subject: body.subject?.trim() || body.name.trim(),
+      htmlTemplate: body.templateHtml
     }).save()
     campaign.emailTemplate = template._id
   }

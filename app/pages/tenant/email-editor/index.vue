@@ -51,9 +51,15 @@ const initialHtml = ref<string | null>(null)
 const htmlReady = ref(false)
 const isMounted = ref(false)
 
-const htmlFromUrl = computed(() => route.query.html as string)
-const builderId = computed(() => route.query.builderId as string)
-const campaignId = computed(() => route.query.campaignId as string)
+function queryParamString(q: unknown): string {
+  if (q == null) return ''
+  if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0] : ''
+  return typeof q === 'string' ? q : String(q)
+}
+
+const htmlFromUrl = computed(() => queryParamString(route.query.html))
+const builderId = computed(() => queryParamString(route.query.builderId))
+const campaignId = computed(() => queryParamString(route.query.campaignId))
 
 onMounted(() => {
   isMounted.value = true

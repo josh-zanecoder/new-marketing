@@ -53,9 +53,10 @@ export default defineEventHandler(async (event) => {
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
-      emailTemplate = { name: template.name, html: template.html }
+      const rawHtml = template.htmlTemplate ?? template.html
+      emailTemplate = { name: template.name, html: rawHtml }
       // Support legacy docs with separate css field
-      templateHtml = template.css ? `<style>${template.css}</style>${template.html}` : template.html
+      templateHtml = template.css ? `<style>${template.css}</style>${rawHtml}` : rawHtml
     }
   }
 

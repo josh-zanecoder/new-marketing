@@ -242,7 +242,7 @@
           <button
             type="button"
             class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
-            @click="designOpen = !designOpen"
+            @click="openDesignModal"
           >
             <div class="flex items-center gap-4">
               <div
@@ -259,110 +259,70 @@
               <div>
                 <div class="text-lg font-semibold text-slate-900">Design</div>
                 <div class="mt-0.5 text-base text-slate-500">
-                  {{ form.templateMode === 'scratch' ? 'Create from scratch' : form.templateMode === 'existing' ? 'Pick a template' : 'Create your email content' }}
+                  {{ designStepSubtitle }}
                 </div>
               </div>
             </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ designOpen ? 'Close' : 'Start designing' }}</span>
+            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ designSectionToggleLabel }}</span>
           </button>
-          <div v-if="designOpen" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
-            <div class="space-y-5">
-              <label class="block text-base font-medium text-slate-700">Email template</label>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <button
-                  type="button"
-                  :class="[
-                    'flex items-start gap-4 rounded-lg border px-5 py-4 text-left transition-colors',
-                    form.templateMode === 'scratch'
-                      ? 'border-slate-300 bg-white text-slate-900 shadow-sm'
-                      : 'border-slate-200 bg-white/60 text-slate-600 hover:bg-white'
-                  ]"
-                  @click="handleCreateFromScratch"
-                >
-                  <div class="mt-0.5 rounded-xl bg-slate-100 p-2.5">
-                    <svg class="h-5 w-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div class="text-base font-medium">Create from scratch</div>
-                    <div class="mt-0.5 text-sm text-slate-500">Start with a blank template</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  :class="[
-                    'flex items-start gap-4 rounded-lg border px-5 py-4 text-left transition-colors',
-                    form.templateMode === 'existing'
-                      ? 'border-slate-300 bg-white text-slate-900 shadow-sm'
-                      : 'border-slate-200 bg-white/60 text-slate-600 hover:bg-white'
-                  ]"
-                  @click="form.templateMode = 'existing'; form.selectedTemplateId = form.selectedTemplateId || existingTemplates[0]?.id || ''"
-                >
-                  <div class="mt-0.5 rounded-xl bg-slate-100 p-2.5">
-                    <svg class="h-5 w-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div class="text-base font-medium">Use existing template</div>
-                    <div class="mt-0.5 text-sm text-slate-500">Pick from saved templates</div>
-                  </div>
-                </button>
-              </div>
-              <div v-if="savedTemplateHtml && (returnCampaignId || editId)" class="mt-6 pt-6 border-t border-slate-200">
-                <label class="mb-3 block text-base font-medium text-slate-700">Email preview</label>
-                <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <div class="relative min-h-[320px] max-h-[480px] overflow-auto bg-[#f8f4ef]">
-                    <iframe
-                      :srcdoc="previewSrcdoc(savedTemplateHtml || '')"
-                      title="Email preview"
-                      class="absolute inset-0 h-full w-full border-0"
-                      sandbox="allow-same-origin"
-                    />
-                  </div>
-                  <div class="p-5">
-                    <NuxtLink
-                      :to="`/tenant/email-editor?campaignId=${returnCampaignId || editId}&token=local`"
-                      class="block w-full rounded-lg border border-slate-200 py-3.5 text-center text-base font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Edit design
-                    </NuxtLink>
-                  </div>
+          <div v-if="savedTemplateHtml" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-200/40">
+              <div class="flex flex-col gap-4 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <h3 class="text-base font-semibold text-slate-900">Current email design</h3>
+                  <p class="mt-1 text-sm text-slate-500">{{ designSourceSummary }}</p>
                 </div>
-              </div>
-              <div v-if="form.templateMode === 'existing'" class="mt-6 pt-6 border-t border-slate-200">
-                <label class="mb-3 block text-base font-medium text-slate-700">Existing templates</label>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div
-                    v-for="template in existingTemplates"
-                    :key="template.id"
-                    class="overflow-hidden rounded-lg border border-slate-200 bg-white"
+                <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    @click="confirmChangeDesign"
                   >
-                    <div class="px-5 py-4 text-base font-medium text-slate-900">{{ template.name }}</div>
-                    <div class="relative min-h-[180px] overflow-hidden bg-[#f8f4ef]">
-                      <iframe
-                        :srcdoc="previewSrcdoc(template.html, 0.28)"
-                        :title="template.name"
-                        class="absolute inset-0 h-full w-full border-0"
-                        sandbox="allow-same-origin"
-                      />
-                    </div>
-                    <div class="p-5">
-                      <button
-                        type="button"
-                        class="w-full rounded-lg bg-slate-900 py-3.5 text-base font-medium text-white hover:bg-slate-800"
-                        @click="handleUseTemplate(template)"
-                      >
-                        Use template
-                      </button>
-                    </div>
-                  </div>
+                    Change design
+                  </button>
+                  <NuxtLink
+                    v-if="designEditorCampaignId"
+                    :to="`/tenant/email-editor?campaignId=${designEditorCampaignId}&token=local`"
+                    class="rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                  >
+                    Edit in editor
+                  </NuxtLink>
                 </div>
               </div>
+              <div class="relative min-h-[280px] max-h-[min(480px,55vh)] overflow-auto bg-[#f8f4ef]">
+                <iframe
+                  :srcdoc="previewSrcdoc(savedTemplateHtml || '')"
+                  title="Email preview"
+                  class="absolute inset-0 h-full w-full border-0"
+                  sandbox="allow-same-origin"
+                />
+              </div>
+              <p v-if="!designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                Save the campaign once to get a stable link for the editor.
+              </p>
             </div>
           </div>
         </div>
+
+        <ClientEmailTemlatesSelection
+          v-model="designModalOpen"
+          :templates="existingTemplates"
+          :pending="emailTemplatesPending"
+          :error="emailTemplatesError"
+          @create-from-scratch="handleCreateFromScratch"
+          @select-template="handleUseTemplate"
+        />
+
+        <ClientConfirmationModal
+          :open="changeDesignConfirmOpen"
+          title="Change design?"
+          message="Changing design will replace your current email. All unsaved changes will be lost."
+          confirm-text="Continue"
+          cancel-text="Cancel"
+          variant="danger"
+          @confirm="onChangeDesignConfirmed"
+          @cancel="changeDesignConfirmOpen = false"
+        />
 
         <!-- Subject -->
         <div class="border-b border-slate-100 last:border-b-0">
@@ -503,7 +463,22 @@ const form = ref({
 
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
-const designOpen = ref(false)
+const designModalOpen = ref(false)
+const changeDesignConfirmOpen = ref(false)
+
+function openDesignModal() {
+  designModalOpen.value = true
+  void loadEmailTemplates()
+}
+
+function confirmChangeDesign() {
+  changeDesignConfirmOpen.value = true
+}
+
+function onChangeDesignConfirmed() {
+  changeDesignConfirmOpen.value = false
+  openDesignModal()
+}
 const subjectVariable = ref('')
 const returnCampaignId = ref<string | null>(null)
 const savedTemplateHtml = ref<string | null>(null)
@@ -643,10 +618,39 @@ const subjectVariables = [
   { value: '{{user.company}}', label: 'Company' }
 ]
 
-const existingTemplates = [
-  { id: 'newsletter', name: 'Newsletter', html: '<div>Newsletter template</div>' },
-  { id: 'promo', name: 'Promotional', html: '<div>Promo template</div>' }
-]
+interface ExistingTemplateOption {
+  id: string
+  name: string
+  html: string
+}
+
+const existingTemplates = ref<ExistingTemplateOption[]>([])
+const emailTemplatesPending = ref(false)
+const emailTemplatesError = ref('')
+
+async function loadEmailTemplates() {
+  emailTemplatesPending.value = true
+  emailTemplatesError.value = ''
+  try {
+    const res = await $fetch<{ templates: { id: string; name: string; htmlTemplate: string }[] }>(
+      '/api/v1/tenant/email-templates',
+      {
+        credentials: 'include',
+        ...serverAuthHeaders()
+      }
+    )
+    existingTemplates.value = (res.templates ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      html: t.htmlTemplate
+    }))
+  } catch {
+    emailTemplatesError.value = 'Could not load email templates.'
+    existingTemplates.value = []
+  } finally {
+    emailTemplatesPending.value = false
+  }
+}
 
 const route = useRoute()
 const editId = computed(() => (route.query.id as string) || '')
@@ -689,7 +693,6 @@ async function loadEditCampaign() {
     returnCampaignId.value = editId.value
     const fromEditor = route.query.fromEditor === '1'
     if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
-    designOpen.value = !!c.templateHtml || fromEditor
   } catch {
     /* ignore load errors; form stays empty */
   } finally {
@@ -745,7 +748,6 @@ async function loadFromEditorReturn() {
       }
     }
   }
-  designOpen.value = true
   await nextTick()
   designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -755,8 +757,19 @@ const designSectionRef = ref<HTMLElement | null>(null)
 onMounted(() => {
   loadFromEditorReturn()
   loadRecipientLists()
+  loadEmailTemplates()
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
+
+function pickQueryString(q: unknown): string {
+  if (q == null || q === '') return ''
+  if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0] : ''
+  return typeof q === 'string' ? q : String(q)
+}
+
+const designEditorCampaignId = computed(() =>
+  returnCampaignId.value || editId.value || pickQueryString(route.query.campaignId)
+)
 
 const recipientsDescription = computed(() => {
   if (form.value.recipientsMode === 'manual') {
@@ -773,6 +786,25 @@ const recipientsComplete = computed(() => {
 })
 const subjectComplete = computed(() => !!form.value.subject?.trim())
 const designComplete = computed(() => !!savedTemplateHtml.value || (form.value.templateMode === 'existing' && form.value.selectedTemplateId))
+
+const designSourceSummary = computed(() => {
+  if (form.value.templateMode === 'scratch') return 'Built from scratch in the email editor.'
+  const t = existingTemplates.value.find((x) => x.id === form.value.selectedTemplateId)
+  if (t) return `Based on saved template “${t.name}”.`
+  return 'Your campaign email is ready to refine or send.'
+})
+
+const designSectionToggleLabel = computed(() => {
+  if (savedTemplateHtml.value) return 'Browse templates'
+  return 'Choose design'
+})
+
+const designStepSubtitle = computed(() => {
+  if (savedTemplateHtml.value) return 'Preview ready — change design or edit in the editor.'
+  if (form.value.templateMode === 'scratch') return 'Create from scratch'
+  if (form.value.templateMode === 'existing') return 'Pick a template'
+  return 'Create your email content'
+})
 
 const campaignFormComplete = computed(
   () =>
@@ -882,6 +914,7 @@ watch(subjectVariable, (val) => {
 })
 
 function handleCreateFromScratch() {
+  designModalOpen.value = false
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
   const campaignId = editId.value || `temp-${Date.now()}`
@@ -894,14 +927,17 @@ function handleCreateFromScratch() {
   navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
 }
 
-function handleUseTemplate(template: { id: string; name: string; html: string }) {
+function handleUseTemplate(template: ExistingTemplateOption) {
+  designModalOpen.value = false
+  form.value.templateMode = 'existing'
+  form.value.selectedTemplateId = template.id
   const campaignId = editId.value || `temp-${Date.now()}`
-  const builderId = `builder-${Date.now()}`
   if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(builderId, template.html)
+    // Same key the email editor reads after save-and-exit; avoids relying on builderId query + separate storage.
+    window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: { ...form.value }, campaignId }))
   }
-  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&builderId=${builderId}&token=local`)
+  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
 }
 
 function applyStoredOrSelectedTemplate() {
@@ -911,7 +947,7 @@ function applyStoredOrSelectedTemplate() {
     if (template) savedTemplateHtml.value = template
   }
   if (!savedTemplateHtml.value && form.value.templateMode === 'existing' && form.value.selectedTemplateId) {
-    const template = existingTemplates.find(t => t.id === form.value.selectedTemplateId)
+    const template = existingTemplates.value.find(t => t.id === form.value.selectedTemplateId)
     if (template) savedTemplateHtml.value = template.html
   }
 }

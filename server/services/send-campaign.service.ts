@@ -74,7 +74,7 @@ export async function processBatch(
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
-      templateHtml = template.html
+      templateHtml = template.htmlTemplate ?? template.html ?? null
     }
   }
 

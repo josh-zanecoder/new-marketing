@@ -27,8 +27,8 @@ export default defineEventHandler(async (event) => {
   if (body.templateHtml) {
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
-      html: body.templateHtml,
-      clientId: ''
+      subject: body.subject?.trim() || body.name.trim(),
+      htmlTemplate: body.templateHtml
     }).save()
     emailTemplateId = template._id.toString()
   }

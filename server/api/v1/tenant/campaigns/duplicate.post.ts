@@ -27,10 +27,11 @@ export default defineEventHandler(async (event) => {
       .findById(source.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
+      const htmlBody = template.htmlTemplate ?? template.html
       const newTemplate = await new EmailTemplate({
         name: `${source.name} (copy) - Template`,
-        html: template.html,
-        clientId: ''
+        subject: template.subject?.trim() || source.subject || `${source.name} (copy)`,
+        htmlTemplate: htmlBody
       }).save()
       emailTemplateId = newTemplate._id.toString()
     }

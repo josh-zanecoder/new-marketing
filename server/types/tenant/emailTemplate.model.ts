@@ -3,7 +3,11 @@ import type { Model, Types } from 'mongoose'
 export interface EmailTemplateDoc {
   _id: Types.ObjectId
   name: string
-  html: string
+  subject?: string
+  /** Current schema field */
+  htmlTemplate?: string
+  /** Legacy field */
+  html?: string
   clientId?: string
   css?: string
 }
