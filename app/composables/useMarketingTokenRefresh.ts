@@ -64,6 +64,9 @@ export function logoutMarketingSession(): Promise<void> {
 
     await syncMarketingTokenCookieFromFirebaseUser(null)
 
+    const tenantBridge = useCookie<string | null>('marketing_tenant_bridge')
+    tenantBridge.value = null
+
     await clearNuxtData('marketing-me')
 
     try {

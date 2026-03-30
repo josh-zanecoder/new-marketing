@@ -1,5 +1,9 @@
 <script setup lang="ts">
-const { data: me, pending } = useMarketingMe()
+const { data: me, pending, refresh } = useMarketingMe()
+
+onMounted(() => {
+  void refresh()
+})
 
 const sidebarAccount = computed(() => {
   if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }
@@ -14,6 +18,32 @@ const sidebarAccount = computed(() => {
         : 'Tenant'
   return { primary: me.value.email, secondary: roleLabel }
 })
+
+/** CRM handoff / tenant API-key browser session — use “Back to tenant” instead of Logout. */
+const isApiKeyBrowserSession = computed(() => me.value?.authType === 'apiKey')
+
+const tenantBridgeCookie = useCookie<string | null>('marketing_tenant_bridge')
+
+const backToTenantLabel = computed(() => {
+  if (me.value?.authType === 'apiKey') return me.value.tenantName
+  return ''
+})
+
+async function handleBackToCrm() {
+  const u = me.value?.authType === 'apiKey' ? me.value.crmAppUrl : undefined
+  try {
+    await $fetch('/api/v1/auth/logout', { method: 'POST' })
+  } catch {
+    /* ignore */
+  }
+  await clearNuxtData('marketing-me')
+  tenantBridgeCookie.value = null
+  if (import.meta.client && u) {
+    window.location.assign(u)
+    return
+  }
+  await navigateTo('/auth/login')
+}
 
 async function handleLogout() {
   await logoutMarketingSession()
@@ -91,6 +121,18 @@ async function handleLogout() {
       </nav>
       <div class="p-3 border-t border-slate-200/80">
         <button
+          v-if="isApiKeyBrowserSession"
+          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-100 hover:text-slate-900 transition-colors text-left"
+          type="button"
+          @click="handleBackToCrm"
+        >
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span class="truncate">Back to {{ backToTenantLabel }}</span>
+        </button>
+        <button
+          v-else
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 text-sm font-medium hover:bg-rose-50 hover:text-rose-700 transition-colors"
           type="button"
           @click="handleLogout"

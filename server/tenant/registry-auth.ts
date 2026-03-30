@@ -14,6 +14,12 @@ export type TenantApiKeyAuthContext = {
   tenantId?: string
   /** From registry `clients.crmAppUrl` when set. */
   crmAppUrl?: string
+  /** CRM sends `x-crm-user-id` with the tenant API key (integration / BFF). */
+  crmUserId?: string
+  /** CRM sends `x-crm-user-email`. */
+  crmUserEmail?: string
+  /** CRM sends `x-crm-user-name`. */
+  crmUserName?: string
 }
 
 /** Firebase session for a tenant or client user (registry row resolved). */

@@ -15,7 +15,10 @@ export default defineEventHandler((event) => {
         tenantName: auth.tenantName,
         dbName: auth.dbName,
         ...(auth.tenantId ? { tenantId: auth.tenantId } : {}),
-        ...(auth.crmAppUrl ? { crmAppUrl: auth.crmAppUrl } : {})
+        ...(auth.crmAppUrl ? { crmAppUrl: auth.crmAppUrl } : {}),
+        ...(auth.crmUserId ? { crmUserId: auth.crmUserId } : {}),
+        ...(auth.crmUserEmail ? { email: auth.crmUserEmail } : {}),
+        ...(auth.crmUserName ? { name: auth.crmUserName } : {})
       }
     }
   }

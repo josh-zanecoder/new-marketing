@@ -43,6 +43,14 @@ export default defineNuxtPlugin({
 
       const auth = await getMarketingFirebaseAuth()
       onIdTokenChanged(auth, async (user) => {
+        const bridge = useCookie<string | null>('marketing_tenant_bridge', {
+          path: '/',
+          sameSite: 'lax'
+        })
+        if (bridge.value === '1') {
+          await syncMarketingTokenCookieFromFirebaseUser(null)
+          return
+        }
         await syncMarketingTokenCookieFromFirebaseUser(user)
       })
     } catch {

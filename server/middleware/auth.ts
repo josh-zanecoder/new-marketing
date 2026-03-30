@@ -6,12 +6,44 @@ import type { IUser } from '../types/admin/user.model'
 import { getRegistryConnection } from '../lib/mongoose'
 import {
   findRegistryTenantByApiKey,
+  findRegistryTenantByDbName,
   findRegistryTenantByTenantId
 } from '../tenant/registry-auth'
+import { MARKETING_TENANT_SESSION_COOKIE } from '../constants/tenantAuth.constants'
+import { verifyMarketingTenantBrowserSession } from '../utils/marketingTenantBrowserSession'
 
-const PUBLIC_API_PREFIXES = ['/api/v1/auth/login', '/api/v1/auth/sso']
+const PUBLIC_API_PREFIXES = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/sso',
+  '/api/v1/auth/logout',
+  '/api/v1/auth/tenant-handoff'
+]
 
 const ADMIN_API_PREFIX = '/api/v1/admin'
+
+const CRM_USER_ID_MAX = 128
+const CRM_USER_EMAIL_MAX = 320
+const CRM_USER_NAME_MAX = 200
+
+/** Optional CRM operator identity; only applied when API key auth succeeds (same trust as the key). */
+function crmForwardedUserFromHeaders(event: H3Event): {
+  crmUserId?: string
+  crmUserEmail?: string
+  crmUserName?: string
+} {
+  const id = (getHeader(event, 'x-crm-user-id') || '').trim()
+  const email = (getHeader(event, 'x-crm-user-email') || '').trim().toLowerCase()
+  const name = (getHeader(event, 'x-crm-user-name') || '').trim()
+  const out: {
+    crmUserId?: string
+    crmUserEmail?: string
+    crmUserName?: string
+  } = {}
+  if (id.length > 0 && id.length <= CRM_USER_ID_MAX) out.crmUserId = id
+  if (email.length > 0 && email.length <= CRM_USER_EMAIL_MAX) out.crmUserEmail = email
+  if (name.length > 0 && name.length <= CRM_USER_NAME_MAX) out.crmUserName = name
+  return out
+}
 
 function getBearerToken(event: H3Event): string {
   const authorization = getHeader(event, 'authorization') || ''
@@ -37,18 +69,69 @@ export default defineEventHandler(async (event) => {
   if (!path.startsWith('/api/')) return
   if (PUBLIC_API_PREFIXES.some((prefix) => path.startsWith(prefix))) return
 
-  const apiKey = getTenantApiKeyFromEvent(event)
   const registryConn = await getRegistryConnection()
+
+  const sessionCookie = getCookie(event, MARKETING_TENANT_SESSION_COOKIE)?.trim() || ''
+  if (sessionCookie && !path.startsWith(ADMIN_API_PREFIX)) {
+    try {
+      const parts = sessionCookie.split('.')
+      if (parts.length === 3 && parts[1]) {
+        const pb64 = parts[1]
+        const pad = '='.repeat((4 - (pb64.length % 4)) % 4)
+        const pJson = JSON.parse(
+          Buffer.from(pb64.replace(/-/g, '+').replace(/_/g, '/') + pad, 'base64').toString(
+            'utf8'
+          )
+        ) as { sub?: string }
+        const dbName =
+          typeof pJson.sub === 'string' ? pJson.sub.trim() : ''
+        if (dbName) {
+          const row = await findRegistryTenantByDbName(registryConn, dbName)
+          if (row?.clientKeyHash) {
+            const { tenantId: tidFromJwt, crmEmail } = verifyMarketingTenantBrowserSession(
+              sessionCookie,
+              row.clientKeyHash,
+              dbName
+            )
+            const tidMismatch = Boolean(
+              row.tenantId && tidFromJwt && row.tenantId !== tidFromJwt
+            )
+            if (!tidMismatch) {
+              event.context.auth = {
+                type: 'tenantApiKey',
+                role: 'tenant',
+                tenantName: row.tenantName,
+                dbName: row.dbName,
+                ...(row.tenantId ? { tenantId: row.tenantId } : {}),
+                ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
+                ...(crmEmail ? { crmUserEmail: crmEmail } : {})
+              }
+              return
+            }
+          }
+        }
+      }
+    } catch {
+      /* invalid or expired session */
+    }
+  }
+
+  const apiKey = getTenantApiKeyFromEvent(event)
 
   if (apiKey && !path.startsWith(ADMIN_API_PREFIX)) {
     const row = await findRegistryTenantByApiKey(registryConn, apiKey)
     if (row) {
+      const crm = crmForwardedUserFromHeaders(event)
       event.context.auth = {
         type: 'tenantApiKey',
         role: 'tenant',
         tenantName: row.tenantName,
         dbName: row.dbName,
-        ...(row.tenantId ? { tenantId: row.tenantId } : {})
+        ...(row.tenantId ? { tenantId: row.tenantId } : {}),
+        ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
+        ...(crm.crmUserId ? { crmUserId: crm.crmUserId } : {}),
+        ...(crm.crmUserEmail ? { crmUserEmail: crm.crmUserEmail } : {}),
+        ...(crm.crmUserName ? { crmUserName: crm.crmUserName } : {})
       }
       return
     }

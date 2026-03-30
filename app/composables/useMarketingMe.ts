@@ -17,6 +17,12 @@ export type MarketingMeApiKeyUser = {
   tenantId?: string
   /** Registry `crmAppUrl` — CRM base URL for “Back to CRM”. */
   crmAppUrl?: string
+  /** From CRM `x-crm-user-id` when calling Marketing with the tenant API key. */
+  crmUserId?: string
+  /** From CRM `x-crm-user-email`. */
+  email?: string
+  /** From CRM `x-crm-user-name`. */
+  name?: string
 }
 
 export type MarketingMeUser = MarketingMeFirebaseUser | MarketingMeApiKeyUser
@@ -36,8 +42,7 @@ export function useMarketingMe() {
     },
     {
       server: true,
-      default: () => null,
-      getCachedData: () => undefined
+      default: () => null
     }
   )
 }
