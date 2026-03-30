@@ -6,7 +6,7 @@
           Contacts
         </h1>
         <p class="mt-1 text-sm text-slate-500">
-          All contacts in your tenant database (up to 3,000 loaded for performance).
+          All contacts in your tenant database, newest updates first.
         </p>
       </header>
 

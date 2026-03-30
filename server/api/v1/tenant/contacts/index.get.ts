@@ -3,9 +3,6 @@ import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { isTenantApiKeyAuthContext } from '../../../../tenant/registry-auth'
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 
-/** Upper bound for a single response; matches recipient-list scale. */
-const CONTACT_LIMIT = 3000
-
 type ContactDoc = {
   _id: unknown
   externalId?: string
@@ -43,7 +40,6 @@ export default defineEventHandler(async (event) => {
     Contact.countDocuments(filter),
     Contact.find(filter)
       .sort({ updatedAt: -1 })
-      .limit(CONTACT_LIMIT)
       .lean()
       .exec()
   ])
@@ -77,6 +73,6 @@ export default defineEventHandler(async (event) => {
   return {
     contacts,
     total,
-    truncated: total > CONTACT_LIMIT
+    truncated: total > contacts.length
   }
 })
