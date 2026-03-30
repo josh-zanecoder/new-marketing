@@ -1,14 +1,27 @@
 <script setup lang="ts">
+const route = useRoute()
 const { data: me, pending, refresh } = useMarketingMe()
 
+/** Cancel any in-flight `/me` request so we always hit the server again (not a deduped no-op). */
+function refreshMe() {
+  return refresh({ dedupe: 'cancel' })
+}
+
 onMounted(() => {
-  void refresh()
+  void refreshMe()
 })
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (import.meta.client) void refreshMe()
+  }
+)
 
 const sidebarAccount = computed(() => {
   if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }
   if (me.value.authType === 'apiKey') {
-    return { primary: me.value.tenantName, secondary: 'API key session' }
+    return { primary: me.value.tenantName, secondary: 'Marketing' }
   }
   const roleLabel =
     me.value.role === 'admin'
@@ -54,18 +67,11 @@ async function handleLogout() {
   <div class="flex min-h-screen bg-slate-50">
     <aside class="w-56 shrink-0 bg-white border-r border-slate-200/80 flex flex-col">
       <div class="p-5 border-b border-slate-200/80">
-        <h1 class="text-lg font-semibold text-slate-800 tracking-tight">Mortdash</h1>
+        <h1 class="text-lg font-semibold text-slate-800 tracking-tight">
+          {{ me?.authType === 'apiKey' ? me.tenantName : 'Mortdash' }}
+        </h1>
         <p class="text-xs text-slate-500 mt-0.5">Marketing</p>
-        <p
-          v-if="sidebarAccount.primary"
-          class="text-xs text-slate-600 mt-2 font-medium truncate"
-          :title="sidebarAccount.primary"
-        >
-          {{ sidebarAccount.primary }}
-        </p>
-        <p v-if="sidebarAccount.secondary" class="text-[11px] text-slate-400 mt-0.5">
-          {{ sidebarAccount.secondary }}
-        </p>
+
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
         <NuxtLink

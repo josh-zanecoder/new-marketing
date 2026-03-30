@@ -10,6 +10,7 @@ import {
   findRegistryTenantByTenantId
 } from '../tenant/registry-auth'
 import { MARKETING_TENANT_SESSION_COOKIE } from '../constants/tenantAuth.constants'
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
 import { verifyMarketingTenantBrowserSession } from '../utils/marketingTenantBrowserSession'
 
 const PUBLIC_API_PREFIXES = [
@@ -43,6 +44,22 @@ function crmForwardedUserFromHeaders(event: H3Event): {
   if (email.length > 0 && email.length <= CRM_USER_EMAIL_MAX) out.crmUserEmail = email
   if (name.length > 0 && name.length <= CRM_USER_NAME_MAX) out.crmUserName = name
   return out
+}
+
+/** Same trust boundary as `x-crm-user-email`: only for API-key requests from CRM. */
+function crmContactOwnerEmailsHeader(event: H3Event): string[] | undefined {
+  const raw = (getHeader(event, 'x-crm-contact-owner-emails') || '').trim()
+  if (!raw) return undefined
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of raw.split(',')) {
+    const e = part.trim().toLowerCase()
+    if (!e || seen.has(e)) continue
+    seen.add(e)
+    out.push(e)
+    if (out.length >= MAX_CONTACT_OWNER_EMAILS_IN_SESSION) break
+  }
+  return out.length > 0 ? out : undefined
 }
 
 function getBearerToken(event: H3Event): string {
@@ -88,11 +105,8 @@ export default defineEventHandler(async (event) => {
         if (dbName) {
           const row = await findRegistryTenantByDbName(registryConn, dbName)
           if (row?.clientKeyHash) {
-            const { tenantId: tidFromJwt, crmEmail } = verifyMarketingTenantBrowserSession(
-              sessionCookie,
-              row.clientKeyHash,
-              dbName
-            )
+            const { tenantId: tidFromJwt, crmEmail, contactOwnerEmails, tenantWideContacts } =
+              verifyMarketingTenantBrowserSession(sessionCookie, row.clientKeyHash, dbName)
             const tidMismatch = Boolean(
               row.tenantId && tidFromJwt && row.tenantId !== tidFromJwt
             )
@@ -104,7 +118,11 @@ export default defineEventHandler(async (event) => {
                 dbName: row.dbName,
                 ...(row.tenantId ? { tenantId: row.tenantId } : {}),
                 ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
-                ...(crmEmail ? { crmUserEmail: crmEmail } : {})
+                ...(crmEmail ? { crmUserEmail: crmEmail } : {}),
+                ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
+                ...(!tenantWideContacts && contactOwnerEmails?.length
+                  ? { contactOwnerScope: contactOwnerEmails }
+                  : {})
               }
               return
             }
@@ -122,6 +140,7 @@ export default defineEventHandler(async (event) => {
     const row = await findRegistryTenantByApiKey(registryConn, apiKey)
     if (row) {
       const crm = crmForwardedUserFromHeaders(event)
+      const headerOwners = crmContactOwnerEmailsHeader(event)
       event.context.auth = {
         type: 'tenantApiKey',
         role: 'tenant',
@@ -131,7 +150,8 @@ export default defineEventHandler(async (event) => {
         ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
         ...(crm.crmUserId ? { crmUserId: crm.crmUserId } : {}),
         ...(crm.crmUserEmail ? { crmUserEmail: crm.crmUserEmail } : {}),
-        ...(crm.crmUserName ? { crmUserName: crm.crmUserName } : {})
+        ...(crm.crmUserName ? { crmUserName: crm.crmUserName } : {}),
+        ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {})
       }
       return
     }

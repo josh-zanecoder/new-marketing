@@ -9,8 +9,10 @@ import type {
 } from '../../../../types/tenant/recipientList.model'
 import {
   isRegisteredTenantAuthContext,
+  isTenantApiKeyAuthContext,
   resolveTenantIdForTenantAuth
 } from '../../../../tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
 import { buildContactFilterQuery } from '../../../../utils/recipientListContactQuery'
@@ -227,9 +229,17 @@ export default defineEventHandler(async (event) => {
     filterMode,
     groupsForAndMode
   )
+  const ownerScope =
+    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
+      ? auth.contactOwnerScope
+      : undefined
+  const scopedContactQuery = mergeContactOwnerScopeFilter(
+    contactQuery as Record<string, unknown>,
+    ownerScope
+  )
   let memberCount = 0
 
-  const cursor = Contact.find(contactQuery).select('_id').lean().cursor()
+  const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()
   let batch: { recipientListId: typeof listId; contactId: unknown }[] = []
 
   for await (const doc of cursor) {

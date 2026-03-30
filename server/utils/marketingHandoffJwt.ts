@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
 
 const ISS = 'mortdash-crm'
 const AUD = 'mortdash-marketing'
@@ -21,6 +22,10 @@ export type HandoffParseResult = {
   apiKey: string
   marketingTenantId: string
   email?: string
+  /** Lowercased CRM `ownerEmails` claim (`users:own-ae-only` / downline scope). */
+  allowedOwnerEmails?: string[]
+  /** CRM `tenantWideContacts`: no contact owner filter (lacks `users:own-ae-only`). */
+  tenantWideContacts?: true
 }
 
 /**
@@ -52,10 +57,38 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
 
   const emailRaw = typeof payload.email === 'string' ? payload.email.trim() : ''
 
+  const tenantWideContacts =
+    payload.tenantWideContacts === true || payload.tenantWideContacts === 'true'
+      ? (true as const)
+      : undefined
+
+  if (tenantWideContacts) {
+    return {
+      apiKey,
+      marketingTenantId: sub,
+      ...(emailRaw ? { email: emailRaw } : {}),
+      tenantWideContacts
+    }
+  }
+
+  let allowedOwnerEmails: string[] | undefined
+  const rawOwners = payload.ownerEmails
+  if (Array.isArray(rawOwners)) {
+    const set = new Set<string>()
+    for (const x of rawOwners) {
+      if (typeof x !== 'string') continue
+      const e = x.trim().toLowerCase()
+      if (e) set.add(e)
+      if (set.size >= MAX_CONTACT_OWNER_EMAILS_IN_SESSION) break
+    }
+    if (set.size > 0) allowedOwnerEmails = [...set]
+  }
+
   return {
     apiKey,
     marketingTenantId: sub,
-    ...(emailRaw ? { email: emailRaw } : {})
+    ...(emailRaw ? { email: emailRaw } : {}),
+    ...(allowedOwnerEmails ? { allowedOwnerEmails } : {})
   }
 }
 

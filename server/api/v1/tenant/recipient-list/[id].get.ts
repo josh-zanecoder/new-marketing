@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import { isRegisteredTenantAuthContext } from '../../../../tenant/registry-auth'
+import {
+  isRegisteredTenantAuthContext,
+  isTenantApiKeyAuthContext
+} from '../../../../tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 
@@ -75,13 +79,22 @@ export default defineEventHandler(async (event) => {
 
   const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
 
+  const ownerScope =
+    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
+      ? auth.contactOwnerScope
+      : undefined
+  const contactByIdsFilter = mergeContactOwnerScopeFilter(
+    {
+      _id: { $in: contactIds },
+      deletedAt: null
+    },
+    ownerScope
+  )
+
   const contacts: ContactRow[] =
     contactIds.length === 0
       ? []
-      : ((await Contact.find({
-          _id: { $in: contactIds },
-          deletedAt: null
-        })
+      : ((await Contact.find(contactByIdsFilter)
           .select({
             name: 1,
             email: 1,

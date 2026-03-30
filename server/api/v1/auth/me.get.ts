@@ -18,7 +18,11 @@ export default defineEventHandler((event) => {
         ...(auth.crmAppUrl ? { crmAppUrl: auth.crmAppUrl } : {}),
         ...(auth.crmUserId ? { crmUserId: auth.crmUserId } : {}),
         ...(auth.crmUserEmail ? { email: auth.crmUserEmail } : {}),
-        ...(auth.crmUserName ? { name: auth.crmUserName } : {})
+        ...(auth.crmUserName ? { name: auth.crmUserName } : {}),
+        ...(auth.tenantWideContacts ? { tenantWideContacts: true as const } : {}),
+        ...(auth.contactOwnerScope?.length
+          ? { contactOwnerEmails: auth.contactOwnerScope }
+          : {})
       }
     }
   }

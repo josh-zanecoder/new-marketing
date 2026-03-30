@@ -23,6 +23,10 @@ export type MarketingMeApiKeyUser = {
   email?: string
   /** From CRM `x-crm-user-name`. */
   name?: string
+  /** CRM handoff: emails allowed for contact ownership filter. */
+  contactOwnerEmails?: string[]
+  /** When true, Marketing does not filter contacts by owner (CRM user without `users:own-ae-only`). */
+  tenantWideContacts?: true
 }
 
 export type MarketingMeUser = MarketingMeFirebaseUser | MarketingMeApiKeyUser

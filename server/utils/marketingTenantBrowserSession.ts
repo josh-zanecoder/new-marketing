@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
 
 function base64urlEncode(buf: Buffer): string {
   return buf
@@ -23,6 +24,9 @@ export function signMarketingTenantBrowserSession(params: {
   clientKeyHash: string
   maxAgeSec: number
   crmHandoffEmail?: string
+  /** CRM user may see all tenant contacts (no `metadata.ownerEmail` filter). */
+  tenantWideContacts?: boolean
+  contactOwnerEmails?: string[]
 }): string {
   const now = Math.floor(Date.now() / 1000)
   const header = { alg: 'HS256', typ: 'JWT' }
@@ -34,6 +38,12 @@ export function signMarketingTenantBrowserSession(params: {
   if (params.tenantId) payload.tid = params.tenantId
   const em = params.crmHandoffEmail?.trim()
   if (em) payload.crmEmail = em
+  if (params.tenantWideContacts === true) {
+    payload.tw = true
+  }
+  if (params.contactOwnerEmails?.length) {
+    payload.owners = params.contactOwnerEmails.slice(0, MAX_CONTACT_OWNER_EMAILS_IN_SESSION)
+  }
 
   const h = base64urlEncode(Buffer.from(JSON.stringify(header), 'utf8'))
   const p = base64urlEncode(Buffer.from(JSON.stringify(payload), 'utf8'))
@@ -46,7 +56,12 @@ export function verifyMarketingTenantBrowserSession(
   token: string,
   clientKeyHash: string,
   expectedDbName: string
-): { tenantId: string | null; crmEmail?: string } {
+): {
+  tenantId: string | null
+  crmEmail?: string
+  tenantWideContacts?: true
+  contactOwnerEmails?: string[]
+} {
   const parts = token.trim().split('.')
   if (parts.length !== 3) throw new Error('Invalid session')
   const [h, p, sigB64] = parts
@@ -66,9 +81,29 @@ export function verifyMarketingTenantBrowserSession(
 
   const tid = typeof payload.tid === 'string' ? payload.tid.trim() : ''
   const crmEmail = typeof payload.crmEmail === 'string' ? payload.crmEmail.trim() : ''
+  const tenantWideContacts =
+    payload.tw === true || payload.tw === 'true' ? (true as const) : undefined
+
+  let contactOwnerEmails: string[] | undefined
+  const rawOwners = payload.owners
+  if (Array.isArray(rawOwners)) {
+    const next: string[] = []
+    const seen = new Set<string>()
+    for (const x of rawOwners) {
+      if (typeof x !== 'string') continue
+      const e = x.trim().toLowerCase()
+      if (!e || seen.has(e)) continue
+      seen.add(e)
+      next.push(e)
+      if (next.length >= MAX_CONTACT_OWNER_EMAILS_IN_SESSION) break
+    }
+    if (next.length > 0) contactOwnerEmails = next
+  }
 
   return {
     tenantId: tid || null,
-    ...(crmEmail ? { crmEmail } : {})
+    ...(crmEmail ? { crmEmail } : {}),
+    ...(tenantWideContacts ? { tenantWideContacts } : {}),
+    ...(contactOwnerEmails ? { contactOwnerEmails } : {})
   }
 }

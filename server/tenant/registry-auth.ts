@@ -20,6 +20,13 @@ export type TenantApiKeyAuthContext = {
   crmUserEmail?: string
   /** CRM sends `x-crm-user-name`. */
   crmUserName?: string
+  /**
+   * CRM handoff: lowercased emails allowed for `metadata.ownerEmail` on contacts.
+   * Omitted = no row-level filter (integrations / legacy session).
+   */
+  contactOwnerScope?: string[]
+  /** From CRM handoff: user may see all contacts for the tenant (no owner filter). */
+  tenantWideContacts?: true
 }
 
 /** Firebase session for a tenant or client user (registry row resolved). */

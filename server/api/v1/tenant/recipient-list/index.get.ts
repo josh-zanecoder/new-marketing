@@ -3,8 +3,10 @@ import { getRecipientFilterModel } from '../../../../models/registry/RecipientFi
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
+  isTenantApiKeyAuthContext,
   resolveTenantIdForTenantAuth
 } from '../../../../tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
 import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
@@ -68,9 +70,15 @@ export default defineEventHandler(async (event) => {
   const tenantConn = await getTenantConnectionFromEvent(event)
   const { Contact, RecipientList } = getTenantClientModels(tenantConn)
 
+  const ownerScope =
+    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
+      ? auth.contactOwnerScope
+      : undefined
+  const contactFilter = mergeContactOwnerScopeFilter({ deletedAt: null }, ownerScope)
+
   const [contactTotal, contactsRaw, kindCounts, listsRaw] = await Promise.all([
-    Contact.countDocuments({ deletedAt: null }),
-    Contact.find({ deletedAt: null })
+    Contact.countDocuments(contactFilter),
+    Contact.find(contactFilter)
       .select({
         name: 1,
         email: 1,
@@ -85,7 +93,7 @@ export default defineEventHandler(async (event) => {
       .lean()
       .exec(),
     Contact.aggregate<{ _id: string; count: number }>([
-      { $match: { deletedAt: null } },
+      { $match: contactFilter },
       { $group: { _id: '$contactKind', count: { $sum: 1 } } }
     ]).exec(),
     RecipientList.find({})

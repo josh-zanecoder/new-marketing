@@ -1,5 +1,7 @@
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { isTenantApiKeyAuthContext } from '../../../../tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 
 /** Upper bound for a single response; matches recipient-list scale. */
 const CONTACT_LIMIT = 3000
@@ -14,6 +16,7 @@ type ContactDoc = {
   phone?: string
   company?: string
   channel?: string
+  metadata?: Record<string, unknown>
   address?: {
     street?: string
     city?: string
@@ -28,7 +31,13 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Contact } = getTenantClientModels(conn)
 
-  const filter = { deletedAt: null }
+  const auth = event.context.auth as unknown
+  const scope =
+    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
+      ? auth.contactOwnerScope
+      : undefined
+
+  const filter = mergeContactOwnerScopeFilter({ deletedAt: null }, scope)
 
   const [total, raw] = await Promise.all([
     Contact.countDocuments(filter),
@@ -40,7 +49,10 @@ export default defineEventHandler(async (event) => {
   ])
 
   const rows = raw as ContactDoc[]
-  const contacts = rows.map((c) => ({
+  const contacts = rows.map((c) => {
+    const meta = c.metadata && typeof c.metadata === 'object' ? c.metadata : {}
+    const ownerRaw = meta && typeof meta.ownerEmail === 'string' ? meta.ownerEmail : ''
+    return {
     id: String(c._id),
     externalId: c.externalId ?? '',
     source: c.source ?? '',
@@ -50,6 +62,7 @@ export default defineEventHandler(async (event) => {
     phone: c.phone ?? '',
     company: c.company ?? '',
     channel: c.channel ?? '',
+    ownerEmail: ownerRaw,
     address: {
       street: c.address?.street ?? '',
       city: c.address?.city ?? '',
@@ -58,7 +71,8 @@ export default defineEventHandler(async (event) => {
     },
     createdAt: c.createdAt?.toISOString?.() ?? null,
     updatedAt: c.updatedAt?.toISOString?.() ?? null
-  }))
+  }
+  })
 
   return {
     contacts,

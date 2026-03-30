@@ -27,7 +27,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Invalid or expired handoff token' })
   }
 
-  const { apiKey, marketingTenantId, email: handoffEmail } = parsed
+  const {
+    apiKey,
+    marketingTenantId,
+    email: handoffEmail,
+    allowedOwnerEmails,
+    tenantWideContacts
+  } = parsed
   if (!apiKey.startsWith('nmk_')) {
     throw createError({ statusCode: 400, message: 'Invalid tenant key material' })
   }
@@ -52,7 +58,12 @@ export default defineEventHandler(async (event) => {
     tenantId: row.tenantId ?? null,
     clientKeyHash,
     maxAgeSec: TENANT_AUTH_COOKIE_MAX_AGE,
-    ...(handoffEmail ? { crmHandoffEmail: handoffEmail } : {})
+    ...(handoffEmail ? { crmHandoffEmail: handoffEmail } : {}),
+    ...(tenantWideContacts === true
+      ? { tenantWideContacts: true }
+      : allowedOwnerEmails?.length
+        ? { contactOwnerEmails: allowedOwnerEmails }
+        : {})
   })
 
   const secure = process.env.NODE_ENV === 'production'
