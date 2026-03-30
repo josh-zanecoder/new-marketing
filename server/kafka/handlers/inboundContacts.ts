@@ -8,6 +8,31 @@ import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
 
+type SyncSnapshotContact = {
+  externalId: string
+  name: string
+  email: string
+  phone?: string
+  company?: string
+  address?: Record<string, unknown>
+  contactType?: string
+  channel?: string
+  metadata?: Record<string, unknown>
+}
+
+type SyncSnapshotUpsertRow = {
+  externalId: string
+  email: string
+  contactKind: 'prospect' | 'client' | 'contact'
+  name: string
+  phone: string
+  address: Record<string, unknown>
+  company: string
+  channel: string
+  ownerId: string
+  ownerEmail: string
+}
+
 export async function createContactFromCreatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
   const tenantConn = await getTenantConnectionForInboundEvent(contactEvent.tenantId, {
     eventType: contactEvent.eventType,
@@ -130,4 +155,76 @@ export async function softDeleteContactFromDeletedEvent(
       }
     }
   )
+}
+
+export async function upsertContactsFromSyncSnapshot(params: {
+  tenantId: string
+  dBname: string
+  occurredAt: string
+  contacts: SyncSnapshotContact[]
+}): Promise<number> {
+  const tenantConn = await getTenantConnectionForInboundEvent(params.tenantId, {
+    eventType: 'marketing.sync.requested',
+    dBname: params.dBname
+  })
+  if (!tenantConn || !Array.isArray(params.contacts) || params.contacts.length === 0) return 0
+  const models = getTenantClientModels(tenantConn)
+
+  const rows = params.contacts
+    .map((c) => {
+      const externalId = String(c.externalId || '').trim()
+      const email = String(c.email || '').trim().toLowerCase()
+      if (!externalId || !email) return null
+      const payloadMetadata = c.metadata ?? {}
+      const ownerId = typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
+      const ownerEmail =
+        typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+      const row: SyncSnapshotUpsertRow = {
+        externalId,
+        email,
+        contactKind:
+          c.contactType === 'client' || c.contactType === 'contact' ? c.contactType : 'prospect',
+        name: String(c.name || '').trim(),
+        phone: c.phone ?? '',
+        address: c.address ?? {},
+        company: c.company ?? '',
+        channel: c.channel ?? 'email',
+        ownerId,
+        ownerEmail
+      }
+      return row
+    })
+    .filter((x): x is SyncSnapshotUpsertRow => Boolean(x))
+
+  if (rows.length === 0) return 0
+  await Promise.all(
+    rows.map((r) =>
+      models.Contact.updateOne(
+        { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
+        {
+          $set: {
+            externalId: r.externalId,
+            source: KAFKA_INBOUND_CONTACT_SOURCE,
+            contactKind: r.contactKind,
+            name: r.name,
+            email: r.email,
+            phone: r.phone,
+            address: r.address,
+            company: r.company,
+            channel: r.channel,
+            deletedAt: null,
+            metadata: {
+              tenantId: params.tenantId,
+              eventType: 'marketing.sync.requested',
+              occurredAt: params.occurredAt,
+              ...(r.ownerId ? { ownerId: r.ownerId } : {}),
+              ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+            }
+          }
+        },
+        { upsert: true }
+      )
+    )
+  )
+  return rows.length
 }

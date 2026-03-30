@@ -24,7 +24,8 @@ import {
 import {
   createContactFromCreatedEvent,
   softDeleteContactFromDeletedEvent,
-  updateContactFromUpdatedEvent
+  updateContactFromUpdatedEvent,
+  upsertContactsFromSyncSnapshot
 } from '../kafka/handlers/inboundContacts'
 import {
   deleteMarketingEmailTemplateFromDeletedEvent,
@@ -33,6 +34,109 @@ import {
 } from '../kafka/handlers/inboundEmailTemplates'
 
 // --- Runtime / client config -------------------------------------------------
+const SYNC_REQUESTED_EVENT_TYPE = 'marketing.sync.requested' as const
+
+type MarketingSyncRequestedEnvelope = {
+  eventType: typeof SYNC_REQUESTED_EVENT_TYPE
+  occurredAt: string
+  dBname: string
+  tenantId: string
+  payload: {
+    tenantId: string
+    dBname: string
+    syncType: 'login_reconcile' | string
+    syncId?: string
+    chunkIndex?: number
+    chunkCount?: number
+    tenantWideContacts: boolean
+    ownerEmails?: string[]
+    contacts?: Array<{
+      externalId: string
+      name: string
+      email: string
+      phone?: string
+      company?: string
+      address?: Record<string, unknown>
+      contactType?: string
+      channel?: string
+      metadata?: Record<string, unknown>
+    }>
+    requestedByUserId?: string
+    requestedByEmail?: string
+  }
+}
+
+function parseMarketingSyncRequestedEnvelope(
+  parsed: Record<string, unknown>
+): MarketingSyncRequestedEnvelope | null {
+  if (parsed.eventType !== SYNC_REQUESTED_EVENT_TYPE) return null
+  const tenantId = typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
+  const dBname = typeof parsed.dBname === 'string' ? parsed.dBname.trim() : ''
+  const occurredAt = typeof parsed.occurredAt === 'string' ? parsed.occurredAt : ''
+  const payload = parsed.payload
+  if (!tenantId || !dBname || !occurredAt || typeof payload !== 'object' || payload === null) {
+    return null
+  }
+  const p = payload as Record<string, unknown>
+  const pTenantId = typeof p.tenantId === 'string' ? p.tenantId.trim() : ''
+  const pDbName = typeof p.dBname === 'string' ? p.dBname.trim() : ''
+  if (!pTenantId || !pDbName) return null
+  const ownerEmails =
+    Array.isArray(p.ownerEmails) && p.ownerEmails.length
+      ? p.ownerEmails
+          .map((x) => (typeof x === 'string' ? x.trim().toLowerCase() : ''))
+          .filter(Boolean)
+      : []
+  return {
+    eventType: SYNC_REQUESTED_EVENT_TYPE,
+    occurredAt,
+    dBname,
+    tenantId,
+    payload: {
+      tenantId: pTenantId,
+      dBname: pDbName,
+      syncType: typeof p.syncType === 'string' ? p.syncType : 'login_reconcile',
+      ...(typeof p.syncId === 'string' ? { syncId: p.syncId } : {}),
+      ...(typeof p.chunkIndex === 'number' ? { chunkIndex: p.chunkIndex } : {}),
+      ...(typeof p.chunkCount === 'number' ? { chunkCount: p.chunkCount } : {}),
+      tenantWideContacts: p.tenantWideContacts === true,
+      ...(ownerEmails.length ? { ownerEmails } : {}),
+      ...(Array.isArray(p.contacts) ? { contacts: p.contacts as MarketingSyncRequestedEnvelope['payload']['contacts'] } : {}),
+      ...(typeof p.requestedByUserId === 'string' ? { requestedByUserId: p.requestedByUserId } : {}),
+      ...(typeof p.requestedByEmail === 'string' ? { requestedByEmail: p.requestedByEmail } : {})
+    }
+  }
+}
+
+async function handleMarketingSyncRequested(parsed: Record<string, unknown>): Promise<void> {
+  const evt = parseMarketingSyncRequestedEnvelope(parsed)
+  if (!evt) {
+    logger.warn('Invalid marketing.sync.requested schema', { parsed })
+    return
+  }
+  const startedAt = Date.now()
+  const syncedCount = await upsertContactsFromSyncSnapshot({
+    tenantId: evt.tenantId,
+    dBname: evt.dBname,
+    occurredAt: evt.occurredAt,
+    contacts: Array.isArray(evt.payload.contacts) ? evt.payload.contacts : []
+  })
+  logger.info('Kafka inbound marketing.sync.requested', {
+    occurredAt: evt.occurredAt,
+    tenantId: evt.tenantId,
+    dBname: evt.dBname,
+    syncType: evt.payload.syncType,
+    syncId: evt.payload.syncId ?? '',
+    chunkIndex: evt.payload.chunkIndex ?? 1,
+    chunkCount: evt.payload.chunkCount ?? 1,
+    tenantWideContacts: evt.payload.tenantWideContacts,
+    ownerEmailCount: evt.payload.ownerEmails?.length ?? 0,
+    requestedByUserId: evt.payload.requestedByUserId ?? '',
+    snapshotContactCount: Array.isArray(evt.payload.contacts) ? evt.payload.contacts.length : 0,
+    syncedCount,
+    durationMs: Date.now() - startedAt
+  })
+}
 
 type KafkaRuntime = {
   kafkaBrokers: string
@@ -402,6 +506,7 @@ function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
     tenantId.length > 0 &&
     (et.startsWith('contact.') ||
       et.startsWith('account.') ||
+      et === SYNC_REQUESTED_EVENT_TYPE ||
       et === EMAIL_TEMPLATE_EVENT_TYPES.CREATED ||
       et === EMAIL_TEMPLATE_EVENT_TYPES.UPDATED ||
       et === EMAIL_TEMPLATE_EVENT_TYPES.DELETED)
@@ -414,6 +519,9 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
   const deletedEvent = parseContactDeletedEventEnvelope(parsed)
 
   switch (eventType) {
+    case SYNC_REQUESTED_EVENT_TYPE:
+      await handleMarketingSyncRequested(parsed)
+      break
     case CONTACT_EVENT_TYPES.CREATED:
       if (!contactEvent) {
         logger.warn('Invalid contact.created schema', { parsed })
