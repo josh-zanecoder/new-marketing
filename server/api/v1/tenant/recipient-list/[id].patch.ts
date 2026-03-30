@@ -8,20 +8,11 @@ import {
   resolveTenantIdForTenantAuth
 } from '../../../../tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 import {
   rebuildRecipientListMembers,
   resolveRecipientListFiltersFromBody
 } from '../../../../utils/recipientListMutation'
-
-type CreatedRecipientList = {
-  name?: string
-  listType?: string
-  audience?: string
-  filters?: unknown[]
-  filterMode?: string
-  createdAt?: Date | null
-  updatedAt?: Date | null
-}
 
 const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
 
@@ -50,6 +41,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Tenant access required' })
   }
 
+  const rawId = getRouterParam(event, 'id')
+  if (!rawId || !mongoose.isValidObjectId(rawId)) {
+    throw createError({ statusCode: 400, message: 'Invalid list id' })
+  }
+
+  const listId = new mongoose.Types.ObjectId(rawId)
+
   const body = (await readBody(event).catch(() => ({}))) as Record<string, unknown>
   const name =
     typeof body?.name === 'string' ? body.name.trim().slice(0, 200) : ''
@@ -69,18 +67,19 @@ export default defineEventHandler(async (event) => {
   const tenantConn = await getTenantConnectionFromEvent(event)
   const { RecipientList } = getTenantClientModels(tenantConn)
 
-  const created = await RecipientList.create({
+  const existing = await RecipientList.findById(listId).lean().exec()
+  if (!existing) {
+    throw createError({ statusCode: 404, message: 'List not found' })
+  }
+
+  await RecipientList.findByIdAndUpdate(listId, {
     name,
-    description: '',
-    listType: 'dynamic',
     audience,
     filters,
     filterMode,
-    filterRows: persistedFilterRows,
-    clientId: ''
-  })
+    filterRows: persistedFilterRows
+  }).exec()
 
-  const listId = created._id as mongoose.Types.ObjectId
   const memberCount = await rebuildRecipientListMembers(
     tenantConn,
     listId,
@@ -91,19 +90,31 @@ export default defineEventHandler(async (event) => {
     auth
   )
 
-  const lean = created.toObject() as CreatedRecipientList
+  const updated = (await RecipientList.findById(listId).lean().exec()) as Record<
+    string,
+    unknown
+  > | null
+  const normalized = updated
+    ? normalizeRecipientListDoc(updated)
+    : { audience, filters, filterMode }
 
   return {
     list: {
-      id: String(created._id),
-      name: lean.name ?? '',
-      listType: lean.listType ?? '',
-      audience: lean.audience ?? '',
-      filters: lean.filters ?? [],
-      filterMode: lean.filterMode === 'or' ? 'or' : 'and',
+      id: String(listId),
+      name: typeof updated?.name === 'string' ? updated.name : name,
+      listType: typeof updated?.listType === 'string' ? updated.listType : 'dynamic',
+      audience: normalized.audience,
+      filters: normalized.filters,
+      filterMode: normalized.filterMode,
       memberCount,
-      createdAt: lean.createdAt?.toISOString?.() ?? null,
-      updatedAt: lean.updatedAt?.toISOString?.() ?? null
+      createdAt:
+        updated?.createdAt instanceof Date
+          ? updated.createdAt.toISOString()
+          : null,
+      updatedAt:
+        updated?.updatedAt instanceof Date
+          ? updated.updatedAt.toISOString()
+          : null
     }
   }
 })

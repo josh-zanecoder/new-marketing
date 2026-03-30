@@ -12,6 +12,14 @@ const recipientListCriterionSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const recipientListFilterRowSchema = new mongoose.Schema(
+  {
+    recipientFilterId: { type: String, trim: true, default: '' },
+    listPropertyValue: { type: String, trim: true, default: '' }
+  },
+  { _id: false }
+)
+
 export const recipientListSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -36,6 +44,11 @@ export const recipientListSchema = new mongoose.Schema(
       type: String,
       enum: filterModeEnum,
       default: 'and'
+    },
+    /** Source rows from the tenant UI (registry filter id + value); used to repopulate edit. */
+    filterRows: {
+      type: [recipientListFilterRowSchema],
+      default: () => []
     },
     /** Legacy shape only (`contactKinds`, `state`, …). New lists omit this. */
     filter: { type: mongoose.Schema.Types.Mixed }

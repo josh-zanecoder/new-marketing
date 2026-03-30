@@ -162,3 +162,52 @@ export function registryDocToCriteria(doc: {
       return []
   }
 }
+
+/**
+ * Best-effort UI rows for lists saved before `filterRows` existed on the document.
+ */
+export function suggestFilterRowsFromCriteria(
+  audience: ContactKind,
+  criteria: RecipientListCriterion[],
+  registryDocs: Record<string, unknown>[]
+): { recipientFilterId: string; listPropertyValue: string }[] {
+  const pool = registryDocs.filter(
+    (d) => d.enabled === true && d.contactType === audience
+  )
+  const used = new Set<string>()
+  const rows: { recipientFilterId: string; listPropertyValue: string }[] = []
+
+  for (const c of criteria) {
+    const cProp = String(c.property ?? '').trim()
+    const cVal = String(c.value ?? '').trim()
+    if (!cProp || !cVal) continue
+
+    let matched = false
+    for (const doc of pool) {
+      const idRaw = doc._id
+      const id = idRaw != null ? String(idRaw) : ''
+      if (!id || used.has(id)) continue
+
+      const tryValues = [cVal]
+      const reg =
+        typeof doc.propertyValue === 'string' ? doc.propertyValue.trim() : ''
+      if (reg && !tryValues.includes(reg)) tryValues.push(reg)
+
+      for (const pv of tryValues) {
+        const crits = registryDocToCriteria({
+          ...doc,
+          propertyValue: pv
+        } as Parameters<typeof registryDocToCriteria>[0])
+        if (crits.some((x) => x.property === cProp && x.value === cVal)) {
+          rows.push({ recipientFilterId: id, listPropertyValue: cVal })
+          used.add(id)
+          matched = true
+          break
+        }
+      }
+      if (matched) break
+    }
+  }
+
+  return rows
+}

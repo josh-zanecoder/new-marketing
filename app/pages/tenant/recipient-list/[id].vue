@@ -25,17 +25,28 @@
       </div>
 
       <template v-else-if="payload">
-        <header class="mb-8 border-b border-slate-200 pb-6">
-          <h1 class="text-2xl font-bold text-slate-900 tracking-tight">
-            {{ payload.list.name }}
-          </h1>
-          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+        <header class="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">
+              {{ payload.list.name }}
+            </h1>
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
             <span class="inline-flex rounded px-1.5 py-0.5 text-xs font-medium capitalize bg-slate-100 text-slate-700">
               {{ payload.list.listType }}
             </span>
             <span class="capitalize">{{ payload.list.audience }}</span>
             <span v-if="payload.list.updatedAt">{{ formatDate(payload.list.updatedAt) }}</span>
+            </div>
           </div>
+          <NuxtLink
+            :to="`/tenant/recipient-list/edit/${listId}`"
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            Edit list
+          </NuxtLink>
         </header>
 
         <section class="mb-10">

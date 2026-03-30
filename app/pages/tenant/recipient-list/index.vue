@@ -77,13 +77,15 @@
       </div>
 
       <div v-else-if="data" class="space-y-3">
-        <NuxtLink
+        <div
           v-for="row in paginatedLists"
           :key="row.id"
-          :to="`/tenant/recipient-list/${row.id}`"
           class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-300 sm:flex-row sm:items-center sm:gap-6"
         >
-          <div class="min-w-0 flex-1">
+          <NuxtLink
+            :to="`/tenant/recipient-list/${row.id}`"
+            class="min-w-0 flex-1 outline-none"
+          >
             <span class="font-semibold text-slate-900">
               {{ row.name }}
             </span>
@@ -98,8 +100,14 @@
             <p class="mt-2 text-sm text-slate-600 line-clamp-2">
               {{ formatFilters(row.filters, row.filterMode) }}
             </p>
-          </div>
-        </NuxtLink>
+          </NuxtLink>
+          <NuxtLink
+            :to="`/tenant/recipient-list/edit/${row.id}`"
+            class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Edit
+          </NuxtLink>
+        </div>
 
         <div
           v-if="filteredLists.length"

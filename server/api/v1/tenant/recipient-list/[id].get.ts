@@ -1,12 +1,18 @@
 import mongoose from 'mongoose'
+import { getRegistryConnection } from '../../../../lib/mongoose'
+import { getRecipientFilterModel } from '../../../../models/registry/RecipientFilter'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
-  isTenantApiKeyAuthContext
+  isTenantApiKeyAuthContext,
+  resolveTenantIdForTenantAuth
 } from '../../../../tenant/registry-auth'
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
+import {
+  normalizeRecipientListDoc,
+  suggestFilterRowsFromCriteria
+} from '../../../../utils/recipientListDocument'
 
 const MAX_PAGE_SIZE = 100
 type RecipientListDoc = {
@@ -39,6 +45,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Tenant access required' })
   }
 
+  const registryConn = await getRegistryConnection()
+  const registryTenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
+
   const rawId = getRouterParam(event, 'id')
   if (!rawId || !mongoose.isValidObjectId(rawId)) {
     throw createError({ statusCode: 400, message: 'Invalid list id' })
@@ -56,6 +65,39 @@ export default defineEventHandler(async (event) => {
   }
 
   const { audience, filters, filterMode } = normalizeRecipientListDoc(doc)
+
+  const storedRowsRaw = (doc as { filterRows?: unknown }).filterRows
+  let filterRows: { recipientFilterId: string; listPropertyValue: string }[] = []
+  if (Array.isArray(storedRowsRaw)) {
+    for (const r of storedRowsRaw) {
+      if (!r || typeof r !== 'object') continue
+      const row = r as Record<string, unknown>
+      const recipientFilterId =
+        typeof row.recipientFilterId === 'string' ? row.recipientFilterId.trim() : ''
+      if (!recipientFilterId) continue
+      filterRows.push({
+        recipientFilterId,
+        listPropertyValue:
+          typeof row.listPropertyValue === 'string' ? row.listPropertyValue.trim() : ''
+      })
+    }
+  }
+
+  if (!filterRows.length && filters.length && registryTenantId) {
+    const FilterModel = getRecipientFilterModel(registryConn)
+    const registryDocs = await FilterModel.find({
+      tenantId: registryTenantId,
+      enabled: true,
+      contactType: audience
+    })
+      .lean()
+      .exec()
+    filterRows = suggestFilterRowsFromCriteria(
+      audience,
+      filters,
+      registryDocs as Record<string, unknown>[]
+    )
+  }
 
   const query = getQuery(event)
   const page = Math.max(1, parseInt(String(query.page ?? '1'), 10) || 1)
@@ -132,6 +174,7 @@ export default defineEventHandler(async (event) => {
       audience,
       filters,
       filterMode,
+      filterRows,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     },
