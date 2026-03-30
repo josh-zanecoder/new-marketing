@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      v-if="props.open"
+      v-if="props.open && props.tenant"
       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
       @click.self="emit('close')"
     >
@@ -9,10 +9,10 @@
         <div class="flex items-start justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-900">
-              Add tenant
+              Edit tenant
             </h3>
             <p class="mt-1 text-sm text-slate-600">
-              Create a new tenant in the registry.
+              Registry: <span class="font-mono text-xs">{{ props.tenant.dbName }}</span>
             </p>
           </div>
           <button
@@ -28,46 +28,55 @@
 
         <form class="mt-5 space-y-4" @submit.prevent="handleSubmit">
           <div class="space-y-2">
-            <label for="tenant-name" class="block text-sm font-medium text-slate-700">Tenant name</label>
+            <label for="edit-tenant-name" class="block text-sm font-medium text-slate-700">Tenant name</label>
             <input
-              id="tenant-name"
+              id="edit-tenant-name"
               v-model="name"
               type="text"
               autocomplete="organization"
               required
-              placeholder="Acme Corp"
               class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
             >
           </div>
 
           <div class="space-y-2">
-            <label for="tenant-email" class="block text-sm font-medium text-slate-700">Contact email</label>
+            <label for="edit-tenant-email" class="block text-sm font-medium text-slate-700">Contact email</label>
             <input
-              id="tenant-email"
+              id="edit-tenant-email"
               v-model="email"
               type="email"
               autocomplete="email"
-              required
-              placeholder="client@company.com"
               class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              placeholder="Optional"
             >
           </div>
 
           <div class="space-y-2">
-            <label for="tenant-crm-url" class="block text-sm font-medium text-slate-700">
+            <label for="edit-tenant-id" class="block text-sm font-medium text-slate-700">
+              Tenant ID <span class="font-normal text-slate-500">(CRM / integrations)</span>
+            </label>
+            <input
+              id="edit-tenant-id"
+              v-model="tenantId"
+              type="text"
+              autocomplete="off"
+              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              placeholder="UUID"
+            >
+          </div>
+
+          <div class="space-y-2">
+            <label for="edit-tenant-crm-url" class="block text-sm font-medium text-slate-700">
               CRM app URL <span class="font-normal text-slate-500">(optional)</span>
             </label>
             <input
-              id="tenant-crm-url"
+              id="edit-tenant-crm-url"
               v-model="crmAppUrl"
               type="url"
               autocomplete="url"
               placeholder="https://crm.example.com"
               class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
             >
-            <p class="text-xs text-slate-500">
-              Used for “Back to CRM” when this tenant opens marketing from their CRM.
-            </p>
           </div>
 
           <div v-if="displayError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -97,10 +106,10 @@
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 5.523 4.477 10 10 10v-4c-1.45 0-2.792-.464-3.99-1.25z"
                   />
                 </svg>
-                Adding...
+                Saving...
               </span>
               <span v-else>
-                Add tenant
+                Save changes
               </span>
             </button>
           </div>
@@ -111,38 +120,60 @@
 </template>
 
 <script setup lang="ts">
+import type { AdminTenantRow } from '~/types/adminTenant'
 import { useSubmitting } from '~/composables/useSubmitting'
 
 const props = defineProps<{
   open: boolean
+  tenant: AdminTenantRow | null
   serverError?: string | null
 }>()
 
 const emit = defineEmits<{
   close: []
-  submit: [{ name: string; email: string; crmAppUrl?: string }]
+  submit: [{
+    name: string
+    email: string | null
+    crmAppUrl: string | null
+    tenantId: string | null
+  }]
 }>()
 
 const name = ref('')
 const email = ref('')
+const tenantId = ref('')
 const crmAppUrl = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
 const displayError = computed(() => errorMessage.value || props.serverError || null)
 
-function resetForm() {
-  name.value = ''
-  email.value = ''
-  crmAppUrl.value = ''
+function loadFromTenant(t: AdminTenantRow) {
+  name.value = t.name
+  email.value = t.email ?? ''
+  tenantId.value = t.tenantId ?? ''
+  crmAppUrl.value = t.crmAppUrl ?? ''
+}
+
+function resetLocal() {
   errorMessage.value = null
   stopSubmitting()
 }
 
 watch(
+  () => [props.open, props.tenant] as const,
+  ([open, tenant]) => {
+    if (open && tenant) {
+      loadFromTenant(tenant)
+      resetLocal()
+    }
+  }
+)
+
+watch(
   () => props.open,
-  (isOpen) => {
-    if (isOpen) resetForm()
+  (open) => {
+    if (!open) stopSubmitting()
   }
 )
 
@@ -158,23 +189,19 @@ function handleSubmit() {
 
   const trimmedName = name.value.trim()
   const trimmedEmail = email.value.trim()
+  const trimmedCrm = crmAppUrl.value.trim()
+  const trimmedTid = tenantId.value.trim()
 
   if (!trimmedName) {
     errorMessage.value = 'Tenant name is required.'
     return
   }
 
-  if (!trimmedEmail) {
-    errorMessage.value = 'Contact email is required.'
-    return
-  }
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+  if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
     errorMessage.value = 'Please enter a valid email address.'
     return
   }
 
-  const trimmedCrm = crmAppUrl.value.trim()
   if (
     trimmedCrm
     && !/^https?:\/\/.+/i.test(trimmedCrm)
@@ -186,9 +213,9 @@ function handleSubmit() {
   startSubmitting()
   emit('submit', {
     name: trimmedName,
-    email: trimmedEmail,
-    ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {})
+    email: trimmedEmail ? trimmedEmail.toLowerCase() : null,
+    crmAppUrl: trimmedCrm || null,
+    tenantId: trimmedTid || null
   })
 }
 </script>
-

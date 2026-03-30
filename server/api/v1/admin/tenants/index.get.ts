@@ -21,9 +21,15 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
         ? new Date(doc.createdAt).toISOString()
         : null
 
+  const crmRaw = doc.crmAppUrl
+  const crmAppUrl =
+    typeof crmRaw === 'string' && crmRaw.trim()
+      ? crmRaw.trim().replace(/\/+$/, '')
+      : null
+
   if (!name || !dbName || !createdAt) return null
   /** `tenantId` is included for admin UI and APIs keyed by registry id (e.g. recipient filters). */
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt }
+  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl }
 }
 
 export default defineEventHandler(async (event) => {

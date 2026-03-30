@@ -21,6 +21,7 @@
           <tr>
             <th>Name</th>
             <th>Email</th>
+            <th>CRM URL</th>
             <th>API key</th>
             <th>Status</th>
             <th class="th-actions" />
@@ -37,13 +38,35 @@
               </NuxtLink>
             </td>
             <td>{{ t.email || '-' }}</td>
+            <td class="max-w-[12rem] truncate text-sm text-slate-600" :title="t.crmAppUrl || undefined">
+              <template v-if="t.crmAppUrl">
+                <a
+                  :href="t.crmAppUrl"
+                  class="text-indigo-600 hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ t.crmAppUrl }}
+                </a>
+              </template>
+              <template v-else>
+                —
+              </template>
+            </td>
             <td class="font-mono text-xs text-slate-600">
               {{ t.apiKeyPrefix || '-' }}
             </td>
             <td>
               <span class="badge">{{ t.status }}</span>
             </td>
-            <td class="td-actions">
+            <td class="td-actions td-actions-row">
+              <button
+                type="button"
+                class="btn-edit-tenant"
+                @click="openEditTenantModal(t)"
+              >
+                Edit
+              </button>
               <button
                 type="button"
                 class="btn-regenerate"
@@ -77,7 +100,7 @@
             </td>
           </tr>
           <tr v-if="!tenants.length">
-            <td colspan="5">
+            <td colspan="6">
               No tenants yet
             </td>
           </tr>
@@ -87,9 +110,17 @@
 
     <TenantAddTenantModal
       :open="isAddTenantOpen"
-      :server-error="addTenantServerError"
+      :server-error="tenantFormError"
       @close="closeAddTenantModal"
       @submit="handleAddTenantSubmit"
+    />
+
+    <TenantEditTenantModal
+      :open="isEditTenantOpen"
+      :tenant="editingTenant"
+      :server-error="tenantFormError"
+      @close="closeEditTenantModal"
+      @submit="handleEditTenantSubmit"
     />
 
     <TenantApiKeyModal
@@ -117,14 +148,17 @@ import type { AdminTenantRow } from '~/types/adminTenant'
 definePageMeta({ layout: 'admin' })
 
 const isAddTenantOpen = ref(false)
+const isEditTenantOpen = ref(false)
+const editingTenant = ref<AdminTenantRow | null>(null)
 const newlyCreatedApiKey = ref<string | null>(null)
 const regeneratedApiKey = ref<string | null>(null)
 const isRegenerating = ref<string | null>(null)
 
 const {
-  serverError: addTenantServerError,
+  serverError: tenantFormError,
   resetError,
   createTenantDb,
+  updateTenant,
   regenerateTenantApiKey
 } = useAdminTenantsCreateDb()
 
@@ -142,6 +176,18 @@ function closeAddTenantModal() {
   isAddTenantOpen.value = false
 }
 
+function openEditTenantModal(t: AdminTenantRow) {
+  resetError()
+  editingTenant.value = t
+  isEditTenantOpen.value = true
+}
+
+function closeEditTenantModal() {
+  resetError()
+  editingTenant.value = null
+  isEditTenantOpen.value = false
+}
+
 async function fetchTenants() {
   try {
     const res = await $fetch<{
@@ -151,6 +197,7 @@ async function fetchTenants() {
         dbName: string
         tenantId: string | null
         apiKeyPrefix: string | null
+        crmAppUrl: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -161,6 +208,7 @@ async function fetchTenants() {
       dbName: t.dbName,
       tenantId: t.tenantId,
       apiKeyPrefix: t.apiKeyPrefix,
+      crmAppUrl: t.crmAppUrl,
       status: 'Ready'
     }))
   } catch {
@@ -168,7 +216,7 @@ async function fetchTenants() {
   }
 }
 
-async function handleAddTenantSubmit(payload: { name: string; email: string }) {
+async function handleAddTenantSubmit(payload: { name: string; email: string; crmAppUrl?: string }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
 
@@ -176,6 +224,22 @@ async function handleAddTenantSubmit(payload: { name: string; email: string }) {
   await fetchTenants()
 
   if (!result.apiKey) closeAddTenantModal()
+}
+
+async function handleEditTenantSubmit(payload: {
+  name: string
+  email: string | null
+  crmAppUrl: string | null
+  tenantId: string | null
+}) {
+  const row = editingTenant.value
+  if (!row) return
+
+  const result = await updateTenant(row.dbName, payload)
+  if (!result.ok) return
+
+  await fetchTenants()
+  closeEditTenantModal()
 }
 
 async function handleRegenerateKey(dbName: string) {

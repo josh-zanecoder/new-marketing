@@ -56,7 +56,14 @@ export function logoutMarketingSession(): Promise<void> {
   if (sessionLogoutPromise) return sessionLogoutPromise
 
   sessionLogoutPromise = (async () => {
+    try {
+      await $fetch('/api/v1/auth/logout', { method: 'POST' })
+    } catch {
+      /* ignore */
+    }
+
     await syncMarketingTokenCookieFromFirebaseUser(null)
+
     await clearNuxtData('marketing-me')
 
     try {

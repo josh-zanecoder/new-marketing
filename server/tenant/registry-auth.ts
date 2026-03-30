@@ -12,15 +12,19 @@ export type TenantApiKeyAuthContext = {
   tenantName: string
   dbName: string
   tenantId?: string
+  /** From registry `clients.crmAppUrl` when set. */
+  crmAppUrl?: string
 }
 
-/** Firebase session for a tenant user (registry row resolved). */
+/** Firebase session for a tenant or client user (registry row resolved). */
 export type FirebaseTenantAuthContext = {
   uid: string
   email: string
-  role: typeof TENANT_ROLE
+  role: typeof TENANT_ROLE | 'client'
   tenantId: string
   dbName: string
+  /** From registry `clients.crmAppUrl` when set. */
+  crmAppUrl?: string
 }
 
 export function isAdminAuthContext(value: unknown): value is RoleAuthContext {
@@ -58,7 +62,9 @@ export function isFirebaseTenantAuthContext(
 ): value is FirebaseTenantAuthContext {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (v.role !== TENANT_ROLE || v.type === 'tenantApiKey') return false
+  if (v.type === 'tenantApiKey') return false
+  const roleOk = v.role === TENANT_ROLE || v.role === 'client'
+  if (!roleOk) return false
   return (
     typeof v.uid === 'string' &&
     typeof v.tenantId === 'string' &&
@@ -96,38 +102,128 @@ export async function resolveTenantIdForTenantAuth(
 export async function findRegistryTenantByTenantId(
   registryConn: Connection,
   tenantId: string
-): Promise<{ tenantName: string; dbName: string; tenantId: string } | null> {
+): Promise<{
+  tenantName: string
+  dbName: string
+  tenantId: string
+  crmAppUrl?: string
+} | null> {
   const doc = await registryConn
     .collection('clients')
     .findOne({ tenantId })
     .then(
       (d) =>
-        d as { name?: string; dbName?: string; tenantId?: string } | null
+        d as {
+          name?: string
+          dbName?: string
+          tenantId?: string
+          crmAppUrl?: string
+        } | null
     )
   if (!doc?.name || !doc?.dbName) return null
   const id =
     typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : tenantId
-  return { tenantName: doc.name, dbName: doc.dbName, tenantId: id }
+  const out: {
+    tenantName: string
+    dbName: string
+    tenantId: string
+    crmAppUrl?: string
+  } = { tenantName: doc.name, dbName: doc.dbName, tenantId: id }
+  const crm = typeof doc.crmAppUrl === 'string' ? doc.crmAppUrl.trim() : ''
+  if (crm) out.crmAppUrl = crm.replace(/\/+$/, '')
+  return out
+}
+
+/** Registry tenant row by marketing DB name (browser session JWT `sub`). */
+export async function findRegistryTenantByDbName(
+  registryConn: Connection,
+  dbName: string
+): Promise<{
+  tenantName: string
+  dbName: string
+  tenantId?: string
+  crmAppUrl?: string
+  /** SHA256 hex of `nmk_` — used to sign browser session cookie. */
+  clientKeyHash: string | null
+} | null> {
+  const key = dbName.trim()
+  if (!key) return null
+  const doc = await registryConn
+    .collection('clients')
+    .findOne({ dbName: key })
+    .then(
+      (d) =>
+        d as {
+          name?: string
+          dbName?: string
+          tenantId?: string
+          crmAppUrl?: string
+          clientKeyHash?: string
+          apiKeyHash?: string
+        } | null
+    )
+  if (!doc?.name || !doc?.dbName) return null
+  const hashRaw =
+    typeof doc.clientKeyHash === 'string' && doc.clientKeyHash
+      ? doc.clientKeyHash
+      : typeof doc.apiKeyHash === 'string' && doc.apiKeyHash
+        ? doc.apiKeyHash
+        : null
+  const out: {
+    tenantName: string
+    dbName: string
+    tenantId?: string
+    crmAppUrl?: string
+    clientKeyHash: string | null
+  } = {
+    tenantName: doc.name,
+    dbName: doc.dbName,
+    clientKeyHash: hashRaw
+  }
+  if (typeof doc.tenantId === 'string' && doc.tenantId) {
+    out.tenantId = doc.tenantId
+  }
+  const crm = typeof doc.crmAppUrl === 'string' ? doc.crmAppUrl.trim() : ''
+  if (crm) out.crmAppUrl = crm.replace(/\/+$/, '')
+  return out
 }
 
 export async function findRegistryTenantByApiKey(
   registryConn: Connection,
   apiKey: string
-): Promise<{ tenantName: string; dbName: string; tenantId?: string } | null> {
+): Promise<{
+  tenantName: string
+  dbName: string
+  tenantId?: string
+  crmAppUrl?: string
+} | null> {
   const hash = hashTenantApiKey(apiKey)
   const doc = await registryConn
     .collection('clients')
     .findOne({ $or: [{ clientKeyHash: hash }, { apiKeyHash: hash }] })
     .then(
-      (d) => d as { name?: string; dbName?: string; tenantId?: string } | null
+      (d) =>
+        d as {
+          name?: string
+          dbName?: string
+          tenantId?: string
+          crmAppUrl?: string
+        } | null
     )
   if (!doc?.name || !doc?.dbName) return null
-  const out: { tenantName: string; dbName: string; tenantId?: string } = {
+  const out: {
+    tenantName: string
+    dbName: string
+    tenantId?: string
+    crmAppUrl?: string
+  } = {
     tenantName: doc.name,
     dbName: doc.dbName
   }
   if (typeof doc.tenantId === 'string' && doc.tenantId) {
     out.tenantId = doc.tenantId
   }
+  const crm = typeof doc.crmAppUrl === 'string' ? doc.crmAppUrl.trim() : ''
+  if (crm) out.crmAppUrl = crm.replace(/\/+$/, '')
   return out
 }

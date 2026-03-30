@@ -5,6 +5,8 @@ export type MarketingMeFirebaseUser = {
   role: 'admin' | 'tenant' | 'client'
   tenantId: string | null
   dbName: string | null
+  /** Registry `crmAppUrl` for tenant/client (not admin). */
+  crmAppUrl?: string
 }
 
 export type MarketingMeApiKeyUser = {
@@ -13,6 +15,8 @@ export type MarketingMeApiKeyUser = {
   tenantName: string
   dbName: string
   tenantId?: string
+  /** Registry `crmAppUrl` — CRM base URL for “Back to CRM”. */
+  crmAppUrl?: string
 }
 
 export type MarketingMeUser = MarketingMeFirebaseUser | MarketingMeApiKeyUser
@@ -23,7 +27,13 @@ export type MarketingMeResponse = { ok: true; user: MarketingMeUser }
 export function useMarketingMe() {
   return useAsyncData(
     'marketing-me',
-    () => $fetch<MarketingMeResponse>('/api/v1/auth/me').then((r) => r.user),
+    async () => {
+      const reqFetch = import.meta.server ? useRequestFetch() : $fetch
+      const r = await reqFetch<MarketingMeResponse>('/api/v1/auth/me', {
+        credentials: 'include'
+      })
+      return r.user
+    },
     {
       server: true,
       default: () => null,

@@ -26,6 +26,7 @@ export function useAdminTenantsCreateDb() {
   async function createTenantDb(payload: {
     name: string
     email: string
+    crmAppUrl?: string
   }): Promise<{ ok: boolean; apiKey?: string }> {
     resetError()
 
@@ -34,7 +35,11 @@ export function useAdminTenantsCreateDb() {
         '/api/v1/admin/tenants/create-db',
         {
           method: 'POST',
-          body: { name: payload.name, email: payload.email }
+          body: {
+            name: payload.name,
+            email: payload.email,
+            crmAppUrl: payload.crmAppUrl?.trim() ? payload.crmAppUrl.trim() : null
+          }
         }
       )
 
@@ -60,10 +65,34 @@ export function useAdminTenantsCreateDb() {
     }
   }
 
+  async function updateTenant(
+    dbName: string,
+    payload: {
+      name: string
+      email: string | null
+      crmAppUrl: string | null
+      tenantId: string | null
+    }
+  ): Promise<{ ok: boolean }> {
+    resetError()
+
+    try {
+      await $fetch(`/api/v1/admin/tenants/db/${encodeURIComponent(dbName)}`, {
+        method: 'PATCH',
+        body: payload
+      })
+      return { ok: true }
+    } catch (e: unknown) {
+      serverError.value = normalizeError(e, 'Failed to update tenant')
+      return { ok: false }
+    }
+  }
+
   return {
     serverError,
     resetError,
     createTenantDb,
+    updateTenant,
     regenerateTenantApiKey
   }
 }

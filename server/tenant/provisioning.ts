@@ -5,7 +5,7 @@ import {
   hashTenantApiKey,
   getTenantApiKeyPrefix
 } from './api-key'
-import type { EnsureTenantResult } from '../types/registry/provision.types'
+import type { EnsureTenantOptions, EnsureTenantResult } from '../types/registry/provision.types'
 import { invalidateTenantTopicCacheForDbName } from '../services/kafkaProducer'
 
 export function toTenantDbName(displayName: string): string {
@@ -33,7 +33,8 @@ export async function ensureTenantDatabaseInitialized(
   registryConn: Connection,
   displayName: string,
   contactEmail: string | null,
-  tenantIdFromBody: string | null = null
+  tenantIdFromBody: string | null = null,
+  options?: EnsureTenantOptions
 ): Promise<EnsureTenantResult> {
   const dbName = toTenantDbName(displayName)
   const dbConn = registryConn.useDb(dbName)
@@ -73,6 +74,16 @@ export async function ensureTenantDatabaseInitialized(
     { upsert: true }
   )
 
+  const crmPatch: { crmAppUrl: string | null } | Record<string, never> = {}
+  if (
+    options &&
+    Object.prototype.hasOwnProperty.call(options, 'crmAppUrl')
+  ) {
+    const raw = options.crmAppUrl
+    const trimmed = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/\/+$/, '') : ''
+    Object.assign(crmPatch, { crmAppUrl: trimmed || null })
+  }
+
   await registryConn.collection('clients').updateOne(
     { dbName },
     {
@@ -81,6 +92,7 @@ export async function ensureTenantDatabaseInitialized(
         email: contactEmail,
         dbName,
         tenantId,
+        ...(Object.keys(crmPatch).length ? crmPatch : {}),
         ...(isNew && apiKey
           ? {
               clientKeyHash: hashTenantApiKey(apiKey),

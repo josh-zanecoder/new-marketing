@@ -21,8 +21,14 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
         ? new Date(doc.createdAt).toISOString()
         : null
 
+  const crmRaw = doc.crmAppUrl
+  const crmAppUrl =
+    typeof crmRaw === 'string' && crmRaw.trim()
+      ? crmRaw.trim().replace(/\/+$/, '')
+      : null
+
   if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt }
+  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl }
 }
 
 /** Resolve a tenant by registry database name (for admin URLs that use `dbName` in the path). */

@@ -9,7 +9,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Admin access required' })
   }
 
-  const body = await readBody<{ name?: string; email?: string; tenantId?: string }>(event)
+  const body = await readBody<{
+    name?: string
+    email?: string
+    tenantId?: string
+    crmAppUrl?: string | null
+  }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()
   const tenantId = body?.tenantId?.trim() || null
@@ -18,13 +23,27 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'name is required' })
   }
 
+  let crmAppUrl: string | null = null
+  const rawCrm = body?.crmAppUrl
+  if (rawCrm !== undefined && rawCrm !== null && String(rawCrm).trim() !== '') {
+    const u = String(rawCrm).trim().replace(/\/+$/, '')
+    if (!/^https?:\/\//i.test(u)) {
+      throw createError({
+        statusCode: 400,
+        message: 'CRM app URL must start with http:// or https://'
+      })
+    }
+    crmAppUrl = u
+  }
+
   const registryConn = await getRegistryConnection()
   const { dbName, apiKey, tenantId: resolvedTenantId } =
     await ensureTenantDatabaseInitialized(
       registryConn,
       displayName,
       contactEmail || null,
-      tenantId
+      tenantId,
+      { crmAppUrl }
     )
   let kafkaTopic: string | null = null
   try {
