@@ -629,12 +629,51 @@ async function loadRecipientLists() {
   }
 }
 
-const subjectVariables = [
+interface DynamicVariableOption {
+  key: string
+  label: string
+  scopes?: Array<'subject' | 'body'>
+  enabled?: boolean
+}
+
+const dynamicVariables = ref<DynamicVariableOption[]>([])
+
+const baseSubjectVariables = [
   { value: '{{user.firstName}}', label: 'First name' },
   { value: '{{user.lastName}}', label: 'Last name' },
   { value: '{{user.email}}', label: 'Email' },
   { value: '{{user.company}}', label: 'Company' }
 ]
+
+const subjectVariables = computed(() => {
+  const vars = dynamicVariables.value
+    .filter((v) => v.enabled !== false && (!v.scopes?.length || v.scopes.includes('subject')))
+    .map((v) => ({
+      value: `{{${v.key}}}`,
+      label: v.label || v.key
+    }))
+  const seen = new Set<string>()
+  return [...baseSubjectVariables, ...vars].filter((v) => {
+    if (seen.has(v.value)) return false
+    seen.add(v.value)
+    return true
+  })
+})
+
+async function loadDynamicVariables() {
+  try {
+    const res = await $fetch<{ variables?: DynamicVariableOption[] }>(
+      '/api/v1/tenant/dynamic-variables',
+      {
+        credentials: 'include',
+        ...serverAuthHeaders()
+      }
+    )
+    dynamicVariables.value = Array.isArray(res.variables) ? res.variables : []
+  } catch {
+    dynamicVariables.value = []
+  }
+}
 
 interface ExistingTemplateOption {
   id: string
@@ -782,6 +821,7 @@ onMounted(() => {
   loadFromEditorReturn()
   loadRecipientLists()
   loadEmailTemplates()
+  loadDynamicVariables()
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
 

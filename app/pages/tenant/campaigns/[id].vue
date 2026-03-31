@@ -65,6 +65,8 @@ const previewSubject = computed(() => {
   if (!sub) return ''
   return mergeMustacheTemplate(sub, mergeRoot.value)
 })
+const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
+const previewSubjectDisplay = computed(() => previewSubject.value || campaign.value?.subject || 'No subject')
 
 const showSkeleton = computed(() => pending.value && !error.value)
 
@@ -76,8 +78,8 @@ body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,
 </style></head><body><div id=preview-wrap>${html}</div></body></html>`
 }
 
-/** Larger scale for modal (~real width on desktop). */
-function previewSrcdocModal(html: string, scale = 0.92) {
+/** Larger scale for modal for better readability. */
+function previewSrcdocModal(html: string, scale = 1) {
   return previewSrcdoc(html, scale)
 }
 
@@ -362,9 +364,14 @@ function formatDate(d: string) {
           <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
             <div v-if="campaign.templateHtml" class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
               <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
-                <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Email preview
-                </h2>
+                <div class="min-w-0">
+                  <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    {{ previewTitle }}
+                  </h2>
+                  <p class="mt-1 truncate text-sm text-zinc-600" :title="previewSubjectDisplay">
+                    Subject: {{ previewSubjectDisplay }}
+                  </p>
+                </div>
                 <button
                   type="button"
                   class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
@@ -411,7 +418,7 @@ function formatDate(d: string) {
     <Teleport to="body">
       <div
         v-if="previewModalOpen && previewHtml"
-        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4 lg:p-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="email-preview-modal-title"
@@ -422,15 +429,15 @@ function formatDate(d: string) {
           @click="closePreviewModal"
         />
         <div
-          class="relative flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:max-h-[90vh] sm:rounded-2xl"
+          class="relative flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:h-[92vh] sm:rounded-2xl"
         >
-          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3 sm:px-5">
+          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
             <div class="min-w-0">
-              <p id="email-preview-modal-title" class="text-sm font-semibold text-zinc-900">
-                Email preview
+              <p id="email-preview-modal-title" class="text-base font-semibold text-zinc-900 sm:text-lg">
+                {{ previewTitle }}
               </p>
-              <p v-if="previewSubject" class="mt-0.5 truncate text-xs text-zinc-500" :title="previewSubject">
-                {{ previewSubject }}
+              <p class="mt-1 truncate text-sm text-zinc-600 sm:text-base" :title="previewSubjectDisplay">
+                Subject: {{ previewSubjectDisplay }}
               </p>
             </div>
             <button
@@ -444,10 +451,10 @@ function formatDate(d: string) {
               </svg>
             </button>
           </div>
-          <div class="min-h-0 flex-1 overflow-auto bg-[#f8f4ef] p-4 sm:p-5">
+          <div class="min-h-0 flex-1 overflow-auto bg-[#f8f4ef] p-3 sm:p-4 lg:p-5">
             <iframe
               :srcdoc="previewSrcdocModal(previewHtml)"
-              class="h-[min(75vh,820px)] w-full min-h-[320px] border-0 sm:h-[min(72vh,780px)]"
+              class="h-full w-full min-h-[420px] border-0"
               sandbox="allow-same-origin"
               title="Email preview (full size)"
             />

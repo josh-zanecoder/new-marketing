@@ -22,3 +22,49 @@ export function mergeUserSnapshotFromTenantAuth(auth: unknown): UserMergeSnapsho
   if (role) out.role = role
   return Object.keys(out).length ? out : undefined
 }
+
+type ContactMergeSource = {
+  name?: string
+  email?: string
+  phone?: string
+  company?: string
+  contactKind?: string
+  channel?: string
+  address?: {
+    street?: string
+    city?: string
+    state?: string
+    county?: string
+  }
+}
+
+function splitNameParts(name: string): { firstName: string; lastName: string } {
+  const clean = name.trim()
+  if (!clean) return { firstName: '', lastName: '' }
+  const parts = clean.split(/\s+/).filter(Boolean)
+  if (parts.length <= 1) return { firstName: parts[0] || '', lastName: '' }
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') }
+}
+
+/** Recipient profile from tenant contact record (for `recipient.*` merge fields). */
+export function mergeRecipientSnapshotFromContact(
+  contact: ContactMergeSource | null | undefined
+): Record<string, unknown> | undefined {
+  if (!contact || typeof contact !== 'object') return undefined
+  const out: Record<string, unknown> = {}
+  const name = typeof contact.name === 'string' ? contact.name.trim() : ''
+  const nameParts = splitNameParts(name)
+  if (name) out.name = name
+  if (nameParts.firstName) out.firstName = nameParts.firstName
+  if (nameParts.lastName) out.lastName = nameParts.lastName
+  if (contact.email) out.email = contact.email
+  if (contact.phone) out.phone = contact.phone
+  if (contact.company) out.company = contact.company
+  if (contact.contactKind) out.contactKind = contact.contactKind
+  if (contact.channel) out.channel = contact.channel
+  if (contact.address?.street) out.street = contact.address.street
+  if (contact.address?.city) out.city = contact.address.city
+  if (contact.address?.state) out.state = contact.address.state
+  if (contact.address?.county) out.county = contact.address.county
+  return Object.keys(out).length ? out : undefined
+}
