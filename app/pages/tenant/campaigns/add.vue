@@ -1,55 +1,58 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-    <div class="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:px-8">
+  <div class="w-full min-w-0">
+    <div class="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:max-w-5xl lg:px-8 xl:max-w-6xl 2xl:max-w-7xl">
       <NuxtLink
         :to="cancelOrBackHref"
-        class="mb-10 inline-flex items-center gap-2.5 text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
+        class="group mb-8 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900"
       >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </span>
         {{ cancelOrBackLabel }}
       </NuxtLink>
 
       <div v-if="showEditSkeleton" class="mb-12 space-y-10 animate-pulse">
         <header class="space-y-4">
-          <div class="h-4 w-40 rounded-md bg-slate-200" />
-          <div class="h-11 max-w-md rounded-lg bg-slate-200" />
-          <div class="h-5 max-w-xl rounded-md bg-slate-200" />
-          <div class="h-5 w-2/3 max-w-lg rounded-md bg-slate-200" />
+          <div class="h-4 w-40 rounded-md bg-zinc-200" />
+          <div class="h-11 max-w-md rounded-lg bg-zinc-200" />
+          <div class="h-5 max-w-xl rounded-md bg-zinc-200" />
+          <div class="h-5 w-2/3 max-w-lg rounded-md bg-zinc-200" />
         </header>
         <div class="space-y-3">
-          <div class="h-5 w-36 rounded bg-slate-200" />
-          <div class="h-14 w-full rounded-xl bg-slate-200" />
+          <div class="h-5 w-36 rounded bg-zinc-200" />
+          <div class="h-14 w-full rounded-xl bg-zinc-200" />
         </div>
-        <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60">
-          <div v-for="n in 4" :key="n" class="flex items-center gap-4 border-b border-slate-100 px-8 py-5 last:border-b-0">
-            <div class="h-12 w-12 shrink-0 rounded-xl bg-slate-200" />
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
+          <div v-for="n in 4" :key="n" class="flex items-center gap-4 border-b border-zinc-100 px-5 py-4 last:border-b-0 sm:px-6 sm:py-5">
+            <div class="h-12 w-12 shrink-0 rounded-xl bg-zinc-200" />
             <div class="min-w-0 flex-1 space-y-2">
-              <div class="h-5 w-32 rounded bg-slate-200" />
-              <div class="h-4 max-w-sm rounded bg-slate-200" />
+              <div class="h-5 w-32 rounded bg-zinc-200" />
+              <div class="h-4 max-w-sm rounded bg-zinc-200" />
             </div>
-            <div class="h-10 w-28 shrink-0 rounded-lg bg-slate-200" />
+            <div class="h-10 w-28 shrink-0 rounded-lg bg-zinc-200" />
           </div>
         </div>
         <div class="flex justify-end gap-4 pt-4">
-          <div class="h-12 w-28 rounded-xl bg-slate-200" />
-          <div class="h-12 w-44 rounded-xl bg-slate-200" />
+          <div class="h-12 w-28 rounded-xl bg-zinc-200" />
+          <div class="h-12 w-44 rounded-xl bg-zinc-200" />
         </div>
       </div>
 
       <template v-else>
-      <header class="mb-12">
-        <nav class="mb-3 flex items-center gap-2 text-base text-slate-500" />
-        <h1 class="text-4xl font-bold text-slate-900 tracking-tight">{{ isEditMode ? 'Edit campaign' : 'Create campaign' }}</h1>
-        <p class="mt-2 text-lg text-slate-600">
+      <header class="mb-8 sm:mb-10">
+        <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+          {{ isEditMode ? 'Edit campaign' : 'Create campaign' }}
+        </h1>
+        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
           Configure your campaign step by step: name, recipients, design, and subject.
         </p>
       </header>
 
       <div class="space-y-6">
         <div>
-          <label class="mb-2.5 block text-base font-semibold text-slate-700">
+          <label class="mb-2 block text-sm font-medium text-zinc-700">
             Campaign name
             <span class="ml-0.5 text-red-600" aria-hidden="true">*</span>
             <span class="sr-only">(required)</span>
@@ -61,24 +64,24 @@
             aria-required="true"
             autocomplete="off"
             placeholder="e.g. Q1 Newsletter"
-            class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+            class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
           >
         </div>
 
-        <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
         <!-- Sender (read-only; values from account defaults or existing campaign) -->
-        <div class="border-b border-slate-100 last:border-b-0">
-          <div class="flex w-full items-center gap-4 px-8 py-5">
+        <div class="border-b border-zinc-100 last:border-b-0">
+          <div class="flex w-full items-center gap-4 px-5 py-4 sm:px-6 sm:py-5">
             <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
+              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 sm:h-12 sm:w-12"
             >
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-lg font-semibold text-slate-900">Sender</div>
-              <div class="mt-0.5 text-base text-slate-600">
+              <div class="text-base font-semibold text-zinc-900">Sender</div>
+              <div class="mt-0.5 text-sm text-zinc-600 sm:text-[15px]">
                 {{ form.senderName }} &lt;{{ form.senderEmail }}&gt;
               </div>
             </div>
@@ -86,16 +89,16 @@
         </div>
 
         <!-- Recipients -->
-        <div class="border-b border-slate-100 last:border-b-0">
+        <div class="border-b border-zinc-100 last:border-b-0">
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
+            class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-zinc-50/50 sm:gap-5 sm:px-6 sm:py-5"
             @click="recipientsOpen = !recipientsOpen"
           >
             <div class="flex items-center gap-4">
               <div
                 class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
-                :class="recipientsComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
+                :class="recipientsComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-600'"
               >
                 <svg v-if="recipientsComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -104,48 +107,48 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
-              <div>
-                <div class="text-lg font-semibold text-slate-900">Recipients</div>
-                <div class="mt-0.5 text-base text-slate-500">{{ recipientsDescription }}</div>
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-zinc-900">Recipients</div>
+                <div class="mt-0.5 text-sm text-zinc-500 sm:text-[15px]">{{ recipientsDescription }}</div>
               </div>
             </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ recipientsOpen ? 'Close' : 'Add recipients' }}</span>
+            <span class="shrink-0 rounded-xl border border-zinc-200/90 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:px-4 sm:text-[15px]">{{ recipientsOpen ? 'Close' : 'Add recipients' }}</span>
           </button>
-          <div v-if="recipientsOpen" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
+          <div v-if="recipientsOpen" class="border-t border-zinc-100 bg-zinc-50/50 px-5 py-5 sm:px-6 sm:py-6">
             <div class="space-y-5">
               <div class="grid gap-4 sm:grid-cols-2">
                 <button
                   type="button"
                   :class="[
-                    'rounded-lg border px-5 py-4 text-left text-base font-medium transition-colors',
+                    'rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition-colors sm:px-5 sm:py-4 sm:text-[15px]',
                     form.recipientsMode === 'list'
-                      ? 'border-slate-300 bg-white text-slate-900 shadow-sm'
-                      : 'border-slate-200 bg-white/60 text-slate-600 hover:bg-white'
+                      ? 'border-zinc-300 bg-white text-zinc-900 shadow-sm'
+                      : 'border-zinc-200 bg-white/60 text-zinc-600 hover:bg-white'
                   ]"
                   @click="form.recipientsMode = 'list'"
                 >
                   Use a list
-                  <div class="mt-1.5 text-sm font-normal text-slate-500">Pick from saved recipient lists</div>
+                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Pick from saved recipient lists</div>
                 </button>
                 <button
                   type="button"
                   :class="[
-                    'rounded-lg border px-5 py-4 text-left text-base font-medium transition-colors',
+                    'rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition-colors sm:px-5 sm:py-4 sm:text-[15px]',
                     form.recipientsMode === 'manual'
-                      ? 'border-slate-300 bg-white text-slate-900 shadow-sm'
-                      : 'border-slate-200 bg-white/60 text-slate-600 hover:bg-white'
+                      ? 'border-zinc-300 bg-white text-zinc-900 shadow-sm'
+                      : 'border-zinc-200 bg-white/60 text-zinc-600 hover:bg-white'
                   ]"
                   @click="form.recipientsMode = 'manual'"
                 >
                   Enter manually
-                  <div class="mt-1.5 text-sm font-normal text-slate-500">Paste emails separated by comma or new line</div>
+                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Paste emails separated by comma or new line</div>
                 </button>
               </div>
               <div v-if="form.recipientsMode === 'list'">
-                <label class="mb-2 block text-base font-medium text-slate-700">Recipient list</label>
+                <label class="mb-2 block text-sm font-medium text-zinc-700">Recipient list</label>
                 <select
                   v-model="form.recipientsListId"
-                  class="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                  class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500 sm:text-[15px]"
                   :disabled="recipientListsPending"
                 >
                   <option value="">
@@ -167,12 +170,12 @@
                 </p>
                 <p
                   v-else-if="!recipientListsPending && !recipientLists.length"
-                  class="mt-2 text-sm text-slate-500"
+                  class="mt-2 text-sm text-zinc-500"
                 >
                   No recipient lists yet.
                   <NuxtLink
                     to="/tenant/recipient-list/add"
-                    class="font-medium text-slate-700 underline hover:text-slate-900"
+                    class="font-medium text-zinc-700 underline hover:text-zinc-900"
                   >
                     Create one
                   </NuxtLink>
@@ -180,16 +183,16 @@
               </div>
               <div v-else class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                  <label class="text-base font-medium text-slate-700">Recipients</label>
+                  <label class="text-sm font-medium text-zinc-700 sm:text-[15px]">Recipients</label>
                   <div class="flex items-center gap-2">
                     <a
                       href="#"
-                      class="text-sm font-medium text-slate-600 hover:text-slate-900 underline"
+                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900 underline"
                       @click.prevent="downloadSampleExcel"
                     >
                       Download sample
                     </a>
-                    <span class="text-slate-300">|</span>
+                    <span class="text-zinc-300">|</span>
                     <input
                       ref="fileInputRef"
                       type="file"
@@ -199,16 +202,16 @@
                     >
                     <button
                       type="button"
-                      class="text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50"
                       :disabled="isUploading"
                       @click="fileInputRef?.click()"
                     >
                       {{ isUploading ? 'Uploading...' : 'Upload Excel' }}
                     </button>
-                    <span class="text-slate-300">|</span>
+                    <span class="text-zinc-300">|</span>
                     <button
                       type="button"
-                      class="text-sm font-medium text-slate-600 hover:text-slate-900"
+                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900"
                       @click="addManualRecipient"
                     >
                       Add email
@@ -221,12 +224,12 @@
                     v-model="form.recipientsManual[index]"
                     type="email"
                     placeholder="recipient@example.com"
-                    class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    class="flex-1 rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
                   >
                   <button
                     v-if="form.recipientsManual.length > 1"
                     type="button"
-                    class="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                    class="rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-600 shadow-sm transition hover:bg-zinc-50"
                     @click="removeManualRecipient(index)"
                   >
                     Remove
@@ -238,16 +241,16 @@
         </div>
 
         <!-- Design -->
-        <div ref="designSectionRef" class="border-b border-slate-100">
+        <div ref="designSectionRef" class="border-b border-zinc-100">
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
+            class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-zinc-50/50 sm:gap-5 sm:px-6 sm:py-5"
             @click="openDesignModal"
           >
             <div class="flex items-center gap-4">
               <div
                 class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
-                :class="designComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
+                :class="designComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-600'"
               >
                 <svg v-if="designComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -256,26 +259,26 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
                 </svg>
               </div>
-              <div>
-                <div class="text-lg font-semibold text-slate-900">Design</div>
-                <div class="mt-0.5 text-base text-slate-500">
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-zinc-900">Design</div>
+                <div class="mt-0.5 text-sm text-zinc-500 sm:text-[15px]">
                   {{ designStepSubtitle }}
                 </div>
               </div>
             </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ designSectionToggleLabel }}</span>
+            <span class="shrink-0 rounded-xl border border-zinc-200/90 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:px-4 sm:text-[15px]">{{ designSectionToggleLabel }}</span>
           </button>
-          <div v-if="savedTemplateHtml" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-200/40">
-              <div class="flex flex-col gap-4 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div v-if="savedTemplateHtml" class="border-t border-zinc-100 bg-zinc-50/50 px-5 py-5 sm:px-6 sm:py-6">
+            <div class="overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
+              <div class="flex flex-col gap-4 border-b border-zinc-100 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-base font-semibold text-slate-900">Current email design</h3>
-                  <p class="mt-1 text-sm text-slate-500">{{ designSourceSummary }}</p>
+                  <h3 class="text-base font-semibold text-zinc-900">Current email design</h3>
+                  <p class="mt-1 text-sm text-zinc-500">{{ designSourceSummary }}</p>
                 </div>
                 <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
                   <button
                     type="button"
-                    class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    class="rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-center text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
                     @click="confirmChangeDesign"
                   >
                     Change design
@@ -283,7 +286,7 @@
                   <NuxtLink
                     v-if="designEditorCampaignId"
                     :to="`/tenant/email-editor?campaignId=${designEditorCampaignId}&token=local`"
-                    class="rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                    class="rounded-xl bg-zinc-900 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800"
                   >
                     Edit in editor
                   </NuxtLink>
@@ -297,7 +300,7 @@
                   sandbox="allow-same-origin"
                 />
               </div>
-              <p v-if="!designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+              <p v-if="!designEditorCampaignId" class="border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">
                 Save the campaign once to get a stable link for the editor.
               </p>
             </div>
@@ -325,16 +328,16 @@
         />
 
         <!-- Subject -->
-        <div class="border-b border-slate-100 last:border-b-0">
+        <div class="border-b border-zinc-100 last:border-b-0">
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-5 px-8 py-5 text-left hover:bg-slate-50/50 transition-colors"
+            class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-zinc-50/50 sm:gap-5 sm:px-6 sm:py-5"
             @click="subjectOpen = !subjectOpen"
           >
             <div class="flex items-center gap-4">
               <div
                 class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors"
-                :class="subjectComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'"
+                :class="subjectComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-600'"
               >
                 <svg v-if="subjectComplete" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -343,25 +346,25 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <div>
-                <div class="text-lg font-semibold text-slate-900">Subject</div>
-                <div class="mt-0.5 text-base text-slate-500">{{ form.subject || 'Add a subject line for this campaign' }}</div>
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-zinc-900">Subject</div>
+                <div class="mt-0.5 truncate text-sm text-zinc-500 sm:text-[15px]">{{ form.subject || 'Add a subject line for this campaign' }}</div>
               </div>
             </div>
-            <span class="rounded-lg border border-slate-200 px-4 py-2 text-base font-medium text-slate-700 hover:bg-slate-50">{{ subjectOpen ? 'Close' : 'Manage' }}</span>
+            <span class="shrink-0 rounded-xl border border-zinc-200/90 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:px-4 sm:text-[15px]">{{ subjectOpen ? 'Close' : 'Manage' }}</span>
           </button>
-          <div v-if="subjectOpen" class="border-t border-slate-100 bg-slate-50/50 px-8 py-6">
-            <label class="mb-2 block text-base font-medium text-slate-700">Subject line</label>
-            <div class="flex gap-3">
+          <div v-if="subjectOpen" class="border-t border-zinc-100 bg-zinc-50/50 px-5 py-5 sm:px-6 sm:py-6">
+            <label class="mb-2 block text-sm font-medium text-zinc-700">Subject line</label>
+            <div class="flex flex-col gap-3 sm:flex-row">
               <input
                 v-model="form.subject"
                 type="text"
                 placeholder="Enter email subject line"
-                class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                class="min-w-0 flex-1 rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
               >
               <select
                 v-model="subjectVariable"
-                class="w-44 shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-3 text-base focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                class="w-full shrink-0 rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-44 sm:text-[15px]"
               >
                 <option value="">Insert variable</option>
                 <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
@@ -371,37 +374,51 @@
         </div>
       </div>
 
-      <div v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-base text-red-700">
+      <div
+        v-if="saveError"
+        class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+        role="alert"
+      >
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
         {{ saveError }}
       </div>
       <div
         v-if="sendError && !sendingCampaignId"
-        class="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-900"
+        class="flex flex-wrap items-start gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+        role="status"
       >
-        <div class="flex items-start gap-3">
-          <span class="flex-1">{{ sendError }}</span>
-          <button
-            type="button"
-            class="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-amber-800 hover:bg-amber-100"
-            @click="campaignStore.clearSendModal()"
-          >
-            Dismiss
-          </button>
+        <div class="mt-0.5 shrink-0 text-amber-600">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
         </div>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-amber-950">Send failed</p>
+          <p class="mt-1 text-amber-900/90">{{ sendError }}</p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 self-start rounded-lg px-2 py-1 text-sm font-medium text-amber-900 transition hover:bg-amber-100/80"
+          @click="campaignStore.clearSendModal()"
+        >
+          Dismiss
+        </button>
       </div>
-      <div class="flex flex-col items-stretch gap-4 pt-10 sm:flex-row sm:items-center sm:justify-end">
+      <div class="flex flex-col items-stretch gap-3 pt-8 sm:flex-row sm:items-center sm:justify-end sm:gap-4 sm:pt-10">
         <NuxtLink
           :to="cancelOrBackHref"
-          class="rounded-xl border border-slate-200 px-6 py-3.5 text-center text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors sm:text-left"
+          class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-center text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:text-[15px]"
           :class="{ 'pointer-events-none opacity-50': wizardSendBusy }"
         >
           Cancel
         </NuxtLink>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
           <button
             v-if="campaignFormComplete"
             type="button"
-            class="rounded-xl border border-emerald-200 bg-emerald-50 px-8 py-3.5 text-base font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100 transition-all disabled:opacity-50"
+            class="inline-flex items-center justify-center rounded-xl border border-emerald-200/90 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
             :disabled="wizardSendBusy"
             @click.prevent="handleSendFromWizard"
           >
@@ -415,7 +432,7 @@
           </button>
           <button
             type="button"
-            class="rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl transition-all disabled:opacity-50"
+            class="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50 sm:px-8 sm:text-[15px]"
             :disabled="saveCampaignActionDisabled"
             @click.prevent="handleCreate"
           >

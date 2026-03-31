@@ -1,173 +1,226 @@
 <template>
-  <div class="min-h-screen bg-white">
-    <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] lg:px-8">
-      <NuxtLink
-        to="/tenant/recipient-list"
-        class="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
-      >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="w-full min-w-0">
+    <NuxtLink
+      to="/tenant/recipient-list"
+      class="group mb-8 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900"
+    >
+      <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
-        Recipient lists
-      </NuxtLink>
+      </span>
+      Recipient lists
+    </NuxtLink>
 
-      <div
-        v-if="loadError"
-        class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-      >
-        {{ loadError }}
-      </div>
+    <div
+      v-if="loadError"
+      class="mb-6 flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+      role="alert"
+    >
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      {{ loadError }}
+    </div>
 
-      <div v-if="pending" class="space-y-6">
-        <div class="h-10 max-w-md animate-pulse rounded-lg bg-slate-100" />
-        <div class="h-40 animate-pulse rounded-xl bg-slate-100" />
-        <div class="h-64 animate-pulse rounded-xl bg-slate-100" />
-      </div>
+    <div v-if="pending" class="space-y-4">
+      <div class="h-9 max-w-lg animate-pulse rounded-xl bg-zinc-100" />
+      <div class="h-28 animate-pulse rounded-2xl bg-zinc-100" />
+      <div class="h-72 animate-pulse rounded-2xl border border-zinc-200/80 bg-white shadow-sm" />
+    </div>
 
-      <template v-else-if="payload">
-        <header class="mb-8 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">
-              {{ payload.list.name }}
-            </h1>
-            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-            <span class="inline-flex rounded px-1.5 py-0.5 text-xs font-medium capitalize bg-slate-100 text-slate-700">
+    <template v-else-if="payload">
+      <header class="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0 space-y-3">
+          <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+            {{ payload.list.name }}
+          </h1>
+          <div class="flex flex-wrap items-center gap-2">
+            <span
+              class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+              :class="listTypeBadgeClass(payload.list.listType)"
+            >
               {{ payload.list.listType }}
             </span>
-            <span class="capitalize">{{ payload.list.audience }}</span>
-            <span v-if="payload.list.updatedAt">{{ formatDate(payload.list.updatedAt) }}</span>
-            </div>
-          </div>
-          <NuxtLink
-            :to="`/tenant/recipient-list/edit/${listId}`"
-            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-            Edit list
-          </NuxtLink>
-        </header>
-
-        <section class="mb-10">
-          <div class="mb-3 flex flex-wrap items-baseline gap-2">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Filters
-            </h2>
             <span
-              v-if="(payload.list.filters?.length ?? 0) >= 2 && payload.list.filterMode"
-              class="text-xs font-medium text-slate-500"
+              v-if="payload.list.audience"
+              class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-700 ring-1 ring-zinc-200/80"
             >
-              Combined with <span class="uppercase">{{ payload.list.filterMode }}</span>
+              {{ payload.list.audience }}
+            </span>
+            <span v-if="payload.list.updatedAt" class="text-xs tabular-nums text-zinc-400 sm:text-sm">
+              Updated {{ formatDate(payload.list.updatedAt) }}
             </span>
           </div>
-          <div
-            v-if="!payload.list.filters?.length"
-            class="rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-600"
-          >
-            No filter criteria (audience only).
-          </div>
-          <ul
-            v-else
-            class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white"
-          >
-            <li
-              v-for="(f, i) in payload.list.filters"
-              :key="i"
-              class="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-4 py-3 text-sm"
-            >
-              <span class="font-medium capitalize text-slate-800">{{ f.property }}</span>
-              <span class="text-slate-400">=</span>
-              <span class="text-slate-700">{{ f.value }}</span>
-            </li>
-          </ul>
-        </section>
+        </div>
+        <NuxtLink
+          :to="`/tenant/recipient-list/edit/${listId}`"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+        >
+          <svg class="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Edit list
+        </NuxtLink>
+      </header>
 
-        <section>
-          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <section class="mb-8 sm:mb-10">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Criteria
+          </h2>
+          <span
+            v-if="(payload.list.filters?.length ?? 0) >= 2 && payload.list.filterMode"
+            class="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600"
+          >
+            {{ payload.list.filterMode }}
+          </span>
+        </div>
+        <div
+          v-if="!payload.list.filters?.length"
+          class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-10 text-center shadow-sm sm:flex-row sm:items-center sm:gap-4 sm:py-8 sm:text-left"
+        >
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-zinc-900">
+              Audience only
+            </p>
+            <p class="mt-1 text-sm text-zinc-500">
+              No extra filters — everyone in this audience can be included (subject to campaign rules).
+            </p>
+          </div>
+        </div>
+        <ul
+          v-else
+          class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
+        >
+          <li
+            v-for="(f, i) in payload.list.filters"
+            :key="i"
+            class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-100 px-4 py-3.5 text-sm last:border-b-0 sm:px-5"
+          >
+            <span class="font-medium capitalize text-zinc-900">{{ f.property }}</span>
+            <span class="rounded-md bg-zinc-200/60 px-1.5 py-0.5 text-xs font-semibold text-zinc-600">=</span>
+            <span class="break-words text-zinc-700">{{ f.value }}</span>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               Recipients
-              <span class="font-normal normal-case text-slate-600">
-                ({{ payload.members.total }})
-              </span>
             </h2>
+            <p class="mt-1 text-sm tabular-nums text-zinc-600">
+              <span class="font-semibold text-zinc-900">{{ payload.members.total.toLocaleString() }}</span>
+              {{ payload.members.total === 1 ? 'contact' : 'contacts' }}
+            </p>
+          </div>
+          <p v-if="pageLoading" class="text-xs text-zinc-400">
+            Loading…
+          </p>
+        </div>
+
+        <div
+          v-if="!payload.members.total"
+          class="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-14 text-center shadow-sm"
+        >
+          <p class="text-sm font-medium text-zinc-900">
+            No matching contacts
+          </p>
+          <p class="mt-2 text-sm text-zinc-500">
+            Adjust filters or audience, or sync may still be in progress.
+          </p>
+        </div>
+
+        <div
+          v-else
+          class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
+        >
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+              <thead class="border-b border-zinc-200 bg-zinc-50/80">
+                <tr>
+                  <th class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+                    Name
+                  </th>
+                  <th class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+                    Email
+                  </th>
+                  <th class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+                    Kind
+                  </th>
+                  <th class="hidden whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:table-cell sm:px-5">
+                    Company
+                  </th>
+                  <th class="hidden whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 lg:table-cell lg:px-5">
+                    Location
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-100">
+                <tr
+                  v-for="m in payload.members.items"
+                  :key="m.id"
+                  class="bg-white transition hover:bg-zinc-50/80"
+                >
+                  <td class="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 sm:px-5">
+                    {{ m.name }}
+                  </td>
+                  <td class="max-w-[14rem] truncate px-4 py-3 text-zinc-600 sm:max-w-xs sm:px-5">
+                    {{ m.email }}
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-3 capitalize text-zinc-600 sm:px-5">
+                    {{ m.contactKind }}
+                  </td>
+                  <td class="hidden max-w-[10rem] truncate px-4 py-3 text-zinc-600 sm:table-cell sm:max-w-[12rem] sm:px-5">
+                    {{ m.company || '—' }}
+                  </td>
+                  <td class="hidden max-w-[12rem] truncate px-4 py-3 text-zinc-600 lg:table-cell lg:max-w-[16rem] lg:px-5" :title="formatAddress(m.address)">
+                    {{ formatAddress(m.address) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div
-            v-if="!payload.members.total"
-            class="rounded-xl border border-slate-200 bg-slate-50/50 px-6 py-12 text-center text-sm text-slate-600"
+            v-if="payload.members.totalPages > 1"
+            class="flex flex-col gap-4 border-t border-zinc-200 bg-zinc-50/50 px-4 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-5"
           >
-            No contacts match this list yet.
-          </div>
-
-          <div v-else class="overflow-hidden rounded-xl border border-slate-200">
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th class="px-4 py-3">Name</th>
-                    <th class="px-4 py-3">Email</th>
-                    <th class="px-4 py-3">Kind</th>
-                    <th class="hidden px-4 py-3 sm:table-cell">Company</th>
-                    <th class="hidden px-4 py-3 lg:table-cell">Location</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 bg-white">
-                  <tr
-                    v-for="m in payload.members.items"
-                    :key="m.id"
-                    class="hover:bg-slate-50/80"
-                  >
-                    <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
-                      {{ m.name }}
-                    </td>
-                    <td class="whitespace-nowrap px-4 py-3 text-slate-600">
-                      {{ m.email }}
-                    </td>
-                    <td class="whitespace-nowrap px-4 py-3 capitalize text-slate-600">
-                      {{ m.contactKind }}
-                    </td>
-                    <td class="hidden max-w-[12rem] truncate px-4 py-3 text-slate-600 sm:table-cell">
-                      {{ m.company || '—' }}
-                    </td>
-                    <td class="hidden max-w-[14rem] truncate px-4 py-3 text-slate-600 lg:table-cell">
-                      {{ formatAddress(m.address) }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div
-              v-if="payload.members.totalPages > 1"
-              class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <span>
-                Page {{ payload.members.page }} of {{ payload.members.totalPages }}
-              </span>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="page <= 1 || pageLoading"
-                  @click="goPage(page - 1)"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="page >= payload.members.totalPages || pageLoading"
-                  @click="goPage(page + 1)"
-                >
-                  Next
-                </button>
-              </div>
+            <p class="tabular-nums text-zinc-500">
+              Page <span class="font-medium text-zinc-800">{{ payload.members.page }}</span>
+              of {{ payload.members.totalPages }}
+              <span class="text-zinc-400">·</span>
+              {{ payload.members.pageSize }} per page
+            </p>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                :disabled="page <= 1 || pageLoading"
+                @click="goPage(page - 1)"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                :disabled="page >= payload.members.totalPages || pageLoading"
+                @click="goPage(page + 1)"
+              >
+                Next
+              </button>
             </div>
           </div>
-        </section>
-      </template>
-    </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -223,6 +276,14 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
 
 const route = useRoute()
 const listId = computed(() => String(route.params.id ?? ''))
+
+function listTypeBadgeClass(listType: string): string {
+  const t = listType.toLowerCase()
+  if (t.includes('dynamic')) return 'bg-violet-50 text-violet-800 ring-violet-200/80'
+  if (t.includes('static')) return 'bg-sky-50 text-sky-800 ring-sky-200/80'
+  if (t.includes('prospect')) return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+  return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
+}
 
 const pending = ref(true)
 const pageLoading = ref(false)

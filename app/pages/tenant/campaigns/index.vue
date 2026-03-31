@@ -172,187 +172,240 @@ const sendProgress = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
-    <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] lg:px-8">
-      <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Campaigns</h1>
-        <NuxtLink
-          to="/tenant/campaigns/add"
-          class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shrink-0"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Create campaign
-        </NuxtLink>
-      </header>
-
-      <div
-        v-if="sendError && !sendingCampaignId"
-        class="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-      >
-        <span class="flex-1">{{ sendError }}</span>
-        <button
-          type="button"
-          class="shrink-0 rounded-lg px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"
-          @click="store.clearSendModal()"
-        >
-          Dismiss
-        </button>
-      </div>
-
-      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div class="relative flex-1">
-          <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search campaigns"
-            class="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
-          >
-        </div>
-        <select
-          v-model="statusFilter"
-          class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
-        >
-          <option value="all">All statuses</option>
-          <option value="Draft">Draft</option>
-          <option value="Sending">Sending</option>
-          <option value="Sent">Sent</option>
-          <option value="Failed">Failed</option>
-        </select>
-      </div>
-
-      <div v-if="!filteredCampaigns.length" class="rounded-xl border border-slate-200 bg-slate-50/50 px-8 py-20 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-slate-200/80 text-slate-500">
-          <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <h3 class="mt-4 text-lg font-semibold text-slate-900">No campaigns yet</h3>
-        <p class="mt-1 text-sm text-slate-500">
-          {{ campaigns.length ? 'No campaigns match your filters' : 'Create your first campaign to get started' }}
+  <div class="w-full min-w-0">
+    <header class="mb-8 flex flex-col gap-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0 space-y-1">
+        <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+          Campaigns
+        </h1>
+        <p class="max-w-xl text-sm text-zinc-500 sm:text-[15px]">
+          Create sends, track draft and delivery status, and manage campaigns from one place.
         </p>
-        <NuxtLink
-          v-if="!campaigns.length"
-          to="/tenant/campaigns/add"
-          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
-        >
-          Create campaign
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </NuxtLink>
       </div>
+      <NuxtLink
+        to="/tenant/campaigns/add"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+      >
+        <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Create campaign
+      </NuxtLink>
+    </header>
 
-      <div v-else class="space-y-3">
-        <div
-          v-for="c in paginatedCampaigns"
-          :key="c.id"
-          class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-300 sm:flex-row sm:items-center sm:gap-6"
+    <div
+      v-if="sendError && !sendingCampaignId"
+      class="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+      role="alert"
+    >
+      <div class="mt-0.5 shrink-0 text-amber-600">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+      </div>
+      <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
+      <button
+        type="button"
+        class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100/80"
+        @click="store.clearSendModal()"
+      >
+        Dismiss
+      </button>
+    </div>
+
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <div class="relative min-w-0 w-full sm:w-80 md:w-96">
+        <label class="sr-only" for="campaigns-search">Search campaigns</label>
+        <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          id="campaigns-search"
+          v-model="searchQuery"
+          type="search"
+          autocomplete="off"
+          placeholder="Search by campaign name…"
+          class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
         >
-          <NuxtLink :to="`/tenant/campaigns/${c.id}`" class="min-w-0 flex-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6 block">
-            <div class="min-w-0 flex-1">
-              <span class="font-semibold text-slate-900 hover:text-slate-700">
-                {{ c.name || 'Untitled' }}
+      </div>
+      <select
+        v-model="statusFilter"
+        aria-label="Filter by status"
+        class="shrink-0 rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[11rem]"
+      >
+        <option value="all">
+          All statuses
+        </option>
+        <option value="Draft">
+          Draft
+        </option>
+        <option value="Sending">
+          Sending
+        </option>
+        <option value="Sent">
+          Sent
+        </option>
+        <option value="Failed">
+          Failed
+        </option>
+      </select>
+    </div>
+
+    <div
+      v-if="!filteredCampaigns.length"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center shadow-sm sm:py-20"
+    >
+      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+        {{ campaigns.length ? 'No matching campaigns' : 'No campaigns yet' }}
+      </h3>
+      <p class="mt-2 max-w-sm text-sm text-zinc-500">
+        {{ campaigns.length ? 'Try a different search or status filter.' : 'Create your first campaign to start sending email.' }}
+      </p>
+      <NuxtLink
+        v-if="!campaigns.length"
+        to="/tenant/campaigns/add"
+        class="mt-8 inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+      >
+        Create campaign
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+        </svg>
+      </NuxtLink>
+    </div>
+
+    <div v-else class="space-y-3">
+      <article
+        v-for="c in paginatedCampaigns"
+        :key="c.id"
+        class="group/card flex flex-col gap-4 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] transition hover:border-zinc-300 hover:shadow-md hover:shadow-zinc-950/[0.06] sm:flex-row sm:items-center sm:gap-5 sm:p-5"
+      >
+        <NuxtLink
+          :to="`/tenant/campaigns/${c.id}`"
+          class="flex min-w-0 flex-1 flex-col gap-4 outline-none sm:flex-row sm:items-center sm:gap-6 focus-visible:ring-2 focus-visible:ring-zinc-900/15 sm:rounded-lg"
+        >
+          <div class="min-w-0 flex-1">
+            <span class="text-base font-semibold text-zinc-900 transition group-hover/card:text-zinc-700">
+              {{ c.name || 'Untitled' }}
+            </span>
+            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span
+                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                :class="{
+                  'bg-amber-50 text-amber-800 ring-amber-200/80': c.status === 'Draft',
+                  'bg-sky-50 text-sky-800 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
+                  'bg-emerald-50 text-emerald-800 ring-emerald-200/80': c.status === 'Sent',
+                  'bg-red-50 text-red-800 ring-red-200/80': c.status === 'Failed',
+                  'bg-zinc-100 text-zinc-700 ring-zinc-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
+                }"
+              >
+                {{ c.status }}
               </span>
-              <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
-                <span
-                  class="inline-flex rounded px-1.5 py-0.5 font-medium"
-                  :class="{
-                    'bg-amber-100 text-amber-700': c.status === 'Draft',
-                    'bg-blue-100 text-blue-700': c.status === 'Scheduled' || c.status === 'Sending',
-                    'bg-emerald-100 text-emerald-700': c.status === 'Sent',
-                    'bg-red-100 text-red-700': c.status === 'Failed',
-                    'bg-slate-100 text-slate-600': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status)
-                  }"
-                >
-                  {{ c.status }}
-                </span>
-                <span>#{{ c.id.slice(-6) }}</span>
-                <span v-if="c.createdAt">{{ new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
+              <span class="font-mono tabular-nums text-zinc-400">#{{ c.id.slice(-6) }}</span>
+              <span v-if="c.createdAt" class="tabular-nums">{{ new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-zinc-100 pt-3 text-sm sm:flex-1 sm:border-t-0 sm:pt-0 md:grid-cols-4">
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                Recipients
+              </div>
+              <div class="mt-0.5 font-medium tabular-nums text-zinc-800">
+                {{ recipientCount(c).toLocaleString() }}
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4 sm:flex-1">
             <div>
-              <div class="text-xs font-medium text-slate-400">Recipients</div>
-              <div class="text-slate-700">{{ recipientCount(c) }}</div>
-            </div>
-            <div>
-              <div class="text-xs font-medium text-slate-400">Opens</div>
-              <div class="text-slate-500">–</div>
-            </div>
-            <div>
-              <div class="text-xs font-medium text-slate-400">Clicks</div>
-              <div class="text-slate-500">–</div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                Opens
+              </div>
+              <div class="mt-0.5 text-zinc-400">
+                —
+              </div>
             </div>
             <div>
-              <div class="text-xs font-medium text-slate-400">Conversions</div>
-              <div class="text-slate-500">–</div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                Clicks
+              </div>
+              <div class="mt-0.5 text-zinc-400">
+                —
+              </div>
             </div>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                Conversions
+              </div>
+              <div class="mt-0.5 text-zinc-400">
+                —
+              </div>
             </div>
-          </NuxtLink>
-          <div class="flex items-center gap-1.5">
-            <button
-              v-if="canSendDraft(c)"
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!!sendingCampaignId"
-              title="Send"
-              @click.stop="handleSend(c)"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
-            </button>
-            <button
-              v-if="c.status === 'Sent'"
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              title="Duplicate campaign"
-              @click.stop="openDuplicateModal(c)"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-              title="Delete campaign"
-              @click.stop="openDeleteModal(c)"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
           </div>
+        </NuxtLink>
+        <div class="flex shrink-0 items-center justify-end gap-1 border-t border-zinc-100 pt-3 sm:border-t-0 sm:pt-0">
+          <button
+            v-if="canSendDraft(c)"
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="!!sendingCampaignId"
+            title="Send campaign"
+            @click.stop="handleSend(c)"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+          <button
+            v-if="c.status === 'Sent'"
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+            title="Duplicate campaign"
+            @click.stop="openDuplicateModal(c)"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
+            title="Delete campaign"
+            @click.stop="openDeleteModal(c)"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
-        <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Showing {{ paginationMeta.from }}-{{ paginationMeta.to }} of {{ paginationMeta.total }}
+      </article>
+
+      <div class="flex flex-col gap-4 rounded-2xl border border-zinc-200/90 bg-white px-4 py-4 text-sm text-zinc-600 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <p class="tabular-nums text-zinc-500">
+          <span class="font-medium text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+          of {{ paginationMeta.total.toLocaleString() }}
+        </p>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="currentPage === 1"
+            @click="currentPage -= 1"
+          >
+            Previous
+          </button>
+          <span class="min-w-[5rem] text-center tabular-nums text-zinc-500">
+            Page {{ currentPage }} / {{ totalPages }}
           </span>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="currentPage === 1"
-              @click="currentPage -= 1"
-            >
-              Previous
-            </button>
-            <span class="text-slate-500">Page {{ currentPage }} of {{ totalPages }}</span>
-            <button
-              type="button"
-              class="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="currentPage === totalPages"
-              @click="currentPage += 1"
-            >
-              Next
-            </button>
-          </div>
+          <button
+            type="button"
+            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="currentPage === totalPages"
+            @click="currentPage += 1"
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>

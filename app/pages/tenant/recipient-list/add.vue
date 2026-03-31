@@ -1,44 +1,63 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-    <div class="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:px-8">
+  <div class="w-full min-w-0">
+    <div class="mx-auto w-full max-w-3xl">
       <NuxtLink
         to="/tenant/recipient-list"
-        class="mb-10 inline-flex items-center gap-2.5 text-base font-medium text-slate-600 transition-colors hover:text-slate-900"
+        class="group mb-8 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900"
       >
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </span>
         Back to lists
       </NuxtLink>
 
-      <header class="mb-12">
-        <h1 class="text-4xl font-bold text-slate-900 tracking-tight">
+      <header class="mb-8 sm:mb-10">
+        <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
           New recipient list
         </h1>
-        <p class="mt-2 text-lg text-slate-600">
+        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
           Pick an audience, then optionally add filters to narrow who’s included.
         </p>
       </header>
 
       <div
         v-if="data && !data.tenantIdConfigured"
-        class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-900"
+        class="mb-6 flex gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+        role="status"
       >
-        Your tenant has no <strong>tenant ID</strong> in the registry. You can still save audience-only lists;
-        admin-defined recipient filters appear once a tenant ID is set.
+        <div class="mt-0.5 shrink-0 text-amber-600">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <div>
+          <p class="font-medium text-amber-950">
+            Tenant ID not set
+          </p>
+          <p class="mt-1 text-amber-900/90">
+            Your tenant has no <strong class="font-semibold">tenant ID</strong> in the registry. You can still save audience-only lists;
+            admin-defined recipient filters appear once a tenant ID is set.
+          </p>
+        </div>
       </div>
 
       <div
         v-if="loadError"
-        class="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-base text-red-700"
+        class="mb-6 flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+        role="alert"
       >
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
         {{ loadError }}
       </div>
 
-      <div v-if="loadPending" class="mb-12 space-y-6 animate-pulse">
-        <div class="h-11 max-w-md rounded-xl bg-slate-200" />
-        <div class="h-14 w-full rounded-xl bg-slate-200" />
-        <div class="h-40 rounded-2xl bg-slate-200/80" />
+      <div v-if="loadPending" class="mb-8 space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm">
+        <div class="h-10 max-w-sm animate-pulse rounded-xl bg-zinc-100" />
+        <div class="h-12 w-full animate-pulse rounded-xl bg-zinc-100" />
+        <div class="h-32 animate-pulse rounded-xl bg-zinc-50" />
       </div>
 
       <form
@@ -46,10 +65,15 @@
         class="space-y-6"
         @submit.prevent="submitCreate"
       >
-        <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
-          <div class="space-y-6 p-8 sm:p-10">
+        <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
+          <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Details
+            </h2>
+          </div>
+          <div class="space-y-6 p-5 sm:p-6">
             <div>
-              <label for="rl-name" class="mb-2.5 block text-base font-semibold text-slate-700">List name</label>
+              <label for="rl-name" class="mb-2 block text-sm font-medium text-zinc-700">List name</label>
               <input
                 id="rl-name"
                 v-model="form.name"
@@ -57,16 +81,16 @@
                 required
                 maxlength="200"
                 placeholder="e.g. Texas prospects"
-                class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+                class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
               >
             </div>
 
             <div>
-              <label for="rl-audience" class="mb-2.5 block text-base font-semibold text-slate-700">Audience</label>
+              <label for="rl-audience" class="mb-2 block text-sm font-medium text-zinc-700">Audience</label>
               <select
                 id="rl-audience"
                 v-model="form.audience"
-                class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500 sm:text-[15px]"
                 :disabled="!audienceOptions.length"
                 required
               >
@@ -83,150 +107,166 @@
               </select>
               <p
                 v-if="data.tenantIdConfigured && !audienceOptions.length"
-                class="mt-2 text-base text-slate-500"
+                class="mt-2 text-sm text-zinc-500"
               >
                 Add at least one recipient filter in admin (per contact type) to choose an audience here.
               </p>
             </div>
+          </div>
 
-            <div class="space-y-6">
-              <p
-                v-if="data.tenantIdConfigured && !filtersForAudience.length"
-                class="text-base text-slate-500"
-              >
-                No enabled recipient filters for this audience. Ask an admin to add filters, or create the list with audience only.
-              </p>
+          <div class="border-t border-zinc-100 bg-zinc-50/50 px-5 py-4 sm:px-6">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Filters
+            </h2>
+            <p class="mt-1 text-sm text-zinc-500">
+              Optional rules from your registry. Leave empty for audience-only lists.
+            </p>
+          </div>
+          <div class="space-y-5 p-5 sm:p-6">
+            <p
+              v-if="data.tenantIdConfigured && !filtersForAudience.length"
+              class="rounded-xl bg-zinc-50/80 px-4 py-3 text-sm text-zinc-600 ring-1 ring-zinc-200/60"
+            >
+              No enabled recipient filters for this audience. Ask an admin to add filters, or create the list with audience only.
+            </p>
+
+            <div
+              v-for="(row, idx) in form.filterRows"
+              :key="idx"
+              class="space-y-3"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <label
+                  :for="`rl-filter-${idx}`"
+                  class="text-sm font-medium text-zinc-800"
+                >
+                  {{ idx === 0 ? 'Filter' : `Filter ${idx + 1}` }}
+                </label>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 sm:text-sm"
+                  @click="removeFilterRow(idx)"
+                >
+                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Remove
+                </button>
+              </div>
+
+              <template v-if="!row.recipientFilterId">
+                <select
+                  :id="`rl-filter-${idx}`"
+                  v-model="row.recipientFilterId"
+                  required
+                  class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
+                  @change="onRowFilterChange(row)"
+                >
+                  <option disabled value="">
+                    Choose a filter
+                  </option>
+                  <option
+                    v-for="f in selectableFiltersForRow(idx)"
+                    :key="f.id"
+                    :value="f.id"
+                  >
+                    {{ filterOptionLabel(f) }}
+                  </option>
+                </select>
+              </template>
 
               <div
-                v-for="(row, idx) in form.filterRows"
-                :key="idx"
-                class="space-y-3"
+                v-else
+                class="rounded-xl bg-zinc-50/90 px-4 py-4 ring-1 ring-zinc-200/70 sm:px-5 sm:py-5"
               >
-                <div class="flex flex-wrap items-end justify-between gap-3">
-                  <label
-                    :for="`rl-filter-${idx}`"
-                    class="mb-0 block text-base font-semibold text-slate-700"
-                  >
-                    {{ idx === 0 ? 'Filter' : 'Additional filter' }}
-                  </label>
-                  <button
-                    type="button"
-                    class="text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
-                    @click="removeFilterRow(idx)"
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <template v-if="!row.recipientFilterId">
-                  <select
-                    :id="`rl-filter-${idx}`"
-                    v-model="row.recipientFilterId"
-                    required
-                    class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
-                    @change="onRowFilterChange(row)"
-                  >
-                    <option disabled value="">
-                      Choose a filter
-                    </option>
-                    <option
-                      v-for="f in selectableFiltersForRow(idx)"
-                      :key="f.id"
-                      :value="f.id"
-                    >
-                      {{ filterOptionLabel(f) }}
-                    </option>
-                  </select>
-                </template>
-
+                <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Match rule
+                </p>
                 <div
-                  v-else
-                  class="rounded-xl border border-slate-100 bg-slate-50/60 px-6 py-5"
+                  class="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)] sm:gap-3"
                 >
-                  <p class="mb-4 text-base font-semibold text-slate-700">
-                    Match rule
-                  </p>
-                  <div
-                    class="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)] sm:gap-4"
-                  >
-                    <div class="min-w-0">
-                      <select
-                        :id="`rl-filter-${idx}`"
-                        v-model="row.recipientFilterId"
-                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                        @change="onRowFilterChange(row)"
+                  <div class="min-w-0">
+                    <select
+                      :id="`rl-filter-${idx}`"
+                      v-model="row.recipientFilterId"
+                      class="w-full rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
+                      @change="onRowFilterChange(row)"
+                    >
+                      <option
+                        v-for="f in selectableFiltersForRow(idx)"
+                        :key="f.id"
+                        :value="f.id"
                       >
-                        <option
-                          v-for="f in selectableFiltersForRow(idx)"
-                          :key="f.id"
-                          :value="f.id"
-                        >
-                          {{ filterOptionLabel(f) }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="text-center text-sm font-semibold uppercase tracking-wide text-slate-400 sm:px-1">
+                        {{ filterOptionLabel(f) }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="flex justify-center sm:px-1">
+                    <span class="rounded-md bg-zinc-200/60 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
                       equals
-                    </div>
-                    <div class="min-w-0">
-                      <template v-if="showPropertyRowFor(row) && rowRegistryTokens(row).length > 1">
-                        <select
-                          :id="`rl-list-property-value-${idx}`"
-                          v-model="row.listPropertyValue"
-                          required
-                          class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                        >
-                          <option disabled value="">
-                            Select a value
-                          </option>
-                          <option
-                            v-for="opt in rowRegistryTokens(row)"
-                            :key="opt"
-                            :value="opt"
-                          >
-                            {{ opt }}
-                          </option>
-                        </select>
-                      </template>
-                      <p
-                        v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
-                        class="break-words rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
-                      >
-                        {{ rowRegistryTokens(row)[0] }}
-                      </p>
-                      <input
-                        v-else-if="showPropertyRowFor(row)"
+                    </span>
+                  </div>
+                  <div class="min-w-0">
+                    <template v-if="showPropertyRowFor(row) && rowRegistryTokens(row).length > 1">
+                      <select
                         :id="`rl-list-property-value-${idx}`"
                         v-model="row.listPropertyValue"
-                        type="text"
                         required
-                        maxlength="2000"
-                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                        :placeholder="propertyValuePlaceholderFor(row)"
+                        class="w-full rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
                       >
-                    </div>
+                        <option disabled value="">
+                          Select a value
+                        </option>
+                        <option
+                          v-for="opt in rowRegistryTokens(row)"
+                          :key="opt"
+                          :value="opt"
+                        >
+                          {{ opt }}
+                        </option>
+                      </select>
+                    </template>
+                    <p
+                      v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
+                      class="break-words rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm sm:text-[15px]"
+                    >
+                      {{ rowRegistryTokens(row)[0] }}
+                    </p>
+                    <input
+                      v-else-if="showPropertyRowFor(row)"
+                      :id="`rl-list-property-value-${idx}`"
+                      v-model="row.listPropertyValue"
+                      type="text"
+                      required
+                      maxlength="2000"
+                      class="w-full rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
+                      :placeholder="propertyValuePlaceholderFor(row)"
+                    >
                   </div>
                 </div>
               </div>
-
-              <button
-                v-if="filtersForAudience.length && canAddFilter"
-                type="button"
-                class="w-full rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-5 py-3.5 text-base font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
-                @click="addFilterRow"
-              >
-                {{ form.filterRows.length ? 'Add another filter' : 'Add filter' }}
-              </button>
             </div>
 
-            <div v-if="showCombineCriteria">
-              <label for="rl-filter-mode" class="mb-2.5 block text-base font-semibold text-slate-700">
-                Combine criteria with
+            <button
+              v-if="filtersForAudience.length && canAddFilter"
+              type="button"
+              class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-3.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 sm:text-[15px]"
+              @click="addFilterRow"
+            >
+              <svg class="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              {{ form.filterRows.length ? 'Add another filter' : 'Add filter' }}
+            </button>
+
+            <div v-if="showCombineCriteria" class="border-t border-zinc-100 pt-5">
+              <label for="rl-filter-mode" class="mb-2 block text-sm font-medium text-zinc-700">
+                Combine criteria
               </label>
               <select
                 id="rl-filter-mode"
                 v-model="form.filterMode"
-                class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20"
+                class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
               >
                 <option value="and">
                   AND — must match all conditions
@@ -235,29 +275,33 @@
                   OR — match any one of the conditions
                 </option>
               </select>
-              <p class="mt-2 text-sm text-slate-500">
-                <strong class="font-medium text-slate-600">AND</strong> = must match all conditions.
-                <strong class="font-medium text-slate-600">OR</strong> = match any one of the conditions.
+              <p class="mt-2 text-xs leading-relaxed text-zinc-500 sm:text-sm">
+                <span class="font-medium text-zinc-700">AND</span> requires every rule to match.
+                <span class="font-medium text-zinc-700">OR</span> matches if any rule matches.
               </p>
             </div>
           </div>
         </div>
 
-        <div v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-base text-red-700">
+        <div
+          v-if="saveError"
+          class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900"
+          role="alert"
+        >
           {{ saveError }}
         </div>
 
-        <div class="flex flex-col-reverse items-stretch justify-end gap-4 pt-4 sm:flex-row sm:items-center">
+        <div class="flex flex-col-reverse items-stretch gap-3 pt-2 sm:flex-row sm:justify-end sm:gap-3">
           <NuxtLink
             to="/tenant/recipient-list"
-            class="rounded-xl border border-slate-200 px-6 py-3.5 text-center text-base font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-center text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:text-[15px]"
             :class="{ 'pointer-events-none opacity-50': saving }"
           >
             Cancel
           </NuxtLink>
           <button
             type="submit"
-            class="rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 hover:shadow-xl disabled:opacity-50"
+            class="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50 sm:px-8 sm:text-[15px]"
             :disabled="saving || !canSubmitPropertyValue || !audienceOptions.length"
           >
             {{ saving ? 'Saving…' : 'Create list' }}
