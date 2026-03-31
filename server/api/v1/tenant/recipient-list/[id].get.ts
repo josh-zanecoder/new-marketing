@@ -1,11 +1,8 @@
 import mongoose from 'mongoose'
-import { getRegistryConnection } from '../../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../../models/registry/RecipientFilter'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
-  isTenantApiKeyAuthContext,
-  resolveTenantIdForTenantAuth
+  isTenantApiKeyAuthContext
 } from '../../../../tenant/registry-auth'
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
@@ -45,9 +42,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Tenant access required' })
   }
 
-  const registryConn = await getRegistryConnection()
-  const registryTenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
-
   const rawId = getRouterParam(event, 'id')
   if (!rawId || !mongoose.isValidObjectId(rawId)) {
     throw createError({ statusCode: 400, message: 'Invalid list id' })
@@ -56,7 +50,7 @@ export default defineEventHandler(async (event) => {
   const listId = new mongoose.Types.ObjectId(rawId)
 
   const tenantConn = await getTenantConnectionFromEvent(event)
-  const { RecipientList, RecipientListMember, Contact } =
+  const { RecipientList, RecipientListMember, Contact, RecipientFilter } =
     getTenantClientModels(tenantConn)
 
   const doc = (await RecipientList.findById(listId).lean().exec()) as RecipientListDoc | null
@@ -83,10 +77,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (!filterRows.length && filters.length && registryTenantId) {
-    const FilterModel = getRecipientFilterModel(registryConn)
-    const registryDocs = await FilterModel.find({
-      tenantId: registryTenantId,
+  if (!filterRows.length && filters.length) {
+    const registryDocs = await RecipientFilter.find({
       enabled: true,
       contactType: audience
     })

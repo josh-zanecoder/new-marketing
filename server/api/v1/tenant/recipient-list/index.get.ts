@@ -1,5 +1,4 @@
 import { getRegistryConnection } from '../../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../../models/registry/RecipientFilter'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
@@ -31,22 +30,24 @@ type RecipientListDoc = {
   updatedAt?: Date | null
 } & Record<string, unknown>
 
-function serializeRegistryFilter(f: {
-  _id: unknown
-  tenantId: string
-  name: string
-  contactType: string
-  property?: string
-  propertyType?: string | null
-  propertyValue?: string
-  enabled: boolean
-  createdAt?: Date
-  updatedAt?: Date
-}) {
+function serializeRegistryFilter(
+  f: {
+    _id: unknown
+    name: string
+    contactType: string
+    property?: string
+    propertyType?: string | null
+    propertyValue?: string
+    enabled: boolean
+    createdAt?: Date
+    updatedAt?: Date
+  },
+  registryTenantId: string | null
+) {
   const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(f)
   return {
     id: String(f._id),
-    tenantId: f.tenantId,
+    tenantId: registryTenantId ?? '',
     name: f.name,
     contactType: f.contactType,
     property,
@@ -68,7 +69,8 @@ export default defineEventHandler(async (event) => {
   const tenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
 
   const tenantConn = await getTenantConnectionFromEvent(event)
-  const { Contact, RecipientList } = getTenantClientModels(tenantConn)
+  const { Contact, RecipientList, RecipientFilter: FilterModel } =
+    getTenantClientModels(tenantConn)
 
   const ownerScope =
     isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
@@ -111,14 +113,16 @@ export default defineEventHandler(async (event) => {
   }
 
   let recipientFilters: ReturnType<typeof serializeRegistryFilter>[] = []
-  if (tenantId) {
-    const FilterModel = getRecipientFilterModel(registryConn)
-    const docs = await FilterModel.find({ tenantId, enabled: true })
-      .sort({ updatedAt: -1 })
-      .lean()
-      .exec()
-    recipientFilters = docs.map(serializeRegistryFilter)
-  }
+  const docs = await FilterModel.find({ enabled: true })
+    .sort({ updatedAt: -1 })
+    .lean()
+    .exec()
+  recipientFilters = docs.map((d) =>
+    serializeRegistryFilter(
+      d as unknown as Parameters<typeof serializeRegistryFilter>[0],
+      tenantId
+    )
+  )
 
   return {
     tenantId,

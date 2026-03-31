@@ -37,7 +37,6 @@ export async function ensureTenantDatabaseInitialized(
   options?: EnsureTenantOptions
 ): Promise<EnsureTenantResult> {
   const dbName = toTenantDbName(displayName)
-  const dbConn = registryConn.useDb(dbName)
 
   const existing = (await registryConn.collection('clients').findOne({ dbName })) as {
     tenantId?: string
@@ -64,15 +63,6 @@ export async function ensureTenantDatabaseInitialized(
       throw createError({ statusCode: 409, message: 'tenantId is already in use' })
     }
   }
-
-  await dbConn.collection('clients').updateOne(
-    { name: displayName },
-    {
-      $set: { email: contactEmail, tenantId },
-      $setOnInsert: { createdAt: new Date() }
-    },
-    { upsert: true }
-  )
 
   const crmPatch: { crmAppUrl: string | null } | Record<string, never> = {}
   if (

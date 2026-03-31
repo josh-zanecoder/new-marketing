@@ -11,8 +11,8 @@ export default defineEventHandler(async (event) => {
 
   const rawTid = getRouterParam(event, 'tenantId') ?? ''
   const tenantId = decodeURIComponent(rawTid).trim()
-  const filterId = getRouterParam(event, 'filterId') ?? ''
-  if (!tenantId || !filterId || !mongoose.Types.ObjectId.isValid(filterId)) {
+  const id = getRouterParam(event, 'id') ?? ''
+  if (!tenantId || !id || !mongoose.Types.ObjectId.isValid(id)) {
     throw createError({ statusCode: 400, message: 'Invalid request' })
   }
 
@@ -21,13 +21,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
-  const res = await Model.deleteOne({
-    _id: filterId
-  }).exec()
+  const { EmailDynamicVariable: Model } = getTenantClientModels(tenantConn)
+  const res = await Model.deleteOne({ _id: id }).exec()
 
   if (res.deletedCount === 0) {
-    throw createError({ statusCode: 404, message: 'Filter not found' })
+    throw createError({ statusCode: 404, message: 'Variable not found' })
   }
 
   return { ok: true }

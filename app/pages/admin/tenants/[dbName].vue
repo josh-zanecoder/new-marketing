@@ -41,6 +41,14 @@
         >
           Recipient filters
         </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'dynamicVariables' }"
+          @click="tab = 'dynamicVariables'"
+        >
+          Dynamic variables
+        </button>
       </div>
 
       <div v-show="tab === 'overview'" class="overview-card">
@@ -295,6 +303,183 @@
           </div>
         </div>
       </div>
+
+      <div v-show="tab === 'dynamicVariables'" class="filters-tab">
+        <div class="filters-intro">
+          <p>
+            Dynamic variables define allowed template tokens for this tenant. Use
+            <strong>key</strong> as the token path (e.g. <code>user.firstName</code>), then map it to a
+            contact <strong>path</strong> (e.g. <code>name</code> or <code>address.state</code>). Templates use
+            mustache syntax like <code v-pre>{{user.firstName}}</code>.
+          </p>
+        </div>
+
+        <div class="filters-split">
+          <aside class="filter-form-card">
+            <h2 class="filter-form-title">
+              {{ dynamicEditingId ? 'Edit variable' : 'New variable' }}
+            </h2>
+            <p v-if="dynamicEditingId" class="filter-form-hint">
+              Updating the selected variable. Cancel to create a new one.
+            </p>
+            <form class="filter-form" @submit.prevent="saveDynamicVariable">
+              <div class="field">
+                <label for="dv-key">Key</label>
+                <input id="dv-key" v-model="dynamicForm.key" type="text" required class="field-input" placeholder="e.g. user.firstName">
+              </div>
+
+              <div class="field">
+                <label for="dv-label">Label</label>
+                <input id="dv-label" v-model="dynamicForm.label" type="text" required class="field-input" placeholder="e.g. First name">
+              </div>
+
+              <div class="field">
+                <label for="dv-contact-path">Contact path</label>
+                <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. name or address.state">
+              </div>
+
+              <div class="field">
+                <label for="dv-source-type">Variable source</label>
+                <select id="dv-source-type" v-model="dynamicForm.sourceType" class="field-input">
+                  <option value="recipient">Recipient</option>
+                  <option value="user">User</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="dv-description">Description</label>
+                <input id="dv-description" v-model="dynamicForm.description" type="text" class="field-input" placeholder="Optional">
+              </div>
+
+              <div class="field">
+                <label for="dv-fallback">Fallback value</label>
+                <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Optional">
+              </div>
+
+              <div class="field">
+                <label for="dv-sort">Sort order</label>
+                <input id="dv-sort" v-model.number="dynamicForm.sortOrder" type="number" class="field-input" min="0" step="1">
+              </div>
+
+              <div class="field">
+                <label>Scopes</label>
+                <div class="flex gap-3">
+                  <label class="toggle-row">
+                    <input
+                      :checked="dynamicForm.scopes.includes('subject')"
+                      type="checkbox"
+                      class="toggle-check"
+                      @change="toggleDynamicScope('subject', ($event.target as HTMLInputElement).checked)"
+                    >
+                    <span class="toggle-label">Subject</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input
+                      :checked="dynamicForm.scopes.includes('body')"
+                      type="checkbox"
+                      class="toggle-check"
+                      @change="toggleDynamicScope('body', ($event.target as HTMLInputElement).checked)"
+                    >
+                    <span class="toggle-label">Body</span>
+                  </label>
+                </div>
+              </div>
+
+              <label class="toggle-row">
+                <input v-model="dynamicForm.enabled" type="checkbox" class="toggle-check">
+                <span class="toggle-label">Enabled</span>
+              </label>
+
+              <label class="toggle-row">
+                <input v-model="dynamicForm.requiredForSend" type="checkbox" class="toggle-check">
+                <span class="toggle-label">Required for send</span>
+              </label>
+
+              <p v-if="dynamicFormError" class="form-error">{{ dynamicFormError }}</p>
+
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" :disabled="dynamicSaving">
+                  {{ dynamicSaving ? 'Saving…' : dynamicEditingId ? 'Update' : 'Create' }}
+                </button>
+                <button v-if="dynamicEditingId" type="button" class="btn-secondary" @click="resetDynamicForm">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </aside>
+
+          <div class="filters-table-wrap">
+            <div class="filters-table-head">
+              <div>
+                <h2 class="filters-table-title">
+                  Existing variables
+                </h2>
+                <p class="filters-table-sub">
+                  {{ dynamicVariables.length }} {{ dynamicVariables.length === 1 ? 'variable' : 'variables' }} for this tenant
+                </p>
+              </div>
+              <span v-if="dynamicPending" class="filters-loading">Loading…</span>
+            </div>
+
+            <div class="table-card filters-table-card">
+              <table class="clients-table clients-table--filters">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Key</th>
+                    <th>Contact path</th>
+                    <th>Scopes</th>
+                    <th>Fallback</th>
+                    <th>Status</th>
+                    <th class="th-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="dynamicPending && !dynamicVariables.length">
+                    <td colspan="7" class="td-empty-state">
+                      Loading variables…
+                    </td>
+                  </tr>
+                  <template v-else-if="dynamicVariables.length">
+                    <tr v-for="v in dynamicVariables" :key="v.id">
+                      <td class="td-name">{{ v.label }}</td>
+                      <td class="td-muted"><code>{{ v.key }}</code></td>
+                      <td class="td-muted"><code>{{ v.contactPath }}</code></td>
+                      <td class="td-values">
+                        <span v-for="scope in v.scopes" :key="scope" class="value-chip mr-1">{{ scope }}</span>
+                      </td>
+                      <td class="td-muted">{{ v.fallbackValue || '—' }}</td>
+                      <td>
+                        <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
+                      </td>
+                      <td class="td-actions">
+                        <div class="row-actions">
+                          <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-row btn-row--danger"
+                            :disabled="dynamicDeletingId === v.id"
+                            @click="removeDynamicVariable(v.id)"
+                          >
+                            {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr v-else>
+                    <td colspan="7" class="td-empty-state">
+                      No dynamic variables yet. Use the form to add one.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
   </section>
 </template>
@@ -307,7 +492,7 @@ const dbName = computed(() =>
   decodeURIComponent(String(route.params.dbName || ''))
 )
 
-const tab = ref<'overview' | 'filters'>('overview')
+const tab = ref<'overview' | 'filters' | 'dynamicVariables'>('overview')
 
 const contactTypes = ['prospect', 'client', 'contact'] as const
 
@@ -351,11 +536,27 @@ interface FilterRow {
   enabled: boolean
 }
 
+interface DynamicVariableRow {
+  id: string
+  key: string
+  label: string
+  description: string
+  contactPath: string
+  sourceType: 'recipient' | 'user'
+  scopes: Array<'subject' | 'body'>
+  enabled: boolean
+  sortOrder: number
+  fallbackValue: string
+  requiredForSend: boolean
+}
+
 const tenant = ref<TenantDetail | null>(null)
 const tenantPending = ref(true)
 
 const filters = ref<FilterRow[]>([])
 const filtersPending = ref(false)
+const dynamicVariables = ref<DynamicVariableRow[]>([])
+const dynamicPending = ref(false)
 
 function propertyValueTokens(raw: string | null | undefined): string[] {
   if (raw == null || !String(raw).trim()) return []
@@ -376,6 +577,10 @@ const editingId = ref<string | null>(null)
 const saving = ref(false)
 const deletingId = ref<string | null>(null)
 const formError = ref('')
+const dynamicEditingId = ref<string | null>(null)
+const dynamicSaving = ref(false)
+const dynamicDeletingId = ref<string | null>(null)
+const dynamicFormError = ref('')
 
 const form = reactive({
   name: '',
@@ -384,6 +589,19 @@ const form = reactive({
   propertyType: 'state' as AddressPropertyTypeValue,
   propertyValue: '',
   enabled: true
+})
+
+const dynamicForm = reactive({
+  key: '',
+  label: '',
+  description: '',
+  contactPath: '',
+  sourceType: 'recipient' as 'recipient' | 'user',
+  scopes: ['subject', 'body'] as Array<'subject' | 'body'>,
+  enabled: true,
+  sortOrder: 0,
+  fallbackValue: '',
+  requiredForSend: false
 })
 
 watch(
@@ -450,6 +668,32 @@ async function loadFilters() {
   }
 }
 
+function dynamicApiPrefix(): string | null {
+  const id = tenant.value?.tenantId
+  if (!id) return null
+  return `/api/v1/admin/tenants/${encodeURIComponent(id)}`
+}
+
+async function loadDynamicVariables() {
+  dynamicPending.value = true
+  const prefix = dynamicApiPrefix()
+  if (!prefix) {
+    dynamicVariables.value = []
+    dynamicPending.value = false
+    return
+  }
+  try {
+    const res = await $fetch<{ variables: DynamicVariableRow[] }>(
+      `${prefix}/dynamic-variables`
+    )
+    dynamicVariables.value = res.variables ?? []
+  } catch {
+    dynamicVariables.value = []
+  } finally {
+    dynamicPending.value = false
+  }
+}
+
 function fillForm(f: FilterRow) {
   form.name = f.name
   form.enabled = f.enabled
@@ -483,6 +727,34 @@ function resetForm() {
   form.propertyValue = ''
   form.enabled = true
   formError.value = ''
+}
+
+function fillDynamicForm(v: DynamicVariableRow) {
+  dynamicForm.key = v.key
+  dynamicForm.label = v.label
+  dynamicForm.description = v.description ?? ''
+  dynamicForm.contactPath = v.contactPath
+  dynamicForm.sourceType = v.sourceType === 'user' ? 'user' : 'recipient'
+  dynamicForm.scopes = (v.scopes?.length ? [...v.scopes] : ['subject', 'body']) as Array<'subject' | 'body'>
+  dynamicForm.enabled = !!v.enabled
+  dynamicForm.sortOrder = Number.isFinite(v.sortOrder) ? v.sortOrder : 0
+  dynamicForm.fallbackValue = v.fallbackValue ?? ''
+  dynamicForm.requiredForSend = !!v.requiredForSend
+}
+
+function resetDynamicForm() {
+  dynamicEditingId.value = null
+  dynamicForm.key = ''
+  dynamicForm.label = ''
+  dynamicForm.description = ''
+  dynamicForm.contactPath = ''
+  dynamicForm.sourceType = 'recipient'
+  dynamicForm.scopes = ['subject', 'body']
+  dynamicForm.enabled = true
+  dynamicForm.sortOrder = 0
+  dynamicForm.fallbackValue = ''
+  dynamicForm.requiredForSend = false
+  dynamicFormError.value = ''
 }
 
 function startEdit(f: FilterRow) {
@@ -538,6 +810,73 @@ async function saveFilter() {
   }
 }
 
+function toggleDynamicScope(scope: 'subject' | 'body', checked: boolean) {
+  const set = new Set(dynamicForm.scopes)
+  if (checked) set.add(scope)
+  else set.delete(scope)
+  dynamicForm.scopes = [...set] as Array<'subject' | 'body'>
+}
+
+function startEditDynamicVariable(v: DynamicVariableRow) {
+  dynamicEditingId.value = v.id
+  fillDynamicForm(v)
+  dynamicFormError.value = ''
+}
+
+async function saveDynamicVariable() {
+  dynamicFormError.value = ''
+  const prefix = dynamicApiPrefix()
+  if (!prefix) {
+    dynamicFormError.value = 'This tenant has no tenant ID in the registry.'
+    return
+  }
+  if (!dynamicForm.scopes.length) {
+    dynamicFormError.value = 'Select at least one scope.'
+    return
+  }
+  dynamicSaving.value = true
+  try {
+    const body = {
+      key: dynamicForm.key.trim(),
+      label: dynamicForm.label.trim(),
+      description: dynamicForm.description.trim(),
+      contactPath: dynamicForm.contactPath.trim(),
+      sourceType: dynamicForm.sourceType,
+      scopes: dynamicForm.scopes,
+      enabled: dynamicForm.enabled,
+      sortOrder: Number(dynamicForm.sortOrder) || 0,
+      fallbackValue: dynamicForm.fallbackValue,
+      requiredForSend: dynamicForm.requiredForSend
+    }
+    if (dynamicEditingId.value) {
+      await $fetch(`${prefix}/dynamic-variables/${dynamicEditingId.value}`, {
+        method: 'PUT',
+        body
+      })
+    } else {
+      await $fetch(`${prefix}/dynamic-variables`, {
+        method: 'POST',
+        body
+      })
+    }
+    resetDynamicForm()
+    await loadDynamicVariables()
+  } catch (e: unknown) {
+    const msg =
+      e &&
+      typeof e === 'object' &&
+      'data' in e &&
+      e.data &&
+      typeof e.data === 'object' &&
+      'message' in e.data
+        ? String((e.data as { message?: string }).message)
+        : 'Save failed'
+    dynamicFormError.value = msg
+  } finally {
+    dynamicSaving.value = false
+  }
+}
+
 async function removeFilter(id: string) {
   const prefix = filtersApiPrefix()
   if (!prefix) return
@@ -552,12 +891,27 @@ async function removeFilter(id: string) {
   }
 }
 
+async function removeDynamicVariable(id: string) {
+  const prefix = dynamicApiPrefix()
+  if (!prefix) return
+  if (!confirm('Delete this dynamic variable?')) return
+  dynamicDeletingId.value = id
+  try {
+    await $fetch(`${prefix}/dynamic-variables/${id}`, { method: 'DELETE' })
+    if (dynamicEditingId.value === id) resetDynamicForm()
+    await loadDynamicVariables()
+  } finally {
+    dynamicDeletingId.value = null
+  }
+}
+
 watch(
   dbName,
   async (name) => {
     if (!name) return
     await loadTenant()
     await loadFilters()
+    await loadDynamicVariables()
   },
   { immediate: true }
 )

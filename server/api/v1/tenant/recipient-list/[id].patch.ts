@@ -1,12 +1,8 @@
 import mongoose from 'mongoose'
-import { getRegistryConnection } from '../../../../lib/mongoose'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import type { ContactKind } from '../../../../types/tenant/contact.model'
 import type { RecipientListFilterMode } from '../../../../types/tenant/recipientList.model'
-import {
-  isRegisteredTenantAuthContext,
-  resolveTenantIdForTenantAuth
-} from '../../../../tenant/registry-auth'
+import { isRegisteredTenantAuthContext } from '../../../../tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 import {
@@ -58,13 +54,10 @@ export default defineEventHandler(async (event) => {
   const audience = assertAudience(body?.audience)
   const filterMode = assertFilterMode(body?.filterMode)
 
-  const registryConn = await getRegistryConnection()
-  const tenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
+  const tenantConn = await getTenantConnectionFromEvent(event)
 
   const { filters, criterionGroups, persistedFilterRows } =
-    await resolveRecipientListFiltersFromBody(body, registryConn, tenantId, audience)
-
-  const tenantConn = await getTenantConnectionFromEvent(event)
+    await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
   const { RecipientList } = getTenantClientModels(tenantConn)
 
   const existing = await RecipientList.findById(listId).lean().exec()

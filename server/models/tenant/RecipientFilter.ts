@@ -16,10 +16,9 @@ const propertyEnum = [
 ] as const
 const propertyTypeEnum = ['none', 'state', 'city', 'county', 'street'] as const
 
-const recipientFilterSchema = new mongoose.Schema(
+/** Audience filters for recipient lists; one physical DB per tenant (no tenantId field). */
+export const recipientFilterSchema = new mongoose.Schema(
   {
-    /** Registry `clients.tenantId` (not db name). */
-    tenantId: { type: String, required: true, index: true, trim: true },
     name: { type: String, required: true, trim: true },
     contactType: {
       type: String,
@@ -31,7 +30,6 @@ const recipientFilterSchema = new mongoose.Schema(
       enum: propertyEnum,
       default: 'none'
     },
-    /** Meaningful when `property` is `address` (or legacy `address.*`). */
     propertyType: {
       type: String,
       enum: propertyTypeEnum,
@@ -43,21 +41,8 @@ const recipientFilterSchema = new mongoose.Schema(
   { timestamps: true, collection: 'recipient_filters' }
 )
 
-recipientFilterSchema.index({ tenantId: 1, name: 1 }, { unique: true })
+recipientFilterSchema.index({ name: 1 }, { unique: true })
 
 export type RecipientFilterDoc = mongoose.InferSchemaType<
   typeof recipientFilterSchema
 >
-
-export function getRecipientFilterModel(
-  conn: mongoose.Connection
-): mongoose.Model<RecipientFilterDoc> {
-  const existing = conn.models.RecipientFilter as
-    | mongoose.Model<RecipientFilterDoc>
-    | undefined
-  if (existing) return existing
-  return conn.model<RecipientFilterDoc>(
-    'RecipientFilter',
-    recipientFilterSchema
-  )
-}

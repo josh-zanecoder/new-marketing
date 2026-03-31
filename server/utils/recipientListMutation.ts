@@ -1,6 +1,5 @@
 import mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
-import { getRecipientFilterModel } from '../models/registry/RecipientFilter'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { ContactKind } from '../types/tenant/contact.model'
 import type {
@@ -17,8 +16,7 @@ const MEMBER_INSERT_BATCH = 1000
 
 export async function resolveRecipientListFiltersFromBody(
   body: Record<string, unknown>,
-  registryConn: Connection,
-  tenantId: string | null,
+  tenantConn: Connection,
   audience: ContactKind
 ): Promise<{
   filters: RecipientListCriterion[]
@@ -34,14 +32,7 @@ export async function resolveRecipientListFiltersFromBody(
   const useFilterRows = Array.isArray(rawRows) && rawRows.length > 0
 
   if (useFilterRows) {
-    if (!tenantId) {
-      throw createError({
-        statusCode: 400,
-        message:
-          'This account has no tenant ID in the registry; recipient filters cannot be applied'
-      })
-    }
-    const FilterModel = getRecipientFilterModel(registryConn)
+    const { RecipientFilter: FilterModel } = getTenantClientModels(tenantConn)
     for (const row of rawRows as unknown[]) {
       if (!row || typeof row !== 'object') continue
       const r = row as Record<string, unknown>
@@ -61,7 +52,6 @@ export async function resolveRecipientListFiltersFromBody(
 
       const doc = await FilterModel.findOne({
         _id: new mongoose.Types.ObjectId(recipientFilterId),
-        tenantId,
         enabled: true,
         contactType: audience
       })
@@ -76,9 +66,12 @@ export async function resolveRecipientListFiltersFromBody(
         })
       }
 
-      const { property } = canonicalRecipientFilterFieldsFromDoc(doc)
+      const filterDoc = doc as Record<string, unknown>
+      const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
       const registryVal =
-        typeof doc.propertyValue === 'string' ? doc.propertyValue.trim() : ''
+        typeof filterDoc.propertyValue === 'string'
+          ? filterDoc.propertyValue.trim()
+          : ''
       const effectiveValue = listPropertyValue || registryVal
 
       if (property !== 'none' && !effectiveValue) {
@@ -90,7 +83,7 @@ export async function resolveRecipientListFiltersFromBody(
       }
 
       const rowCriteria = registryDocToCriteria({
-        ...doc,
+        ...filterDoc,
         propertyValue: effectiveValue
       })
       if (rowCriteria.length) {
@@ -114,20 +107,12 @@ export async function resolveRecipientListFiltersFromBody(
     const listPropertyValue = listPropertyValueRaw.trim().slice(0, 2000)
 
     if (recipientFilterId) {
-      if (!tenantId) {
-        throw createError({
-          statusCode: 400,
-          message:
-            'This account has no tenant ID in the registry; recipient filters cannot be applied'
-        })
-      }
       if (!mongoose.isValidObjectId(recipientFilterId)) {
         throw createError({ statusCode: 400, message: 'Invalid recipient filter id' })
       }
-      const FilterModel = getRecipientFilterModel(registryConn)
+      const { RecipientFilter: FilterModel } = getTenantClientModels(tenantConn)
       const doc = await FilterModel.findOne({
         _id: new mongoose.Types.ObjectId(recipientFilterId),
-        tenantId,
         enabled: true,
         contactType: audience
       })
@@ -142,9 +127,12 @@ export async function resolveRecipientListFiltersFromBody(
         })
       }
 
-      const { property } = canonicalRecipientFilterFieldsFromDoc(doc)
+      const filterDoc = doc as Record<string, unknown>
+      const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
       const registryVal =
-        typeof doc.propertyValue === 'string' ? doc.propertyValue.trim() : ''
+        typeof filterDoc.propertyValue === 'string'
+          ? filterDoc.propertyValue.trim()
+          : ''
       const effectiveValue = listPropertyValue || registryVal
 
       if (property !== 'none' && !effectiveValue) {
@@ -156,7 +144,7 @@ export async function resolveRecipientListFiltersFromBody(
       }
 
       const legacyCriteria = registryDocToCriteria({
-        ...doc,
+        ...filterDoc,
         propertyValue: effectiveValue
       })
       filters = legacyCriteria

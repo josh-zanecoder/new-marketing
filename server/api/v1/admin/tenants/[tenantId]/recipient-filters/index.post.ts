@@ -1,6 +1,8 @@
-import { getRegistryConnection } from '../../../../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../../../../models/registry/RecipientFilter'
+import type { RecipientFilterDoc } from '../../../../../../models/tenant/RecipientFilter'
+import mongoose from 'mongoose'
+import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
 import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
   normalizeRecipientFilterContactType,
@@ -42,11 +44,14 @@ export default defineEventHandler(async (event) => {
   const propertyValue = normalizeRecipientFilterPropertyValue(body?.propertyValue)
   const enabled = body?.enabled !== false
 
-  const registryConn = await getRegistryConnection()
-  const Model = getRecipientFilterModel(registryConn)
+  const tenantConn = await getTenantConnectionByTenantId(tenantId)
+  if (!tenantConn) {
+    throw createError({ statusCode: 404, message: 'Tenant not found' })
+  }
+
+  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
   try {
     const doc = await Model.create({
-      tenantId,
       name,
       contactType,
       property,
@@ -54,17 +59,20 @@ export default defineEventHandler(async (event) => {
       propertyValue,
       enabled
     })
-    const canon = canonicalRecipientFilterFieldsFromDoc(doc.toObject())
+    const saved = doc.toObject() as unknown as RecipientFilterDoc & {
+      _id: mongoose.Types.ObjectId
+    }
+    const canon = canonicalRecipientFilterFieldsFromDoc(saved)
     return {
       filter: {
-        id: String(doc._id),
-        tenantId: doc.tenantId,
-        name: doc.name,
-        contactType: doc.contactType,
+        id: String(saved._id),
+        tenantId,
+        name: saved.name,
+        contactType: saved.contactType,
         property: canon.property,
         propertyType: canon.propertyType,
-        propertyValue: doc.propertyValue,
-        enabled: doc.enabled
+        propertyValue: saved.propertyValue,
+        enabled: saved.enabled
       }
     }
   } catch (e: unknown) {

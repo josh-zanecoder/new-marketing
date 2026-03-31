@@ -1,7 +1,8 @@
 import mongoose from 'mongoose'
-import { getRegistryConnection } from '../../../../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../../../../models/registry/RecipientFilter'
+import type { RecipientFilterDoc } from '../../../../../../models/tenant/RecipientFilter'
+import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
 import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
   normalizeRecipientFilterContactType,
@@ -47,11 +48,15 @@ export default defineEventHandler(async (event) => {
   }
   if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
 
-  const registryConn = await getRegistryConnection()
-  const Model = getRecipientFilterModel(registryConn)
+  const tenantConn = await getTenantConnectionByTenantId(tenantId)
+  if (!tenantConn) {
+    throw createError({ statusCode: 404, message: 'Tenant not found' })
+  }
+
+  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
 
   if (body?.property !== undefined || body?.propertyType !== undefined) {
-    const existing = await Model.findOne({ _id: filterId, tenantId }).lean().exec()
+    const existing = await Model.findOne({ _id: filterId }).lean().exec()
     if (!existing) {
       throw createError({ statusCode: 404, message: 'Filter not found' })
     }
@@ -79,7 +84,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const doc = await Model.findOneAndUpdate(
-      { _id: filterId, tenantId },
+      { _id: filterId },
       { $set: patch },
       { new: true, runValidators: true }
     ).exec()
@@ -88,17 +93,20 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Filter not found' })
     }
 
-    const canon = canonicalRecipientFilterFieldsFromDoc(doc.toObject())
+    const saved = doc.toObject() as unknown as RecipientFilterDoc & {
+      _id: mongoose.Types.ObjectId
+    }
+    const canon = canonicalRecipientFilterFieldsFromDoc(saved)
     return {
       filter: {
-        id: String(doc._id),
-        tenantId: doc.tenantId,
-        name: doc.name,
-        contactType: doc.contactType,
+        id: String(saved._id),
+        tenantId,
+        name: saved.name,
+        contactType: saved.contactType,
         property: canon.property,
         propertyType: canon.propertyType,
-        propertyValue: doc.propertyValue,
-        enabled: doc.enabled
+        propertyValue: saved.propertyValue,
+        enabled: saved.enabled
       }
     }
   } catch (e: unknown) {

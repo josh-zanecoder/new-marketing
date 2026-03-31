@@ -1,24 +1,26 @@
-import { getRegistryConnection } from '../../../../../../lib/mongoose'
-import { getRecipientFilterModel } from '../../../../../../models/registry/RecipientFilter'
+import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
 import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '../../../../../../utils/recipientFilterValidation'
 
-function serialize(f: {
-  _id: unknown
+function serialize(
+  f: {
+    _id: unknown
+    name: string
+    contactType: string
+    property?: string
+    propertyType?: string | null
+    propertyValue?: string
+    enabled: boolean
+    createdAt?: Date
+    updatedAt?: Date
+  },
   tenantId: string
-  name: string
-  contactType: string
-  property?: string
-  propertyType?: string | null
-  propertyValue?: string
-  enabled: boolean
-  createdAt?: Date
-  updatedAt?: Date
-}) {
+) {
   const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(f)
   return {
     id: String(f._id),
-    tenantId: f.tenantId,
+    tenantId,
     name: f.name,
     contactType: f.contactType,
     property,
@@ -42,14 +44,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing tenant id' })
   }
 
-  const registryConn = await getRegistryConnection()
-  const Model = getRecipientFilterModel(registryConn)
-  const docs = await Model.find({ tenantId })
+  const tenantConn = await getTenantConnectionByTenantId(tenantId)
+  if (!tenantConn) {
+    throw createError({ statusCode: 404, message: 'Tenant not found' })
+  }
+
+  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
+  const docs = await Model.find({})
     .sort({ updatedAt: -1 })
     .lean()
     .exec()
 
   return {
-    filters: docs.map(serialize)
+    filters: docs.map((d) =>
+      serialize(
+        d as unknown as Parameters<typeof serialize>[0],
+        tenantId
+      )
+    )
   }
 })

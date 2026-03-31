@@ -3,6 +3,8 @@ export interface EmailTemplateItem {
   id: string
   name: string
   html: string
+  /** Default subject from the saved template (optional for older callers). */
+  subject?: string
 }
 
 const props = withDefaults(

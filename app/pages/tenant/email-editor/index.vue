@@ -51,6 +51,19 @@ const initialHtml = ref<string | null>(null)
 const htmlReady = ref(false)
 const isMounted = ref(false)
 
+const DYN_VAR_BLOCK_PREFIX = 'email-dyn-var-'
+
+interface DynamicVariableItem {
+  id: string
+  key: string
+  label: string
+  sourceType?: 'recipient' | 'user'
+  scopes?: Array<'subject' | 'body'>
+  enabled?: boolean
+}
+
+const dynamicVariables = ref<DynamicVariableItem[]>([])
+
 function queryParamString(q: unknown): string {
   if (q == null) return ''
   if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0] : ''
@@ -60,9 +73,146 @@ function queryParamString(q: unknown): string {
 const htmlFromUrl = computed(() => queryParamString(route.query.html))
 const builderId = computed(() => queryParamString(route.query.builderId))
 const campaignId = computed(() => queryParamString(route.query.campaignId))
+const tenantIdFromQuery = computed(() => queryParamString(route.query.tenantId))
+const resolvedTenantId = ref('')
+
+function pickTenantId(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const obj = payload as Record<string, unknown>
+  const direct = obj.tenantId
+  if (typeof direct === 'string' && direct.trim()) return direct.trim()
+  const me = obj.me
+  if (me && typeof me === 'object') {
+    const nested = (me as Record<string, unknown>).tenantId
+    if (typeof nested === 'string' && nested.trim()) return nested.trim()
+  }
+  const data = obj.data
+  if (data && typeof data === 'object') {
+    const nested = (data as Record<string, unknown>).tenantId
+    if (typeof nested === 'string' && nested.trim()) return nested.trim()
+  }
+  return ''
+}
+
+async function resolveTenantId() {
+  if (tenantIdFromQuery.value) {
+    resolvedTenantId.value = tenantIdFromQuery.value
+    return
+  }
+  try {
+    const res = await $fetch<unknown>('/api/v1/tenant/me')
+    const id = pickTenantId(res)
+    resolvedTenantId.value = id || ''
+  } catch {
+    resolvedTenantId.value = ''
+  }
+}
+
+async function loadDynamicVariables() {
+  try {
+    const res = await $fetch<{ variables: DynamicVariableItem[] }>(
+      '/api/v1/tenant/dynamic-variables'
+    )
+    dynamicVariables.value = res.variables ?? []
+  } catch {
+    dynamicVariables.value = []
+  }
+}
+
+function tokenFor(v: DynamicVariableItem) {
+  return `{{${v.key}}}`
+}
+
+function variableCategory(v: DynamicVariableItem) {
+  if (v.sourceType === 'user') return 'User variables'
+  if (v.sourceType === 'recipient') return 'Recipient variables'
+  if (/^user\./i.test(v.key)) return 'User variables'
+  return 'Recipient variables'
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) {
+  const bm = editor.BlockManager
+  const coll = bm.getAll() as {
+    each?: (fn: (block: { get(k: string): string }) => void) => void
+    models?: Array<{ get(k: string): string }>
+  }
+  const toRemove: string[] = []
+  if (typeof coll.each === 'function') {
+    coll.each((block) => {
+      const id = block.get('id')
+      if (id?.startsWith(DYN_VAR_BLOCK_PREFIX)) toRemove.push(id)
+    })
+  } else if (coll.models) {
+    for (const block of coll.models) {
+      const id = block.get('id')
+      if (id?.startsWith(DYN_VAR_BLOCK_PREFIX)) toRemove.push(id)
+    }
+  }
+  for (const id of toRemove) bm.remove(id)
+
+  const mergeMedia =
+    '<div style="font-size:22px;font-weight:800;letter-spacing:-0.06em;line-height:1;color:currentColor">{{}}</div>'
+  let addedCount = 0
+
+  for (const v of list) {
+    if (v.enabled === false) continue
+    if (v.scopes?.length && !v.scopes.includes('body')) continue
+
+    const token = tokenFor(v)
+    const id = `${DYN_VAR_BLOCK_PREFIX}${v.id}`
+    bm.add(id, {
+      label: v.label,
+      category: variableCategory(v),
+      media: mergeMedia,
+      attributes: { title: `${token} — ${v.label}` },
+      content: `<span style="display:inline;">${token}</span>`
+    })
+    addedCount += 1
+  }
+
+  if (addedCount === 0) {
+    const tid = resolvedTenantId.value.trim()
+    const shortId = tid ? tid.slice(-8) : ''
+    const title = tid
+      ? `Tenant ID ${tid}. None configured yet — add them in Admin › Tenants › Dynamic variables.`
+      : 'Sign in as a tenant user or open this page with ?tenantId=… so your tenant can be resolved.'
+    const body = tid
+      ? `No merge fields for your tenant yet. ID: ${tid}`
+      : 'Tenant could not be resolved — dynamic variables were not loaded.'
+    bm.add(`${DYN_VAR_BLOCK_PREFIX}empty`, {
+      label: tid ? `No variables · …${shortId}` : 'No tenant context',
+      category: 'Dynamic variables',
+      media: mergeMedia,
+      attributes: { title },
+      content: `<p style="margin:0;font-size:12px;line-height:1.45;color:#64748b">${escapeHtml(body)}</p>`
+    })
+  }
+
+  bm.render()
+}
+
+watch([editorRef, dynamicVariables], () => {
+  const editor = editorRef.value
+  if (!editor) return
+  syncDynamicVariableBlocks(editor, dynamicVariables.value)
+})
 
 onMounted(() => {
   isMounted.value = true
+  resolveTenantId().then(loadDynamicVariables)
+})
+
+watch(tenantIdFromQuery, () => {
+  resolveTenantId().then(loadDynamicVariables)
 })
 
 watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
@@ -211,6 +361,18 @@ ${html}
     })
 
     editor.onReady(() => {
+      const frameEl = editor.Canvas?.getFrameEl?.()
+      if (frameEl) {
+        const sandboxTokens = (frameEl.getAttribute('sandbox') || '')
+          .split(/\s+/)
+          .map((t) => t.trim())
+          .filter(Boolean)
+        if (sandboxTokens.includes('allow-same-origin')) {
+          const next = sandboxTokens.filter((t) => t !== 'allow-same-origin')
+          frameEl.setAttribute('sandbox', next.length ? next.join(' ') : 'allow-scripts')
+        }
+      }
+
       const panels = editor.Panels
       const optionsPanel = panels.getPanel('options')
       if (optionsPanel) {

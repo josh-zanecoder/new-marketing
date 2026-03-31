@@ -2,8 +2,10 @@ import type { Connection, Model } from 'mongoose'
 import { campaignSchema } from './Campaign'
 import { campaignRecipientSchema } from './CampaignRecipient'
 import { contactSchema } from './Contact'
+import { emailDynamicVariableSchema } from './EmailDynamicVariable'
 import { emailTemplateSchema } from './EmailTemplate'
 import { manualRecipientSchema } from './ManualRecipients'
+import { recipientFilterSchema } from './RecipientFilter'
 import { recipientListSchema } from './RecipientList'
 import { recipientListMemberSchema } from './RecipientListMember'
 
@@ -12,6 +14,8 @@ export type TenantClientModels = {
   CampaignRecipient: Model<unknown>
   ManualRecipient: Model<unknown>
   EmailTemplate: Model<unknown>
+  EmailDynamicVariable: Model<unknown>
+  RecipientFilter: Model<unknown>
   Contact: Model<unknown>
   RecipientList: Model<unknown>
   RecipientListMember: Model<unknown>
@@ -28,6 +32,12 @@ export function getTenantClientModels(conn: Connection): TenantClientModels {
       conn.model('ManualRecipient', manualRecipientSchema),
     EmailTemplate:
       conn.models.EmailTemplate || conn.model('EmailTemplate', emailTemplateSchema),
+    EmailDynamicVariable:
+      conn.models.EmailDynamicVariable ||
+      conn.model('EmailDynamicVariable', emailDynamicVariableSchema),
+    RecipientFilter:
+      conn.models.RecipientFilter ||
+      conn.model('RecipientFilter', recipientFilterSchema),
     Contact: conn.models.Contact || conn.model('Contact', contactSchema),
     RecipientList:
       conn.models.RecipientList ||

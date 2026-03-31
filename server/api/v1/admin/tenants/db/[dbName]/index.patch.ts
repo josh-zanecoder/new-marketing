@@ -1,4 +1,3 @@
-import type { Types } from 'mongoose'
 import { getRegistryConnection } from '../../../../../../lib/mongoose'
 import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
 import { invalidateTenantTopicCacheForDbName } from '../../../../../../services/kafkaProducer'
@@ -105,7 +104,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const oldName = typeof existing.name === 'string' ? existing.name : ''
   const existingTenantId =
     typeof existing.tenantId === 'string' && existing.tenantId
       ? existing.tenantId
@@ -132,21 +130,6 @@ export default defineEventHandler(async (event) => {
       }
     }
   )
-
-  const dbConn = registryConn.useDb(dbName)
-  const tenantDoc =
-    (await dbConn.collection('clients').findOne(
-      existingTenantId ? { tenantId: existingTenantId } : { name: oldName }
-    )) ??
-    (await dbConn.collection('clients').findOne({}))
-
-  if (tenantDoc && typeof tenantDoc === 'object' && tenantDoc !== null && '_id' in tenantDoc) {
-    const _id = (tenantDoc as { _id: Types.ObjectId })._id
-    await dbConn.collection('clients').updateOne(
-      { _id },
-      { $set: { name: displayName, email: contactEmail, tenantId } }
-    )
-  }
 
   invalidateTenantTopicCacheForDbName(dbName)
 

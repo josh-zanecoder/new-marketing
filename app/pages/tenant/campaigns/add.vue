@@ -639,6 +639,8 @@ interface ExistingTemplateOption {
   id: string
   name: string
   html: string
+  /** Mirrors saved email template default subject; may be empty. */
+  subject?: string
 }
 
 const existingTemplates = ref<ExistingTemplateOption[]>([])
@@ -649,17 +651,17 @@ async function loadEmailTemplates() {
   emailTemplatesPending.value = true
   emailTemplatesError.value = ''
   try {
-    const res = await $fetch<{ templates: { id: string; name: string; htmlTemplate: string }[] }>(
-      '/api/v1/tenant/email-templates',
-      {
-        credentials: 'include',
-        ...serverAuthHeaders()
-      }
-    )
+    const res = await $fetch<{
+      templates: { id: string; name: string; htmlTemplate: string; subject?: string }[]
+    }>('/api/v1/tenant/email-templates', {
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
     existingTemplates.value = (res.templates ?? []).map((t) => ({
       id: t.id,
       name: t.name,
-      html: t.htmlTemplate
+      html: t.htmlTemplate,
+      subject: (t.subject ?? '').trim() || undefined
     }))
   } catch {
     emailTemplatesError.value = 'Could not load email templates.'
@@ -948,6 +950,10 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   designModalOpen.value = false
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
+  const fromTemplate = template.subject?.trim()
+  if (fromTemplate) {
+    form.value.subject = fromTemplate
+  }
   const campaignId = editId.value || `temp-${Date.now()}`
   if (typeof window !== 'undefined') {
     // Same key the email editor reads after save-and-exit; avoids relying on builderId query + separate storage.
@@ -965,7 +971,13 @@ function applyStoredOrSelectedTemplate() {
   }
   if (!savedTemplateHtml.value && form.value.templateMode === 'existing' && form.value.selectedTemplateId) {
     const template = existingTemplates.value.find(t => t.id === form.value.selectedTemplateId)
-    if (template) savedTemplateHtml.value = template.html
+    if (template) {
+      savedTemplateHtml.value = template.html
+      const sub = (template.subject ?? '').trim()
+      if (sub && !form.value.subject?.trim()) {
+        form.value.subject = sub
+      }
+    }
   }
 }
 
