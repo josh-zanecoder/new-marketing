@@ -1,5 +1,14 @@
 import type { Model, Types } from 'mongoose'
 
+/** Persisted CRM user fields for template tokens {{ user.firstName }}, etc. */
+export interface CampaignMergeUserSnapshot {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  role?: string
+}
+
 export interface CampaignLean {
   _id: Types.ObjectId
   name: string
@@ -12,6 +21,7 @@ export interface CampaignLean {
   createdAt?: Date
   updatedAt?: Date
   clientId?: string
+  mergeUserSnapshot?: CampaignMergeUserSnapshot
 }
 
 export interface CampaignDoc {

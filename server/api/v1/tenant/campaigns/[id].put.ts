@@ -8,6 +8,7 @@ import type {
 } from '../../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
+import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -67,6 +68,8 @@ export default defineEventHandler(async (event) => {
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
   campaign.subject = body.subject?.trim() || ''
+  const mergeSnap = mergeUserSnapshotFromTenantAuth(event.context.auth)
+  if (mergeSnap) campaign.set('mergeUserSnapshot', mergeSnap)
   await campaign.save()
 
   if (recipientsType === 'manual') {

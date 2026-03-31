@@ -62,11 +62,11 @@ export default defineEventHandler(async (event) => {
     tenantId: row.tenantId ?? null,
     clientKeyHash,
     maxAgeSec: TENANT_AUTH_COOKIE_MAX_AGE,
-    ...(handoffEmail ? { crmHandoffEmail: handoffEmail } : {}),
-    ...(handoffFirstName ? { crmHandoffFirstName: handoffFirstName } : {}),
-    ...(handoffLastName ? { crmHandoffLastName: handoffLastName } : {}),
-    ...(handoffPhone ? { crmHandoffPhone: handoffPhone } : {}),
-    ...(handoffRole ? { crmHandoffRole: handoffRole } : {}),
+    ...(handoffEmail ? { handoffEmail } : {}),
+    ...(handoffFirstName ? { handoffFirstName } : {}),
+    ...(handoffLastName ? { handoffLastName } : {}),
+    ...(handoffPhone ? { handoffPhone } : {}),
+    ...(handoffRole ? { handoffRole } : {}),
     ...(tenantWideContacts === true
       ? { tenantWideContacts: true }
       : allowedOwnerEmails?.length

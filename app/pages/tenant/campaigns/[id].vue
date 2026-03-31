@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { useCampaignStore } from '~/store/campaignStore'
+import type { MarketingMeResponse } from '~/composables/useMarketingMe'
+import type { UserMergeSnapshot } from '~/utils/emailTemplateMerge'
+import { mergeMustacheTemplate, mergeRootWithUserSnapshot } from '~/utils/emailTemplateMerge'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
@@ -17,12 +20,51 @@ const { data, error, pending } = await useFetch<{
     recipients: { email: string; status?: string; sentAt?: string; error?: string }[]
     emailTemplate?: { name: string; html: string }
     templateHtml?: string | null
+    mergeUserSnapshot?: UserMergeSnapshot
     createdAt: string
     updatedAt: string
   }
 }>(`/api/v1/tenant/campaigns/${id}`)
 
+const { data: mePayload } = await useFetch<MarketingMeResponse>('/api/v1/auth/me', {
+  credentials: 'include'
+})
+
 const campaign = computed(() => data.value?.campaign ?? null)
+
+function userSnapshotForPreview(
+  me: MarketingMeResponse['user'] | null | undefined,
+  fallback: UserMergeSnapshot | undefined
+): UserMergeSnapshot {
+  if (me && typeof me === 'object' && me.authType === 'apiKey') {
+    const snap: UserMergeSnapshot = {}
+    if (me.firstName) snap.firstName = me.firstName
+    if (me.lastName) snap.lastName = me.lastName
+    if (me.email) snap.email = me.email
+    if (me.phone) snap.phone = me.phone
+    if (me.tenantRole) snap.role = me.tenantRole
+    if (Object.keys(snap).length) return snap
+  }
+  return { ...(fallback || {}) }
+}
+
+const mergeRoot = computed(() =>
+  mergeRootWithUserSnapshot(
+    userSnapshotForPreview(mePayload.value?.user ?? null, campaign.value?.mergeUserSnapshot)
+  )
+)
+
+const previewHtml = computed(() => {
+  const raw = campaign.value?.templateHtml
+  if (!raw) return ''
+  return mergeMustacheTemplate(raw, mergeRoot.value)
+})
+
+const previewSubject = computed(() => {
+  const sub = campaign.value?.subject
+  if (!sub) return ''
+  return mergeMustacheTemplate(sub, mergeRoot.value)
+})
 
 const showSkeleton = computed(() => pending.value && !error.value)
 
@@ -33,6 +75,47 @@ body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,
 #preview-wrap{transform:scale(${scale});transform-origin:center top;width:600px}
 </style></head><body><div id=preview-wrap>${html}</div></body></html>`
 }
+
+/** Larger scale for modal (~real width on desktop). */
+function previewSrcdocModal(html: string, scale = 0.92) {
+  return previewSrcdoc(html, scale)
+}
+
+const previewModalOpen = ref(false)
+
+function openPreviewModal() {
+  previewModalOpen.value = true
+}
+
+function closePreviewModal() {
+  previewModalOpen.value = false
+}
+
+let previewEscListener: ((e: KeyboardEvent) => void) | null = null
+
+watch(previewModalOpen, (open) => {
+  if (!import.meta.client) return
+  document.body.style.overflow = open ? 'hidden' : ''
+  if (previewEscListener) {
+    window.removeEventListener('keydown', previewEscListener)
+    previewEscListener = null
+  }
+  if (open) {
+    previewEscListener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePreviewModal()
+    }
+    window.addEventListener('keydown', previewEscListener)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  document.body.style.overflow = ''
+  if (previewEscListener) {
+    window.removeEventListener('keydown', previewEscListener)
+    previewEscListener = null
+  }
+})
 
 function formatDate(d: string) {
   if (!d) return '–'
@@ -199,7 +282,7 @@ function formatDate(d: string) {
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Subject</dt>
                     <dd class="break-words text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
-                      {{ campaign.subject || '–' }}
+                      {{ previewSubject || '–' }}
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
@@ -278,18 +361,39 @@ function formatDate(d: string) {
 
           <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
             <div v-if="campaign.templateHtml" class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-              <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                   Email preview
                 </h2>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                  @click="openPreviewModal"
+                >
+                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                  Full preview
+                </button>
               </div>
-              <div class="relative min-h-[400px] max-h-[600px] overflow-auto bg-[#f8f4ef] p-4 sm:p-6 xl:min-h-[min(52vh,560px)] xl:max-h-[min(88vh,920px)] 2xl:min-h-[min(58vh,640px)]">
+              <div
+                class="relative min-h-[400px] max-h-[600px] cursor-zoom-in overflow-auto bg-[#f8f4ef] p-4 sm:p-6 xl:min-h-[min(52vh,560px)] xl:max-h-[min(88vh,920px)] 2xl:min-h-[min(58vh,640px)]"
+                role="button"
+                tabindex="0"
+                :aria-label="'Open full email preview. Subject: ' + (previewSubject || campaign.name)"
+                @click="openPreviewModal"
+                @keydown.enter.prevent="openPreviewModal"
+                @keydown.space.prevent="openPreviewModal"
+              >
                 <iframe
-                  :srcdoc="previewSrcdoc(campaign.templateHtml)"
+                  :srcdoc="previewSrcdoc(previewHtml)"
                   title="Email preview"
-                  class="min-h-[400px] w-full border-0 xl:min-h-[min(48vh,520px)]"
+                  class="pointer-events-none min-h-[400px] w-full select-none border-0 xl:min-h-[min(48vh,520px)]"
                   sandbox="allow-same-origin"
                 />
+                <p class="pointer-events-none mt-3 text-center text-xs text-zinc-500">
+                  Click to open full preview
+                </p>
               </div>
             </div>
 
@@ -303,5 +407,53 @@ function formatDate(d: string) {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="previewModalOpen && previewHtml"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="email-preview-modal-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closePreviewModal"
+        />
+        <div
+          class="relative flex max-h-[95vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:max-h-[90vh] sm:rounded-2xl"
+        >
+          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3 sm:px-5">
+            <div class="min-w-0">
+              <p id="email-preview-modal-title" class="text-sm font-semibold text-zinc-900">
+                Email preview
+              </p>
+              <p v-if="previewSubject" class="mt-0.5 truncate text-xs text-zinc-500" :title="previewSubject">
+                {{ previewSubject }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+              aria-label="Close preview"
+              @click="closePreviewModal"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-auto bg-[#f8f4ef] p-4 sm:p-5">
+            <iframe
+              :srcdoc="previewSrcdocModal(previewHtml)"
+              class="h-[min(75vh,820px)] w-full min-h-[320px] border-0 sm:h-[min(72vh,780px)]"
+              sandbox="allow-same-origin"
+              title="Email preview (full size)"
+            />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

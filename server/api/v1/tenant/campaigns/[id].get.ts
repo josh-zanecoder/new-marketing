@@ -72,6 +72,7 @@ export default defineEventHandler(async (event) => {
       recipients,
       emailTemplate,
       templateHtml,
+      mergeUserSnapshot: campaign.mergeUserSnapshot,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt
     }

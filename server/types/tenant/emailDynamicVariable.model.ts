@@ -11,7 +11,10 @@ export interface EmailDynamicVariableDoc {
   /** Display label in admin / tenant pickers. */
   label: string
   description?: string
-  /** Dot path on Contact at send time (e.g. `name`, `email`, `company`, `address.state`). */
+  /**
+   * For `recipient`: dot path on Contact at send time.
+   * For `user`: logical path under `user` in merge data (often matches key after `user.`, e.g. `firstName`); templates use `{{user.firstName}}` filled from the campaign `mergeUserSnapshot` / CRM handoff session.
+   */
   contactPath: string
   sourceType?: EmailDynamicVariableSourceType
   scopes: EmailDynamicVariableScope[]

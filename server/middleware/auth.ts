@@ -22,52 +22,65 @@ const PUBLIC_API_PREFIXES = [
 
 const ADMIN_API_PREFIX = '/api/v1/admin'
 
-const CRM_USER_ID_MAX = 128
-const CRM_USER_EMAIL_MAX = 320
-const CRM_USER_NAME_MAX = 200
-const CRM_USER_PART_MAX = 100
-const CRM_USER_PHONE_MAX = 40
-const CRM_USER_ROLE_MAX = 120
+const TENANT_FORWARDED_USER_ID_MAX = 128
+const TENANT_FORWARDED_USER_EMAIL_MAX = 320
+const TENANT_FORWARDED_USER_NAME_MAX = 200
+const TENANT_FORWARDED_USER_PART_MAX = 100
+const TENANT_FORWARDED_USER_PHONE_MAX = 40
+const TENANT_FORWARDED_USER_ROLE_MAX = 120
 
-/** Optional CRM operator identity; only applied when API key auth succeeds (same trust as the key). */
-function crmForwardedUserFromHeaders(event: H3Event): {
-  crmUserId?: string
-  crmUserEmail?: string
-  crmUserName?: string
-  crmUserFirstName?: string
-  crmUserLastName?: string
-  crmUserPhone?: string
-  crmUserRole?: string
+function firstHeader(event: H3Event, names: string[]): string {
+  for (const name of names) {
+    const v = (getHeader(event, name) || '').trim()
+    if (v) return v
+  }
+  return ''
+}
+
+/** Optional forwarded tenant operator; only when API key auth succeeds (same trust as the key). */
+function tenantForwardedUserFromHeaders(event: H3Event): {
+  tenantUserId?: string
+  tenantUserEmail?: string
+  tenantUserName?: string
+  tenantUserFirstName?: string
+  tenantUserLastName?: string
+  tenantUserPhone?: string
+  tenantUserRole?: string
 } {
-  const id = (getHeader(event, 'x-crm-user-id') || '').trim()
-  const email = (getHeader(event, 'x-crm-user-email') || '').trim().toLowerCase()
-  const name = (getHeader(event, 'x-crm-user-name') || '').trim()
-  const firstName = (getHeader(event, 'x-crm-user-first-name') || '').trim()
-  const lastName = (getHeader(event, 'x-crm-user-last-name') || '').trim()
-  const phone = (getHeader(event, 'x-crm-user-phone') || '').trim()
-  const role = (getHeader(event, 'x-crm-user-role') || '').trim()
+  const id = firstHeader(event, ['x-tenant-user-id', 'x-crm-user-id'])
+  const email = firstHeader(event, ['x-tenant-user-email', 'x-crm-user-email']).toLowerCase()
+  const name = firstHeader(event, ['x-tenant-user-name', 'x-crm-user-name'])
+  const firstName = firstHeader(event, ['x-tenant-user-first-name', 'x-crm-user-first-name'])
+  const lastName = firstHeader(event, ['x-tenant-user-last-name', 'x-crm-user-last-name'])
+  const phone = firstHeader(event, ['x-tenant-user-phone', 'x-crm-user-phone'])
+  const role = firstHeader(event, ['x-tenant-user-role', 'x-crm-user-role'])
   const out: {
-    crmUserId?: string
-    crmUserEmail?: string
-    crmUserName?: string
-    crmUserFirstName?: string
-    crmUserLastName?: string
-    crmUserPhone?: string
-    crmUserRole?: string
+    tenantUserId?: string
+    tenantUserEmail?: string
+    tenantUserName?: string
+    tenantUserFirstName?: string
+    tenantUserLastName?: string
+    tenantUserPhone?: string
+    tenantUserRole?: string
   } = {}
-  if (id.length > 0 && id.length <= CRM_USER_ID_MAX) out.crmUserId = id
-  if (email.length > 0 && email.length <= CRM_USER_EMAIL_MAX) out.crmUserEmail = email
-  if (name.length > 0 && name.length <= CRM_USER_NAME_MAX) out.crmUserName = name
-  if (firstName.length > 0 && firstName.length <= CRM_USER_PART_MAX) out.crmUserFirstName = firstName
-  if (lastName.length > 0 && lastName.length <= CRM_USER_PART_MAX) out.crmUserLastName = lastName
-  if (phone.length > 0 && phone.length <= CRM_USER_PHONE_MAX) out.crmUserPhone = phone
-  if (role.length > 0 && role.length <= CRM_USER_ROLE_MAX) out.crmUserRole = role
+  if (id.length > 0 && id.length <= TENANT_FORWARDED_USER_ID_MAX) out.tenantUserId = id
+  if (email.length > 0 && email.length <= TENANT_FORWARDED_USER_EMAIL_MAX) out.tenantUserEmail = email
+  if (name.length > 0 && name.length <= TENANT_FORWARDED_USER_NAME_MAX) out.tenantUserName = name
+  if (firstName.length > 0 && firstName.length <= TENANT_FORWARDED_USER_PART_MAX)
+    out.tenantUserFirstName = firstName
+  if (lastName.length > 0 && lastName.length <= TENANT_FORWARDED_USER_PART_MAX)
+    out.tenantUserLastName = lastName
+  if (phone.length > 0 && phone.length <= TENANT_FORWARDED_USER_PHONE_MAX) out.tenantUserPhone = phone
+  if (role.length > 0 && role.length <= TENANT_FORWARDED_USER_ROLE_MAX) out.tenantUserRole = role
   return out
 }
 
-/** Same trust boundary as `x-crm-user-email`: only for API-key requests from CRM. */
-function crmContactOwnerEmailsHeader(event: H3Event): string[] | undefined {
-  const raw = (getHeader(event, 'x-crm-contact-owner-emails') || '').trim()
+/** Only for API-key requests from the tenant app / BFF. */
+function tenantContactOwnerEmailsHeader(event: H3Event): string[] | undefined {
+  const raw = firstHeader(event, [
+    'x-tenant-contact-owner-emails',
+    'x-crm-contact-owner-emails'
+  ])
   if (!raw) return undefined
   const seen = new Set<string>()
   const out: string[] = []
@@ -126,11 +139,11 @@ export default defineEventHandler(async (event) => {
           if (row?.clientKeyHash) {
             const {
               tenantId: tidFromJwt,
-              crmEmail,
-              crmFirstName,
-              crmLastName,
-              crmPhone,
-              crmRole,
+              tenantUserEmail,
+              tenantUserFirstName,
+              tenantUserLastName,
+              tenantUserPhone,
+              tenantUserRole,
               contactOwnerEmails,
               tenantWideContacts
             } = verifyMarketingTenantBrowserSession(sessionCookie, row.clientKeyHash, dbName)
@@ -145,11 +158,11 @@ export default defineEventHandler(async (event) => {
                 dbName: row.dbName,
                 ...(row.tenantId ? { tenantId: row.tenantId } : {}),
                 ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
-                ...(crmEmail ? { crmUserEmail: crmEmail } : {}),
-                ...(crmFirstName ? { crmUserFirstName: crmFirstName } : {}),
-                ...(crmLastName ? { crmUserLastName: crmLastName } : {}),
-                ...(crmPhone ? { crmUserPhone: crmPhone } : {}),
-                ...(crmRole ? { crmUserRole: crmRole } : {}),
+                ...(tenantUserEmail ? { tenantUserEmail } : {}),
+                ...(tenantUserFirstName ? { tenantUserFirstName } : {}),
+                ...(tenantUserLastName ? { tenantUserLastName } : {}),
+                ...(tenantUserPhone ? { tenantUserPhone } : {}),
+                ...(tenantUserRole ? { tenantUserRole } : {}),
                 ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
                 ...(!tenantWideContacts && contactOwnerEmails?.length
                   ? { contactOwnerScope: contactOwnerEmails }
@@ -170,8 +183,8 @@ export default defineEventHandler(async (event) => {
   if (apiKey && !path.startsWith(ADMIN_API_PREFIX)) {
     const row = await findRegistryTenantByApiKey(registryConn, apiKey)
     if (row) {
-      const crm = crmForwardedUserFromHeaders(event)
-      const headerOwners = crmContactOwnerEmailsHeader(event)
+      const forwarded = tenantForwardedUserFromHeaders(event)
+      const headerOwners = tenantContactOwnerEmailsHeader(event)
       event.context.auth = {
         type: 'tenantApiKey',
         role: 'tenant',
@@ -179,13 +192,15 @@ export default defineEventHandler(async (event) => {
         dbName: row.dbName,
         ...(row.tenantId ? { tenantId: row.tenantId } : {}),
         ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
-        ...(crm.crmUserId ? { crmUserId: crm.crmUserId } : {}),
-        ...(crm.crmUserEmail ? { crmUserEmail: crm.crmUserEmail } : {}),
-        ...(crm.crmUserName ? { crmUserName: crm.crmUserName } : {}),
-        ...(crm.crmUserFirstName ? { crmUserFirstName: crm.crmUserFirstName } : {}),
-        ...(crm.crmUserLastName ? { crmUserLastName: crm.crmUserLastName } : {}),
-        ...(crm.crmUserPhone ? { crmUserPhone: crm.crmUserPhone } : {}),
-        ...(crm.crmUserRole ? { crmUserRole: crm.crmUserRole } : {}),
+        ...(forwarded.tenantUserId ? { tenantUserId: forwarded.tenantUserId } : {}),
+        ...(forwarded.tenantUserEmail ? { tenantUserEmail: forwarded.tenantUserEmail } : {}),
+        ...(forwarded.tenantUserName ? { tenantUserName: forwarded.tenantUserName } : {}),
+        ...(forwarded.tenantUserFirstName
+          ? { tenantUserFirstName: forwarded.tenantUserFirstName }
+          : {}),
+        ...(forwarded.tenantUserLastName ? { tenantUserLastName: forwarded.tenantUserLastName } : {}),
+        ...(forwarded.tenantUserPhone ? { tenantUserPhone: forwarded.tenantUserPhone } : {}),
+        ...(forwarded.tenantUserRole ? { tenantUserRole: forwarded.tenantUserRole } : {}),
         ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {})
       }
       return

@@ -9,6 +9,7 @@ import type {
 } from '../../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
+import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -37,6 +38,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const mergeSnap =
+    mergeUserSnapshotFromTenantAuth(event.context.auth) ?? source.mergeUserSnapshot
+
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
     sender: source.sender,
@@ -45,7 +49,8 @@ export default defineEventHandler(async (event) => {
     emailTemplate: emailTemplateId,
     subject: source.subject || '',
     status: 'Draft',
-    clientId: ''
+    clientId: '',
+    ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {})
   }).save()
 
   if (source.recipientsType === 'manual' || source.recipientsType === 'list') {

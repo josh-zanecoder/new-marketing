@@ -2,6 +2,7 @@ import { getTenantClientModels } from '../../../../models/tenant/tenantClientMod
 import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
+import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -36,6 +37,7 @@ export default defineEventHandler(async (event) => {
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''
 
+  const mergeSnap = mergeUserSnapshotFromTenantAuth(event.context.auth)
   const campaignData: Record<string, unknown> = {
     name: body.name.trim(),
     sender: {
@@ -49,6 +51,7 @@ export default defineEventHandler(async (event) => {
     clientId: ''
   }
   if (emailTemplateId) campaignData.emailTemplate = emailTemplateId
+  if (mergeSnap) campaignData.mergeUserSnapshot = mergeSnap
 
   const campaign = await new Campaign(campaignData).save()
 

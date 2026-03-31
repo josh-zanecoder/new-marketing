@@ -23,12 +23,12 @@ export function signMarketingTenantBrowserSession(params: {
   tenantId: string | null
   clientKeyHash: string
   maxAgeSec: number
-  crmHandoffEmail?: string
-  crmHandoffFirstName?: string
-  crmHandoffLastName?: string
-  crmHandoffPhone?: string
-  crmHandoffRole?: string
-  /** CRM user may see all tenant contacts (no `metadata.ownerEmail` filter). */
+  handoffEmail?: string
+  handoffFirstName?: string
+  handoffLastName?: string
+  handoffPhone?: string
+  handoffRole?: string
+  /** Operator may see all tenant contacts (no `metadata.ownerEmail` filter). */
   tenantWideContacts?: boolean
   contactOwnerEmails?: string[]
 }): string {
@@ -40,16 +40,16 @@ export function signMarketingTenantBrowserSession(params: {
     exp: now + params.maxAgeSec
   }
   if (params.tenantId) payload.tid = params.tenantId
-  const em = params.crmHandoffEmail?.trim()
-  if (em) payload.crmEmail = em
-  const fn = params.crmHandoffFirstName?.trim()
-  if (fn) payload.crmFn = fn
-  const ln = params.crmHandoffLastName?.trim()
-  if (ln) payload.crmLn = ln
-  const ph = params.crmHandoffPhone?.trim()
-  if (ph) payload.crmPh = ph
-  const rl = params.crmHandoffRole?.trim()
-  if (rl) payload.crmRl = rl
+  const em = params.handoffEmail?.trim()
+  if (em) payload.tenantEmail = em
+  const fn = params.handoffFirstName?.trim()
+  if (fn) payload.tenantFn = fn
+  const ln = params.handoffLastName?.trim()
+  if (ln) payload.tenantLn = ln
+  const ph = params.handoffPhone?.trim()
+  if (ph) payload.tenantPh = ph
+  const rl = params.handoffRole?.trim()
+  if (rl) payload.tenantRl = rl
   if (params.tenantWideContacts === true) {
     payload.tw = true
   }
@@ -70,11 +70,11 @@ export function verifyMarketingTenantBrowserSession(
   expectedDbName: string
 ): {
   tenantId: string | null
-  crmEmail?: string
-  crmFirstName?: string
-  crmLastName?: string
-  crmPhone?: string
-  crmRole?: string
+  tenantUserEmail?: string
+  tenantUserFirstName?: string
+  tenantUserLastName?: string
+  tenantUserPhone?: string
+  tenantUserRole?: string
   tenantWideContacts?: true
   contactOwnerEmails?: string[]
 } {
@@ -96,11 +96,21 @@ export function verifyMarketingTenantBrowserSession(
   if (exp < Math.floor(Date.now() / 1000)) throw new Error('Expired')
 
   const tid = typeof payload.tid === 'string' ? payload.tid.trim() : ''
-  const crmEmail = typeof payload.crmEmail === 'string' ? payload.crmEmail.trim() : ''
-  const crmFirstName = typeof payload.crmFn === 'string' ? payload.crmFn.trim() : ''
-  const crmLastName = typeof payload.crmLn === 'string' ? payload.crmLn.trim() : ''
-  const crmPhone = typeof payload.crmPh === 'string' ? payload.crmPh.trim() : ''
-  const crmRole = typeof payload.crmRl === 'string' ? payload.crmRl.trim() : ''
+  const tenantUserEmail =
+    (typeof payload.tenantEmail === 'string' ? payload.tenantEmail.trim() : '') ||
+    (typeof payload.crmEmail === 'string' ? payload.crmEmail.trim() : '')
+  const tenantUserFirstName =
+    (typeof payload.tenantFn === 'string' ? payload.tenantFn.trim() : '') ||
+    (typeof payload.crmFn === 'string' ? payload.crmFn.trim() : '')
+  const tenantUserLastName =
+    (typeof payload.tenantLn === 'string' ? payload.tenantLn.trim() : '') ||
+    (typeof payload.crmLn === 'string' ? payload.crmLn.trim() : '')
+  const tenantUserPhone =
+    (typeof payload.tenantPh === 'string' ? payload.tenantPh.trim() : '') ||
+    (typeof payload.crmPh === 'string' ? payload.crmPh.trim() : '')
+  const tenantUserRole =
+    (typeof payload.tenantRl === 'string' ? payload.tenantRl.trim() : '') ||
+    (typeof payload.crmRl === 'string' ? payload.crmRl.trim() : '')
   const tenantWideContacts =
     payload.tw === true || payload.tw === 'true' ? (true as const) : undefined
 
@@ -122,11 +132,11 @@ export function verifyMarketingTenantBrowserSession(
 
   return {
     tenantId: tid || null,
-    ...(crmEmail ? { crmEmail } : {}),
-    ...(crmFirstName ? { crmFirstName } : {}),
-    ...(crmLastName ? { crmLastName } : {}),
-    ...(crmPhone ? { crmPhone } : {}),
-    ...(crmRole ? { crmRole } : {}),
+    ...(tenantUserEmail ? { tenantUserEmail } : {}),
+    ...(tenantUserFirstName ? { tenantUserFirstName } : {}),
+    ...(tenantUserLastName ? { tenantUserLastName } : {}),
+    ...(tenantUserPhone ? { tenantUserPhone } : {}),
+    ...(tenantUserRole ? { tenantUserRole } : {}),
     ...(tenantWideContacts ? { tenantWideContacts } : {}),
     ...(contactOwnerEmails ? { contactOwnerEmails } : {})
   }

@@ -3,6 +3,10 @@ import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model
 import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { sendEmail } from './brevo.service'
+import {
+  mergeMustacheTemplate,
+  mergeRootWithUserSnapshot
+} from '../../app/utils/emailTemplateMerge'
 
 const BATCH_SIZE = 25
 
@@ -100,11 +104,18 @@ export async function processBatch(
       continue
     }
 
+    const mergeRoot = mergeRootWithUserSnapshot(campaign.mergeUserSnapshot)
+    const subjectRendered = mergeMustacheTemplate(
+      campaign.subject || '(No subject)',
+      mergeRoot
+    )
+    const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+
     const result = await sendEmail({
       sender: campaign.sender,
       to: [{ email: r.email }],
-      subject: campaign.subject || '(No subject)',
-      htmlContent: templateHtml,
+      subject: subjectRendered,
+      htmlContent: htmlRendered,
       tags: [`campaign:${campaignId}`]
     })
 

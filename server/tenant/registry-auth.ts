@@ -14,24 +14,22 @@ export type TenantApiKeyAuthContext = {
   tenantId?: string
   /** From registry `clients.crmAppUrl` when set. */
   crmAppUrl?: string
-  /** CRM sends `x-crm-user-id` with the tenant API key (integration / BFF). */
-  crmUserId?: string
-  /** CRM sends `x-crm-user-email`. */
-  crmUserEmail?: string
-  /** CRM sends `x-crm-user-name`. */
-  crmUserName?: string
-  /** From handoff session or `x-crm-user-first-name`. */
-  crmUserFirstName?: string
-  crmUserLastName?: string
-  crmUserPhone?: string
-  /** CRM tenant role display name (not Marketing auth role). */
-  crmUserRole?: string
+  /** Optional forwarded operator id (`x-tenant-user-id` or legacy `x-crm-user-id`). */
+  tenantUserId?: string
+  tenantUserEmail?: string
+  tenantUserName?: string
+  /** From handoff session or forwarded headers. */
+  tenantUserFirstName?: string
+  tenantUserLastName?: string
+  tenantUserPhone?: string
+  /** Tenant role display name for templates / UI (not Marketing `role: 'tenant'`). */
+  tenantUserRole?: string
   /**
-   * CRM handoff: lowercased emails allowed for `metadata.ownerEmail` on contacts.
+   * Handoff / headers: lowercased emails allowed for `metadata.ownerEmail` on contacts.
    * Omitted = no row-level filter (integrations / legacy session).
    */
   contactOwnerScope?: string[]
-  /** From CRM handoff: user may see all contacts for the tenant (no owner filter). */
+  /** User may see all contacts for the tenant (no owner filter). */
   tenantWideContacts?: true
 }
 

@@ -50,6 +50,21 @@ const editorRef = ref<Editor | null>(null)
 const initialHtml = ref<string | null>(null)
 const htmlReady = ref(false)
 const isMounted = ref(false)
+const editorInitInFlight = ref(false)
+let editorInitToken = 0
+let blockSyncTimer: ReturnType<typeof setTimeout> | null = null
+let editorCleanupFns: Array<() => void> = []
+
+function logEditorCrash(stage: string, details?: unknown) {
+  console.error('[EmailEditor][Crash]', {
+    stage,
+    route: typeof route.fullPath === 'string' ? route.fullPath : '',
+    campaignId: campaignId.value || null,
+    builderId: builderId.value || null,
+    tenantId: resolvedTenantId.value || null,
+    details
+  })
+}
 
 const DYN_VAR_BLOCK_PREFIX = 'email-dyn-var-'
 
@@ -139,6 +154,16 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;')
 }
 
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  const el = target as Partial<HTMLElement> | null
+  if (!el || typeof el !== 'object') return false
+  const tag = el.tagName?.toLowerCase() || ''
+  if (tag === 'input' || tag === 'textarea') return true
+  if (el.isContentEditable === true) return true
+  if (typeof el.closest !== 'function') return false
+  return Boolean(el.closest('[contenteditable="true"]'))
+}
+
 function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) {
   const bm = editor.BlockManager
   const coll = bm.getAll() as {
@@ -200,10 +225,65 @@ function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) 
   bm.render()
 }
 
+function queueDynamicVariableBlocksSync() {
+  if (blockSyncTimer) clearTimeout(blockSyncTimer)
+  blockSyncTimer = setTimeout(() => {
+    blockSyncTimer = null
+    const editor = editorRef.value
+    if (!editor) return
+    try {
+      syncDynamicVariableBlocks(editor, dynamicVariables.value)
+    } catch (err) {
+      logEditorCrash('dynamic-variable-blocks.sync', err)
+    }
+  }, 120)
+}
+
+function hardenTextBlocks(editor: Editor) {
+  const bm = editor.BlockManager
+  const textBlock = bm.get('text')
+  if (!textBlock) return
+  textBlock.set({
+    activate: false,
+    content: `
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td style="padding:10px 0;color:#334155;font-size:14px;line-height:1.6;" data-gjs-type="text">
+            Add your text here
+          </td>
+        </tr>
+      </table>
+    `
+  })
+}
+
+function runEditorCleanups() {
+  for (const fn of editorCleanupFns) {
+    try {
+      fn()
+    } catch {
+      /* cleanup failed */
+    }
+  }
+  editorCleanupFns = []
+}
+
+function destroyEditorInstance() {
+  if (blockSyncTimer) {
+    clearTimeout(blockSyncTimer)
+    blockSyncTimer = null
+  }
+  runEditorCleanups()
+  if (editorRef.value) {
+    editorRef.value.destroy()
+    editorRef.value = null
+  }
+}
+
 watch([editorRef, dynamicVariables], () => {
   const editor = editorRef.value
   if (!editor) return
-  syncDynamicVariableBlocks(editor, dynamicVariables.value)
+  queueDynamicVariableBlocksSync()
 })
 
 onMounted(() => {
@@ -253,16 +333,26 @@ watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
   htmlReady.value = true
 }, { immediate: true })
 
-watch([isMounted, htmlReady], () => {
+watch([isMounted, htmlReady], async () => {
   if (!isMounted.value || !htmlReady.value) return
+  if (editorRef.value || editorInitInFlight.value) return
 
-  nextTick().then(() => {
+  editorInitInFlight.value = true
+  const token = ++editorInitToken
+
+  try {
+    await nextTick()
+    if (token !== editorInitToken) return
     if (!editorContainerRef.value) return
 
-  Promise.all([
-    import('grapesjs'),
-    import('grapesjs-preset-newsletter')
-  ]).then(([grapesjsModule, presetModule]) => {
+    destroyEditorInstance()
+
+    const [grapesjsModule, presetModule] = await Promise.all([
+      import('grapesjs'),
+      import('grapesjs-preset-newsletter')
+    ])
+    if (token !== editorInitToken) return
+
     const grapesjs = grapesjsModule.default
     const presetNewsletter = presetModule.default
 
@@ -270,6 +360,7 @@ watch([isMounted, htmlReady], () => {
 
     const editor = grapesjs.init({
       height: '100%',
+      width: 'auto',
       storageManager: false,
       container: editorContainerRef.value,
       fromElement: false,
@@ -296,6 +387,13 @@ watch([isMounted, htmlReady], () => {
             textCleanCanvas: 'Are you sure you want to clear the canvas?'
           })
       ]
+    })
+    editorCleanupFns.push(() => {
+      try {
+        editor.stopCommand?.('*')
+      } catch {
+        /* noop */
+      }
     })
 
     editor.Commands.add('save-and-exit', {
@@ -361,16 +459,43 @@ ${html}
     })
 
     editor.onReady(() => {
-      const frameEl = editor.Canvas?.getFrameEl?.()
-      if (frameEl) {
-        const sandboxTokens = (frameEl.getAttribute('sandbox') || '')
-          .split(/\s+/)
-          .map((t) => t.trim())
-          .filter(Boolean)
-        if (sandboxTokens.includes('allow-same-origin')) {
-          const next = sandboxTokens.filter((t) => t !== 'allow-same-origin')
-          frameEl.setAttribute('sandbox', next.length ? next.join(' ') : 'allow-scripts')
+      const onWindowError = (ev: ErrorEvent) => {
+        logEditorCrash('window.error', {
+          message: ev.message,
+          filename: ev.filename,
+          lineno: ev.lineno,
+          colno: ev.colno,
+          error: ev.error instanceof Error ? ev.error.stack || ev.error.message : ev.error
+        })
+      }
+      const onUnhandledRejection = (ev: PromiseRejectionEvent) => {
+        logEditorCrash('window.unhandledrejection', {
+          reason:
+            ev.reason instanceof Error
+              ? ev.reason.stack || ev.reason.message
+              : String(ev.reason)
+        })
+      }
+      window.addEventListener('error', onWindowError)
+      window.addEventListener('unhandledrejection', onUnhandledRejection)
+      editorCleanupFns.push(() => {
+        window.removeEventListener('error', onWindowError)
+        window.removeEventListener('unhandledrejection', onUnhandledRejection)
+      })
+
+      const frameDoc = editor.Canvas?.getDocument?.()
+      if (frameDoc) {
+        const onFrameKeydown = (e: KeyboardEvent) => {
+          if (!(e.ctrlKey || e.metaKey)) return
+          if (e.key.toLowerCase() !== 'a') return
+          // Keep Cmd/Ctrl+A scoped to text editing instead of GrapesJS global select-all.
+          if (!isTextEditingTarget(e.target)) return
+          e.stopPropagation()
         }
+        frameDoc.addEventListener('keydown', onFrameKeydown, true)
+        editorCleanupFns.push(() => {
+          frameDoc.removeEventListener('keydown', onFrameKeydown, true)
+        })
       }
 
       const panels = editor.Panels
@@ -383,38 +508,37 @@ ${html}
           attributes: { title: 'Save to Device' }
         })
       }
+      hardenTextBlocks(editor)
       if (initialHtml.value) {
         try {
-          editor.runCommand('core:canvas-clear')
-          const html = initialHtml.value
-          setTimeout(() => {
-            editor.addComponents(html)
-          }, 300)
+          editor.setComponents(initialHtml.value)
         } catch {
-          editor.addComponents(DEFAULT_EMAIL_TEMPLATE)
+          editor.setComponents(DEFAULT_EMAIL_TEMPLATE)
         }
       } else {
-        editor.addComponents(DEFAULT_EMAIL_TEMPLATE)
+        editor.setComponents(DEFAULT_EMAIL_TEMPLATE)
       }
+
+      queueDynamicVariableBlocksSync()
+    })
+    editor.on('error', (err: unknown) => {
+      logEditorCrash('grapesjs.error', err)
     })
 
     editorRef.value = editor
-  }).catch(console.error)
-  })
-
-  return () => {
-    if (editorRef.value) {
-      editorRef.value.destroy()
-      editorRef.value = null
+  } catch (err) {
+    logEditorCrash('editor.init', err)
+  } finally {
+    if (token === editorInitToken) {
+      editorInitInFlight.value = false
     }
   }
 }, { immediate: true })
 
 onBeforeUnmount(() => {
-  if (editorRef.value) {
-    editorRef.value.destroy()
-    editorRef.value = null
-  }
+  editorInitToken += 1
+  editorInitInFlight.value = false
+  destroyEditorInstance()
 })
 
 function handleSaveAndExit() {
@@ -452,7 +576,7 @@ function handleSaveAndExit() {
     <div v-if="!isMounted" class="flex h-screen items-center justify-center bg-slate-100">
       <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
     </div>
-    <div v-else class="flex h-screen flex-col overflow-hidden">
+    <div v-else class="flex h-screen flex-col">
       <div class="flex shrink-0 items-center justify-end border-b border-slate-200 bg-slate-800 px-4 py-2.5">
         <button
           type="button"
@@ -464,7 +588,7 @@ function handleSaveAndExit() {
       </div>
       <div
         ref="editorContainerRef"
-        class="min-h-0 flex-1 overflow-hidden"
+        class="min-h-0 flex-1 overflow-auto"
         style="height: calc(100vh - 52px)"
       />
     </div>

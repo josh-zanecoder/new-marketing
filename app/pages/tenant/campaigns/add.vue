@@ -283,13 +283,14 @@
                   >
                     Change design
                   </button>
-                  <NuxtLink
+                  <button
                     v-if="designEditorCampaignId"
-                    :to="`/tenant/email-editor?campaignId=${designEditorCampaignId}&token=local`"
+                    type="button"
                     class="rounded-xl bg-zinc-900 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800"
+                    @click="openEditorWithCurrentDesign"
                   >
                     Edit in editor
-                  </NuxtLink>
+                  </button>
                 </div>
               </div>
               <div class="relative min-h-[280px] max-h-[min(480px,55vh)] overflow-auto bg-[#f8f4ef]">
@@ -740,6 +741,7 @@ async function loadFromEditorReturn() {
         recipientsListId?: string
         subject: string
         recipients: { email: string }[]
+        templateHtml?: string | null
       } }>(`/api/v1/tenant/campaigns/${campaignId}`)
       const c = res.campaign
       form.value = {
@@ -752,6 +754,9 @@ async function loadFromEditorReturn() {
         recipientsManual: c.recipients?.length ? c.recipients.map((r) => r.email) : [''],
         templateMode: form.value.templateMode,
         selectedTemplateId: form.value.selectedTemplateId
+      }
+      if (!savedTemplateHtml.value && c.templateHtml) {
+        savedTemplateHtml.value = c.templateHtml
       }
     } catch {
       /* ignore prefetch errors; session path may still apply */
@@ -789,6 +794,21 @@ function pickQueryString(q: unknown): string {
 const designEditorCampaignId = computed(() =>
   returnCampaignId.value || editId.value || pickQueryString(route.query.campaignId)
 )
+
+function openEditorWithCurrentDesign() {
+  const campaignId = designEditorCampaignId.value
+  if (!campaignId) return
+  if (typeof window !== 'undefined') {
+    if (savedTemplateHtml.value) {
+      window.sessionStorage.setItem(`campaign-template-${campaignId}`, savedTemplateHtml.value)
+    }
+    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
+      form: { ...form.value },
+      campaignId
+    }))
+  }
+  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
+}
 
 const recipientsDescription = computed(() => {
   if (form.value.recipientsMode === 'manual') {

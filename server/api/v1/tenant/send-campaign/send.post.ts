@@ -9,6 +9,7 @@ import type { ManualRecipientLean, ManualRecipientModel } from '../../../../type
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../../helpers/marketingEmail'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
+import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -105,7 +106,16 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: 'Sending' })
+  const snap = mergeUserSnapshotFromTenantAuth(event.context.auth)
+  await (Campaign as CampaignModel).updateOne(
+    { _id: campaignId },
+    {
+      $set: {
+        status: 'Sending',
+        ...(snap ? { mergeUserSnapshot: snap } : {})
+      }
+    }
+  )
 
   try {
     await enqueueCampaignBatch(campaignId, dbName)

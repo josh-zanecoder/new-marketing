@@ -17,21 +17,20 @@ export type MarketingMeApiKeyUser = {
   tenantId?: string
   /** Registry `crmAppUrl` — CRM base URL for “Back to CRM”. */
   crmAppUrl?: string
-  /** From CRM `x-crm-user-id` when calling Marketing with the tenant API key. */
-  crmUserId?: string
-  /** From CRM `x-crm-user-email` or handoff JWT. */
+  /** Forwarded operator id (`x-tenant-user-id` / legacy `x-crm-user-id`). */
+  tenantUserId?: string
+  /** Handoff JWT or `x-tenant-user-email`. */
   email?: string
-  /** From CRM `x-crm-user-name`. */
+  /** `x-tenant-user-name`. */
   name?: string
-  /** From CRM handoff JWT or `x-crm-user-first-name`. */
   firstName?: string
   lastName?: string
   phone?: string
-  /** CRM tenant role display name (Marketing auth role remains `tenant`). */
-  crmRole?: string
-  /** CRM handoff: emails allowed for contact ownership filter. */
+  /** Tenant role display name (Marketing auth role remains `tenant`). */
+  tenantRole?: string
+  /** Handoff: emails allowed for contact ownership filter. */
   contactOwnerEmails?: string[]
-  /** When true, Marketing does not filter contacts by owner (CRM user without `users:own-ae-only`). */
+  /** When true, no contact owner filter (`users:own-ae-only` off). */
   tenantWideContacts?: true
 }
 
