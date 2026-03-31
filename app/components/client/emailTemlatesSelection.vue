@@ -100,6 +100,7 @@ onUnmounted(() => {
           leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         >
           <div
+            v-if="modelValue"
             class="relative z-[81] flex max-h-[min(92vh,900px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
           >
             <header class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">

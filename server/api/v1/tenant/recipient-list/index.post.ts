@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import type { Types } from 'mongoose'
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import type { ContactKind } from '../../../../types/tenant/contact.model'
 import type { RecipientListFilterMode } from '../../../../types/tenant/recipientList.model'
@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
     clientId: ''
   })
 
-  const listId = created._id as mongoose.Types.ObjectId
+  const listId = created._id as Types.ObjectId
   const memberCount = await rebuildRecipientListMembers(
     tenantConn,
     listId,

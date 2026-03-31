@@ -1,5 +1,5 @@
 import type { RecipientFilterDoc } from '../../../../../../models/tenant/RecipientFilter'
-import mongoose from 'mongoose'
+import type { Types } from 'mongoose'
 import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
 import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
 import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
       enabled
     })
     const saved = doc.toObject() as unknown as RecipientFilterDoc & {
-      _id: mongoose.Types.ObjectId
+      _id: Types.ObjectId
     }
     const canon = canonicalRecipientFilterFieldsFromDoc(saved)
     return {
