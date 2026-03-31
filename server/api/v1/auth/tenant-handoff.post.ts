@@ -31,6 +31,10 @@ export default defineEventHandler(async (event) => {
     apiKey,
     marketingTenantId,
     email: handoffEmail,
+    firstName: handoffFirstName,
+    lastName: handoffLastName,
+    phone: handoffPhone,
+    role: handoffRole,
     allowedOwnerEmails,
     tenantWideContacts
   } = parsed
@@ -59,6 +63,10 @@ export default defineEventHandler(async (event) => {
     clientKeyHash,
     maxAgeSec: TENANT_AUTH_COOKIE_MAX_AGE,
     ...(handoffEmail ? { crmHandoffEmail: handoffEmail } : {}),
+    ...(handoffFirstName ? { crmHandoffFirstName: handoffFirstName } : {}),
+    ...(handoffLastName ? { crmHandoffLastName: handoffLastName } : {}),
+    ...(handoffPhone ? { crmHandoffPhone: handoffPhone } : {}),
+    ...(handoffRole ? { crmHandoffRole: handoffRole } : {}),
     ...(tenantWideContacts === true
       ? { tenantWideContacts: true }
       : allowedOwnerEmails?.length

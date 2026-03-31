@@ -20,6 +20,12 @@ export type TenantApiKeyAuthContext = {
   crmUserEmail?: string
   /** CRM sends `x-crm-user-name`. */
   crmUserName?: string
+  /** From handoff session or `x-crm-user-first-name`. */
+  crmUserFirstName?: string
+  crmUserLastName?: string
+  crmUserPhone?: string
+  /** CRM tenant role display name (not Marketing auth role). */
+  crmUserRole?: string
   /**
    * CRM handoff: lowercased emails allowed for `metadata.ownerEmail` on contacts.
    * Omitted = no row-level filter (integrations / legacy session).

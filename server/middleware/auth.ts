@@ -25,24 +25,43 @@ const ADMIN_API_PREFIX = '/api/v1/admin'
 const CRM_USER_ID_MAX = 128
 const CRM_USER_EMAIL_MAX = 320
 const CRM_USER_NAME_MAX = 200
+const CRM_USER_PART_MAX = 100
+const CRM_USER_PHONE_MAX = 40
+const CRM_USER_ROLE_MAX = 120
 
 /** Optional CRM operator identity; only applied when API key auth succeeds (same trust as the key). */
 function crmForwardedUserFromHeaders(event: H3Event): {
   crmUserId?: string
   crmUserEmail?: string
   crmUserName?: string
+  crmUserFirstName?: string
+  crmUserLastName?: string
+  crmUserPhone?: string
+  crmUserRole?: string
 } {
   const id = (getHeader(event, 'x-crm-user-id') || '').trim()
   const email = (getHeader(event, 'x-crm-user-email') || '').trim().toLowerCase()
   const name = (getHeader(event, 'x-crm-user-name') || '').trim()
+  const firstName = (getHeader(event, 'x-crm-user-first-name') || '').trim()
+  const lastName = (getHeader(event, 'x-crm-user-last-name') || '').trim()
+  const phone = (getHeader(event, 'x-crm-user-phone') || '').trim()
+  const role = (getHeader(event, 'x-crm-user-role') || '').trim()
   const out: {
     crmUserId?: string
     crmUserEmail?: string
     crmUserName?: string
+    crmUserFirstName?: string
+    crmUserLastName?: string
+    crmUserPhone?: string
+    crmUserRole?: string
   } = {}
   if (id.length > 0 && id.length <= CRM_USER_ID_MAX) out.crmUserId = id
   if (email.length > 0 && email.length <= CRM_USER_EMAIL_MAX) out.crmUserEmail = email
   if (name.length > 0 && name.length <= CRM_USER_NAME_MAX) out.crmUserName = name
+  if (firstName.length > 0 && firstName.length <= CRM_USER_PART_MAX) out.crmUserFirstName = firstName
+  if (lastName.length > 0 && lastName.length <= CRM_USER_PART_MAX) out.crmUserLastName = lastName
+  if (phone.length > 0 && phone.length <= CRM_USER_PHONE_MAX) out.crmUserPhone = phone
+  if (role.length > 0 && role.length <= CRM_USER_ROLE_MAX) out.crmUserRole = role
   return out
 }
 
@@ -105,8 +124,16 @@ export default defineEventHandler(async (event) => {
         if (dbName) {
           const row = await findRegistryTenantByDbName(registryConn, dbName)
           if (row?.clientKeyHash) {
-            const { tenantId: tidFromJwt, crmEmail, contactOwnerEmails, tenantWideContacts } =
-              verifyMarketingTenantBrowserSession(sessionCookie, row.clientKeyHash, dbName)
+            const {
+              tenantId: tidFromJwt,
+              crmEmail,
+              crmFirstName,
+              crmLastName,
+              crmPhone,
+              crmRole,
+              contactOwnerEmails,
+              tenantWideContacts
+            } = verifyMarketingTenantBrowserSession(sessionCookie, row.clientKeyHash, dbName)
             const tidMismatch = Boolean(
               row.tenantId && tidFromJwt && row.tenantId !== tidFromJwt
             )
@@ -119,6 +146,10 @@ export default defineEventHandler(async (event) => {
                 ...(row.tenantId ? { tenantId: row.tenantId } : {}),
                 ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
                 ...(crmEmail ? { crmUserEmail: crmEmail } : {}),
+                ...(crmFirstName ? { crmUserFirstName: crmFirstName } : {}),
+                ...(crmLastName ? { crmUserLastName: crmLastName } : {}),
+                ...(crmPhone ? { crmUserPhone: crmPhone } : {}),
+                ...(crmRole ? { crmUserRole: crmRole } : {}),
                 ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
                 ...(!tenantWideContacts && contactOwnerEmails?.length
                   ? { contactOwnerScope: contactOwnerEmails }
@@ -151,6 +182,10 @@ export default defineEventHandler(async (event) => {
         ...(crm.crmUserId ? { crmUserId: crm.crmUserId } : {}),
         ...(crm.crmUserEmail ? { crmUserEmail: crm.crmUserEmail } : {}),
         ...(crm.crmUserName ? { crmUserName: crm.crmUserName } : {}),
+        ...(crm.crmUserFirstName ? { crmUserFirstName: crm.crmUserFirstName } : {}),
+        ...(crm.crmUserLastName ? { crmUserLastName: crm.crmUserLastName } : {}),
+        ...(crm.crmUserPhone ? { crmUserPhone: crm.crmUserPhone } : {}),
+        ...(crm.crmUserRole ? { crmUserRole: crm.crmUserRole } : {}),
         ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {})
       }
       return

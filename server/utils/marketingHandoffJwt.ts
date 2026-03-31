@@ -22,6 +22,11 @@ export type HandoffParseResult = {
   apiKey: string
   marketingTenantId: string
   email?: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  /** CRM active tenant role display name. */
+  role?: string
   /** Lowercased CRM `ownerEmails` claim (`users:own-ae-only` / downline scope). */
   allowedOwnerEmails?: string[]
   /** CRM `tenantWideContacts`: no contact owner filter (lacks `users:own-ae-only`). */
@@ -56,17 +61,29 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   verifyHs256Signature(h, p, s, apiKey)
 
   const emailRaw = typeof payload.email === 'string' ? payload.email.trim() : ''
+  const firstNameRaw = typeof payload.firstName === 'string' ? payload.firstName.trim() : ''
+  const lastNameRaw = typeof payload.lastName === 'string' ? payload.lastName.trim() : ''
+  const phoneRaw = typeof payload.phone === 'string' ? payload.phone.trim() : ''
+  const roleRaw = typeof payload.role === 'string' ? payload.role.trim() : ''
 
   const tenantWideContacts =
     payload.tenantWideContacts === true || payload.tenantWideContacts === 'true'
       ? (true as const)
       : undefined
 
+  const profileExtras = {
+    ...(emailRaw ? { email: emailRaw } : {}),
+    ...(firstNameRaw ? { firstName: firstNameRaw } : {}),
+    ...(lastNameRaw ? { lastName: lastNameRaw } : {}),
+    ...(phoneRaw ? { phone: phoneRaw } : {}),
+    ...(roleRaw ? { role: roleRaw } : {})
+  }
+
   if (tenantWideContacts) {
     return {
       apiKey,
       marketingTenantId: sub,
-      ...(emailRaw ? { email: emailRaw } : {}),
+      ...profileExtras,
       tenantWideContacts
     }
   }
@@ -87,7 +104,7 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   return {
     apiKey,
     marketingTenantId: sub,
-    ...(emailRaw ? { email: emailRaw } : {}),
+    ...profileExtras,
     ...(allowedOwnerEmails ? { allowedOwnerEmails } : {})
   }
 }

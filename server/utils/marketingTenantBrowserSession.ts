@@ -24,6 +24,10 @@ export function signMarketingTenantBrowserSession(params: {
   clientKeyHash: string
   maxAgeSec: number
   crmHandoffEmail?: string
+  crmHandoffFirstName?: string
+  crmHandoffLastName?: string
+  crmHandoffPhone?: string
+  crmHandoffRole?: string
   /** CRM user may see all tenant contacts (no `metadata.ownerEmail` filter). */
   tenantWideContacts?: boolean
   contactOwnerEmails?: string[]
@@ -38,6 +42,14 @@ export function signMarketingTenantBrowserSession(params: {
   if (params.tenantId) payload.tid = params.tenantId
   const em = params.crmHandoffEmail?.trim()
   if (em) payload.crmEmail = em
+  const fn = params.crmHandoffFirstName?.trim()
+  if (fn) payload.crmFn = fn
+  const ln = params.crmHandoffLastName?.trim()
+  if (ln) payload.crmLn = ln
+  const ph = params.crmHandoffPhone?.trim()
+  if (ph) payload.crmPh = ph
+  const rl = params.crmHandoffRole?.trim()
+  if (rl) payload.crmRl = rl
   if (params.tenantWideContacts === true) {
     payload.tw = true
   }
@@ -59,6 +71,10 @@ export function verifyMarketingTenantBrowserSession(
 ): {
   tenantId: string | null
   crmEmail?: string
+  crmFirstName?: string
+  crmLastName?: string
+  crmPhone?: string
+  crmRole?: string
   tenantWideContacts?: true
   contactOwnerEmails?: string[]
 } {
@@ -81,6 +97,10 @@ export function verifyMarketingTenantBrowserSession(
 
   const tid = typeof payload.tid === 'string' ? payload.tid.trim() : ''
   const crmEmail = typeof payload.crmEmail === 'string' ? payload.crmEmail.trim() : ''
+  const crmFirstName = typeof payload.crmFn === 'string' ? payload.crmFn.trim() : ''
+  const crmLastName = typeof payload.crmLn === 'string' ? payload.crmLn.trim() : ''
+  const crmPhone = typeof payload.crmPh === 'string' ? payload.crmPh.trim() : ''
+  const crmRole = typeof payload.crmRl === 'string' ? payload.crmRl.trim() : ''
   const tenantWideContacts =
     payload.tw === true || payload.tw === 'true' ? (true as const) : undefined
 
@@ -103,6 +123,10 @@ export function verifyMarketingTenantBrowserSession(
   return {
     tenantId: tid || null,
     ...(crmEmail ? { crmEmail } : {}),
+    ...(crmFirstName ? { crmFirstName } : {}),
+    ...(crmLastName ? { crmLastName } : {}),
+    ...(crmPhone ? { crmPhone } : {}),
+    ...(crmRole ? { crmRole } : {}),
     ...(tenantWideContacts ? { tenantWideContacts } : {}),
     ...(contactOwnerEmails ? { contactOwnerEmails } : {})
   }
