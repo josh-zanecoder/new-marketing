@@ -1,7 +1,7 @@
 import {
   isFirebaseTenantAuthContext,
   isTenantApiKeyAuthContext
-} from '../../../tenant/registry-auth'
+} from '@server/tenant/registry-auth'
 
 export default defineEventHandler((event) => {
   const auth = event.context.auth as unknown

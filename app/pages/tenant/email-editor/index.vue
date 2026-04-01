@@ -305,7 +305,7 @@ async function openMergePreview() {
   let root: Record<string, unknown> = {}
   if (cid && /^[a-f0-9]{24}$/i.test(cid)) {
     try {
-      const r = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+      const r = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
         method: 'POST',
         body: { campaignId: cid },
         credentials: 'include'

@@ -1,15 +1,15 @@
-import { getRegistryConnection } from '../../../../lib/mongoose'
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
   isTenantApiKeyAuthContext,
   resolveTenantIdForTenantAuth
-} from '../../../../tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
-import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
-import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
+} from '@server/tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
+import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
+import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListDocument'
 
 const CONTACT_LIMIT = 3000
 type ContactRow = {

@@ -1,16 +1,16 @@
 import mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
-import { getTenantClientModels } from '../models/tenant/tenantClientModels'
-import type { ContactKind } from '../types/tenant/contact.model'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListFilterMode
-} from '../types/tenant/recipientList.model'
-import { isTenantApiKeyAuthContext } from '../tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from './contactOwnerFilter'
-import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
-import { buildContactFilterQuery } from './recipientListContactQuery'
-import { registryDocToCriteria } from './recipientListDocument'
+} from '@server/types/tenant/recipientList.model'
+import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
+import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
+import { registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
 
 const MEMBER_INSERT_BATCH = 1000
 
@@ -25,8 +25,7 @@ export async function resolveRecipientListFiltersFromBody(
 }> {
   let filters: RecipientListCriterion[] = []
   const criterionGroups: RecipientListCriterion[][] = []
-  const persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[] =
-    []
+  const persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[] = []
 
   const rawRows = body?.filterRows
   const useFilterRows = Array.isArray(rawRows) && rawRows.length > 0
@@ -54,31 +53,24 @@ export async function resolveRecipientListFiltersFromBody(
         _id: new mongoose.Types.ObjectId(recipientFilterId),
         enabled: true,
         contactType: audience
-      })
-        .lean()
-        .exec()
+      }).lean().exec()
 
       if (!doc) {
         throw createError({
           statusCode: 404,
-          message:
-            'Recipient filter not found, disabled, or does not match the selected audience'
+          message: 'Recipient filter not found, disabled, or does not match the selected audience'
         })
       }
 
       const filterDoc = doc as Record<string, unknown>
       const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
-      const registryVal =
-        typeof filterDoc.propertyValue === 'string'
-          ? filterDoc.propertyValue.trim()
-          : ''
+      const registryVal = typeof filterDoc.propertyValue === 'string' ? filterDoc.propertyValue.trim() : ''
       const effectiveValue = listPropertyValue || registryVal
 
       if (property !== 'none' && !effectiveValue) {
         throw createError({
           statusCode: 400,
-          message:
-            'This filter has no saved value; enter a value for the property before creating the list'
+          message: 'This filter has no saved value; enter a value for the property before creating the list'
         })
       }
 
@@ -90,10 +82,7 @@ export async function resolveRecipientListFiltersFromBody(
         criterionGroups.push(rowCriteria)
         filters.push(...rowCriteria)
       }
-      persistedFilterRows.push({
-        recipientFilterId,
-        listPropertyValue
-      })
+      persistedFilterRows.push({ recipientFilterId, listPropertyValue })
     }
   } else {
     const rawFilterId = body?.recipientFilterId
@@ -115,31 +104,24 @@ export async function resolveRecipientListFiltersFromBody(
         _id: new mongoose.Types.ObjectId(recipientFilterId),
         enabled: true,
         contactType: audience
-      })
-        .lean()
-        .exec()
+      }).lean().exec()
 
       if (!doc) {
         throw createError({
           statusCode: 404,
-          message:
-            'Recipient filter not found, disabled, or does not match the selected audience'
+          message: 'Recipient filter not found, disabled, or does not match the selected audience'
         })
       }
 
       const filterDoc = doc as Record<string, unknown>
       const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
-      const registryVal =
-        typeof filterDoc.propertyValue === 'string'
-          ? filterDoc.propertyValue.trim()
-          : ''
+      const registryVal = typeof filterDoc.propertyValue === 'string' ? filterDoc.propertyValue.trim() : ''
       const effectiveValue = listPropertyValue || registryVal
 
       if (property !== 'none' && !effectiveValue) {
         throw createError({
           statusCode: 400,
-          message:
-            'This filter has no saved value; enter a value for the property before creating the list'
+          message: 'This filter has no saved value; enter a value for the property before creating the list'
         })
       }
 
@@ -148,13 +130,8 @@ export async function resolveRecipientListFiltersFromBody(
         propertyValue: effectiveValue
       })
       filters = legacyCriteria
-      if (legacyCriteria.length) {
-        criterionGroups.push(legacyCriteria)
-      }
-      persistedFilterRows.push({
-        recipientFilterId,
-        listPropertyValue
-      })
+      if (legacyCriteria.length) criterionGroups.push(legacyCriteria)
+      persistedFilterRows.push({ recipientFilterId, listPropertyValue })
     }
   }
 
@@ -171,18 +148,11 @@ export async function rebuildRecipientListMembers(
   auth: unknown
 ): Promise<number> {
   const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
-
   await RecipientListMember.deleteMany({ recipientListId: listId })
 
-  const groupsForAndMode =
-    filterMode === 'and' && criterionGroups.length > 0 ? criterionGroups : undefined
+  const groupsForAndMode = filterMode === 'and' && criterionGroups.length > 0 ? criterionGroups : undefined
 
-  const contactQuery = buildContactFilterQuery(
-    audience,
-    filters,
-    filterMode,
-    groupsForAndMode
-  )
+  const contactQuery = buildContactFilterQuery(audience, filters, filterMode, groupsForAndMode)
   const ownerScope =
     isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
       ? auth.contactOwnerScope

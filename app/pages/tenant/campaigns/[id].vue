@@ -26,7 +26,7 @@ const { data, error, pending } = await useFetch<{
 
 const { data: mergeRootPayload } = await useAsyncData(`email-merge-root-${id}`, async () => {
   try {
-    return await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+    return await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
       method: 'POST',
       body: { campaignId: id },
       credentials: 'include'

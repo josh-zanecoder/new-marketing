@@ -4,14 +4,14 @@
  */
 import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
-import type { TenantClientModels } from '../../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../types/tenant/campaign.model'
-import type { ContactLean, ContactModel } from '../../types/tenant/contact.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../types/tenant/manualRecipient.model'
-import type { RecipientListMemberModel } from '../../types/tenant/recipientListMember.model'
-import { normalizeMarketingEmail } from '../../helpers/marketingEmail'
-import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
-import { resolveRecipientListEmails } from '../resolveRecipientListEmails'
+import type { TenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
+import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
+import type { RecipientListMemberModel } from '@server/types/tenant/recipientListMember.model'
+import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 function contactKindRank(k: string): number {
   const order: Record<string, number> = { client: 0, prospect: 1, contact: 2 }
@@ -126,7 +126,7 @@ export async function contactsByEmailForAudience(
   emails: string[]
 ): Promise<Map<string, ContactLean>> {
   const { Contact, RecipientListMember } = models
-  let contactByEmail = await loadContactsByNormalizedEmail(Contact as ContactModel, emails)
+  const contactByEmail = await loadContactsByNormalizedEmail(Contact as ContactModel, emails)
 
   if (audience.recipientsType === 'list' && audience.recipientsListId?.trim()) {
     const listIdRaw = audience.recipientsListId.trim()

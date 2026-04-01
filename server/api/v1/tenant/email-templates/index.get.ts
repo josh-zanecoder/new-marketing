@@ -1,6 +1,6 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../../../../types/tenant/emailTemplate.model'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 
 type EmailTemplateLean = EmailTemplateDoc & {
   description?: string

@@ -1,13 +1,13 @@
 import type { Types } from 'mongoose'
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import type { ContactKind } from '../../../../types/tenant/contact.model'
-import type { RecipientListFilterMode } from '../../../../types/tenant/recipientList.model'
-import { isRegisteredTenantAuthContext } from '../../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { ContactKind } from '@server/types/tenant/contact.model'
+import type { RecipientListFilterMode } from '@server/types/tenant/recipientList.model'
+import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import {
   rebuildRecipientListMembers,
   resolveRecipientListFiltersFromBody
-} from '../../../../utils/recipientListMutation'
+} from '@server/utils/recipient/recipientListMutation'
 
 type CreatedRecipientList = {
   name?: string

@@ -1,10 +1,10 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../../../../types/tenant/campaignRecipient.model'
-import type { EmailTemplateDoc, EmailTemplateModel } from '../../../../types/tenant/emailTemplate.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
+import type { CampaignRecipientLean, CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
+import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
-      const rawHtml = template.htmlTemplate ?? template.html
+      const rawHtml = template.htmlTemplate ?? template.html ?? ''
       emailTemplate = { name: template.name, html: rawHtml }
       // Support legacy docs with separate css field
       templateHtml = template.css ? `<style>${template.css}</style>${rawHtml}` : rawHtml

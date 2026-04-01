@@ -1,10 +1,10 @@
-import { getRegistryConnection } from '../../../../lib/mongoose'
+import { getRegistryConnection } from '@server/lib/mongoose'
 import {
   generateTenantApiKey,
   hashTenantApiKey,
   getTenantApiKeyPrefix
-} from '../../../../tenant/api-key'
-import { isAdminAuthContext } from '../../../../tenant/registry-auth'
+} from '@server/tenant/api-key'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown

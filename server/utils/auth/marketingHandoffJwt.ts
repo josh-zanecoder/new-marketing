@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
 
 const ISS = 'mortdash-crm'
 const AUD = 'mortdash-marketing'
@@ -25,17 +25,11 @@ export type HandoffParseResult = {
   firstName?: string
   lastName?: string
   phone?: string
-  /** CRM active tenant role display name. */
   role?: string
-  /** Lowercased CRM `ownerEmails` claim (`users:own-ae-only` / downline scope). */
   allowedOwnerEmails?: string[]
-  /** CRM `tenantWideContacts`: no contact owner filter (lacks `users:own-ae-only`). */
   tenantWideContacts?: true
 }
 
-/**
- * CRM handoff JWT: HS256 secret = tenant `nmk_`; payload `k` matches; `sub` = marketing registry tenantId.
- */
 export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   const parts = token.trim().split('.')
   if (parts.length !== 3) {

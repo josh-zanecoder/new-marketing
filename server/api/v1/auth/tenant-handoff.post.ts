@@ -1,8 +1,8 @@
 import { getRegistryConnection } from '../../../lib/mongoose'
 import { hashTenantApiKey } from '../../../tenant/api-key'
 import { findRegistryTenantByApiKey } from '../../../tenant/registry-auth'
-import { parseMarketingHandoffToken } from '../../../utils/marketingHandoffJwt'
-import { signMarketingTenantBrowserSession } from '../../../utils/marketingTenantBrowserSession'
+import { parseMarketingHandoffToken } from '../../../utils/auth/marketingHandoffJwt'
+import { signMarketingTenantBrowserSession } from '../../../utils/auth/marketingTenantBrowserSession'
 import {
   MARKETING_TENANT_BRIDGE_COOKIE,
   MARKETING_TENANT_SESSION_COOKIE,

@@ -1,5 +1,5 @@
-import type { ContactLean } from '../../types/tenant/contact.model'
-import { formatContactFullName } from '../contactPersonName'
+import type { ContactLean } from '@server/types/tenant/contact.model'
+import { formatContactFullName } from '@server/utils/contactPersonName'
 
 /** Minimal CRM contact shape needed for `recipient.*` merge tokens. */
 export type CrmContactFieldsForMerge = {

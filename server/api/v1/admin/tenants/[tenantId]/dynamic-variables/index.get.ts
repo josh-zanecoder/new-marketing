@@ -1,6 +1,6 @@
-import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 
 function serialize(v: {
   _id: unknown

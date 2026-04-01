@@ -1,6 +1,6 @@
-import { getRegistryConnection } from '../../../../../../lib/mongoose'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import type { RegistryTenantDoc, TenantAdminRow } from '../../../../../../types/registry/registryTenant.types'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
 
 function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
   const name = typeof doc.name === 'string' ? doc.name : ''

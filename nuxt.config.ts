@@ -1,5 +1,10 @@
+import { fileURLToPath } from 'node:url'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  alias: {
+    '@server': fileURLToPath(new URL('./server', import.meta.url))
+  },
   srcDir: 'app',
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },

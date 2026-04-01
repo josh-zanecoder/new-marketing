@@ -1,8 +1,8 @@
 import mongoose from 'mongoose'
-import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
-import type { EmailDynamicVariableDoc } from '../../../../../../types/tenant/emailDynamicVariable.model'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { EmailDynamicVariableDoc } from '@server/types/tenant/emailDynamicVariable.model'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 
 function normalizeScopes(input: unknown): Array<'subject' | 'body'> {
   const values = Array.isArray(input) ? input : []

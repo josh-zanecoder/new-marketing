@@ -1,6 +1,6 @@
-import { getTenantClientModels } from '../../../../../models/tenant/tenantClientModels'
-import { getCampaignSendProgress } from '../../../../../services/send-campaign.service'
-import { getTenantConnectionFromEvent } from '../../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { getCampaignSendProgress } from '@server/services/send-campaign.service'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 
 export default defineEventHandler(async (event) => {
   const campaignId = getRouterParam(event, 'campaignId')

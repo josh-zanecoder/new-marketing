@@ -1,5 +1,5 @@
-import type { UserMergeSnapshot } from '../../../app/utils/emailTemplateMerge'
-import { isTenantApiKeyAuthContext } from '../../tenant/registry-auth'
+import type { UserMergeSnapshot } from '../../../shared/utils/emailTemplateMerge'
+import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
 
 /**
  * Maps the current tenant API session to `user.*` merge fields (sender / operator).

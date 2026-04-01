@@ -1,8 +1,8 @@
-import type { ContactKind } from '../types/tenant/contact.model'
+import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListFilterMode
-} from '../types/tenant/recipientList.model'
+} from '@server/types/tenant/recipientList.model'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
 
 const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
@@ -22,7 +22,6 @@ function asAudience(raw: unknown): ContactKind {
   return 'prospect'
 }
 
-/** Maps old embedded `filter` document → audience + criteria rows. */
 export function legacyFilterToAudienceAndCriteria(
   filter: Record<string, unknown> | null | undefined
 ): { audience: ContactKind; filters: RecipientListCriterion[] } {
@@ -39,9 +38,7 @@ export function legacyFilterToAudienceAndCriteria(
 
   const state = take('state')
   if (state) {
-    for (const t of tokenizePropertyValue(state)) {
-      filters.push({ property: 'state', value: t })
-    }
+    for (const t of tokenizePropertyValue(state)) filters.push({ property: 'state', value: t })
   }
   const city = take('city')
   if (city) filters.push({ property: 'city', value: city })
@@ -66,9 +63,7 @@ export function legacyFilterToAudienceAndCriteria(
   return { audience, filters }
 }
 
-function mapCriteriaRows(
-  rows: RecipientListCriterion[]
-): RecipientListCriterion[] {
+function mapCriteriaRows(rows: RecipientListCriterion[]): RecipientListCriterion[] {
   return rows.map((c) => ({
     property: String(c.property ?? '').trim() || 'unknown',
     value: String(c.value ?? '').trim()
@@ -107,9 +102,7 @@ export function normalizeRecipientListDoc(
 
   const legacy = doc.filter
   if (legacy && typeof legacy === 'object' && Object.keys(legacy as object).length > 0) {
-    const legacyResult = legacyFilterToAudienceAndCriteria(
-      legacy as Record<string, unknown>
-    )
+    const legacyResult = legacyFilterToAudienceAndCriteria(legacy as Record<string, unknown>)
     return { ...legacyResult, filterMode: 'and' }
   }
 
@@ -124,7 +117,6 @@ export function normalizeRecipientListDoc(
   return { audience: 'prospect', filters: [], filterMode: 'and' }
 }
 
-/** Build criteria from a registry recipient_filter row (after value is resolved). */
 export function registryDocToCriteria(doc: {
   property?: string
   propertyType?: string | null
@@ -132,23 +124,14 @@ export function registryDocToCriteria(doc: {
 }): RecipientListCriterion[] {
   const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(doc)
   const tokens = tokenizePropertyValue(doc.propertyValue)
-  if (property === 'none') return []
-  if (!tokens.length) return []
+  if (property === 'none' || !tokens.length) return []
 
   switch (property) {
     case 'address':
-      if (propertyType === 'state') {
-        return tokens.map((value) => ({ property: 'state', value }))
-      }
-      if (propertyType === 'city') {
-        return [{ property: 'city', value: tokens[0] ?? '' }]
-      }
-      if (propertyType === 'county') {
-        return [{ property: 'county', value: tokens[0] ?? '' }]
-      }
-      if (propertyType === 'street') {
-        return [{ property: 'street', value: tokens[0] ?? '' }]
-      }
+      if (propertyType === 'state') return tokens.map((value) => ({ property: 'state', value }))
+      if (propertyType === 'city') return [{ property: 'city', value: tokens[0] ?? '' }]
+      if (propertyType === 'county') return [{ property: 'county', value: tokens[0] ?? '' }]
+      if (propertyType === 'street') return [{ property: 'street', value: tokens[0] ?? '' }]
       return []
     case 'channel':
       return [{ property: 'channel', value: tokens[0] ?? '' }]
@@ -163,9 +146,6 @@ export function registryDocToCriteria(doc: {
   }
 }
 
-/**
- * Best-effort UI rows for lists saved before `filterRows` existed on the document.
- */
 export function suggestFilterRowsFromCriteria(
   audience: ContactKind,
   criteria: RecipientListCriterion[],
@@ -189,8 +169,7 @@ export function suggestFilterRowsFromCriteria(
       if (!id || used.has(id)) continue
 
       const tryValues = [cVal]
-      const reg =
-        typeof doc.propertyValue === 'string' ? doc.propertyValue.trim() : ''
+      const reg = typeof doc.propertyValue === 'string' ? doc.propertyValue.trim() : ''
       if (reg && !tryValues.includes(reg)) tryValues.push(reg)
 
       for (const pv of tryValues) {

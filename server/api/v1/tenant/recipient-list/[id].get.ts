@@ -1,16 +1,16 @@
 import mongoose from 'mongoose'
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
   isTenantApiKeyAuthContext
-} from '../../../../tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
+} from '@server/tenant/registry-auth'
+import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
-} from '../../../../utils/recipientListDocument'
+} from '@server/utils/recipient/recipientListDocument'
 
 const MAX_PAGE_SIZE = 100
 type RecipientListDoc = {

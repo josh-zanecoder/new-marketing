@@ -1,14 +1,14 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import { enqueueCampaignBatch } from '../../../../queue/emailQueue'
-import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { enqueueCampaignBatch } from '@server/queue/emailQueue'
+import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type {
   CampaignRecipientInsertRow,
   CampaignRecipientModel
-} from '../../../../types/tenant/campaignRecipient.model'
-import { isValidMarketingEmail } from '../../../../helpers/marketingEmail'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { recipientEmailsForCampaign } from '../../../../utils/emailMerge/campaignAudience'
-import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
+} from '@server/types/tenant/campaignRecipient.model'
+import { isValidMarketingEmail } from '@server/helpers/marketingEmail'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { recipientEmailsForCampaign } from '@server/utils/emailMerge/campaignAudience'
+import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)

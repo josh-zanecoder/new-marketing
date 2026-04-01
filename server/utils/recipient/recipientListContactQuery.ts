@@ -1,20 +1,18 @@
 import type { FilterQuery } from 'mongoose'
-import type { ContactKind } from '../types/tenant/contact.model'
+import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListFilterMode
-} from '../types/tenant/recipientList.model'
+} from '@server/types/tenant/recipientList.model'
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** One key per logical field so `channel`/`Channel` merge; same-field values always OR together in AND mode. */
 function canonicalCriterionKey(raw: string): string {
   return String(raw ?? '').trim().toLowerCase()
 }
 
-/** Case-insensitive exact match on a string field. */
 function exactField(path: string, value: string): Record<string, unknown> {
   return {
     [path]: { $regex: new RegExp(`^${escapeRegex(value)}$`, 'i') }
@@ -32,7 +30,6 @@ function orExactField(path: string, values: string[]): Record<string, unknown> {
   return { $or: uniq.map((v) => exactField(path, v)) }
 }
 
-/** One criterion row → leaf condition (used when `filterMode` is `or`). */
 function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> | null {
   const prop = canonicalCriterionKey(row.property)
   const val = String(row.value ?? '').trim()
@@ -79,10 +76,7 @@ function buildAndMode(
     deletedAt: null,
     contactKind: audience
   }
-
-  if (!filters.length) {
-    return base
-  }
+  if (!filters.length) return base
 
   const byProp = new Map<string, string[]>()
   for (const row of filters) {
@@ -95,11 +89,9 @@ function buildAndMode(
   }
 
   const andParts: Record<string, unknown>[] = []
-
   for (const [prop, values] of byProp) {
     const uniq = [...new Set(values)].filter(Boolean)
     if (!uniq.length) continue
-
     switch (prop) {
       case 'state':
         andParts.push(orExactField('address.state', uniq))
@@ -153,39 +145,23 @@ function buildAndMode(
     }
   }
 
-  if (!andParts.length) {
-    return base
-  }
-
-  return {
-    ...base,
-    $and: andParts
-  }
+  if (!andParts.length) return base
+  return { ...base, $and: andParts }
 }
 
-/** OR together criteria from one UI filter row (e.g. multiple state tokens). */
 function combineCriteriaGroup(
   criteria: RecipientListCriterion[]
 ): Record<string, unknown> | null {
   const leaves: Record<string, unknown>[] = []
   for (const c of criteria) {
     const leaf = criterionToLeaf(c)
-    if (leaf && Object.keys(leaf).length) {
-      leaves.push(leaf)
-    }
+    if (leaf && Object.keys(leaf).length) leaves.push(leaf)
   }
   if (!leaves.length) return null
-  if (leaves.length === 1) {
-    return leaves[0] ?? null
-  }
+  if (leaves.length === 1) return leaves[0] ?? null
   return { $or: leaves }
 }
 
-/**
- * AND mode with explicit **filter rows**: each group is one UI row; groups are AND’d.
- * Multiple criteria inside a group (token expansion) are OR’d. Two rows both on channel
- * become channel=A AND channel=B → no matching contacts.
- */
 function buildAndModeGrouped(
   audience: ContactKind,
   groups: RecipientListCriterion[][]
@@ -196,28 +172,17 @@ function buildAndModeGrouped(
   }
 
   const nonEmpty = groups.filter((g) => g.length > 0)
-  if (!nonEmpty.length) {
-    return base
-  }
+  if (!nonEmpty.length) return base
 
   const andParts: Record<string, unknown>[] = []
   for (const g of nonEmpty) {
     const part = combineCriteriaGroup(g)
-    if (part) {
-      andParts.push(part)
-    }
+    if (part) andParts.push(part)
   }
 
-  if (!andParts.length) {
-    return base
-  }
-  if (andParts.length === 1) {
-    return { ...base, ...andParts[0] }
-  }
-  return {
-    ...base,
-    $and: andParts
-  }
+  if (!andParts.length) return base
+  if (andParts.length === 1) return { ...base, ...andParts[0] }
+  return { ...base, $and: andParts }
 }
 
 function buildOrMode(
@@ -228,50 +193,26 @@ function buildOrMode(
     deletedAt: null,
     contactKind: audience
   }
-
-  if (!filters.length) {
-    return base
-  }
+  if (!filters.length) return base
 
   const orParts: Record<string, unknown>[] = []
   for (const row of filters) {
     const leaf = criterionToLeaf(row)
-    if (leaf && Object.keys(leaf).length) {
-      orParts.push(leaf)
-    }
+    if (leaf && Object.keys(leaf).length) orParts.push(leaf)
   }
 
-  if (!orParts.length) {
-    return base
-  }
-  if (orParts.length === 1) {
-    return { ...base, ...orParts[0] }
-  }
-  return {
-    ...base,
-    $or: orParts
-  }
+  if (!orParts.length) return base
+  if (orParts.length === 1) return { ...base, ...orParts[0] }
+  return { ...base, $or: orParts }
 }
 
-/**
- * Maps saved list criteria → Mongo filter on `Contact`.
- *
- * **`and` mode:** With `criterionGroups` (one array per UI filter row), each group is
- * OR’d internally, then groups are AND’d—so two channel rows require both values and
- * usually match **no** contacts. Without groups (legacy), criteria are grouped by field
- * as before (same field → OR).
- *
- * **`or` mode:** Each criterion row is an alternative (`$or` of leaves).
- */
 export function buildContactFilterQuery(
   audience: ContactKind,
   filters: RecipientListCriterion[],
   filterMode: RecipientListFilterMode = 'and',
   criterionGroups?: RecipientListCriterion[][]
 ): FilterQuery<Record<string, unknown>> {
-  if (filterMode === 'or') {
-    return buildOrMode(audience, filters)
-  }
+  if (filterMode === 'or') return buildOrMode(audience, filters)
   if (criterionGroups && criterionGroups.length > 0) {
     return buildAndModeGrouped(audience, criterionGroups)
   }

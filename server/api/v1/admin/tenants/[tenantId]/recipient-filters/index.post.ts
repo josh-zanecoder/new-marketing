@@ -1,13 +1,13 @@
-import type { RecipientFilterDoc } from '../../../../../../models/tenant/RecipientFilter'
+import type { RecipientFilterDoc } from '@server/models/tenant/RecipientFilter'
 import type { Types } from 'mongoose'
-import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
   normalizeRecipientFilterPropertyFields,
   normalizeRecipientFilterPropertyValue
-} from '../../../../../../utils/recipientFilterValidation'
+} from '@server/utils/recipient/recipientFilterValidation'
 
 function normalizeContactType(input: unknown): string {
   return String(input ?? '').trim().toLowerCase()

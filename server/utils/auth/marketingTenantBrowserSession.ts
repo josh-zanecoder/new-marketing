@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
 
 function base64urlEncode(buf: Buffer): string {
   return buf
@@ -15,9 +15,6 @@ function base64urlToBuffer(s: string): Buffer {
   return Buffer.from(b64, 'base64')
 }
 
-/**
- * Session cookie: HS256 with registry `clientKeyHash` (hex) as secret; `sub` = `dbName`.
- */
 export function signMarketingTenantBrowserSession(params: {
   dbName: string
   tenantId: string | null
@@ -28,7 +25,6 @@ export function signMarketingTenantBrowserSession(params: {
   handoffLastName?: string
   handoffPhone?: string
   handoffRole?: string
-  /** Operator may see all tenant contacts (no `metadata.ownerEmail` filter). */
   tenantWideContacts?: boolean
   contactOwnerEmails?: string[]
 }): string {

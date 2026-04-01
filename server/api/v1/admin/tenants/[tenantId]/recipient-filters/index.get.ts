@@ -1,7 +1,7 @@
-import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
-import { canonicalRecipientFilterFieldsFromDoc } from '../../../../../../utils/recipientFilterValidation'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '@server/tenant/connection'
+import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 
 function serialize(
   f: {

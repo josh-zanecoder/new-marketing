@@ -11,7 +11,7 @@ import {
 } from '../tenant/registry-auth'
 import { MARKETING_TENANT_SESSION_COOKIE } from '../constants/tenantAuth.constants'
 import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
-import { verifyMarketingTenantBrowserSession } from '../utils/marketingTenantBrowserSession'
+import { verifyMarketingTenantBrowserSession } from '../utils/auth/marketingTenantBrowserSession'
 
 const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/login',

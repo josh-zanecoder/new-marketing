@@ -1,8 +1,8 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { isTenantApiKeyAuthContext } from '../../../../tenant/registry-auth'
-import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
-import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
+import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
+import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type ContactDoc = {
   _id: unknown

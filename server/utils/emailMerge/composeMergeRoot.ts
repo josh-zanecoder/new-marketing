@@ -1,11 +1,11 @@
-import type { UserMergeSnapshot } from '../../../app/utils/emailTemplateMerge'
+import type { UserMergeSnapshot } from '../../../shared/utils/emailTemplateMerge'
 import {
   getMergeValue,
   mergeRootWithUserAndRecipient,
   setMergePath
-} from '../../../app/utils/emailTemplateMerge'
-import type { ContactLean } from '../../types/tenant/contact.model'
-import type { EmailDynamicVariableDoc, EmailDynamicVariableModel } from '../../types/tenant/emailDynamicVariable.model'
+} from '../../../shared/utils/emailTemplateMerge'
+import type { ContactLean } from '@server/types/tenant/contact.model'
+import type { EmailDynamicVariableDoc, EmailDynamicVariableModel } from '@server/types/tenant/emailDynamicVariable.model'
 import {
   contactLookupRecordForDynamicVariables,
   recipientFieldsFromContact

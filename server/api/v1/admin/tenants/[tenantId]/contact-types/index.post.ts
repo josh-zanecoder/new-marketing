@@ -1,8 +1,8 @@
 import type { Types } from 'mongoose'
-import type { ContactTypeDoc } from '../../../../../../models/tenant/ContactType'
-import { getTenantClientModels } from '../../../../../../models/tenant/tenantClientModels'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
+import type { ContactTypeDoc } from '@server/models/tenant/ContactType'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 
 function normalizeKey(input: unknown): string {
   return String(input ?? '')

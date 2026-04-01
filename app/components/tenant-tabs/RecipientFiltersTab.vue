@@ -29,11 +29,11 @@
       </button>
     </div>
 
-    <div class="rf-content" v-show="activeTab === 'contactTypes'">
+    <div v-show="activeTab === 'contactTypes'" class="rf-content">
       <slot name="contact-types" />
     </div>
 
-    <div class="rf-content" v-show="activeTab === 'recipientFilters'">
+    <div v-show="activeTab === 'recipientFilters'" class="rf-content">
       <slot name="recipient-filters" />
     </div>
   </section>

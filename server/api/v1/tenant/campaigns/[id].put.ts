@@ -1,14 +1,14 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import type { CampaignModel } from '../../../../types/tenant/campaign.model'
-import type { EmailTemplateModel } from '../../../../types/tenant/emailTemplate.model'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { CampaignModel } from '@server/types/tenant/campaign.model'
+import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type {
   ManualRecipientInsert,
   ManualRecipientInsertManyCast,
   ManualRecipientModel
-} from '../../../../types/tenant/manualRecipient.model'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
-import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
+} from '@server/types/tenant/manualRecipient.model'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

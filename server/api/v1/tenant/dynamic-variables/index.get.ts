@@ -1,9 +1,9 @@
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import {
   isAdminAuthContext,
   isRegisteredTenantAuthContext
-} from '../../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+} from '@server/tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 
 function serialize(v: {
   _id: unknown

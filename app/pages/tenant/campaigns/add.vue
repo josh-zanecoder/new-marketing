@@ -826,7 +826,7 @@ async function refreshMergeRootDraft() {
     const manual = form.value.recipientsMode === 'manual'
       ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
       : []
-    const res = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+    const res = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
       method: 'POST',
       body: {
         recipientsType: form.value.recipientsMode,

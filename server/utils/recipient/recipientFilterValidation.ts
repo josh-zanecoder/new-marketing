@@ -2,7 +2,7 @@ import type {
   RecipientFilterContactType,
   RecipientFilterProperty,
   RecipientFilterPropertyType
-} from '../types/registry/recipientFilter.types'
+} from '@server/types/registry/recipientFilter.types'
 
 const CONTACT_TYPES = new Set<RecipientFilterContactType>([
   'prospect',
@@ -25,7 +25,6 @@ const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
   'street'
 ])
 
-/** Legacy `property` values stored as a single string (pre propertyType). */
 const LEGACY_PROPERTY_TO_PAIR: Record<
   string,
   { property: RecipientFilterProperty; propertyType: RecipientFilterPropertyType }
@@ -70,10 +69,6 @@ export function normalizeRecipientFilterPropertyType(
   return 'none'
 }
 
-/**
- * Canonical property + propertyType for API and responses.
- * Accepts legacy dotted `property` or separate `property` + `propertyType`.
- */
 export function normalizeRecipientFilterPropertyFields(
   rawProperty: unknown,
   rawPropertyType: unknown
@@ -94,7 +89,6 @@ export function normalizeRecipientFilterPropertyFields(
   return { property, propertyType }
 }
 
-/** Map a stored document (may be legacy) to canonical fields for JSON. */
 export function canonicalRecipientFilterFieldsFromDoc(doc: {
   property?: string
   propertyType?: string | null

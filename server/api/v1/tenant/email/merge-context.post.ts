@@ -1,22 +1,22 @@
 import mongoose from 'mongoose'
-import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../../../../types/tenant/campaign.model'
-import type { EmailDynamicVariableModel } from '../../../../types/tenant/emailDynamicVariable.model'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
+import type { EmailDynamicVariableModel } from '@server/types/tenant/emailDynamicVariable.model'
 import {
   isAdminAuthContext,
   isRegisteredTenantAuthContext
-} from '../../../../tenant/registry-auth'
-import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+} from '@server/tenant/registry-auth'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import {
   type DraftRecipientContext,
   previewContactForDraft,
   previewContactForSavedCampaign
-} from '../../../../utils/emailMerge/campaignAudience'
+} from '@server/utils/emailMerge/campaignAudience'
 import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
-} from '../../../../utils/emailMerge/composeMergeRoot'
-import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
+} from '@server/utils/emailMerge/composeMergeRoot'
+import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 type MergeRootBody =
   | { campaignId: string }

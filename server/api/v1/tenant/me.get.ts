@@ -1,4 +1,4 @@
-import { buildTenantMeResponse } from '../../../tenant/tenant-me'
+import { buildTenantMeResponse } from '@server/tenant/tenant-me'
 
 export default defineEventHandler(async (event) => {
   const me = await buildTenantMeResponse(event)

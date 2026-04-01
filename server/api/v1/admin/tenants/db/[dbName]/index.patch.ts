@@ -1,7 +1,7 @@
-import { getRegistryConnection } from '../../../../../../lib/mongoose'
-import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
-import { invalidateTenantTopicCacheForDbName } from '../../../../../../services/kafkaProducer'
-import type { RegistryTenantDoc, TenantAdminRow } from '../../../../../../types/registry/registryTenant.types'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { invalidateTenantTopicCacheForDbName } from '@server/services/kafkaProducer'
+import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

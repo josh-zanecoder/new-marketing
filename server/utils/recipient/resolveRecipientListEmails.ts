@@ -1,10 +1,7 @@
 import mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
-import { getTenantClientModels } from '../models/tenant/tenantClientModels'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 
-/**
- * Emails for contacts currently in a recipient list (via `recipient_list_members`).
- */
 export async function resolveRecipientListEmails(
   conn: Connection,
   listIdRaw: string
@@ -24,17 +21,12 @@ export async function resolveRecipientListEmails(
     .exec()
 
   const contactIds = members.map((m) => m.contactId).filter(Boolean)
-  if (!contactIds.length) {
-    return []
-  }
+  if (!contactIds.length) return []
 
   const contacts = await Contact.find({
     _id: { $in: contactIds },
     deletedAt: null
-  })
-    .select('email')
-    .lean()
-    .exec()
+  }).select('email').lean().exec()
 
   const raw = contacts
     .map((c) => String((c as { email?: string }).email ?? '').trim().toLowerCase())

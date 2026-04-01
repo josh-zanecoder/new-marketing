@@ -1,7 +1,7 @@
-import { getRegistryConnection } from '../../../../lib/mongoose'
-import { ensureTenantDatabaseInitialized } from '../../../../tenant/provisioning'
-import { isAdminAuthContext } from '../../../../tenant/registry-auth'
-import { ensureTenantEventTopic } from '../../../../services/kafkaProducer'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { ensureTenantDatabaseInitialized } from '@server/tenant/provisioning'
+import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { ensureTenantEventTopic } from '@server/services/kafkaProducer'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
