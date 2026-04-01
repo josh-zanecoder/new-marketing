@@ -200,6 +200,9 @@ export interface ContactRow {
   externalId: string
   source: string
   contactKind: string
+  firstName: string
+  lastName: string
+  /** Display name: first + last (API-computed). */
   name: string
   email: string
   phone: string
@@ -241,7 +244,7 @@ const filteredContacts = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((row) => {
-    const blob = [row.name, row.email, row.company, row.phone, row.contactKind]
+    const blob = [row.firstName, row.lastName, row.name, row.email, row.company, row.phone, row.contactKind]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()

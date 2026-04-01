@@ -8,11 +8,14 @@ import {
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '../../../../utils/recipientFilterValidation'
+import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
 import { normalizeRecipientListDoc } from '../../../../utils/recipientListDocument'
 
 const CONTACT_LIMIT = 3000
 type ContactRow = {
   _id: unknown
+  firstName?: string
+  lastName?: string
   name?: string
   email?: string
   contactKind?: string
@@ -82,6 +85,8 @@ export default defineEventHandler(async (event) => {
     Contact.countDocuments(contactFilter),
     Contact.find(contactFilter)
       .select({
+        firstName: 1,
+        lastName: 1,
         name: 1,
         email: 1,
         contactKind: 1,
@@ -127,16 +132,21 @@ export default defineEventHandler(async (event) => {
   return {
     tenantId,
     tenantIdConfigured: Boolean(tenantId),
-    contacts: contacts.map((c) => ({
-      id: String(c._id),
-      name: c.name ?? '',
-      email: c.email ?? '',
-      contactKind: c.contactKind ?? '',
-      company: c.company ?? '',
-      channel: c.channel ?? '',
-      source: c.source ?? '',
-      address: c.address ?? {}
-    })),
+    contacts: contacts.map((c) => {
+      const { firstName, lastName } = contactFirstLastFromDoc(c)
+      return {
+        id: String(c._id),
+        firstName,
+        lastName,
+        name: formatContactFullName(firstName, lastName),
+        email: c.email ?? '',
+        contactKind: c.contactKind ?? '',
+        company: c.company ?? '',
+        channel: c.channel ?? '',
+        source: c.source ?? '',
+        address: c.address ?? {}
+      }
+    }),
     contactTotal,
     contactsTruncated: contactTotal > CONTACT_LIMIT,
     contactCounts: {

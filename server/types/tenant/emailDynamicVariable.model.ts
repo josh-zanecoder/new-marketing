@@ -12,7 +12,7 @@ export interface EmailDynamicVariableDoc {
   label: string
   description?: string
   /**
-   * For `recipient`: dot path on Contact at send time.
+   * For `recipient`: dot path on Contact at send time (e.g. `firstName`, `address.state`).
    * For `user`: logical path under `user` in merge data (often matches key after `user.`, e.g. `firstName`); templates use `{{user.firstName}}` filled from the campaign `mergeUserSnapshot` / CRM handoff session.
    */
   contactPath: string

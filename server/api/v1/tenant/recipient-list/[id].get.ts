@@ -6,6 +6,7 @@ import {
 } from '../../../../tenant/registry-auth'
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
+import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
 import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
@@ -26,6 +27,8 @@ type RecipientListMemberRow = {
 
 type ContactRow = {
   _id: mongoose.Types.ObjectId
+  firstName?: string
+  lastName?: string
   name?: string
   email?: string
   phone?: string | null
@@ -130,6 +133,8 @@ export default defineEventHandler(async (event) => {
       ? []
       : ((await Contact.find(contactByIdsFilter)
           .select({
+            firstName: 1,
+            lastName: 1,
             name: 1,
             email: 1,
             phone: 1,
@@ -146,17 +151,22 @@ export default defineEventHandler(async (event) => {
   const items = contactIds
     .map((cid) => byId.get(String(cid)))
     .filter(Boolean)
-    .map((c) => ({
-      id: String(c!._id),
-      name: c!.name ?? '',
-      email: c!.email ?? '',
-      phone: c!.phone ?? '',
-      contactKind: c!.contactKind ?? '',
-      company: c!.company ?? '',
-      channel: c!.channel ?? '',
-      source: c!.source ?? '',
-      address: c!.address ?? {}
-    }))
+    .map((c) => {
+      const { firstName, lastName } = contactFirstLastFromDoc(c!)
+      return {
+        id: String(c!._id),
+        firstName,
+        lastName,
+        name: formatContactFullName(firstName, lastName),
+        email: c!.email ?? '',
+        phone: c!.phone ?? '',
+        contactKind: c!.contactKind ?? '',
+        company: c!.company ?? '',
+        channel: c!.channel ?? '',
+        source: c!.source ?? '',
+        address: c!.address ?? {}
+      }
+    })
 
   return {
     list: {

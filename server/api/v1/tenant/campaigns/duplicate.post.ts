@@ -9,7 +9,7 @@ import type {
 } from '../../../../types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
-import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
+import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const mergeSnap =
-    mergeUserSnapshotFromTenantAuth(event.context.auth) ?? source.mergeUserSnapshot
+    tenantUserFieldsFromAuth(event.context.auth) ?? source.mergeUserSnapshot
 
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,

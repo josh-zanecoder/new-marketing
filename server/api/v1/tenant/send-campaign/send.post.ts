@@ -5,11 +5,10 @@ import type {
   CampaignRecipientInsertRow,
   CampaignRecipientModel
 } from '../../../../types/tenant/campaignRecipient.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '../../../../types/tenant/manualRecipient.model'
-import { isValidMarketingEmail, normalizeMarketingEmail } from '../../../../helpers/marketingEmail'
+import { isValidMarketingEmail } from '../../../../helpers/marketingEmail'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
-import { resolveRecipientListEmails } from '../../../../utils/resolveRecipientListEmails'
-import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
+import { recipientEmailsForCampaign } from '../../../../utils/emailMerge/campaignAudience'
+import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -18,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const conn = await getTenantConnectionFromEvent(event)
   const models = getTenantClientModels(conn)
-  const { Campaign, CampaignRecipient, ManualRecipient } = models
+  const { Campaign, CampaignRecipient } = models
 
   const dbName = conn.db?.databaseName
   if (!dbName) {
@@ -41,26 +40,7 @@ export default defineEventHandler(async (event) => {
 
   await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
 
-  let emails: string[] = []
-  const manualDocs = await (ManualRecipient as ManualRecipientModel)
-    .find({ campaign: campaignId })
-    .lean<ManualRecipientLean[]>()
-  const fromManual = manualDocs
-    .map((r) => normalizeMarketingEmail(r.email))
-    .filter((e): e is string => !!e)
-  emails = [...new Set(fromManual)]
-
-  if (
-    !emails.length &&
-    campaign.recipientsType === 'list' &&
-    campaign.recipientsListId?.trim()
-  ) {
-    const fromList = await resolveRecipientListEmails(conn, campaign.recipientsListId)
-    const normalized = fromList
-      .map((e) => normalizeMarketingEmail(e))
-      .filter((e): e is string => !!e)
-    emails = [...new Set(normalized)]
-  }
+  const emails = await recipientEmailsForCampaign(conn, campaign)
 
   if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
 
@@ -106,7 +86,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const snap = mergeUserSnapshotFromTenantAuth(event.context.auth)
+  const snap = tenantUserFieldsFromAuth(event.context.auth)
   await (Campaign as CampaignModel).updateOne(
     { _id: campaignId },
     {

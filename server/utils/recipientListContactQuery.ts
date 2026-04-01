@@ -60,6 +60,8 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
     case 'search':
       return {
         $or: [
+          { firstName: { $regex: new RegExp(escapeRegex(val), 'i') } },
+          { lastName: { $regex: new RegExp(escapeRegex(val), 'i') } },
           { name: { $regex: new RegExp(escapeRegex(val), 'i') } },
           { email: { $regex: new RegExp(escapeRegex(val), 'i') } }
         ]
@@ -137,6 +139,8 @@ function buildAndMode(
         if (v) {
           andParts.push({
             $or: [
+              { firstName: { $regex: new RegExp(escapeRegex(v), 'i') } },
+              { lastName: { $regex: new RegExp(escapeRegex(v), 'i') } },
               { name: { $regex: new RegExp(escapeRegex(v), 'i') } },
               { email: { $regex: new RegExp(escapeRegex(v), 'i') } }
             ]

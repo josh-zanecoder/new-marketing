@@ -1,6 +1,7 @@
 import { getTenantClientModels } from '../../../../models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import { isTenantApiKeyAuthContext } from '../../../../tenant/registry-auth'
+import { contactFirstLastFromDoc, formatContactFullName } from '../../../../utils/contactPersonName'
 import { mergeContactOwnerScopeFilter } from '../../../../utils/contactOwnerFilter'
 
 type ContactDoc = {
@@ -8,6 +9,8 @@ type ContactDoc = {
   externalId?: string
   source?: string
   contactKind?: string
+  firstName?: string
+  lastName?: string
   name?: string
   email?: string
   phone?: string
@@ -48,12 +51,15 @@ export default defineEventHandler(async (event) => {
   const contacts = rows.map((c) => {
     const meta = c.metadata && typeof c.metadata === 'object' ? c.metadata : {}
     const ownerRaw = meta && typeof meta.ownerEmail === 'string' ? meta.ownerEmail : ''
+    const { firstName, lastName } = contactFirstLastFromDoc(c)
     return {
     id: String(c._id),
     externalId: c.externalId ?? '',
     source: c.source ?? '',
     contactKind: c.contactKind ?? '',
-    name: c.name ?? '',
+    firstName,
+    lastName,
+    name: formatContactFullName(firstName, lastName),
     email: c.email ?? '',
     phone: c.phone ?? '',
     company: c.company ?? '',

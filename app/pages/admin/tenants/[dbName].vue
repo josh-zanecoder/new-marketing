@@ -309,7 +309,7 @@
           <p>
             Dynamic variables define allowed template tokens for this tenant. Use
             <strong>key</strong> as the token path (e.g. <code>user.firstName</code>), then map it to a
-            contact <strong>path</strong> (e.g. <code>name</code> or <code>address.state</code>). Templates use
+            contact <strong>path</strong> (e.g. <code>firstName</code>, <code>lastName</code>, or <code>address.state</code>). Templates use
             mustache syntax like <code v-pre>{{user.firstName}}</code>.
           </p>
         </div>
@@ -335,7 +335,7 @@
 
               <div class="field">
                 <label for="dv-contact-path">Contact path</label>
-                <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. name or address.state">
+                <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. firstName or address.state">
               </div>
 
               <div class="field">

@@ -16,7 +16,8 @@ export interface ContactLean {
   externalId?: string
   source?: string
   contactKind: ContactKind
-  name: string
+  firstName: string
+  lastName: string
   email: string
   /** Preferred outreach channel (e.g. email for campaigns). */
   channel: string

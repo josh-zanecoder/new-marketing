@@ -12,9 +12,11 @@ import { getRegistryConnection } from '../lib/mongoose'
 import { logger } from '../utils/logger'
 import {
   CONTACT_EVENT_TYPES,
+  namesFromContactPayload,
   parseContactDeletedEventEnvelope,
   parseContactEventEnvelope
 } from '../schemas/events/contactEvents'
+import { formatContactFullName } from '../utils/contactPersonName'
 import {
   EMAIL_TEMPLATE_EVENT_TYPES,
   parseEmailTemplateCreatedEventEnvelope,
@@ -52,7 +54,9 @@ type MarketingSyncRequestedEnvelope = {
     ownerEmails?: string[]
     contacts?: Array<{
       externalId: string
-      name: string
+      firstName?: string
+      lastName?: string
+      name?: string
       email: string
       phone?: string
       company?: string
@@ -532,7 +536,14 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
         dBname: contactEvent.dBname,
         tenantId: contactEvent.tenantId,
         externalId: contactEvent.payload.externalId,
-        name: contactEvent.payload.name,
+        ...(() => {
+          const { firstName: fn, lastName: ln } = namesFromContactPayload(contactEvent.payload)
+          return {
+            firstName: fn,
+            lastName: ln,
+            displayName: formatContactFullName(fn, ln)
+          }
+        })(),
         email: contactEvent.payload.email,
         phone: contactEvent.payload.phone ?? '',
         company: contactEvent.payload.company || '',
@@ -559,7 +570,14 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
         dBname: contactEvent.dBname,
         tenantId: contactEvent.tenantId,
         externalId: contactEvent.payload.externalId,
-        name: contactEvent.payload.name,
+        ...(() => {
+          const { firstName: fn, lastName: ln } = namesFromContactPayload(contactEvent.payload)
+          return {
+            firstName: fn,
+            lastName: ln,
+            displayName: formatContactFullName(fn, ln)
+          }
+        })(),
         email: contactEvent.payload.email,
         phone: contactEvent.payload.phone ?? '',
         company: contactEvent.payload.company || '',

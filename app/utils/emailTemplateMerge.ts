@@ -65,7 +65,7 @@ export function mergeRootWithUserSnapshot(
   }
 }
 
-/** Keys aligned with `mergeRecipientSnapshotFromContact` for stable `{{ recipient.* }}` resolution. */
+/** Keys aligned with `recipientFieldsFromContact` (server) for stable `{{ recipient.* }}` resolution. */
 const RECIPIENT_MERGE_KEYS = [
   'name',
   'firstName',

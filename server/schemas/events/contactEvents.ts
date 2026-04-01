@@ -17,13 +17,26 @@ export type ContactPayload = {
   externalId: string
   tenantId: string
   dBname: string
-  name: string
+  /** Preferred; use together when CRM sends split names. */
+  firstName?: string
+  lastName?: string
+  /** @deprecated inbound-only; stored as firstName when last not sent */
+  name?: string
   email: string
   phone?: string
   company: string
   address: ContactAddress
   contactType: 'prospect' | 'client' | 'contact'
   channel: string | null
+}
+
+/** Resolve Kafka / CRM payload into stored first + last (no word-splitting). */
+export function namesFromContactPayload(p: ContactPayload): { firstName: string; lastName: string } {
+  const fn = typeof p.firstName === 'string' ? p.firstName.trim() : ''
+  const ln = typeof p.lastName === 'string' ? p.lastName.trim() : ''
+  if (fn || ln) return { firstName: fn, lastName: ln }
+  const legacy = typeof p.name === 'string' ? p.name.trim() : ''
+  return { firstName: legacy, lastName: '' }
 }
 
 export type ContactEventEnvelope = {
@@ -79,7 +92,15 @@ export function parseContactEventEnvelope(input: unknown): ContactEventEnvelope 
   if (typeof p.externalId !== 'string') return null
   if (typeof p.tenantId !== 'string') return null
   if (typeof p.dBname !== 'string') return null
-  if (typeof p.name !== 'string') return null
+  if (
+    !(
+      typeof p.name === 'string'
+      || typeof p.firstName === 'string'
+      || typeof p.lastName === 'string'
+    )
+  ) {
+    return null
+  }
   if (typeof p.email !== 'string') return null
   if (!(typeof p.phone === 'string' || typeof p.phone === 'undefined')) return null
   if (typeof p.company !== 'string') return null

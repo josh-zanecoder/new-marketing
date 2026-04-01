@@ -1,6 +1,7 @@
-import type {
-  ContactDeletedEventEnvelope,
-  ContactEventEnvelope
+import {
+  namesFromContactPayload,
+  type ContactDeletedEventEnvelope,
+  type ContactEventEnvelope
 } from '../../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
@@ -10,7 +11,10 @@ const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
 
 type SyncSnapshotContact = {
   externalId: string
-  name: string
+  firstName?: string
+  lastName?: string
+  /** @deprecated sync payloads may still send single name */
+  name?: string
   email: string
   phone?: string
   company?: string
@@ -24,7 +28,8 @@ type SyncSnapshotUpsertRow = {
   externalId: string
   email: string
   contactKind: 'prospect' | 'client' | 'contact'
-  name: string
+  firstName: string
+  lastName: string
   phone: string
   address: Record<string, unknown>
   company: string
@@ -47,6 +52,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+  const { firstName, lastName } = namesFromContactPayload(contactEvent.payload)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
@@ -57,7 +63,8 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
         externalId: contactEvent.payload.externalId,
         source: KAFKA_INBOUND_CONTACT_SOURCE,
         contactKind: contactEvent.payload.contactType,
-        name: contactEvent.payload.name,
+        firstName,
+        lastName,
         email,
         phone: contactEvent.payload.phone ?? '',
         address: contactEvent.payload.address,
@@ -91,6 +98,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+  const { firstName: fnU, lastName: lnU } = namesFromContactPayload(contactEvent.payload)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
@@ -101,7 +109,8 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
         externalId: contactEvent.payload.externalId,
         source: KAFKA_INBOUND_CONTACT_SOURCE,
         contactKind: contactEvent.payload.contactType,
-        name: contactEvent.payload.name,
+        firstName: fnU,
+        lastName: lnU,
         email,
         phone: contactEvent.payload.phone ?? '',
         address: contactEvent.payload.address,
@@ -179,12 +188,18 @@ export async function upsertContactsFromSyncSnapshot(params: {
       const ownerId = typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
       const ownerEmail =
         typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+      const fn = String(c.firstName ?? '').trim()
+      const ln = String(c.lastName ?? '').trim()
+      const legacy = String(c.name ?? '').trim()
+      const firstName = fn || legacy
+      const lastName = ln
       const row: SyncSnapshotUpsertRow = {
         externalId,
         email,
         contactKind:
           c.contactType === 'client' || c.contactType === 'contact' ? c.contactType : 'prospect',
-        name: String(c.name || '').trim(),
+        firstName,
+        lastName,
         phone: c.phone ?? '',
         address: c.address ?? {},
         company: c.company ?? '',
@@ -206,7 +221,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
             externalId: r.externalId,
             source: KAFKA_INBOUND_CONTACT_SOURCE,
             contactKind: r.contactKind,
-            name: r.name,
+            firstName: r.firstName,
+            lastName: r.lastName,
             email: r.email,
             phone: r.phone,
             address: r.address,

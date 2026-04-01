@@ -21,7 +21,8 @@ loadEnv({ path: join(rootDir, '.env') })
 const FIXTURES = [
   {
     contactKind: 'prospect' as const,
-    name: 'Alex Rivera',
+    firstName: 'Alex',
+    lastName: 'Rivera',
     email: 'alex.rivera@example.com',
     phone: '+1 555-0101',
     company: 'Northwind Labs',
@@ -33,7 +34,8 @@ const FIXTURES = [
   },
   {
     contactKind: 'client' as const,
-    name: 'Jordan Lee',
+    firstName: 'Jordan',
+    lastName: 'Lee',
     email: 'jordan.lee@example.com',
     phone: '+1 555-0102',
     company: 'Contoso Realty',
@@ -45,7 +47,8 @@ const FIXTURES = [
   },
   {
     contactKind: 'contact' as const,
-    name: 'Sam Taylor',
+    firstName: 'Sam',
+    lastName: 'Taylor',
     email: 'sam.taylor@example.com',
     phone: '',
     company: '',
@@ -57,7 +60,8 @@ const FIXTURES = [
   },
   {
     contactKind: 'prospect' as const,
-    name: 'Riley Chen',
+    firstName: 'Riley',
+    lastName: 'Chen',
     email: 'riley.chen@example.com',
     phone: '+1 555-0104',
     company: 'Fabrikam Design',

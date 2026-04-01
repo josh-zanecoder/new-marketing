@@ -7,7 +7,7 @@ const dynamicSourceTypeEnum = ['recipient', 'user'] as const
 /**
  * One allowed dynamic token for campaigns / templates (e.g. superadmin-managed catalog per tenant).
  * `key` is the path inside mustache-style tags: key `user.firstName` -> `{{user.firstName}}`.
- * `contactPath` is resolved against the Contact document at send time (dot path, e.g. `name`, `company`, `address.state`).
+ * `contactPath` is resolved at send time: raw Contact fields (`address.state`, `metadata.foo`) plus the same flat keys as `{{ recipient.* }}` (`city`, `company`) and optional `recipient.firstName`-style paths.
  */
 export const emailDynamicVariableSchema = new mongoose.Schema(
   {

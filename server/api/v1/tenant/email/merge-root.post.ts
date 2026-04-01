@@ -8,15 +8,15 @@ import {
 } from '../../../../tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '../../../../tenant/connection'
 import {
-  buildEmailMergeRoot,
-  loadEnabledDynamicVariableInputs
-} from '../../../../utils/buildEmailMergeRoot'
+  type DraftRecipientContext,
+  previewContactForDraft,
+  previewContactForSavedCampaign
+} from '../../../../utils/emailMerge/campaignAudience'
 import {
-  getSampleContactLeanForCampaignPreview,
-  getSampleContactLeanForDraftPreview,
-  type DraftRecipientContext
-} from '../../../../utils/getSampleContactForCampaignPreview'
-import { mergeUserSnapshotFromTenantAuth } from '../../../../utils/mergeUserSnapshotFromAuth'
+  composeEmailMergeRoot,
+  fetchEnabledEmailDynamicVariableBindings
+} from '../../../../utils/emailMerge/composeMergeRoot'
+import { tenantUserFieldsFromAuth } from '../../../../utils/emailMerge/tenantUserFromAuth'
 
 type MergeRootBody =
   | { campaignId: string }
@@ -49,9 +49,9 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailDynamicVariable } = getTenantClientModels(conn)
   const dynModel = EmailDynamicVariable as EmailDynamicVariableModel
-  const dynamicVariables = await loadEnabledDynamicVariableInputs(dynModel)
+  const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(dynModel)
 
-  const authSnap = mergeUserSnapshotFromTenantAuth(auth)
+  const authSnap = tenantUserFieldsFromAuth(auth)
 
   if ('campaignId' in body && typeof body.campaignId === 'string' && body.campaignId.trim()) {
     const campaignId = body.campaignId.trim()
@@ -62,9 +62,9 @@ export default defineEventHandler(async (event) => {
     if (!campaign) {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }
-    const contact = await getSampleContactLeanForCampaignPreview(conn, campaignId)
+    const contact = await previewContactForSavedCampaign(conn, campaignId)
     const userSnapshot = authSnap ?? campaign.mergeUserSnapshot
-    const mergeRoot = buildEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariables)
+    const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
     return { mergeRoot }
   }
 
@@ -87,7 +87,7 @@ export default defineEventHandler(async (event) => {
       : undefined
   }
 
-  const contact = await getSampleContactLeanForDraftPreview(conn, draft)
-  const mergeRoot = buildEmailMergeRoot(authSnap ?? {}, contact ?? null, dynamicVariables)
+  const contact = await previewContactForDraft(conn, draft)
+  const mergeRoot = composeEmailMergeRoot(authSnap ?? {}, contact ?? null, dynamicVariableBindings)
   return { mergeRoot }
 })

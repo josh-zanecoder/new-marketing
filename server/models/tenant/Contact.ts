@@ -22,7 +22,8 @@ export const contactSchema = new mongoose.Schema(
       required: true,
       index: true
     },
-    name: { type: String, required: true, trim: true },
+    firstName: { type: String, required: true, trim: true, default: '' },
+    lastName: { type: String, required: true, trim: true, default: '' },
     email: { type: String, required: true, trim: true, lowercase: true },
     phone: { type: String, default: '', trim: true },
     address: { type: addressSchema, default: () => ({}) },
