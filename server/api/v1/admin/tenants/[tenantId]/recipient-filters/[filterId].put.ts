@@ -5,10 +5,13 @@ import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
 import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
-  normalizeRecipientFilterContactType,
   normalizeRecipientFilterPropertyFields,
   normalizeRecipientFilterPropertyValue
 } from '../../../../../../utils/recipientFilterValidation'
+
+function normalizeContactType(input: unknown): string {
+  return String(input ?? '').trim().toLowerCase()
+}
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -40,9 +43,6 @@ export default defineEventHandler(async (event) => {
     }
     patch.name = n
   }
-  if (body?.contactType !== undefined) {
-    patch.contactType = normalizeRecipientFilterContactType(body.contactType)
-  }
   if (body?.propertyValue !== undefined) {
     patch.propertyValue = normalizeRecipientFilterPropertyValue(body.propertyValue)
   }
@@ -53,7 +53,29 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
+  const { RecipientFilter: Model, ContactType: ContactTypeModel } =
+    getTenantClientModels(tenantConn)
+
+  if (body?.contactType !== undefined) {
+    const contactType = normalizeContactType(body.contactType)
+    if (!contactType) {
+      throw createError({ statusCode: 400, message: 'contactType cannot be empty' })
+    }
+    const existingType = await ContactTypeModel.findOne({
+      key: contactType,
+      enabled: true
+    })
+      .select({ _id: 1 })
+      .lean()
+      .exec()
+    if (!existingType) {
+      throw createError({
+        statusCode: 400,
+        message: 'Invalid contactType for this tenant'
+      })
+    }
+    patch.contactType = contactType
+  }
 
   if (body?.property !== undefined || body?.propertyType !== undefined) {
     const existing = await Model.findOne({ _id: filterId }).lean().exec()

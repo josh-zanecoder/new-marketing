@@ -5,10 +5,13 @@ import { isAdminAuthContext } from '../../../../../../tenant/registry-auth'
 import { getTenantConnectionByTenantId } from '../../../../../../tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
-  normalizeRecipientFilterContactType,
   normalizeRecipientFilterPropertyFields,
   normalizeRecipientFilterPropertyValue
 } from '../../../../../../utils/recipientFilterValidation'
+
+function normalizeContactType(input: unknown): string {
+  return String(input ?? '').trim().toLowerCase()
+}
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -36,7 +39,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'name is required' })
   }
 
-  const contactType = normalizeRecipientFilterContactType(body?.contactType)
+  const contactType = normalizeContactType(body?.contactType)
+  if (!contactType) {
+    throw createError({ statusCode: 400, message: 'contactType is required' })
+  }
   const { property, propertyType } = normalizeRecipientFilterPropertyFields(
     body?.property,
     body?.propertyType
@@ -49,7 +55,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const { RecipientFilter: Model } = getTenantClientModels(tenantConn)
+  const { RecipientFilter: Model, ContactType: ContactTypeModel } =
+    getTenantClientModels(tenantConn)
+  const existingType = await ContactTypeModel.findOne({
+    key: contactType,
+    enabled: true
+  })
+    .select({ _id: 1 })
+    .lean()
+    .exec()
+  if (!existingType) {
+    throw createError({
+      statusCode: 400,
+      message: 'Invalid contactType for this tenant'
+    })
+  }
   try {
     const doc = await Model.create({
       name,

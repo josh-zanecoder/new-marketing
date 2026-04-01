@@ -1,14 +1,10 @@
 import mongoose from 'mongoose'
-
-const contactTypeEnum = ['prospect', 'client', 'contact'] as const
 /** Includes legacy dotted `address.*` values for existing documents. */
 const propertyEnum = [
   'none',
   'address',
   'channel',
   'company',
-  'source',
-  'email',
   'address.state',
   'address.city',
   'address.county',
@@ -22,7 +18,7 @@ export const recipientFilterSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     contactType: {
       type: String,
-      enum: contactTypeEnum,
+      trim: true,
       required: true
     },
     property: {

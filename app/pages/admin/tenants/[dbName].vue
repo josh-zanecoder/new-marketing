@@ -51,36 +51,12 @@
         </button>
       </div>
 
-      <div v-show="tab === 'overview'" class="overview-card">
-        <dl class="overview-grid">
-          <div class="overview-item">
-            <dt>Email</dt>
-            <dd>{{ tenant.email || '—' }}</dd>
-          </div>
-          <div class="overview-item">
-            <dt>Tenant ID</dt>
-            <dd class="font-mono text-xs">{{ tenant.tenantId || '—' }}</dd>
-          </div>
-          <div class="overview-item">
-            <dt>API key prefix</dt>
-            <dd class="font-mono text-xs">{{ tenant.apiKeyPrefix || '—' }}</dd>
-          </div>
-          <div class="overview-item">
-            <dt>Created</dt>
-            <dd>{{ tenant.createdAt }}</dd>
-          </div>
-        </dl>
-      </div>
+      <TenantTabsOverviewTab
+        v-show="tab === 'overview'"
+        :tenant="tenant"
+      />
 
-      <div v-show="tab === 'filters'" class="filters-tab">
-        <div class="filters-intro">
-          <p>
-            Each row is stored by <strong>tenant ID</strong>. The main rule is <strong>contact type</strong>; then optionally a
-            <strong>property</strong> (e.g. address), an address <strong>property type</strong> (e.g. state) when relevant, and a
-            <strong>property value</strong> (leave blank if not needed). Separate multiple values with commas or new lines.
-          </p>
-        </div>
-
+      <TenantTabsRecipientFiltersTab v-show="tab === 'filters'">
         <div
           v-if="tenant && !tenant.tenantId"
           class="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-950"
@@ -88,8 +64,105 @@
           This tenant has no <strong>tenant ID</strong> in the registry. Set one on the client record before creating recipient filters.
         </div>
 
-        <div class="filters-split">
-          <aside class="filter-form-card">
+        <template #contact-types>
+          <div class="filters-split">
+            <aside class="filter-form-card">
+              <h2 class="filter-form-title">
+                Contact types
+              </h2>
+              <form class="filter-form" @submit.prevent="saveContactType">
+                <div class="field">
+                  <label for="ct-key">Key</label>
+                  <input id="ct-key" v-model="contactTypeForm.key" type="text" required class="field-input" placeholder="e.g. prospect">
+                </div>
+                <div class="field">
+                  <label for="ct-label">Label</label>
+                  <input id="ct-label" v-model="contactTypeForm.label" type="text" required class="field-input" placeholder="e.g. Prospect">
+                </div>
+                <label class="toggle-row">
+                  <input v-model="contactTypeForm.enabled" type="checkbox" class="toggle-check">
+                  <span class="toggle-label">Enabled</span>
+                </label>
+                <p v-if="contactTypeFormError" class="form-error">{{ contactTypeFormError }}</p>
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary" :disabled="contactTypeSaving">
+                    {{ contactTypeSaving ? 'Saving…' : contactTypeEditingId ? 'Update type' : 'Add type' }}
+                  </button>
+                  <button v-if="contactTypeEditingId" type="button" class="btn-secondary" @click="resetContactTypeForm">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </aside>
+
+            <div class="filters-table-wrap">
+              <div class="filters-table-head">
+                <div>
+                  <h2 class="filters-table-title">
+                    Existing contact types
+                  </h2>
+                  <p class="filters-table-sub">
+                    {{ contactTypes.length }} {{ contactTypes.length === 1 ? 'type' : 'types' }} for this tenant
+                  </p>
+                </div>
+                <span v-if="contactTypesPending" class="filters-loading">Loading…</span>
+              </div>
+
+              <div class="table-card filters-table-card">
+                <table class="clients-table clients-table--filters">
+                  <thead>
+                    <tr>
+                      <th>Key</th>
+                      <th>Label</th>
+                      <th>Status</th>
+                      <th class="th-actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="contactTypesPending && !contactTypes.length">
+                      <td colspan="4" class="td-empty-state">
+                        Loading contact types…
+                      </td>
+                    </tr>
+                    <template v-else-if="contactTypes.length">
+                      <tr v-for="ct in contactTypes" :key="ct.id">
+                        <td class="td-name">{{ ct.key }}</td>
+                        <td class="td-muted">{{ ct.label }}</td>
+                        <td>
+                          <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
+                        </td>
+                        <td class="td-actions">
+                          <div class="row-actions">
+                            <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-row btn-row--danger"
+                              :disabled="contactTypeDeletingId === ct.id"
+                              @click="removeContactType(ct.id)"
+                            >
+                              {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <tr v-else>
+                      <td colspan="4" class="td-empty-state">
+                        No contact types yet. Add one first.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template #recipient-filters>
+          <div class="filters-split">
+            <aside class="filter-form-card">
             <h2 class="filter-form-title">
               {{ editingId ? 'Edit filter' : 'New filter' }}
             </h2>
@@ -117,11 +190,11 @@
                   class="field-input capitalize"
                 >
                   <option
-                    v-for="k in contactTypes"
-                    :key="k"
-                    :value="k"
+                    v-for="ct in contactTypes"
+                    :key="ct.id"
+                    :value="ct.key"
                   >
-                    {{ k }}
+                    {{ ct.key }}
                   </option>
                 </select>
               </div>
@@ -302,18 +375,10 @@
             </div>
           </div>
         </div>
-      </div>
+        </template>
+      </TenantTabsRecipientFiltersTab>
 
-      <div v-show="tab === 'dynamicVariables'" class="filters-tab">
-        <div class="filters-intro">
-          <p>
-            Dynamic variables define allowed template tokens for this tenant. Use
-            <strong>key</strong> as the token path (e.g. <code>user.firstName</code>), then map it to a
-            contact <strong>path</strong> (e.g. <code>firstName</code>, <code>lastName</code>, or <code>address.state</code>). Templates use
-            mustache syntax like <code v-pre>{{user.firstName}}</code>.
-          </p>
-        </div>
-
+      <TenantTabsDynamicFieldsTab v-show="tab === 'dynamicVariables'">
         <div class="filters-split">
           <aside class="filter-form-card">
             <h2 class="filter-form-title">
@@ -479,7 +544,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </TenantTabsDynamicFieldsTab>
     </template>
   </section>
 </template>
@@ -494,15 +559,19 @@ const dbName = computed(() =>
 
 const tab = ref<'overview' | 'filters' | 'dynamicVariables'>('overview')
 
-const contactTypes = ['prospect', 'client', 'contact'] as const
+interface ContactTypeRow {
+  id: string
+  key: string
+  label: string
+  enabled: boolean
+  sortOrder: number
+}
 
 const propertyFieldOptions = [
   { value: 'none', label: 'None' },
   { value: 'address', label: 'Address' },
   { value: 'channel', label: 'Channel' },
-  { value: 'company', label: 'Company' },
-  { value: 'source', label: 'Source' },
-  { value: 'email', label: 'Email' }
+  { value: 'company', label: 'Company' }
 ] as const
 
 const addressPropertyTypeOptions = [
@@ -555,6 +624,8 @@ const tenantPending = ref(true)
 
 const filters = ref<FilterRow[]>([])
 const filtersPending = ref(false)
+const contactTypes = ref<ContactTypeRow[]>([])
+const contactTypesPending = ref(false)
 const dynamicVariables = ref<DynamicVariableRow[]>([])
 const dynamicPending = ref(false)
 
@@ -581,13 +652,23 @@ const dynamicEditingId = ref<string | null>(null)
 const dynamicSaving = ref(false)
 const dynamicDeletingId = ref<string | null>(null)
 const dynamicFormError = ref('')
+const contactTypeEditingId = ref<string | null>(null)
+const contactTypeSaving = ref(false)
+const contactTypeDeletingId = ref<string | null>(null)
+const contactTypeFormError = ref('')
 
 const form = reactive({
   name: '',
-  contactType: 'prospect' as (typeof contactTypes)[number],
+  contactType: '',
   property: 'none' as PropertyFieldValue,
   propertyType: 'state' as AddressPropertyTypeValue,
   propertyValue: '',
+  enabled: true
+})
+
+const contactTypeForm = reactive({
+  key: '',
+  label: '',
   enabled: true
 })
 
@@ -668,6 +749,30 @@ async function loadFilters() {
   }
 }
 
+async function loadContactTypes() {
+  contactTypesPending.value = true
+  const prefix = filtersApiPrefix()
+  if (!prefix) {
+    contactTypes.value = []
+    contactTypesPending.value = false
+    return
+  }
+  try {
+    const res = await $fetch<{ contactTypes: ContactTypeRow[] }>(
+      `${prefix}/contact-types`
+    )
+    contactTypes.value = res.contactTypes ?? []
+    const first = contactTypes.value[0]
+    if (!form.contactType && first) {
+      form.contactType = first.key
+    }
+  } catch {
+    contactTypes.value = []
+  } finally {
+    contactTypesPending.value = false
+  }
+}
+
 function dynamicApiPrefix(): string | null {
   const id = tenant.value?.tenantId
   if (!id) return null
@@ -697,9 +802,7 @@ async function loadDynamicVariables() {
 function fillForm(f: FilterRow) {
   form.name = f.name
   form.enabled = f.enabled
-  form.contactType = (contactTypes as readonly string[]).includes(f.contactType)
-    ? (f.contactType as (typeof contactTypes)[number])
-    : 'prospect'
+  form.contactType = f.contactType
   form.property = (propertyFieldOptions as readonly { value: string }[]).some(
     (o) => o.value === f.property
   )
@@ -721,12 +824,75 @@ function fillForm(f: FilterRow) {
 function resetForm() {
   editingId.value = null
   form.name = ''
-  form.contactType = 'prospect'
+  form.contactType = contactTypes.value[0]?.key ?? ''
   form.property = 'none'
   form.propertyType = 'state'
   form.propertyValue = ''
   form.enabled = true
   formError.value = ''
+}
+
+function startEditContactType(ct: ContactTypeRow) {
+  contactTypeEditingId.value = ct.id
+  contactTypeForm.key = ct.key
+  contactTypeForm.label = ct.label
+  contactTypeForm.enabled = ct.enabled
+  contactTypeFormError.value = ''
+}
+
+function resetContactTypeForm() {
+  contactTypeEditingId.value = null
+  contactTypeForm.key = ''
+  contactTypeForm.label = ''
+  contactTypeForm.enabled = true
+  contactTypeFormError.value = ''
+}
+
+async function saveContactType() {
+  contactTypeFormError.value = ''
+  const prefix = filtersApiPrefix()
+  if (!prefix) {
+    contactTypeFormError.value = 'This tenant has no tenant ID in the registry.'
+    return
+  }
+  contactTypeSaving.value = true
+  try {
+    const body = {
+      key: contactTypeForm.key.trim(),
+      label: contactTypeForm.label.trim(),
+      enabled: contactTypeForm.enabled
+    }
+    if (contactTypeEditingId.value) {
+      await $fetch(`${prefix}/contact-types/${contactTypeEditingId.value}`, {
+        method: 'PUT',
+        body
+      })
+    } else {
+      await $fetch(`${prefix}/contact-types`, {
+        method: 'POST',
+        body
+      })
+    }
+    resetContactTypeForm()
+    await loadContactTypes()
+    const first = contactTypes.value[0]
+    if (!editingId.value && !form.contactType && first) {
+      form.contactType = first.key
+    }
+  } catch (e: unknown) {
+    const msg =
+      e &&
+      typeof e === 'object' &&
+      'data' in e &&
+      e.data &&
+      typeof e.data === 'object' &&
+      'message' in e.data
+        ? String((e.data as { message?: string }).message)
+        : 'Save failed'
+    contactTypeFormError.value = msg
+  } finally {
+    contactTypeSaving.value = false
+  }
 }
 
 function fillDynamicForm(v: DynamicVariableRow) {
@@ -891,6 +1057,23 @@ async function removeFilter(id: string) {
   }
 }
 
+async function removeContactType(id: string) {
+  const prefix = filtersApiPrefix()
+  if (!prefix) return
+  if (!confirm('Delete this contact type?')) return
+  contactTypeDeletingId.value = id
+  try {
+    await $fetch(`${prefix}/contact-types/${id}`, { method: 'DELETE' })
+    if (contactTypeEditingId.value === id) resetContactTypeForm()
+    await loadContactTypes()
+    if (!contactTypes.value.some((ct) => ct.key === form.contactType)) {
+      form.contactType = contactTypes.value[0]?.key ?? ''
+    }
+  } finally {
+    contactTypeDeletingId.value = null
+  }
+}
+
 async function removeDynamicVariable(id: string) {
   const prefix = dynamicApiPrefix()
   if (!prefix) return
@@ -910,6 +1093,7 @@ watch(
   async (name) => {
     if (!name) return
     await loadTenant()
+    await loadContactTypes()
     await loadFilters()
     await loadDynamicVariables()
   },

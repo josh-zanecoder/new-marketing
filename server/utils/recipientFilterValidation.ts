@@ -14,9 +14,7 @@ const PROPERTIES = new Set<RecipientFilterProperty>([
   'none',
   'address',
   'channel',
-  'company',
-  'source',
-  'email'
+  'company'
 ])
 
 const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
