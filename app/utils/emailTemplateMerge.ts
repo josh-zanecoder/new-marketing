@@ -1,3 +1,22 @@
+/** Write a string at a dotted path, creating intermediate objects (for admin-defined merge keys). */
+export function setMergePath(root: Record<string, unknown>, path: string, value: string): void {
+  const parts = path
+    .split('.')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (!parts.length) return
+  let cur: Record<string, unknown> = root
+  for (let i = 0; i < parts.length - 1; i++) {
+    const p = parts[i]!
+    const next = cur[p]
+    if (next == null || typeof next !== 'object' || Array.isArray(next)) {
+      cur[p] = {}
+    }
+    cur = cur[p] as Record<string, unknown>
+  }
+  cur[parts[parts.length - 1]!] = value
+}
+
 /** Dot-path lookup for mustache-style tokens, e.g. {{ user.firstName }} */
 export function getMergeValue(root: Record<string, unknown>, path: string): string {
   const parts = path
@@ -44,4 +63,34 @@ export function mergeRootWithUserSnapshot(
       role: u.role ?? ''
     }
   }
+}
+
+/** Keys aligned with `mergeRecipientSnapshotFromContact` for stable `{{ recipient.* }}` resolution. */
+const RECIPIENT_MERGE_KEYS = [
+  'name',
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'company',
+  'contactKind',
+  'channel',
+  'street',
+  'city',
+  'state',
+  'county'
+] as const
+
+export function mergeRootWithUserAndRecipient(
+  userSnapshot: UserMergeSnapshot | null | undefined,
+  recipientPartial: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  const base = mergeRootWithUserSnapshot(userSnapshot)
+  const p = recipientPartial || {}
+  const recipient: Record<string, string> = {}
+  for (const k of RECIPIENT_MERGE_KEYS) {
+    const v = p[k]
+    recipient[k] = v == null ? '' : String(v)
+  }
+  return { ...base, recipient }
 }

@@ -295,7 +295,7 @@
               </div>
               <div class="relative min-h-[280px] max-h-[min(480px,55vh)] overflow-auto bg-[#f8f4ef]">
                 <iframe
-                  :srcdoc="previewSrcdoc(savedTemplateHtml || '')"
+                  :srcdoc="previewSrcdoc(addCampaignDesignPreviewHtml || '')"
                   title="Email preview"
                   class="absolute inset-0 h-full w-full border-0"
                   sandbox="allow-same-origin"
@@ -456,6 +456,7 @@
 </template>
 <script setup lang="ts">
 import type { Campaign, SendStatus } from '~/types/campaign'
+import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
 import type { WorkSheet } from 'xlsx'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
@@ -817,11 +818,67 @@ async function loadFromEditorReturn() {
 
 const designSectionRef = ref<HTMLElement | null>(null)
 
+const mergeRootDraft = ref<Record<string, unknown> | null>(null)
+let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
+
+async function refreshMergeRootDraft() {
+  try {
+    const manual = form.value.recipientsMode === 'manual'
+      ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
+      : []
+    const res = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+      method: 'POST',
+      body: {
+        recipientsType: form.value.recipientsMode,
+        recipientsListId: form.value.recipientsListId || undefined,
+        recipientsManual: manual.length ? manual : undefined
+      },
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
+    mergeRootDraft.value = res.mergeRoot
+  } catch {
+    mergeRootDraft.value = null
+  }
+}
+
+function scheduleMergeRootDraftRefresh() {
+  if (!import.meta.client) return
+  if (mergeDraftTimer) clearTimeout(mergeDraftTimer)
+  mergeDraftTimer = setTimeout(() => {
+    mergeDraftTimer = null
+    void refreshMergeRootDraft()
+  }, 350)
+}
+
+const addCampaignDesignPreviewHtml = computed(() => {
+  const raw = savedTemplateHtml.value
+  if (!raw) return ''
+  if (mergeRootDraft.value == null) return raw
+  try {
+    return mergeMustacheTemplate(raw, mergeRootDraft.value)
+  } catch {
+    return raw
+  }
+})
+
+watch(
+  () =>
+    [
+      form.value.recipientsMode,
+      form.value.recipientsListId,
+      form.value.recipientsManual.map((e) => e?.trim()).join('\n'),
+      savedTemplateHtml.value
+    ] as const,
+  () => scheduleMergeRootDraftRefresh()
+)
+
 onMounted(() => {
   loadFromEditorReturn()
   loadRecipientLists()
   loadEmailTemplates()
   loadDynamicVariables()
+  void refreshMergeRootDraft()
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
 

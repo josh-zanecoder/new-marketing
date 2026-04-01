@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
+import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
 
 definePageMeta({
   layout: false
@@ -285,6 +286,45 @@ watch([editorRef, dynamicVariables], () => {
   if (!editor) return
   queueDynamicVariableBlocksSync()
 })
+
+const mergePreviewOpen = ref(false)
+const mergePreviewSrcdoc = ref('')
+
+function mergePreviewSrcdocHtml(html: string, scale = 0.85): string {
+  return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);min-height:100%}
+#preview-merge-wrap{transform:scale(${scale});transform-origin:center top;width:600px;margin:0 auto}
+</style></head><body><div id=preview-merge-wrap>${html}</div></body></html>`
+}
+
+async function openMergePreview() {
+  const editor = editorRef.value
+  if (!editor) return
+  const cid = campaignId.value
+  let root: Record<string, unknown> = {}
+  if (cid && /^[a-f0-9]{24}$/i.test(cid)) {
+    try {
+      const r = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+        method: 'POST',
+        body: { campaignId: cid },
+        credentials: 'include'
+      })
+      root = r.mergeRoot ?? {}
+    } catch {
+      root = {}
+    }
+  }
+  const html = editor.getHtml()
+  const css = editor.getCss()
+  const merged = mergeMustacheTemplate(`<style>${css}</style>${html}`, root)
+  mergePreviewSrcdoc.value = mergePreviewSrcdocHtml(merged)
+  mergePreviewOpen.value = true
+}
+
+function closeMergePreview() {
+  mergePreviewOpen.value = false
+}
 
 onMounted(() => {
   isMounted.value = true
@@ -577,7 +617,17 @@ function handleSaveAndExit() {
       <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
     </div>
     <div v-else class="flex h-screen flex-col">
-      <div class="flex shrink-0 items-center justify-end border-b border-slate-200 bg-slate-800 px-4 py-2.5">
+      <div
+        class="flex shrink-0 items-center justify-end gap-2 border-b border-slate-200 bg-slate-800 px-4 py-2.5"
+      >
+        <button
+          v-if="campaignId && /^[a-f0-9]{24}$/i.test(campaignId)"
+          type="button"
+          class="rounded-lg border border-slate-500 bg-transparent px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          @click="openMergePreview"
+        >
+          Preview with merge data
+        </button>
         <button
           type="button"
           class="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100"
@@ -586,6 +636,38 @@ function handleSaveAndExit() {
           Save and exit
         </button>
       </div>
+      <Teleport to="body">
+        <div
+          v-if="mergePreviewOpen"
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Merged email preview"
+          @click.self="closeMergePreview"
+        >
+          <div
+            class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+          >
+            <div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span class="text-sm font-semibold text-slate-800">Preview (user + recipient from Contacts)</span>
+              <button
+                type="button"
+                class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                aria-label="Close preview"
+                @click="closeMergePreview"
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              v-if="mergePreviewSrcdoc"
+              class="min-h-[70vh] w-full flex-1 border-0 bg-slate-100"
+              title="Merged email preview"
+              :srcdoc="mergePreviewSrcdoc"
+            />
+          </div>
+        </div>
+      </Teleport>
       <div
         ref="editorContainerRef"
         class="min-h-0 flex-1 overflow-auto"

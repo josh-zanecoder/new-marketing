@@ -17,9 +17,10 @@ export async function resolveRecipientListEmails(
   const listId = new mongoose.Types.ObjectId(trimmed)
   const { RecipientListMember, Contact } = getTenantClientModels(conn)
 
+  type MemberLean = { contactId?: mongoose.Types.ObjectId }
   const members = await RecipientListMember.find({ recipientListId: listId })
     .select('contactId')
-    .lean()
+    .lean<MemberLean[]>()
     .exec()
 
   const contactIds = members.map((m) => m.contactId).filter(Boolean)

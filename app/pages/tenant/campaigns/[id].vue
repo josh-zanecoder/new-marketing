@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useCampaignStore } from '~/store/campaignStore'
-import type { MarketingMeResponse } from '~/composables/useMarketingMe'
-import type { UserMergeSnapshot } from '~/utils/emailTemplateMerge'
-import { mergeMustacheTemplate, mergeRootWithUserSnapshot } from '~/utils/emailTemplateMerge'
+import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
@@ -20,39 +18,27 @@ const { data, error, pending } = await useFetch<{
     recipients: { email: string; status?: string; sentAt?: string; error?: string }[]
     emailTemplate?: { name: string; html: string }
     templateHtml?: string | null
-    mergeUserSnapshot?: UserMergeSnapshot
+    mergeUserSnapshot?: Record<string, unknown>
     createdAt: string
     updatedAt: string
   }
 }>(`/api/v1/tenant/campaigns/${id}`)
 
-const { data: mePayload } = await useFetch<MarketingMeResponse>('/api/v1/auth/me', {
-  credentials: 'include'
+const { data: mergeRootPayload } = await useAsyncData(`email-merge-root-${id}`, async () => {
+  try {
+    return await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-root', {
+      method: 'POST',
+      body: { campaignId: id },
+      credentials: 'include'
+    })
+  } catch {
+    return { mergeRoot: {} as Record<string, unknown> }
+  }
 })
 
 const campaign = computed(() => data.value?.campaign ?? null)
 
-function userSnapshotForPreview(
-  me: MarketingMeResponse['user'] | null | undefined,
-  fallback: UserMergeSnapshot | undefined
-): UserMergeSnapshot {
-  if (me && typeof me === 'object' && me.authType === 'apiKey') {
-    const snap: UserMergeSnapshot = {}
-    if (me.firstName) snap.firstName = me.firstName
-    if (me.lastName) snap.lastName = me.lastName
-    if (me.email) snap.email = me.email
-    if (me.phone) snap.phone = me.phone
-    if (me.tenantRole) snap.role = me.tenantRole
-    if (Object.keys(snap).length) return snap
-  }
-  return { ...(fallback || {}) }
-}
-
-const mergeRoot = computed(() =>
-  mergeRootWithUserSnapshot(
-    userSnapshotForPreview(mePayload.value?.user ?? null, campaign.value?.mergeUserSnapshot)
-  )
-)
+const mergeRoot = computed(() => mergeRootPayload.value?.mergeRoot ?? {})
 
 const previewHtml = computed(() => {
   const raw = campaign.value?.templateHtml
