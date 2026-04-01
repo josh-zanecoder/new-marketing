@@ -456,7 +456,7 @@
 </template>
 <script setup lang="ts">
 import type { Campaign, SendStatus } from '~/types/campaign'
-import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
+import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import type { WorkSheet } from 'xlsx'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'

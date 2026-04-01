@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
-import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
+import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 definePageMeta({
   layout: false

@@ -12,7 +12,7 @@ import {
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
 import { sendEmail } from './brevo.service'
-import { mergeMustacheTemplate } from '../../app/utils/emailTemplateMerge'
+import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 const BATCH_SIZE = 25
 

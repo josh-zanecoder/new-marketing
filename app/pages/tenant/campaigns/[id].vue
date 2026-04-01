@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useCampaignStore } from '~/store/campaignStore'
-import { mergeMustacheTemplate } from '~/utils/emailTemplateMerge'
+import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
