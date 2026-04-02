@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
@@ -8,7 +9,7 @@ import type {
   ManualRecipientModel
 } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
@@ -57,24 +58,26 @@ export default defineEventHandler(async (event) => {
     const manualRecipients = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: source._id })
       .lean<ManualRecipientLean[]>()
-    let emails = [
-      ...new Set(
-        manualRecipients
-          .map((r) => r.email?.trim?.().toLowerCase())
-          .filter((e): e is string => !!e && e.includes('@'))
-      )
-    ]
+    const seen = new Set<string>()
+    let contactIds: mongoose.Types.ObjectId[] = []
+    for (const r of manualRecipients) {
+      if (!r.contact) continue
+      const s = String(r.contact)
+      if (seen.has(s)) continue
+      seen.add(s)
+      contactIds.push(r.contact)
+    }
     if (
-      !emails.length &&
+      !contactIds.length &&
       source.recipientsType === 'list' &&
       String(source.recipientsListId ?? '').trim()
     ) {
-      emails = await resolveRecipientListEmails(conn, String(source.recipientsListId))
+      contactIds = await resolveRecipientListContactIds(conn, String(source.recipientsListId))
     }
-    if (emails.length) {
-      const docs: ManualRecipientInsert[] = emails.map((email) => ({
+    if (contactIds.length) {
+      const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({
         campaign: newCampaign._id,
-        email,
+        contact,
         clientId: ''
       }))
       await (ManualRecipient as ManualRecipientModel).insertMany(

@@ -1,5 +1,7 @@
+import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
+import type { ContactModel } from '@server/types/tenant/contact.model'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type {
   ManualRecipientInsert,
@@ -7,7 +9,7 @@ import type {
   ManualRecipientModel
 } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
@@ -30,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const { Campaign, EmailTemplate, ManualRecipient } = getTenantClientModels(conn)
+  const { Campaign, EmailTemplate, ManualRecipient, Contact } = getTenantClientModels(conn)
 
   const campaign = await (Campaign as CampaignModel).findById(id)
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -74,28 +76,43 @@ export default defineEventHandler(async (event) => {
 
   if (recipientsType === 'manual') {
     await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
-    const raw = (body.recipientsManual || [])
-      .map((e) => e?.trim?.().toLowerCase())
-      .filter((e): e is string => !!e && e.includes('@'))
-    const emails = [...new Set(raw)]
-    if (emails.length) {
-      const docs: ManualRecipientInsert[] = emails.map((email) => ({
-        campaign: campaign._id,
-        email,
-        clientId: ''
-      }))
-      await (ManualRecipient as ManualRecipientModel).insertMany(
-        docs as unknown as ManualRecipientInsertManyCast[]
+    const idStrings = [
+      ...new Set(
+        (body.recipientsManual || [])
+          .map((id) => String(id ?? '').trim())
+          .filter((id) => mongoose.isValidObjectId(id))
       )
+    ]
+    if (idStrings.length) {
+      const objectIds = idStrings.map((id) => new mongoose.Types.ObjectId(id))
+      const existing = await (Contact as ContactModel)
+        .find({ _id: { $in: objectIds }, deletedAt: null })
+        .select('_id')
+        .lean()
+      const allowed = new Set(
+        (existing as Array<{ _id: mongoose.Types.ObjectId }>).map((d) => String(d._id))
+      )
+      const docs: ManualRecipientInsert[] = idStrings
+        .filter((id) => allowed.has(id))
+        .map((id) => ({
+          campaign: campaign._id,
+          contact: new mongoose.Types.ObjectId(id),
+          clientId: ''
+        }))
+      if (docs.length) {
+        await (ManualRecipient as ManualRecipientModel).insertMany(
+          docs as unknown as ManualRecipientInsertManyCast[]
+        )
+      }
     }
   } else if (recipientsType === 'list') {
     await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
     if (recipientsListId) {
-      const emails = await resolveRecipientListEmails(conn, recipientsListId)
-      if (emails.length) {
-        const docs: ManualRecipientInsert[] = emails.map((email) => ({
+      const contactIds = await resolveRecipientListContactIds(conn, recipientsListId)
+      if (contactIds.length) {
+        const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({
           campaign: campaign._id,
-          email,
+          contact,
           clientId: ''
         }))
         await (ManualRecipient as ManualRecipientModel).insertMany(

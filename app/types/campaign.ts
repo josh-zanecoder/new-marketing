@@ -5,6 +5,8 @@ export interface CampaignSender {
 
 export interface CampaignRecipient {
   email: string
+  /** Present when audience rows reference CRM contacts (manual / list snapshots). */
+  contactId?: string
   name?: string
   status?: string
   sentAt?: string

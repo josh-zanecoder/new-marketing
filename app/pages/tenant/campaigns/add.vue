@@ -141,7 +141,7 @@
                   @click="form.recipientsMode = 'manual'"
                 >
                   Enter manually
-                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Paste emails separated by comma or new line</div>
+                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Pick from CRM contacts or upload a spreadsheet</div>
                 </button>
               </div>
               <div v-if="form.recipientsMode === 'list'">
@@ -212,29 +212,35 @@
                     <button
                       type="button"
                       class="text-sm font-medium text-zinc-600 hover:text-zinc-900"
-                      @click="addManualRecipient"
+                      @click="openContactsPicker"
                     >
-                      Add email
+                      Add from contacts
                     </button>
                   </div>
                 </div>
                 <p v-if="bulkUploadError" class="text-sm text-red-600">{{ bulkUploadError }}</p>
-                <div v-for="(value, index) in form.recipientsManual" :key="index" class="flex gap-3">
-                  <input
-                    v-model="form.recipientsManual[index]"
-                    type="email"
-                    placeholder="recipient@example.com"
-                    class="flex-1 rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
+                <p
+                  v-if="!manualRecipientsListed.length"
+                  class="rounded-xl border border-dashed border-zinc-200/90 bg-white/80 px-4 py-8 text-center text-sm text-zinc-500"
+                >
+                  No recipients yet. Use <span class="font-medium text-zinc-700">Add from contacts</span> or <span class="font-medium text-zinc-700">Upload Excel</span>.
+                </p>
+                <ul v-else class="divide-y divide-zinc-100 rounded-xl border border-zinc-200/90 bg-white">
+                  <li
+                    v-for="(row, idx) in manualRecipientsListed"
+                    :key="row.contactId + '-' + idx"
+                    class="flex items-center justify-between gap-3 px-4 py-3"
                   >
-                  <button
-                    v-if="form.recipientsManual.length > 1"
-                    type="button"
-                    class="rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-600 shadow-sm transition hover:bg-zinc-50"
-                    @click="removeManualRecipient(index)"
-                  >
-                    Remove
-                  </button>
-                </div>
+                    <span class="min-w-0 truncate text-sm text-zinc-900" :title="row.email">{{ row.displayLine }}</span>
+                    <button
+                      type="button"
+                      class="shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-sm text-zinc-600 shadow-sm transition hover:bg-zinc-50"
+                      @click="removeManualRecipientById(row.contactId)"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -451,6 +457,113 @@
       :send-progress="sendProgress"
       @close="closeSendModal"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="contactsPickerOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="contacts-picker-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeContactsPicker"
+        />
+        <div
+          class="relative flex max-h-[min(92vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:max-h-[85vh] sm:rounded-2xl"
+        >
+          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
+            <div class="min-w-0">
+              <h2 id="contacts-picker-title" class="text-base font-semibold text-zinc-900">
+                Add from contacts
+              </h2>
+              <p class="mt-1 text-sm text-zinc-500">
+                Choose people already in your CRM. Their email is added to this campaign.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+              aria-label="Close"
+              @click="closeContactsPicker"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="shrink-0 border-b border-zinc-100 px-5 py-3 sm:px-6">
+            <label class="sr-only" for="contact-picker-search">Search contacts</label>
+            <input
+              id="contact-picker-search"
+              v-model="contactPickerSearch"
+              type="search"
+              autocomplete="off"
+              placeholder="Search by name or email…"
+              class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+            >
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-3 sm:px-6">
+            <p v-if="contactsCatalogError" class="text-sm text-red-600">
+              {{ contactsCatalogError }}
+            </p>
+            <div
+              v-else-if="contactsCatalogPending"
+              class="space-y-3 py-8 text-center text-sm text-zinc-500"
+            >
+              Loading contacts…
+            </div>
+            <template v-else>
+              <p
+                v-if="contactsCatalogTruncated"
+                class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200/80"
+              >
+                Showing the most recently updated contacts only (list is capped). Refine your search or manage lists for larger audiences.
+              </p>
+              <p
+                v-if="!filteredContactsForPicker.length"
+                class="py-10 text-center text-sm text-zinc-500"
+              >
+                {{
+                  contactPickerSearch.trim()
+                    ? 'No contacts match your search.'
+                    : 'No contacts with an email address yet.'
+                }}
+              </p>
+              <ul v-else class="divide-y divide-zinc-100">
+                <li
+                  v-for="c in filteredContactsForPicker"
+                  :key="c.id"
+                  class="flex items-center justify-between gap-3 py-3.5"
+                >
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium text-zinc-900">
+                      {{ c.name || '—' }}
+                    </p>
+                    <p class="truncate text-sm text-zinc-500">
+                      {{ c.email }}
+                    </p>
+                    <p v-if="c.company" class="truncate text-xs text-zinc-400">
+                      {{ c.company }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isManualContactSelected(c.id)"
+                    @click="addContactFromPicker(c)"
+                  >
+                    {{ isManualContactSelected(c.id) ? 'Added' : 'Add' }}
+                  </button>
+                </li>
+              </ul>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
   </div>  
 </template>
@@ -475,7 +588,7 @@ const form = ref({
   subject: '',
   recipientsMode: 'list' as 'list' | 'manual',
   recipientsListId: '',
-  recipientsManual: [''],
+  recipientsManual: [] as string[],
   templateMode: 'scratch' as 'scratch' | 'existing',
   selectedTemplateId: ''
 })
@@ -512,6 +625,115 @@ interface RecipientListOption {
 const recipientLists = ref<RecipientListOption[]>([])
 const recipientListsPending = ref(false)
 const recipientListsError = ref('')
+
+interface ContactPickerRow {
+  id: string
+  name: string
+  email: string
+  company?: string
+}
+
+const contactsPickerOpen = ref(false)
+const contactPickerSearch = ref('')
+const contactsCatalog = ref<ContactPickerRow[]>([])
+const contactsCatalogPending = ref(false)
+const contactsCatalogError = ref('')
+const contactsCatalogTruncated = ref(false)
+
+/** Display names/emails for manual recipient contact ids (wizard + Excel match). */
+const manualRecipientLabels = ref<Record<string, { email: string; name: string }>>({})
+
+function normalizeRecipientEmail(raw: string): string {
+  return String(raw ?? '').trim().toLowerCase()
+}
+
+function isManualContactIdString(raw: string): boolean {
+  return /^[a-f0-9]{24}$/i.test(String(raw ?? '').trim())
+}
+
+function isManualContactSelected(contactId: string): boolean {
+  const id = String(contactId ?? '').trim()
+  if (!id) return false
+  return form.value.recipientsManual.includes(id)
+}
+
+function setManualRecipientLabel(contactId: string, email: string, name: string) {
+  manualRecipientLabels.value = {
+    ...manualRecipientLabels.value,
+    [contactId]: { email, name }
+  }
+}
+
+function addContactsToManual(rows: Array<{ id: string; email: string; name: string }>) {
+  const next = new Set(form.value.recipientsManual.filter(isManualContactIdString))
+  for (const r of rows) {
+    const id = r.id.trim()
+    if (!isManualContactIdString(id)) continue
+    next.add(id)
+    setManualRecipientLabel(id, (r.email ?? '').trim(), (r.name ?? '').trim())
+  }
+  form.value.recipientsManual = [...next]
+}
+
+function addContactFromPicker(row: ContactPickerRow) {
+  addContactsToManual([{ id: row.id, email: row.email, name: row.name }])
+}
+
+async function loadContactsCatalog() {
+  contactsCatalogPending.value = true
+  contactsCatalogError.value = ''
+  try {
+    const res = await $fetch<{
+      contacts?: Array<{
+        id: string
+        name?: string
+        email?: string
+        company?: string
+      }>
+      contactsTruncated?: boolean
+    }>('/api/v1/tenant/recipient-list', {
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
+    const rows = Array.isArray(res.contacts) ? res.contacts : []
+    contactsCatalog.value = rows
+      .map((c) => ({
+        id: c.id,
+        name: (c.name ?? '').trim(),
+        email: (c.email ?? '').trim(),
+        company: (c.company ?? '').trim() || undefined
+      }))
+      .filter((c) => c.email.includes('@'))
+    contactsCatalogTruncated.value = Boolean(res.contactsTruncated)
+  } catch {
+    contactsCatalogError.value = 'Could not load contacts.'
+    contactsCatalog.value = []
+    contactsCatalogTruncated.value = false
+  } finally {
+    contactsCatalogPending.value = false
+  }
+}
+
+const filteredContactsForPicker = computed(() => {
+  const q = contactPickerSearch.value.trim().toLowerCase()
+  if (!q) return contactsCatalog.value
+  return contactsCatalog.value.filter((c) => {
+    const name = c.name.toLowerCase()
+    const email = c.email.toLowerCase()
+    const company = (c.company ?? '').toLowerCase()
+    return name.includes(q) || email.includes(q) || company.includes(q)
+  })
+})
+
+async function openContactsPicker() {
+  contactPickerSearch.value = ''
+  contactsPickerOpen.value = true
+  await loadContactsCatalog()
+}
+
+function closeContactsPicker() {
+  contactsPickerOpen.value = false
+}
 
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
@@ -596,8 +818,9 @@ onBeforeUnmount(() => {
 function buildCampaignForSend(savedId: string): Campaign {
   const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
   if (fromStore) return fromStore
-  const manualEmails = form.value.recipientsManual
-    .map((e) => e?.trim())
+  const manualRecipients = form.value.recipientsManual
+    .filter(isManualContactIdString)
+    .map((id) => manualRecipientLabels.value[id]?.email?.trim())
     .filter((e): e is string => !!e && e.includes('@'))
   return {
     id: savedId,
@@ -605,7 +828,7 @@ function buildCampaignForSend(savedId: string): Campaign {
     sender: { name: form.value.senderName, email: form.value.senderEmail },
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
-    recipients: manualEmails.map((email) => ({ email })),
+    recipients: manualRecipients.map((email) => ({ email })),
     subject: form.value.subject,
     status: 'Draft',
     createdAt: '',
@@ -735,10 +958,20 @@ async function loadEditCampaign() {
       recipientsType: 'manual' | 'list'
       recipientsListId?: string
       subject: string
-      recipients: { email: string }[]
+      recipients: { email: string; contactId?: string }[]
       templateHtml?: string | null
     } }>(`/api/v1/tenant/campaigns/${editId.value}`)
     const c = res.campaign
+    const ids: string[] = []
+    const labels: Record<string, { email: string; name: string }> = {}
+    for (const r of c.recipients ?? []) {
+      const cid = r.contactId?.trim()
+      if (cid && isManualContactIdString(cid)) {
+        ids.push(cid)
+        labels[cid] = { email: (r.email ?? '').trim(), name: '' }
+      }
+    }
+    manualRecipientLabels.value = labels
     form.value = {
       name: c.name,
       senderName: c.sender?.name || 'Mortdash',
@@ -746,7 +979,7 @@ async function loadEditCampaign() {
       subject: c.subject || '',
       recipientsMode: c.recipientsType || 'manual',
       recipientsListId: c.recipientsListId || '',
-      recipientsManual: c.recipients?.length ? c.recipients.map((r) => r.email) : [''],
+      recipientsManual: ids,
       templateMode: 'scratch',
       selectedTemplateId: ''
     }
@@ -780,10 +1013,20 @@ async function loadFromEditorReturn() {
         recipientsType: 'manual' | 'list'
         recipientsListId?: string
         subject: string
-        recipients: { email: string }[]
+        recipients: { email: string; contactId?: string }[]
         templateHtml?: string | null
       } }>(`/api/v1/tenant/campaigns/${campaignId}`)
       const c = res.campaign
+      const ids: string[] = []
+      const labels: Record<string, { email: string; name: string }> = {}
+      for (const r of c.recipients ?? []) {
+        const cid = r.contactId?.trim()
+        if (cid && isManualContactIdString(cid)) {
+          ids.push(cid)
+          labels[cid] = { email: (r.email ?? '').trim(), name: '' }
+        }
+      }
+      manualRecipientLabels.value = labels
       form.value = {
         name: c.name,
         senderName: c.sender?.name || 'Mortdash',
@@ -791,7 +1034,7 @@ async function loadFromEditorReturn() {
         subject: c.subject || '',
         recipientsMode: c.recipientsType || 'manual',
         recipientsListId: c.recipientsListId || '',
-        recipientsManual: c.recipients?.length ? c.recipients.map((r) => r.email) : [''],
+        recipientsManual: ids,
         templateMode: form.value.templateMode,
         selectedTemplateId: form.value.selectedTemplateId
       }
@@ -824,7 +1067,7 @@ let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
 async function refreshMergeRootDraft() {
   try {
     const manual = form.value.recipientsMode === 'manual'
-      ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
+      ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
       : []
     const res = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
       method: 'POST',
@@ -909,7 +1152,7 @@ function openEditorWithCurrentDesign() {
 
 const recipientsDescription = computed(() => {
   if (form.value.recipientsMode === 'manual') {
-    const count = form.value.recipientsManual.filter(v => v.trim().length > 0).length
+    const count = form.value.recipientsManual.filter(isManualContactIdString).length
     return count > 0 ? `${count} manual recipient${count === 1 ? '' : 's'}` : 'Add recipients manually'
   }
   const selected = recipientLists.value.find((l) => l.id === form.value.recipientsListId)
@@ -918,7 +1161,7 @@ const recipientsDescription = computed(() => {
 
 const recipientsComplete = computed(() => {
   if (form.value.recipientsMode === 'list') return !!form.value.recipientsListId
-  return form.value.recipientsManual.some(v => v.trim().length > 0)
+  return form.value.recipientsManual.some(isManualContactIdString)
 })
 const subjectComplete = computed(() => !!form.value.subject?.trim())
 const designComplete = computed(() => !!savedTemplateHtml.value || (form.value.templateMode === 'existing' && form.value.selectedTemplateId))
@@ -966,12 +1209,26 @@ const saveCampaignActionDisabled = computed(
     || !readyToSaveCampaign.value
 )
 
-function addManualRecipient() {
-  form.value.recipientsManual = [...form.value.recipientsManual, '']
-}
+const manualRecipientsListed = computed(() =>
+  form.value.recipientsManual
+    .map((id) => id.trim())
+    .filter(isManualContactIdString)
+    .map((contactId) => {
+      const lbl = manualRecipientLabels.value[contactId]
+      const email = lbl?.email ?? ''
+      const name = lbl?.name ?? ''
+      const displayLine =
+        name && email ? `${name} · ${email}` : email || `Contact ${contactId.slice(0, 8)}…`
+      return { contactId, email, name, displayLine }
+    })
+)
 
-function removeManualRecipient(index: number) {
-  form.value.recipientsManual = form.value.recipientsManual.filter((_, i) => i !== index)
+function removeManualRecipientById(contactId: string) {
+  const id = String(contactId ?? '').trim()
+  if (!id) return
+  form.value.recipientsManual = form.value.recipientsManual.filter((x) => x.trim() !== id)
+  const { [id]: _removed, ...rest } = manualRecipientLabels.value
+  manualRecipientLabels.value = rest
 }
 
 const bulkUploadError = ref<string | null>(null)
@@ -1014,13 +1271,29 @@ async function handleBulkUpload(e: Event) {
       bulkUploadError.value = 'No valid email addresses found. Use a column with email addresses.'
       return
     }
-    const existing = new Set(form.value.recipientsManual.map((e) => e.trim().toLowerCase()).filter(Boolean))
-    const toAdd = emails.filter((e) => !existing.has(e))
-    form.value.recipientsManual = [
-      ...form.value.recipientsManual.filter((e) => e.trim()),
-      ...toAdd
-    ]
-    if (form.value.recipientsManual.length === 0) form.value.recipientsManual = ['']
+    if (!contactsCatalog.value.length) await loadContactsCatalog()
+    const byEmail = new Map<string, ContactPickerRow>()
+    for (const c of contactsCatalog.value) {
+      byEmail.set(normalizeRecipientEmail(c.email), c)
+    }
+    const existingIds = new Set(form.value.recipientsManual.filter(isManualContactIdString))
+    const toAdd: Array<{ id: string; email: string; name: string }> = []
+    const unknown: string[] = []
+    for (const em of emails) {
+      const row = byEmail.get(em)
+      if (!row) {
+        unknown.push(em)
+        continue
+      }
+      if (existingIds.has(row.id)) continue
+      existingIds.add(row.id)
+      toAdd.push({ id: row.id, email: row.email, name: row.name })
+    }
+    if (unknown.length) {
+      bulkUploadError.value = `No CRM contact for ${unknown.length} address(es). Only existing contacts can be added.`
+      if (!toAdd.length) return
+    }
+    addContactsToManual(toAdd)
   } catch (err: unknown) {
     bulkUploadError.value =
       err instanceof Error ? err.message : 'Failed to parse file. Use .xlsx or .xls format.'
@@ -1109,7 +1382,7 @@ function clearCampaignSessionStorage() {
 
 async function persistSavedCampaign(): Promise<string> {
   const recipientsManual = form.value.recipientsMode === 'manual'
-    ? form.value.recipientsManual.map((e) => e?.trim()).filter((e): e is string => !!e && e.includes('@'))
+    ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
     : []
 
   const body = {

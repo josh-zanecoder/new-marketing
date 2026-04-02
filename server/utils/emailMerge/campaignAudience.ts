@@ -66,6 +66,7 @@ export type CampaignAudienceConfig = Pick<CampaignLean, 'recipientsType' | 'reci
 export type DraftRecipientContext = {
   recipientsType: 'list' | 'manual'
   recipientsListId?: string
+  /** Manual draft: Contact `_id` strings (not emails). */
   recipientsManual?: string[]
 }
 
@@ -74,7 +75,7 @@ export async function recipientEmailsForCampaign(
   conn: Connection,
   campaign: CampaignLean
 ): Promise<string[]> {
-  const { ManualRecipient } = getTenantClientModels(conn)
+  const { ManualRecipient, Contact } = getTenantClientModels(conn)
   if (campaign.recipientsType === 'list' && campaign.recipientsListId?.trim()) {
     const fromList = await resolveRecipientListEmails(conn, campaign.recipientsListId)
     return [
@@ -86,10 +87,22 @@ export async function recipientEmailsForCampaign(
   const manualDocs = await (ManualRecipient as ManualRecipientModel)
     .find({ campaign: campaign._id })
     .lean<ManualRecipientLean[]>()
+  const idStrings = manualDocs
+    .map((r) => String(r.contact ?? ''))
+    .filter((id) => mongoose.isValidObjectId(id))
+  const uniqueIds = [...new Set(idStrings)].map((s) => new mongoose.Types.ObjectId(s))
+  if (!uniqueIds.length) return []
+  const contacts = await (Contact as ContactModel)
+    .find({ _id: { $in: uniqueIds }, deletedAt: null })
+    .select('email')
+    .lean<ContactLean[]>()
+  const emailById = new Map(
+    contacts.map((c) => [String(c._id), normalizeMarketingEmail(c.email)])
+  )
   return [
     ...new Set(
       manualDocs
-        .map((r) => normalizeMarketingEmail(r.email))
+        .map((r) => emailById.get(String(r.contact)))
         .filter((e): e is string => !!e)
     )
   ]
@@ -108,13 +121,26 @@ export async function recipientEmailsForDraft(
       )
     ]
   }
-  return [
+  const idStrings = [
     ...new Set(
       (draft.recipientsManual ?? [])
-        .map((e) => normalizeMarketingEmail(String(e)))
-        .filter((e): e is string => !!e)
+        .map((id) => String(id ?? '').trim())
+        .filter((id) => mongoose.isValidObjectId(id))
     )
   ]
+  if (!idStrings.length) return []
+  const { Contact } = getTenantClientModels(conn)
+  const objectIds = idStrings.map((id) => new mongoose.Types.ObjectId(id))
+  const contacts = await (Contact as ContactModel)
+    .find({ _id: { $in: objectIds }, deletedAt: null })
+    .select('email')
+    .lean<ContactLean[]>()
+  const emailById = new Map(
+    contacts.map((c) => [String(c._id), normalizeMarketingEmail(c.email)])
+  )
+  return idStrings
+    .map((id) => emailById.get(id))
+    .filter((e): e is string => !!e)
 }
 
 /**

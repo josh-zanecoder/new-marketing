@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import {
   namesFromContactPayload,
   type ContactDeletedEventEnvelope,
@@ -5,6 +6,7 @@ import {
 } from '../../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
+import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -82,6 +84,16 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     },
     { upsert: true }
   )
+  const doc = await models.Contact.findOne(
+    {
+      externalId: contactEvent.payload.externalId,
+      source: KAFKA_INBOUND_CONTACT_SOURCE
+    },
+    { _id: 1 }
+  ).lean()
+  if (doc?._id) {
+    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+  }
 }
 
 export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
@@ -128,6 +140,16 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     },
     { upsert: true }
   )
+  const doc = await models.Contact.findOne(
+    {
+      externalId: contactEvent.payload.externalId,
+      source: KAFKA_INBOUND_CONTACT_SOURCE
+    },
+    { _id: 1 }
+  ).lean()
+  if (doc?._id) {
+    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+  }
 }
 
 export async function softDeleteContactFromDeletedEvent(
@@ -164,6 +186,16 @@ export async function softDeleteContactFromDeletedEvent(
       }
     }
   )
+  const doc = await models.Contact.findOne(
+    {
+      externalId: deletedEvent.payload.externalId,
+      source: KAFKA_INBOUND_CONTACT_SOURCE
+    },
+    { _id: 1 }
+  ).lean()
+  if (doc?._id) {
+    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+  }
 }
 
 export async function upsertContactsFromSyncSnapshot(params: {
@@ -213,8 +245,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
 
   if (rows.length === 0) return 0
   await Promise.all(
-    rows.map((r) =>
-      models.Contact.updateOne(
+    rows.map(async (r) => {
+      await models.Contact.updateOne(
         { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
         {
           $set: {
@@ -240,7 +272,14 @@ export async function upsertContactsFromSyncSnapshot(params: {
         },
         { upsert: true }
       )
-    )
+      const doc = await models.Contact.findOne(
+        { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
+        { _id: 1 }
+      ).lean()
+      if (doc?._id) {
+        await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+      }
+    })
   )
   return rows.length
 }

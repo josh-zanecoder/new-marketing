@@ -450,7 +450,7 @@ watch([isMounted, htmlReady], async () => {
               targetId = `temp-${Date.now()}`
               window.sessionStorage.setItem(`campaign-template-${targetId}`, fullHtml)
               window.sessionStorage.setItem('mortdash-pending-campaign', JSON.stringify({
-                form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [''], templateMode: 'scratch', selectedTemplateId: '' },
+                form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [], templateMode: 'scratch', selectedTemplateId: '' },
                 campaignId: targetId
               }))
             }
@@ -595,7 +595,7 @@ function handleSaveAndExit() {
         targetId = `temp-${Date.now()}`
         window.sessionStorage.setItem(`campaign-template-${targetId}`, fullHtml)
         window.sessionStorage.setItem('mortdash-pending-campaign', JSON.stringify({
-          form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [''], templateMode: 'scratch', selectedTemplateId: '' },
+          form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [], templateMode: 'scratch', selectedTemplateId: '' },
           campaignId: targetId
         }))
       }

@@ -157,6 +157,13 @@
                   </svg>
                   Edit
                 </NuxtLink>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 sm:px-3 sm:text-sm"
+                  @click="listToDelete = row"
+                >
+                  Delete
+                </button>
                 <NuxtLink
                   :to="`/tenant/recipient-list/${row.id}`"
                   class="hidden rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 sm:inline-flex"
@@ -237,6 +244,16 @@
           </div>
         </div>
       </div>
+
+    <ClientConfirmationModal
+      :open="!!listToDelete"
+      title="Delete recipient list"
+      :message="deleteListMessage"
+      confirm-text="Delete list"
+      variant="danger"
+      @confirm="confirmDeleteList"
+      @cancel="listToDelete = null"
+    />
   </div>
 </template>
 
@@ -360,6 +377,38 @@ watch(audienceOptions, (opts) => {
 watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
+
+const listToDelete = ref<ListRow | null>(null)
+const deleteListPending = ref(false)
+
+const deleteListMessage = computed(() => {
+  const row = listToDelete.value
+  if (!row) return ''
+  return `Permanently delete “${row.name}”? Campaigns that used this list will have the list unlinked (they stay as manual audience with any saved recipients). This cannot be undone.`
+})
+
+async function confirmDeleteList() {
+  const row = listToDelete.value
+  if (!row || deleteListPending.value) return
+  deleteListPending.value = true
+  try {
+    await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(row.id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
+    listToDelete.value = null
+    await load()
+  } catch (e: unknown) {
+    loadError.value =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to delete list')
+        : 'Failed to delete list'
+    listToDelete.value = null
+  } finally {
+    deleteListPending.value = false
+  }
+}
 
 function formatFilters(
   filters: ListCriterion[] | undefined,

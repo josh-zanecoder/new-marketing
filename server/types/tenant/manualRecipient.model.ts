@@ -3,13 +3,13 @@ import type { Model, Types } from 'mongoose'
 export interface ManualRecipientLean {
   _id: Types.ObjectId
   campaign: Types.ObjectId
-  email: string
+  contact: Types.ObjectId
   clientId?: string
 }
 
 export interface ManualRecipientInsert {
   campaign: Types.ObjectId
-  email: string
+  contact: Types.ObjectId
   clientId: string
 }
 

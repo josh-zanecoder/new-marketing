@@ -53,15 +53,24 @@
             </span>
           </div>
         </div>
-        <NuxtLink
-          :to="`/tenant/recipient-list/edit/${listId}`"
-          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
-        >
-          <svg class="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          Edit list
-        </NuxtLink>
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <NuxtLink
+            :to="`/tenant/recipient-list/edit/${listId}`"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+          >
+            <svg class="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit list
+          </NuxtLink>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
+            @click="deleteConfirmOpen = true"
+          >
+            Delete list
+          </button>
+        </div>
       </header>
 
       <section class="mb-8 sm:mb-10">
@@ -221,6 +230,16 @@
         </div>
       </section>
     </template>
+
+    <ClientConfirmationModal
+      :open="deleteConfirmOpen"
+      title="Delete recipient list"
+      :message="deleteDetailMessage"
+      confirm-text="Delete list"
+      variant="danger"
+      @confirm="confirmDeleteDetail"
+      @cancel="deleteConfirmOpen = false"
+    />
   </div>
 </template>
 
@@ -292,6 +311,14 @@ const pageLoading = ref(false)
 const loadError = ref('')
 const payload = ref<ListDetailPayload | null>(null)
 const page = ref(1)
+const deleteConfirmOpen = ref(false)
+const deleteDetailPending = ref(false)
+
+const deleteDetailMessage = computed(() => {
+  const name = payload.value?.list?.name?.trim()
+  const label = name ? `“${name}”` : 'this list'
+  return `Permanently delete ${label}? Campaigns that used it will have the list unlinked (they become manual audience with any saved recipients). This cannot be undone.`
+})
 
 function formatDate(iso: string): string {
   try {
@@ -349,6 +376,29 @@ async function load(p: number) {
 async function goPage(p: number) {
   if (p < 1) return
   await load(p)
+}
+
+async function confirmDeleteDetail() {
+  const id = listId.value
+  if (!id || deleteDetailPending.value) return
+  deleteDetailPending.value = true
+  try {
+    await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      ...serverAuthHeaders()
+    })
+    deleteConfirmOpen.value = false
+    await navigateTo('/tenant/recipient-list')
+  } catch (e: unknown) {
+    loadError.value =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to delete list')
+        : 'Failed to delete list'
+    deleteConfirmOpen.value = false
+  } finally {
+    deleteDetailPending.value = false
+  }
 }
 
 watch(
