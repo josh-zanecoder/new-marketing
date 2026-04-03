@@ -45,6 +45,7 @@ const DEFAULT_EMAIL_TEMPLATE = `
 <style>.email-wrapper{width:100%;min-height:100vh;}.cta-btn:hover{background:#3d3834 !important;}</style>
 `
 
+const marketingApi = useTenantMarketingApi()
 const route = useRoute()
 const editorContainerRef = ref<HTMLDivElement | null>(null)
 const editorRef = ref<Editor | null>(null)
@@ -116,7 +117,7 @@ async function resolveTenantId() {
     return
   }
   try {
-    const res = await $fetch<unknown>('/api/v1/tenant/me')
+    const res = await marketingApi.fetchTenantMe()
     const id = pickTenantId(res)
     resolvedTenantId.value = id || ''
   } catch {
@@ -126,10 +127,16 @@ async function resolveTenantId() {
 
 async function loadDynamicVariables() {
   try {
-    const res = await $fetch<{ variables: DynamicVariableItem[] }>(
-      '/api/v1/tenant/dynamic-variables'
-    )
-    dynamicVariables.value = res.variables ?? []
+    const res = await marketingApi.fetchDynamicVariables()
+    const list = res.variables ?? []
+    dynamicVariables.value = list.map((v, i) => ({
+      id: (typeof v.id === 'string' && v.id.trim()) ? v.id : `var-${v.key}-${i}`,
+      key: v.key,
+      label: v.label,
+      sourceType: v.sourceType,
+      scopes: v.scopes,
+      enabled: v.enabled
+    }))
   } catch {
     dynamicVariables.value = []
   }
@@ -305,11 +312,7 @@ async function openMergePreview() {
   let root: Record<string, unknown> = {}
   if (cid && /^[a-f0-9]{24}$/i.test(cid)) {
     try {
-      const r = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
-        method: 'POST',
-        body: { campaignId: cid },
-        credentials: 'include'
-      })
+      const r = await marketingApi.fetchEmailMergeContext({ campaignId: cid })
       root = r.mergeRoot ?? {}
     } catch {
       root = {}

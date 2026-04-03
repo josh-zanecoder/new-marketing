@@ -1,42 +1,78 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import type { Campaign } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
+import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
+const { sendingCampaignId, sendError } = storeToRefs(campaignStore)
+const marketingApi = useTenantMarketingApi()
+const { canSendDraft, sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
 const id = route.params.id as string
 
-const { data, error, pending } = await useFetch<{
-  campaign: {
-    id: string
-    name: string
-    sender: { name: string; email: string }
-    recipientsType: 'manual' | 'list'
-    recipientsListId?: string
-    subject: string
-    status: string
-    recipients: { email: string; status?: string; sentAt?: string; error?: string }[]
-    emailTemplate?: { name: string; html: string }
-    templateHtml?: string | null
-    mergeUserSnapshot?: Record<string, unknown>
-    createdAt: string
-    updatedAt: string
-  }
-}>(`/api/v1/tenant/campaigns/${id}`)
+const { data, error, pending, refresh } = await useAsyncData(
+  `tenant-campaign-${id}`,
+  () => marketingApi.fetchCampaignById(id)
+)
 
-const { data: mergeRootPayload } = await useAsyncData(`email-merge-root-${id}`, async () => {
-  try {
-    return await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
-      method: 'POST',
-      body: { campaignId: id },
-      credentials: 'include'
-    })
-  } catch {
-    return { mergeRoot: {} as Record<string, unknown> }
+const { data: mergeRootPayload } = await useAsyncData(`email-merge-root-${id}`, async () => ({
+  mergeRoot: await marketingApi.fetchEmailMergeContextOrEmpty({ campaignId: id })
+}))
+
+const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
+
+const campaignForSend = computed((): Campaign | null => {
+  const c = campaign.value
+  if (!c) return null
+  return {
+    id: c.id,
+    name: c.name,
+    sender: c.sender,
+    recipientsType: c.recipientsType,
+    recipientsListId: c.recipientsListId,
+    subject: c.subject,
+    status: c.status,
+    recipients: c.recipients ?? [],
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt
   }
 })
 
-const campaign = computed(() => data.value?.campaign ?? null)
+const sendSuccessSummary = ref<{
+  campaignName: string
+  sent: number
+  failed: number
+  campaignStatus: string
+} | null>(null)
+
+async function handleSend() {
+  const c = campaignForSend.value
+  if (!c || !canSendDraft(c)) return
+  const { poll } = await campaignStore.sendCampaign(c)
+  if (!poll) return
+  const campaignId = c.id
+  startSendStatusPolling(campaignId, async (res) => {
+    const name = campaign.value?.name || 'campaign'
+    await refresh()
+    await nextTick()
+    sendSuccessSummary.value = {
+      campaignName: name,
+      sent: res.sent,
+      failed: res.failed,
+      campaignStatus: res.campaignStatus
+    }
+  })
+}
+
+function closeSendSuccessModal() {
+  sendSuccessSummary.value = null
+}
+
+const sendModalCampaignName = computed(() =>
+  sendingCampaignId.value === id ? campaign.value?.name || 'campaign' : 'campaign'
+)
 
 const mergeRoot = computed(() => mergeRootPayload.value?.mergeRoot ?? {})
 
@@ -198,6 +234,26 @@ function formatDate(d: string) {
       </div>
 
       <div v-else-if="campaign" class="space-y-8 sm:space-y-10">
+        <div
+          v-if="sendError && !sendingCampaignId"
+          class="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+          role="alert"
+        >
+          <div class="mt-0.5 shrink-0 text-amber-600">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+          <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100/80"
+            @click="closeSendModal()"
+          >
+            Dismiss
+          </button>
+        </div>
+
         <header class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
             <nav class="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
@@ -219,6 +275,18 @@ function formatDate(d: string) {
             </p>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              v-if="campaignForSend && canSendDraft(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="!!sendingCampaignId"
+              @click="handleSend"
+            >
+              <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+              Send campaign
+            </button>
             <NuxtLink
               v-if="campaign.status === 'Draft' || campaign.status === 'Failed'"
               :to="`/tenant/campaigns/add?id=${campaign.id}`"
@@ -448,5 +516,22 @@ function formatDate(d: string) {
         </div>
       </div>
     </Teleport>
+
+    <ClientSendProgressModal
+      :open="!!sendingCampaignId"
+      :campaign-name="sendModalCampaignName"
+      :send-error="sendError"
+      :send-progress="sendProgress"
+      @close="closeSendModal"
+    />
+
+    <ClientSendSuccessModal
+      :open="!!sendSuccessSummary"
+      :campaign-name="sendSuccessSummary?.campaignName ?? ''"
+      :sent="sendSuccessSummary?.sent ?? 0"
+      :failed="sendSuccessSummary?.failed ?? 0"
+      :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
+      @close="closeSendSuccessModal"
+    />
   </div>
 </template>

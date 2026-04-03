@@ -408,7 +408,7 @@
         <button
           type="button"
           class="shrink-0 self-start rounded-lg px-2 py-1 text-sm font-medium text-amber-900 transition hover:bg-amber-100/80"
-          @click="campaignStore.clearSendModal()"
+          @click="closeSendModal()"
         >
           Dismiss
         </button>
@@ -568,14 +568,16 @@
   </div>  
 </template>
 <script setup lang="ts">
-import type { Campaign, SendStatus } from '~/types/campaign'
+import type { Campaign } from '~/types/campaign'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import type { WorkSheet } from 'xlsx'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
 const campaignStore = useCampaignStore()
-const { campaigns, sendingCampaignId, sendStatus, sendError } = storeToRefs(campaignStore)
+const marketingApi = useTenantMarketingApi()
+const { campaigns, sendingCampaignId, sendError } = storeToRefs(campaignStore)
+const { sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
 
 type XlsxModule = typeof import('xlsx')
 
@@ -683,18 +685,7 @@ async function loadContactsCatalog() {
   contactsCatalogPending.value = true
   contactsCatalogError.value = ''
   try {
-    const res = await $fetch<{
-      contacts?: Array<{
-        id: string
-        name?: string
-        email?: string
-        company?: string
-      }>
-      contactsTruncated?: boolean
-    }>('/api/v1/tenant/recipient-list', {
-      credentials: 'include',
-      ...serverAuthHeaders()
-    })
+    const res = await marketingApi.fetchRecipientListResource()
     const rows = Array.isArray(res.contacts) ? res.contacts : []
     contactsCatalog.value = rows
       .map((c) => ({
@@ -735,84 +726,12 @@ function closeContactsPicker() {
   contactsPickerOpen.value = false
 }
 
-function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
-  try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
-  } catch {
-    return {}
-  }
-}
-
-let sendPollTimer: ReturnType<typeof setInterval> | null = null
-
 const wizardSendBusy = computed(() => isSaving.value || !!sendingCampaignId.value)
 
 const campaignNameForSendModal = computed(() => {
   const id = sendingCampaignId.value
   if (!id) return 'campaign'
   return campaigns.value.find((c) => c.id === id)?.name || form.value.name.trim() || 'campaign'
-})
-
-const sendProgress = computed(() => {
-  const s = sendStatus.value
-  if (!s) return null
-  const processed = s.sent + s.failed
-  const pct = s.total > 0 ? (processed / s.total) * 100 : 0
-  return {
-    ...s,
-    processed,
-    pct,
-    remaining: s.pending
-  }
-})
-
-function closeSendModal() {
-  campaignStore.clearSendModal()
-  if (sendPollTimer) {
-    clearInterval(sendPollTimer)
-    sendPollTimer = null
-  }
-}
-
-function startPollingAfterWizard(campaignId: string) {
-  async function poll() {
-    if (!sendingCampaignId.value) return
-    try {
-      const res = await $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
-        timeout: 60000,
-        credentials: 'include',
-        ...serverAuthHeaders()
-      })
-      campaignStore.setSendStatus(res)
-      if (res.done) {
-        campaignStore.setSendingCampaignId(null)
-        campaignStore.setSendStatus(null)
-        if (sendPollTimer) {
-          clearInterval(sendPollTimer)
-          sendPollTimer = null
-        }
-        await campaignStore.fetchCampaigns()
-        await navigateTo(`/tenant/campaigns/${campaignId}`)
-      }
-    } catch {
-      campaignStore.clearSendModal()
-      if (sendPollTimer) {
-        clearInterval(sendPollTimer)
-        sendPollTimer = null
-      }
-    }
-  }
-  poll()
-  // Frequent polls so we detect completion soon after the worker finishes (5s felt sluggish).
-  sendPollTimer = setInterval(poll, 1500)
-}
-
-onBeforeUnmount(() => {
-  if (sendPollTimer) {
-    clearInterval(sendPollTimer)
-    sendPollTimer = null
-  }
 })
 
 function buildCampaignForSend(savedId: string): Campaign {
@@ -840,10 +759,7 @@ async function loadRecipientLists() {
   recipientListsPending.value = true
   recipientListsError.value = ''
   try {
-    const res = await $fetch<{ lists?: RecipientListOption[] }>('/api/v1/tenant/recipient-list', {
-      credentials: 'include',
-      ...serverAuthHeaders()
-    })
+    const res = await marketingApi.fetchRecipientListResource()
     recipientLists.value = Array.isArray(res.lists) ? res.lists : []
   } catch {
     recipientListsError.value = 'Could not load recipient lists.'
@@ -886,13 +802,7 @@ const subjectVariables = computed(() => {
 
 async function loadDynamicVariables() {
   try {
-    const res = await $fetch<{ variables?: DynamicVariableOption[] }>(
-      '/api/v1/tenant/dynamic-variables',
-      {
-        credentials: 'include',
-        ...serverAuthHeaders()
-      }
-    )
+    const res = await marketingApi.fetchDynamicVariables()
     dynamicVariables.value = Array.isArray(res.variables) ? res.variables : []
   } catch {
     dynamicVariables.value = []
@@ -915,12 +825,7 @@ async function loadEmailTemplates() {
   emailTemplatesPending.value = true
   emailTemplatesError.value = ''
   try {
-    const res = await $fetch<{
-      templates: { id: string; name: string; htmlTemplate: string; subject?: string }[]
-    }>('/api/v1/tenant/email-templates', {
-      credentials: 'include',
-      ...serverAuthHeaders()
-    })
+    const res = await marketingApi.fetchEmailTemplates()
     existingTemplates.value = (res.templates ?? []).map((t) => ({
       id: t.id,
       name: t.name,
@@ -952,15 +857,7 @@ async function loadEditCampaign() {
   }
   editLoadPending.value = true
   try {
-    const res = await $fetch<{ campaign: {
-      name: string
-      sender: { name: string; email: string }
-      recipientsType: 'manual' | 'list'
-      recipientsListId?: string
-      subject: string
-      recipients: { email: string; contactId?: string }[]
-      templateHtml?: string | null
-    } }>(`/api/v1/tenant/campaigns/${editId.value}`)
+    const res = await marketingApi.fetchCampaignById(editId.value)
     const c = res.campaign
     const ids: string[] = []
     const labels: Record<string, { email: string; name: string }> = {}
@@ -1007,15 +904,7 @@ async function loadFromEditorReturn() {
   const isRealCampaignId = /^[a-f0-9]{24}$/i.test(campaignId)
   if (isRealCampaignId) {
     try {
-      const res = await $fetch<{ campaign: {
-        name: string
-        sender: { name: string; email: string }
-        recipientsType: 'manual' | 'list'
-        recipientsListId?: string
-        subject: string
-        recipients: { email: string; contactId?: string }[]
-        templateHtml?: string | null
-      } }>(`/api/v1/tenant/campaigns/${campaignId}`)
+      const res = await marketingApi.fetchCampaignById(campaignId)
       const c = res.campaign
       const ids: string[] = []
       const labels: Record<string, { email: string; name: string }> = {}
@@ -1069,15 +958,10 @@ async function refreshMergeRootDraft() {
     const manual = form.value.recipientsMode === 'manual'
       ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
       : []
-    const res = await $fetch<{ mergeRoot: Record<string, unknown> }>('/api/v1/tenant/email/merge-context', {
-      method: 'POST',
-      body: {
-        recipientsType: form.value.recipientsMode,
-        recipientsListId: form.value.recipientsListId || undefined,
-        recipientsManual: manual.length ? manual : undefined
-      },
-      credentials: 'include',
-      ...serverAuthHeaders()
+    const res = await marketingApi.fetchEmailMergeContext({
+      recipientsType: form.value.recipientsMode,
+      recipientsListId: form.value.recipientsListId || undefined,
+      recipientsManual: manual.length ? manual : undefined
     })
     mergeRootDraft.value = res.mergeRoot
   } catch {
@@ -1397,10 +1281,10 @@ async function persistSavedCampaign(): Promise<string> {
   }
 
   if (isEditMode.value && editId.value) {
-    await $fetch(`/api/v1/tenant/campaigns/${editId.value}`, { method: 'PUT', body })
+    await marketingApi.updateCampaign(editId.value, body)
     return editId.value
   }
-  const res = await $fetch<{ id: string }>('/api/v1/tenant/campaigns', { method: 'POST', body })
+  const res = await marketingApi.createCampaign(body)
   return res.id
 }
 
@@ -1437,7 +1321,9 @@ async function handleSendFromWizard() {
         await navigateTo(`/tenant/campaigns/${id}`)
         return
       }
-      startPollingAfterWizard(id)
+      startSendStatusPolling(id, async () => {
+        await navigateTo(`/tenant/campaigns/${id}`)
+      })
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)
     } finally {

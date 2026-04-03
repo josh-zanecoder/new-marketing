@@ -44,9 +44,9 @@ export function useMarketingMe() {
     'marketing-me',
     async () => {
       const reqFetch = import.meta.server ? useRequestFetch() : $fetch
-      const r = await reqFetch<MarketingMeResponse>('/api/v1/auth/me', {
+      const r = (await reqFetch('/api/v1/auth/me', {
         credentials: 'include'
-      })
+      })) as MarketingMeResponse
       return r.user
     },
     {

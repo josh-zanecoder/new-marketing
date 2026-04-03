@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { Campaign, SendStatus } from '~/types/campaign'
+import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
 const store = useCampaignStore()
-const { campaigns, sendingCampaignId, sendStatus, sendError } = storeToRefs(store)
+const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
+const { canSendDraft, sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
@@ -66,8 +67,6 @@ function recipientCount(c: Campaign): number {
   return c.recipients?.length ?? 0
 }
 
-let pollTimer: ReturnType<typeof setTimeout> | null = null
-
 const sendSuccessSummary = ref<{
   campaignName: string
   sent: number
@@ -75,51 +74,21 @@ const sendSuccessSummary = ref<{
   campaignStatus: string
 } | null>(null)
 
-function canSendDraft(c: Campaign): boolean {
-  if (c.status !== 'Draft') return false
-  if (c.recipientsType === 'manual') return (c.recipients?.length ?? 0) > 0
-  if (c.recipientsType === 'list') {
-    return (c.recipients?.length ?? 0) > 0 || !!c.recipientsListId?.trim()
-  }
-  return false
-}
-
 async function handleSend(c: Campaign) {
   if (!canSendDraft(c)) return
   const { poll } = await store.sendCampaign(c)
-  if (poll) startPolling(c.id)
-}
-
-function startPolling(campaignId: string) {
-  async function poll() {
-    if (!sendingCampaignId.value) return
-    try {
-      const res = await $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
-        timeout: 60000
-      })
-      store.setSendStatus(res)
-      if (res.done) {
-        const name = campaigns.value.find((c) => c.id === campaignId)?.name || 'campaign'
-        store.setSendingCampaignId(null)
-        store.setSendStatus(null)
-        if (pollTimer) clearInterval(pollTimer)
-        pollTimer = null
-        await store.fetchCampaigns()
-        await nextTick()
-        sendSuccessSummary.value = {
-          campaignName: name,
-          sent: res.sent,
-          failed: res.failed,
-          campaignStatus: res.campaignStatus
-        }
-      }
-    } catch {
-      store.clearSendModal()
-      if (pollTimer) clearInterval(pollTimer)
+  if (!poll) return
+  const campaignId = c.id
+  startSendStatusPolling(campaignId, async (res) => {
+    const name = campaigns.value.find((x) => x.id === campaignId)?.name || 'campaign'
+    await nextTick()
+    sendSuccessSummary.value = {
+      campaignName: name,
+      sent: res.sent,
+      failed: res.failed,
+      campaignStatus: res.campaignStatus
     }
-  }
-  poll()
-  pollTimer = setInterval(poll, 1500)
+  })
 }
 
 function openDeleteModal(c: Campaign) {
@@ -145,30 +114,9 @@ async function confirmDuplicate() {
   if (newId) await navigateTo(`/tenant/campaigns/add?id=${newId}`)
 }
 
-function closeSendModal() {
-  store.clearSendModal()
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 function closeSendSuccessModal() {
   sendSuccessSummary.value = null
 }
-
-const sendProgress = computed(() => {
-  const s = sendStatus.value
-  if (!s) return null
-  const processed = s.sent + s.failed
-  const pct = s.total > 0 ? (processed / s.total) * 100 : 0
-  return {
-    ...s,
-    processed,
-    pct,
-    remaining: s.pending
-  }
-})
 </script>
 
 <template>
@@ -207,7 +155,7 @@ const sendProgress = computed(() => {
       <button
         type="button"
         class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100/80"
-        @click="store.clearSendModal()"
+        @click="closeSendModal()"
       >
         Dismiss
       </button>

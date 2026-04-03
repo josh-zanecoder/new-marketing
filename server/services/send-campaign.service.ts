@@ -54,14 +54,23 @@ export async function getCampaignSendProgress(
     })
   ])
 
+  // When the last batch finishes, recipients hit 0 pending before the worker's
+  // campaign status flip (Sending → Sent/Failed). Re-read the campaign and only
+  // report done once status has left Sending so clients don't stop polling early.
+  let campaignStatus = campaign.status
+  if (pendingCount === 0) {
+    const fresh = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+    if (fresh) campaignStatus = fresh.status
+  }
+
   return {
     campaignId,
-    campaignStatus: campaign.status,
+    campaignStatus,
     pending: pendingCount,
     sent: sentCount,
     failed: failedCount,
     total: pendingCount + sentCount + failedCount,
-    done: pendingCount === 0
+    done: pendingCount === 0 && campaignStatus !== 'Sending'
   }
 }
 
