@@ -65,6 +65,7 @@ export default defineEventHandler(async (event) => {
         recipientsListId: c.recipientsListId,
         subject: c.subject,
         status: c.status,
+        scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
         recipients,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt

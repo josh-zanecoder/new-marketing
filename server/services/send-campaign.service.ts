@@ -1,11 +1,22 @@
-import type { TenantClientModels } from '../models/tenant/tenantClientModels'
-import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
-import type { CampaignRecipientLean, CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
+import type { Connection } from 'mongoose'
+import { getTenantClientModels, type TenantClientModels } from '../models/tenant/tenantClientModels'
+import type {
+  CampaignLean,
+  CampaignMergeUserSnapshot,
+  CampaignModel
+} from '../types/tenant/campaign.model'
+import type {
+  CampaignRecipientInsertRow,
+  CampaignRecipientLean,
+  CampaignRecipientModel
+} from '../types/tenant/campaignRecipient.model'
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
-import { normalizeMarketingEmail } from '../helpers/marketingEmail'
+import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
+import { enqueueCampaignBatch } from '../queue/emailQueue'
 import {
-  contactsByEmailForAudience
+  contactsByEmailForAudience,
+  recipientEmailsForCampaign
 } from '../utils/emailMerge/campaignAudience'
 import {
   composeEmailMergeRoot,
@@ -24,6 +35,146 @@ export interface ProcessBatchResult {
   failed: number
   total: number
   done: boolean
+}
+
+export interface BeginCampaignSendOptions {
+  /** Statuses from which this transition is allowed. Default `['Draft']`. */
+  allowedStatuses?: readonly string[]
+  /** If set, persisted on the campaign for {{ user.* }} merge in the worker. Omit to leave the existing snapshot. */
+  mergeUserSnapshot?: CampaignMergeUserSnapshot | null
+  /** Campaign `status` after rollback when enqueue fails. Default `Draft`. */
+  statusOnEnqueueFailure?: string
+}
+
+export interface BeginCampaignSendResult {
+  ok: true
+  total: number
+  valid: number
+  invalid: number
+  queued: number
+  sent: number
+  failed: number
+  pending: number
+}
+
+/**
+ * Builds recipient rows, moves the campaign to Sending, and enqueues batch processing.
+ * Used by the send-now API and (later) the scheduled-send worker.
+ */
+export async function beginCampaignSend(
+  conn: Connection,
+  campaignId: string,
+  options?: BeginCampaignSendOptions
+): Promise<BeginCampaignSendResult> {
+  const allowedStatuses = options?.allowedStatuses ?? ['Draft']
+  const revertStatus = options?.statusOnEnqueueFailure ?? 'Draft'
+
+  const dbName = conn.db?.databaseName
+  if (!dbName) {
+    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
+  }
+
+  const models = getTenantClientModels(conn)
+  const { Campaign, CampaignRecipient } = models
+
+  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
+  if (!allowedStatuses.includes(campaign.status)) {
+    throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
+  }
+
+  const inFlight = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+    campaign: campaignId,
+    status: { $in: ['pending', 'sent'] }
+  })
+  if (inFlight > 0) {
+    throw createError({ statusCode: 400, message: 'Campaign has already been queued for sending' })
+  }
+
+  await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+
+  const emails = await recipientEmailsForCampaign(conn, campaign)
+  if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
+
+  const valid: string[] = []
+  const invalid: string[] = []
+  for (const email of emails) {
+    if (isValidMarketingEmail(email)) valid.push(email)
+    else invalid.push(email)
+  }
+
+  const rows: CampaignRecipientInsertRow[] = [
+    ...valid.map(
+      (email): CampaignRecipientInsertRow => ({
+        campaign: campaignId,
+        email,
+        status: 'pending',
+        clientId: ''
+      })
+    ),
+    ...invalid.map(
+      (email): CampaignRecipientInsertRow => ({
+        campaign: campaignId,
+        email,
+        status: 'failed',
+        clientId: '',
+        error: 'Invalid email address'
+      })
+    )
+  ]
+
+  await (CampaignRecipient as CampaignRecipientModel).insertMany(rows)
+
+  if (valid.length === 0) {
+    // Scheduled sends: without this, status stays "Scheduled" forever (no batch job).
+    if (campaign.status === 'Scheduled') {
+      await (Campaign as CampaignModel).updateOne(
+        { _id: campaignId },
+        { $set: { status: 'Failed' }, $unset: { scheduledAt: 1 } }
+      )
+    }
+    return {
+      ok: true,
+      total: emails.length,
+      valid: 0,
+      invalid: invalid.length,
+      queued: 0,
+      sent: 0,
+      failed: invalid.length,
+      pending: 0
+    }
+  }
+
+  const snap = options?.mergeUserSnapshot
+  await (Campaign as CampaignModel).updateOne(
+    { _id: campaignId },
+    {
+      $set: {
+        status: 'Sending',
+        ...(snap ? { mergeUserSnapshot: snap } : {})
+      }
+    }
+  )
+
+  try {
+    await enqueueCampaignBatch(campaignId, dbName)
+  } catch (e: unknown) {
+    await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+    await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: revertStatus })
+    console.error('[SendCampaign] Failed to enqueue:', e)
+    throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
+  }
+
+  return {
+    ok: true,
+    total: emails.length,
+    valid: valid.length,
+    invalid: invalid.length,
+    queued: valid.length,
+    sent: 0,
+    failed: invalid.length,
+    pending: valid.length
+  }
 }
 
 /** Read-only progress for API polling (sending happens in the BullMQ worker). */

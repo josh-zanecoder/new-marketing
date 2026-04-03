@@ -9,6 +9,8 @@ export interface TenantCampaignDetail {
   recipientsListId?: string
   subject: string
   status: string
+  /** ISO 8601 when status is `Scheduled` (or after reschedule). */
+  scheduledAt?: string
   recipients: Array<{
     email: string
     contactId?: string
@@ -139,6 +141,24 @@ export function useTenantMarketingApi() {
     return $fetch(`/api/v1/tenant/campaigns/${campaignId}`, tenantFetchInit({ method: 'PUT', body }))
   }
 
+  async function scheduleCampaignSend(campaignId: string, scheduledAt: string) {
+    return $fetch<{ ok: boolean; campaignId: string; scheduledAt: string }>(
+      '/api/v1/tenant/send-campaign/schedule',
+      tenantFetchInit({
+        method: 'POST',
+        body: { campaignId, scheduledAt },
+        timeout: 30000
+      })
+    )
+  }
+
+  async function unscheduleCampaignSend(campaignId: string) {
+    return $fetch<{ ok: boolean; campaignId: string }>(
+      `/api/v1/tenant/send-campaign/schedule/${campaignId}`,
+      tenantFetchInit({ method: 'DELETE', timeout: 15000 })
+    )
+  }
+
   return {
     serverAuthHeaders,
     tenantFetchInit,
@@ -151,6 +171,8 @@ export function useTenantMarketingApi() {
     fetchTenantMe,
     fetchSendCampaignStatus,
     createCampaign,
-    updateCampaign
+    updateCampaign,
+    scheduleCampaignSend,
+    unscheduleCampaignSend
   }
 }

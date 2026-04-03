@@ -425,6 +425,15 @@
           <button
             v-if="campaignFormComplete"
             type="button"
+            class="inline-flex items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm transition hover:bg-sky-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
+            :disabled="wizardSendBusy"
+            @click.prevent="handleOpenScheduleWizard"
+          >
+            Schedule send
+          </button>
+          <button
+            v-if="campaignFormComplete"
+            type="button"
             class="inline-flex items-center justify-center rounded-xl border border-emerald-200/90 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
             :disabled="wizardSendBusy"
             @click.prevent="handleSendFromWizard"
@@ -457,6 +466,62 @@
       :send-progress="sendProgress"
       @close="closeSendModal"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="scheduleModalOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wizard-schedule-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeScheduleModalFromWizard"
+        />
+        <div
+          class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200/90 sm:rounded-2xl sm:p-6"
+        >
+          <h2 id="wizard-schedule-title" class="text-lg font-semibold text-zinc-900">
+            Schedule send
+          </h2>
+          <p class="mt-1 text-sm text-zinc-500">
+            Campaign will be saved, then set to send at the time below (your local time).
+          </p>
+          <label class="mt-4 block text-sm font-medium text-zinc-700" for="wizard-schedule-datetime">
+            Date &amp; time
+          </label>
+          <input
+            id="wizard-schedule-datetime"
+            v-model="scheduleLocal"
+            type="datetime-local"
+            class="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+          >
+          <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
+            {{ scheduleError }}
+          </p>
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              :disabled="wizardSendBusy"
+              @click="closeScheduleModalFromWizard"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              :disabled="wizardSendBusy"
+              @click="confirmScheduleFromWizard"
+            >
+              {{ wizardSendBusy ? 'Saving…' : 'Schedule' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -577,7 +642,8 @@ import { useCampaignStore } from '~/store/campaignStore'
 const campaignStore = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(campaignStore)
-const { sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
+const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
+  useCampaignSendFlow()
 
 type XlsxModule = typeof import('xlsx')
 
@@ -726,7 +792,30 @@ function closeContactsPicker() {
   contactsPickerOpen.value = false
 }
 
-const wizardSendBusy = computed(() => isSaving.value || !!sendingCampaignId.value)
+const scheduleModalOpen = ref(false)
+const scheduleLocal = ref('')
+const scheduleError = ref('')
+const scheduleSubmitting = ref(false)
+
+const wizardSendBusy = computed(
+  () => isSaving.value || !!sendingCampaignId.value || scheduleSubmitting.value
+)
+
+function toDatetimeLocalValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function openScheduleModalFromWizard() {
+  scheduleError.value = ''
+  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
+  scheduleModalOpen.value = true
+}
+
+function closeScheduleModalFromWizard() {
+  scheduleModalOpen.value = false
+  scheduleError.value = ''
+}
 
 const campaignNameForSendModal = computed(() => {
   const id = sendingCampaignId.value
@@ -1297,6 +1386,82 @@ function setSaveErrorFromCatch(e: unknown) {
   saveError.value = typeof raw === 'string' ? raw : 'Failed to save campaign'
 }
 
+function recipientsReadyForSchedule(): boolean {
+  if (form.value.recipientsMode === 'manual') {
+    return form.value.recipientsManual.some((id) => isManualContactIdString(String(id ?? '').trim()))
+  }
+  return !!form.value.recipientsListId?.trim()
+}
+
+function handleOpenScheduleWizard() {
+  if (!campaignFormComplete.value) return
+  saveError.value = null
+  if (!form.value.name.trim()) {
+    saveError.value = 'Campaign name is required'
+    return
+  }
+  applyStoredOrSelectedTemplate()
+  if (!savedTemplateHtml.value) {
+    saveError.value = 'Complete the email design before scheduling.'
+    return
+  }
+  if (!recipientsReadyForSchedule()) {
+    saveError.value = 'Add recipients before scheduling.'
+    return
+  }
+  openScheduleModalFromWizard()
+}
+
+async function confirmScheduleFromWizard() {
+  if (!campaignFormComplete.value) return
+  saveError.value = null
+  scheduleError.value = ''
+  if (!form.value.name.trim()) {
+    saveError.value = 'Campaign name is required'
+    return
+  }
+  const parsed = new Date(scheduleLocal.value)
+  if (Number.isNaN(parsed.getTime())) {
+    scheduleError.value = 'Pick a valid date and time.'
+    return
+  }
+  applyStoredOrSelectedTemplate()
+  if (!savedTemplateHtml.value) {
+    saveError.value = 'Complete the email design before scheduling.'
+    return
+  }
+  isSaving.value = true
+  scheduleSubmitting.value = true
+  try {
+    const id = await persistSavedCampaign()
+    clearCampaignSessionStorage()
+    const campaign = buildCampaignForSend(id)
+    if (!canScheduleDraft(campaign)) {
+      saveError.value = 'Add recipients before scheduling.'
+      return
+    }
+    try {
+      await marketingApi.scheduleCampaignSend(id, parsed.toISOString())
+      scheduleModalOpen.value = false
+      await campaignStore.fetchCampaigns()
+      await navigateTo(`/tenant/campaigns/${id}`)
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'data' in e
+          ? (e as { data?: { message?: string } }).data?.message
+          : e instanceof Error
+            ? e.message
+            : 'Could not schedule send.'
+      scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+    }
+  } catch (e: unknown) {
+    setSaveErrorFromCatch(e)
+  } finally {
+    scheduleSubmitting.value = false
+    isSaving.value = false
+  }
+}
+
 async function handleSendFromWizard() {
   if (!campaignFormComplete.value) return
   saveError.value = null
@@ -1314,7 +1479,7 @@ async function handleSendFromWizard() {
     try {
       const id = await persistSavedCampaign()
       clearCampaignSessionStorage()
-        const campaign = buildCampaignForSend(id)
+      const campaign = buildCampaignForSend(id)
       const { poll } = await campaignStore.sendCampaign(campaign)
       if (!poll) {
         if (sendError.value) return

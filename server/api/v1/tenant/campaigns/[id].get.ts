@@ -96,6 +96,9 @@ export default defineEventHandler(async (event) => {
       recipientsListId: campaign.recipientsListId,
       subject: campaign.subject,
       status: campaign.status,
+      scheduledAt: campaign.scheduledAt
+        ? new Date(campaign.scheduledAt).toISOString()
+        : undefined,
       recipients,
       emailTemplate,
       templateHtml,

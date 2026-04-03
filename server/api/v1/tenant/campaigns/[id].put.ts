@@ -36,8 +36,11 @@ export default defineEventHandler(async (event) => {
 
   const campaign = await (Campaign as CampaignModel).findById(id)
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
-  if (!['Draft', 'Sent', 'Failed'].includes(campaign.status)) {
-    throw createError({ statusCode: 400, message: 'Only Draft, Sent, or Failed campaigns can be updated' })
+  if (!['Draft', 'Scheduled', 'Sent', 'Failed'].includes(campaign.status)) {
+    throw createError({
+      statusCode: 400,
+      message: 'Only Draft, Scheduled, Sent, or Failed campaigns can be updated'
+    })
   }
 
   const recipientsType = body.recipientsType || 'manual'

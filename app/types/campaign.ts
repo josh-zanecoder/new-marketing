@@ -24,6 +24,8 @@ export interface Campaign {
   recipientsListId?: string
   subject: string
   status: CampaignStatus | string
+  /** ISO 8601; set when the campaign is scheduled to send later. */
+  scheduledAt?: string
   recipients: CampaignRecipient[]
   createdAt: string
   updatedAt: string

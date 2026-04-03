@@ -13,6 +13,9 @@ export function canSendDraft(c: Campaign): boolean {
   return false
 }
 
+/** Same rules as send-now; only draft campaigns can be scheduled. */
+export const canScheduleDraft = canSendDraft
+
 export type CampaignSendProgress = SendStatus & {
   processed: number
   pct: number
@@ -88,6 +91,7 @@ export function useCampaignSendFlow() {
 
   return {
     canSendDraft,
+    canScheduleDraft,
     sendProgress,
     startSendStatusPolling,
     stopSendPolling,

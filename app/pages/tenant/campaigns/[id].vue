@@ -9,7 +9,8 @@ const route = useRoute()
 const campaignStore = useCampaignStore()
 const { sendingCampaignId, sendError } = storeToRefs(campaignStore)
 const marketingApi = useTenantMarketingApi()
-const { canSendDraft, sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
+const { canSendDraft, canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
+  useCampaignSendFlow()
 const id = route.params.id as string
 
 const { data, error, pending, refresh } = await useAsyncData(
@@ -36,7 +37,8 @@ const campaignForSend = computed((): Campaign | null => {
     status: c.status,
     recipients: c.recipients ?? [],
     createdAt: c.createdAt,
-    updatedAt: c.updatedAt
+    updatedAt: c.updatedAt,
+    scheduledAt: c.scheduledAt
   }
 })
 
@@ -144,6 +146,69 @@ onBeforeUnmount(() => {
 function formatDate(d: string) {
   if (!d) return '–'
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function toDatetimeLocalValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const scheduleModalOpen = ref(false)
+const scheduleLocal = ref('')
+const scheduleError = ref('')
+const scheduleBusy = ref(false)
+
+function openScheduleModal() {
+  scheduleError.value = ''
+  const d = new Date(Date.now() + 65 * 60 * 1000)
+  scheduleLocal.value = toDatetimeLocalValue(d)
+  scheduleModalOpen.value = true
+}
+
+function closeScheduleModal() {
+  scheduleModalOpen.value = false
+  scheduleError.value = ''
+}
+
+async function confirmSchedule() {
+  const c = campaignForSend.value
+  if (!c || !canScheduleDraft(c)) return
+  scheduleError.value = ''
+  const parsed = new Date(scheduleLocal.value)
+  if (Number.isNaN(parsed.getTime())) {
+    scheduleError.value = 'Pick a valid date and time.'
+    return
+  }
+  scheduleBusy.value = true
+  try {
+    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    scheduleModalOpen.value = false
+    await refresh()
+    await campaignStore.fetchCampaigns()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : 'Could not schedule send.'
+    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+async function handleUnschedule() {
+  const c = campaign.value
+  if (!c || c.status !== 'Scheduled') return
+  scheduleBusy.value = true
+  try {
+    await marketingApi.unscheduleCampaignSend(c.id)
+    await refresh()
+    await campaignStore.fetchCampaigns()
+  } finally {
+    scheduleBusy.value = false
+  }
 }
 </script>
 
@@ -279,7 +344,7 @@ function formatDate(d: string) {
               v-if="campaignForSend && canSendDraft(campaignForSend)"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
-              :disabled="!!sendingCampaignId"
+              :disabled="!!sendingCampaignId || scheduleBusy"
               @click="handleSend"
             >
               <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -287,8 +352,29 @@ function formatDate(d: string) {
               </svg>
               Send campaign
             </button>
+            <button
+              v-if="campaignForSend && canScheduleDraft(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="!!sendingCampaignId || scheduleBusy"
+              @click="openScheduleModal"
+            >
+              <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Schedule send
+            </button>
+            <button
+              v-if="campaign?.status === 'Scheduled'"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/80 px-4 py-2.5 text-sm font-medium text-amber-950 shadow-sm transition hover:bg-amber-100/80 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="scheduleBusy"
+              @click="handleUnschedule"
+            >
+              Cancel schedule
+            </button>
             <NuxtLink
-              v-if="campaign.status === 'Draft' || campaign.status === 'Failed'"
+              v-if="campaign.status === 'Draft' || campaign.status === 'Failed' || campaign.status === 'Scheduled'"
               :to="`/tenant/campaigns/add?id=${campaign.id}`"
               class="inline-flex items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 sm:text-[15px]"
             >
@@ -357,6 +443,15 @@ function formatDate(d: string) {
                     <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Updated</dt>
                     <dd class="text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
                       {{ formatDate(campaign.updatedAt) }}
+                    </dd>
+                  </div>
+                  <div
+                    v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
+                    class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5"
+                  >
+                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Sends at</dt>
+                    <dd class="text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
+                      {{ formatDate(campaign.scheduledAt) }}
                     </dd>
                   </div>
                 </dl>
@@ -533,5 +628,65 @@ function formatDate(d: string) {
       :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
       @close="closeSendSuccessModal"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="scheduleModalOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-send-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeScheduleModal"
+        />
+        <div
+          class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200/90 sm:rounded-2xl sm:p-6"
+        >
+          <h2 id="schedule-send-title" class="text-lg font-semibold text-zinc-900">
+            Schedule send
+          </h2>
+          <p class="mt-1 text-sm text-zinc-500">
+            Choose when this campaign should start sending (your local time).
+          </p>
+          <label class="mt-4 block text-sm font-medium text-zinc-700" for="schedule-datetime">
+            Date &amp; time
+          </label>
+          <input
+            id="schedule-datetime"
+            v-model="scheduleLocal"
+            type="datetime-local"
+            class="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+          >
+          <p
+            v-if="scheduleError"
+            class="mt-3 text-sm text-red-600"
+            role="alert"
+          >
+            {{ scheduleError }}
+          </p>
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              :disabled="scheduleBusy"
+              @click="closeScheduleModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              :disabled="scheduleBusy"
+              @click="confirmSchedule"
+            >
+              {{ scheduleBusy ? 'Saving…' : 'Schedule' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

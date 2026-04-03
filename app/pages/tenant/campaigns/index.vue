@@ -4,13 +4,19 @@ import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
 const store = useCampaignStore()
+const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
-const { canSendDraft, sendProgress, startSendStatusPolling, closeSendModal } = useCampaignSendFlow()
+const { canSendDraft, canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
+  useCampaignSendFlow()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
+const campaignToSchedule = ref<Campaign | null>(null)
+const scheduleLocal = ref('')
+const scheduleError = ref('')
+const scheduleBusy = ref(false)
 const currentPage = ref(1)
 const PAGE_SIZE = 10
 
@@ -117,6 +123,70 @@ async function confirmDuplicate() {
 function closeSendSuccessModal() {
   sendSuccessSummary.value = null
 }
+
+function toDatetimeLocalValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function openScheduleModal(c: Campaign) {
+  campaignToSchedule.value = c
+  scheduleError.value = ''
+  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
+}
+
+function closeScheduleModal() {
+  campaignToSchedule.value = null
+  scheduleError.value = ''
+}
+
+async function confirmScheduleFromList() {
+  const c = campaignToSchedule.value
+  if (!c) return
+  scheduleError.value = ''
+  const parsed = new Date(scheduleLocal.value)
+  if (Number.isNaN(parsed.getTime())) {
+    scheduleError.value = 'Pick a valid date and time.'
+    return
+  }
+  scheduleBusy.value = true
+  try {
+    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    campaignToSchedule.value = null
+    await store.fetchCampaigns()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : 'Could not schedule send.'
+    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+async function handleUnschedule(c: Campaign) {
+  if (c.status !== 'Scheduled') return
+  scheduleBusy.value = true
+  try {
+    await marketingApi.unscheduleCampaignSend(c.id)
+    await store.fetchCampaigns()
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+function formatScheduleHint(iso: string) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 </script>
 
 <template>
@@ -190,6 +260,9 @@ function closeSendSuccessModal() {
         <option value="Sending">
           Sending
         </option>
+        <option value="Scheduled">
+          Scheduled
+        </option>
         <option value="Sent">
           Sent
         </option>
@@ -255,6 +328,12 @@ function closeSendSuccessModal() {
               </span>
               <span class="font-mono tabular-nums text-zinc-400">#{{ c.id.slice(-6) }}</span>
               <span v-if="c.createdAt" class="tabular-nums">{{ new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
+              <span
+                v-if="c.status === 'Scheduled' && c.scheduledAt"
+                class="text-sky-800"
+              >
+                · Sends {{ formatScheduleHint(c.scheduledAt) }}
+              </span>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-zinc-100 pt-3 text-sm sm:flex-1 sm:border-t-0 sm:pt-0 md:grid-cols-4">
@@ -297,12 +376,36 @@ function closeSendSuccessModal() {
             v-if="canSendDraft(c)"
             type="button"
             class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="!!sendingCampaignId"
+            :disabled="!!sendingCampaignId || scheduleBusy"
             title="Send campaign"
             @click.stop="handleSend(c)"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+          <button
+            v-if="canScheduleDraft(c)"
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-sky-50 hover:text-sky-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="!!sendingCampaignId || scheduleBusy"
+            title="Schedule send"
+            @click.stop="openScheduleModal(c)"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <button
+            v-if="c.status === 'Scheduled'"
+            type="button"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="scheduleBusy"
+            title="Cancel schedule"
+            @click.stop="handleUnschedule(c)"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <button
@@ -395,5 +498,61 @@ function closeSendSuccessModal() {
       :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
       @close="closeSendSuccessModal"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="campaignToSchedule"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-campaign-list-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeScheduleModal"
+        />
+        <div
+          class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200/90 sm:rounded-2xl sm:p-6"
+        >
+          <h2 id="schedule-campaign-list-title" class="text-lg font-semibold text-zinc-900">
+            Schedule send
+          </h2>
+          <p class="mt-1 truncate text-sm text-zinc-600" :title="campaignToSchedule.name">
+            {{ campaignToSchedule.name || 'Untitled' }}
+          </p>
+          <label class="mt-4 block text-sm font-medium text-zinc-700" for="schedule-list-datetime">
+            Date &amp; time
+          </label>
+          <input
+            id="schedule-list-datetime"
+            v-model="scheduleLocal"
+            type="datetime-local"
+            class="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+          >
+          <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
+            {{ scheduleError }}
+          </p>
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              :disabled="scheduleBusy"
+              @click="closeScheduleModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              :disabled="scheduleBusy"
+              @click="confirmScheduleFromList"
+            >
+              {{ scheduleBusy ? 'Saving…' : 'Schedule' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

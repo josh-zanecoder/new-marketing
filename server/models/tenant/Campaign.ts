@@ -25,6 +25,8 @@ export const campaignSchema = new mongoose.Schema({
   emailTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },
   subject: { type: String, default: '' },
   status: { type: String, enum: campaignStatusEnum, default: 'Draft' },
+  /** When set, campaign is intended to start sending at this instant (UTC). Typically used with status `Scheduled`. */
+  scheduledAt: { type: Date, required: false },
   clientId: { type: String, default: '' },
   /** CRM user profile at last save; used at send time for {{ user.* }} when worker has no session. */
   mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false }

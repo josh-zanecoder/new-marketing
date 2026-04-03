@@ -17,6 +17,8 @@ export interface CampaignLean {
   recipientsListId?: string
   subject: string
   status: string
+  /** Fire time for scheduled send (stored in Mongo as UTC). */
+  scheduledAt?: Date
   emailTemplate?: Types.ObjectId
   createdAt?: Date
   updatedAt?: Date
