@@ -214,6 +214,17 @@ function navLinkLayoutClass(compact: boolean) {
           </svg>
           <span>Campaigns</span>
         </NuxtLink>
+        <NuxtLink
+          to="/tenant/tracking"
+          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
+          :active-class="navLinkActiveClass"
+          @click="collapseSidebarIfMobileExpanded"
+        >
+          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+          <span>Tracking</span>
+        </NuxtLink>
       </nav>
 
       <div class="shrink-0 border-t border-zinc-200/80 p-3">

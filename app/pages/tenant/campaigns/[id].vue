@@ -210,6 +210,9 @@ async function handleUnschedule() {
     scheduleBusy.value = false
   }
 }
+
+type CampaignViewTab = 'details' | 'tracking'
+const campaignViewTab = ref<CampaignViewTab>('details')
 </script>
 
 <template>
@@ -398,7 +401,42 @@ async function handleUnschedule() {
           </div>
         </header>
 
-        <div class="flex flex-col gap-8 sm:gap-10 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12">
+        <nav
+          class="flex gap-1 border-b border-zinc-200/90"
+          aria-label="Campaign views"
+        >
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 sm:text-[15px]"
+            :class="
+              campaignViewTab === 'details'
+                ? 'border-zinc-900 text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-800'
+            "
+            :aria-current="campaignViewTab === 'details' ? 'page' : undefined"
+            @click="campaignViewTab = 'details'"
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 sm:text-[15px]"
+            :class="
+              campaignViewTab === 'tracking'
+                ? 'border-zinc-900 text-zinc-900'
+                : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-800'
+            "
+            :aria-current="campaignViewTab === 'tracking' ? 'page' : undefined"
+            @click="campaignViewTab = 'tracking'"
+          >
+            Tracking
+          </button>
+        </nav>
+
+        <div
+          v-show="campaignViewTab === 'details'"
+          class="flex flex-col gap-8 sm:gap-10 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12"
+        >
           <div class="min-w-0 space-y-8 xl:col-span-5 2xl:col-span-4 xl:space-y-8">
             <div
               class="grid grid-cols-1 gap-8 lg:gap-10 xl:gap-8"
@@ -411,7 +449,7 @@ async function handleUnschedule() {
               <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
                 <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
                   <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    Details
+                    Overview
                   </h2>
                 </div>
                 <dl class="divide-y divide-zinc-100">
@@ -561,6 +599,14 @@ async function handleUnschedule() {
             </div>
           </div>
         </div>
+
+        <section
+          v-show="campaignViewTab === 'tracking'"
+          class="min-w-0 pt-2"
+          aria-label="Campaign send tracking"
+        >
+          <TenantCampaignSendTrackingTable :campaign-id="id" />
+        </section>
       </div>
     </div>
 

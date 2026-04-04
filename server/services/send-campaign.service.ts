@@ -22,6 +22,8 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
+import { getRegistryConnection } from '../lib/mongoose'
+import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -275,6 +277,23 @@ export async function processBatch(
     })
   }
 
+  const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
+  let brevoTenantTagValue: string | undefined
+  if (tenantDbNameForTags) {
+    brevoTenantTagValue = tenantDbNameForTags
+    try {
+      const registry = await getRegistryConnection()
+      const row = await findRegistryTenantByDbName(registry, tenantDbNameForTags)
+      const tid = row?.tenantId?.trim()
+      if (tid) brevoTenantTagValue = tid
+    } catch (err) {
+      console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
+        dbName: tenantDbNameForTags,
+        err
+      })
+    }
+  }
+
   for (const r of pending) {
     if (!templateHtml || !campaign.sender?.email) {
       await (CampaignRecipient as CampaignRecipientModel).updateOne(
@@ -308,12 +327,22 @@ export async function processBatch(
     )
     const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
 
+    const snap = campaign.mergeUserSnapshot
+    const userForTag =
+      snap?.email?.trim() ||
+      [snap?.firstName, snap?.lastName].filter(Boolean).join(' ').trim() ||
+      undefined
+
     const result = await sendEmail({
       sender: campaign.sender,
       to: [{ email: r.email }],
       subject: subjectRendered,
       htmlContent: htmlRendered,
-      tags: [`campaign:${campaignId}`]
+      tags: [`campaign:${campaignId}`],
+      ...(tenantDbNameForTags && brevoTenantTagValue
+        ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
+        : {}),
+      ...(userForTag ? { user: userForTag } : {})
     })
 
     if (result.error) {

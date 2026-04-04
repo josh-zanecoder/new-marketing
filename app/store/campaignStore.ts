@@ -46,7 +46,12 @@ export const useCampaignStore = defineStore('campaigns', () => {
   }
 
   async function sendCampaign(c: Campaign): Promise<{ poll: boolean }> {
-    if (c.status !== 'Draft') return { poll: false }
+    if (c.status !== 'Draft') {
+      sendError.value = 'Campaign cannot be sent in its current status.'
+      sendingCampaignId.value = c.id
+      sendStatus.value = null
+      return { poll: false }
+    }
     sendError.value = null
     sendingCampaignId.value = c.id
     sendStatus.value = null
@@ -69,7 +74,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       })
 
       if (res == null) {
-        sendingCampaignId.value = null
+        sendError.value = 'Unexpected response from server.'
         return { poll: false }
       }
 
@@ -84,16 +89,17 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }
 
       if (!res.queued) {
-        sendingCampaignId.value = null
+        const campaignStatus = res.valid === 0 ? 'Failed' : 'Sent'
         sendStatus.value = {
-          campaignStatus: 'Draft',
+          campaignId: c.id,
+          campaignStatus,
           pending: 0,
-          sent: 0,
-          failed: res.invalid,
+          sent: res.sent,
+          failed: res.failed,
           total: res.total,
           done: true
         }
-        if (res.invalid > 0) {
+        if (res.valid === 0) {
           sendError.value =
             'No valid email addresses. Invalid addresses were marked as failed—fix them and send again.'
         }
@@ -102,10 +108,11 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }
 
       sendStatus.value = {
+        campaignId: c.id,
         campaignStatus: 'Sending',
         pending: res.queued,
         sent: 0,
-        failed: res.invalid,
+        failed: res.failed,
         total: res.total,
         done: false
       }
@@ -113,7 +120,6 @@ export const useCampaignStore = defineStore('campaigns', () => {
       return { poll: true }
     } catch (e: unknown) {
       sendError.value = fetchErrorMessage(e, 'Failed to start send')
-      sendingCampaignId.value = null
       return { poll: false }
     }
   }

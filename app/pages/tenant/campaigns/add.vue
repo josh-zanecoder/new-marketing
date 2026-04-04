@@ -518,7 +518,16 @@
       :campaign-name="campaignNameForSendModal"
       :send-error="sendError"
       :send-progress="sendProgress"
-      @close="closeSendModal"
+      @close="onSendProgressModalClose"
+    />
+
+    <ClientSendSuccessModal
+      :open="!!sendSuccessSummary"
+      :campaign-name="sendSuccessSummary?.campaignName ?? ''"
+      :sent="sendSuccessSummary?.sent ?? 0"
+      :failed="sendSuccessSummary?.failed ?? 0"
+      :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
+      @close="onSendSuccessModalClose"
     />
 
     <Teleport to="body">
@@ -695,7 +704,7 @@ import { useCampaignStore } from '~/store/campaignStore'
 
 const campaignStore = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
-const { campaigns, sendingCampaignId, sendError } = storeToRefs(campaignStore)
+const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
   useCampaignSendFlow()
 
@@ -881,6 +890,30 @@ const campaignNameForSendModal = computed(() => {
   if (!id) return 'campaign'
   return campaigns.value.find((c) => c.id === id)?.name || form.value.name.trim() || 'campaign'
 })
+
+const sendSuccessSummary = ref<{
+  campaignName: string
+  sent: number
+  failed: number
+  campaignStatus: string
+} | null>(null)
+
+/** After send from this wizard, navigate to campaign when the success modal is dismissed. */
+const pendingPostSendNavigationId = ref<string | null>(null)
+
+function onSendProgressModalClose() {
+  const hadError = !!sendError.value
+  const waitingForSuccessModal = !!sendSuccessSummary.value
+  closeSendModal()
+  if (hadError || !waitingForSuccessModal) pendingPostSendNavigationId.value = null
+}
+
+function onSendSuccessModalClose() {
+  sendSuccessSummary.value = null
+  const target = pendingPostSendNavigationId.value
+  pendingPostSendNavigationId.value = null
+  if (target) void navigateTo(`/tenant/campaigns/${target}`)
+}
 
 function buildCampaignForSend(savedId: string): Campaign {
   const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
@@ -1573,15 +1606,33 @@ async function handleSendFromWizard() {
     try {
       const id = await persistSavedCampaign()
       clearCampaignSessionStorage()
+      pendingPostSendNavigationId.value = id
       const campaign = buildCampaignForSend(id)
       const { poll } = await campaignStore.sendCampaign(campaign)
       if (!poll) {
         if (sendError.value) return
+        const s = sendStatus.value
+        if (s?.done) {
+          sendSuccessSummary.value = {
+            campaignName: form.value.name.trim() || 'campaign',
+            sent: s.sent,
+            failed: s.failed,
+            campaignStatus: s.campaignStatus || 'Sent'
+          }
+          closeSendModal()
+          return
+        }
+        pendingPostSendNavigationId.value = null
         await navigateTo(`/tenant/campaigns/${id}`)
         return
       }
-      startSendStatusPolling(id, async () => {
-        await navigateTo(`/tenant/campaigns/${id}`)
+      startSendStatusPolling(id, async (res) => {
+        sendSuccessSummary.value = {
+          campaignName: form.value.name.trim() || campaignNameForSendModal.value,
+          sent: res.sent,
+          failed: res.failed,
+          campaignStatus: res.campaignStatus
+        }
       })
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)

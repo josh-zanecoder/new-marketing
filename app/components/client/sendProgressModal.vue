@@ -40,7 +40,8 @@ const emit = defineEmits<{
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <h3 class="text-lg font-semibold text-slate-900">
-              Sending {{ props.campaignName || 'campaign' }}
+              <template v-if="props.sendProgress?.done">Send finished</template>
+              <template v-else>Sending {{ props.campaignName || 'campaign' }}</template>
             </h3>
           </div>
           <button
@@ -58,7 +59,12 @@ const emit = defineEmits<{
         </div>
         <div v-else-if="props.sendProgress" class="space-y-5 transition-all duration-500 ease-out">
           <p class="text-base font-medium text-slate-900">
-            {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
+            <template v-if="props.sendProgress.done">
+              {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} processed
+            </template>
+            <template v-else>
+              {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
+            </template>
           </p>
           <div class="h-3 overflow-hidden rounded-full bg-slate-200">
             <div
