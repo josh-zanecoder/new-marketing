@@ -180,6 +180,60 @@
                     Create one
                   </NuxtLink>
                 </p>
+                <div
+                  v-if="form.recipientsListId"
+                  class="mt-5 overflow-hidden rounded-xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.03]"
+                >
+                  <div class="border-b border-zinc-100 px-4 py-3 sm:px-5">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Contacts in this list
+                    </h3>
+                  </div>
+                  <div class="px-4 py-3 sm:px-5 sm:py-4">
+                    <p
+                      v-if="listPreviewPending"
+                      class="text-sm text-zinc-500"
+                    >
+                      Loading contacts…
+                    </p>
+                    <p
+                      v-else-if="listPreviewError"
+                      class="text-sm text-red-600"
+                    >
+                      {{ listPreviewError }}
+                    </p>
+                    <p
+                      v-else-if="!listPreviewTotal"
+                      class="text-sm text-zinc-500"
+                    >
+                      No contacts in this list yet.
+                    </p>
+                    <template v-else>
+                      <ul class="max-h-56 divide-y divide-zinc-100 overflow-y-auto sm:max-h-64">
+                        <li
+                          v-for="c in listPreviewContacts"
+                          :key="c.id"
+                          class="flex flex-col gap-0.5 py-2.5 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                        >
+                          <span class="text-sm font-medium text-zinc-900">{{ c.name || '—' }}</span>
+                          <span class="break-all text-sm text-zinc-600">{{ c.email || '—' }}</span>
+                        </li>
+                      </ul>
+                      <p
+                        v-if="listPreviewTotal > listPreviewContacts.length"
+                        class="mt-3 text-xs text-zinc-500"
+                      >
+                        Showing {{ listPreviewContacts.length }} of {{ listPreviewTotal }} contacts.
+                        <NuxtLink
+                          :to="`/tenant/recipient-list/${form.recipientsListId}`"
+                          class="font-medium text-zinc-700 underline hover:text-zinc-900"
+                        >
+                          View full list
+                        </NuxtLink>
+                      </p>
+                    </template>
+                  </div>
+                </div>
               </div>
               <div v-else class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -694,6 +748,11 @@ const recipientLists = ref<RecipientListOption[]>([])
 const recipientListsPending = ref(false)
 const recipientListsError = ref('')
 
+const listPreviewPending = ref(false)
+const listPreviewError = ref('')
+const listPreviewContacts = ref<Array<{ id: string; name: string; email: string }>>([])
+const listPreviewTotal = ref(0)
+
 interface ContactPickerRow {
   id: string
   name: string
@@ -857,6 +916,41 @@ async function loadRecipientLists() {
     recipientListsPending.value = false
   }
 }
+
+async function loadListContactsPreview() {
+  const id = form.value.recipientsListId?.trim()
+  if (!id || form.value.recipientsMode !== 'list') {
+    listPreviewContacts.value = []
+    listPreviewTotal.value = 0
+    listPreviewError.value = ''
+    return
+  }
+  listPreviewPending.value = true
+  listPreviewError.value = ''
+  try {
+    const res = await marketingApi.fetchRecipientListById(id, { limit: 50, page: 1 })
+    listPreviewContacts.value = (res.members?.items ?? []).map((c) => ({
+      id: c.id,
+      name: c.name || '',
+      email: c.email || ''
+    }))
+    listPreviewTotal.value = res.members?.total ?? 0
+  } catch {
+    listPreviewError.value = 'Could not load contacts for this list.'
+    listPreviewContacts.value = []
+    listPreviewTotal.value = 0
+  } finally {
+    listPreviewPending.value = false
+  }
+}
+
+watch(
+  () => [form.value.recipientsMode, form.value.recipientsListId] as const,
+  () => {
+    void loadListContactsPreview()
+  },
+  { immediate: true }
+)
 
 interface DynamicVariableOption {
   key: string

@@ -36,6 +36,26 @@ export interface TenantRecipientListResponse {
   contactsTruncated?: boolean
 }
 
+/** GET `/api/v1/tenant/recipient-list/:id` — paginated members */
+export interface TenantRecipientListMemberItem {
+  id: string
+  name: string
+  email: string
+  company?: string
+  contactKind?: string
+}
+
+export interface TenantRecipientListDetailResponse {
+  list: { id: string; name: string; listType?: string }
+  members: {
+    items: TenantRecipientListMemberItem[]
+    total: number
+    page: number
+    pageSize: number
+    totalPages: number
+  }
+}
+
 export interface TenantDynamicVariableItem {
   id?: string
   key: string
@@ -108,6 +128,15 @@ export function useTenantMarketingApi() {
     return $fetch<TenantRecipientListResponse>('/api/v1/tenant/recipient-list', tenantFetchInit())
   }
 
+  async function fetchRecipientListById(listId: string, opts?: { page?: number; limit?: number }) {
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 50))
+    const page = Math.max(1, opts?.page ?? 1)
+    return $fetch<TenantRecipientListDetailResponse>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`,
+      tenantFetchInit({ query: { page, limit } })
+    )
+  }
+
   async function fetchDynamicVariables() {
     return $fetch<{ variables?: TenantDynamicVariableItem[] }>(
       '/api/v1/tenant/dynamic-variables',
@@ -166,6 +195,7 @@ export function useTenantMarketingApi() {
     fetchEmailMergeContext,
     fetchEmailMergeContextOrEmpty,
     fetchRecipientListResource,
+    fetchRecipientListById,
     fetchDynamicVariables,
     fetchEmailTemplates,
     fetchTenantMe,
