@@ -36,14 +36,13 @@ interface TrackingTableRow {
 const props = withDefaults(
   defineProps<{
     campaignId?: string
-    panelTitle?: string
     panelHint?: string
     cardClass?: string
   }>(),
   {
-    panelTitle: 'Email events',
     panelHint: '',
-    cardClass: 'rounded-lg border border-gray-200 bg-white shadow-sm'
+    cardClass:
+      'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]'
   }
 )
 
@@ -372,26 +371,6 @@ const tableRows = computed((): TrackingTableRow[] => {
   })
 })
 
-const displayedEventCount = computed(() =>
-  tableRows.value.reduce((n, r) => n + r.events.length, 0)
-)
-
-function isMailinatorEmail(email: string | undefined): boolean {
-  if (!email?.trim()) return false
-  const domain = email.trim().split('@')[1]?.toLowerCase() ?? ''
-  return domain === 'mailinator.com' || domain.endsWith('.mailinator.com')
-}
-
-const mailinatorCountFiltered = computed(() => {
-  let n = 0
-  for (const row of tableRows.value) {
-    for (const e of row.events) {
-      if (isMailinatorEmail(e.email)) n++
-    }
-  }
-  return n
-})
-
 function formatEventDate(iso: string | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -404,13 +383,13 @@ function formatEventDate(iso: string | undefined): string {
 
 function eventBadgeClass(ev: string | undefined): string {
   const e = (ev || '').toLowerCase()
-  if (e === 'delivered') return 'bg-emerald-100 text-emerald-800 ring-emerald-600/20'
-  if (e === 'requests' || e === 'sent') return 'bg-sky-100 text-sky-800 ring-sky-600/20'
+  if (e === 'delivered') return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+  if (e === 'requests' || e === 'sent') return 'bg-sky-50 text-sky-800 ring-sky-200/80'
   if (e.includes('bounce') || e === 'hard_bounces' || e === 'soft_bounces')
-    return 'bg-rose-100 text-rose-800 ring-rose-600/20'
-  if (e.includes('open') || e === 'unique_opened') return 'bg-violet-100 text-violet-800 ring-violet-600/20'
-  if (e.includes('click')) return 'bg-amber-100 text-amber-800 ring-amber-600/20'
-  return 'bg-gray-100 text-gray-700 ring-gray-500/20'
+    return 'bg-red-50 text-red-800 ring-red-200/80'
+  if (e.includes('open') || e === 'unique_opened') return 'bg-violet-50 text-violet-800 ring-violet-200/80'
+  if (e.includes('click')) return 'bg-amber-50 text-amber-800 ring-amber-200/80'
+  return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
 }
 
 function clearAllFilters() {
@@ -420,18 +399,6 @@ function clearAllFilters() {
   customDateTo.value = ''
   clearEventFilters()
 }
-
-const defaultHintAllTenant =
-  'Table is grouped by message ID. Last week is the previous Mon–Sun; MTD / YTD use your local calendar. Data is tenant-scoped on the server.'
-
-const defaultHintCampaign =
-  'Brevo events for this campaign only. Filters apply on top of server-side campaign and tenant rules.'
-
-const hintText = computed(() => {
-  if (props.panelHint?.trim()) return props.panelHint.trim()
-  if (props.campaignId?.trim()) return defaultHintCampaign
-  return defaultHintAllTenant
-})
 
 const dateRangeFilterActive = computed(() => {
   if (datePreset.value === 'all') return false
@@ -448,68 +415,72 @@ const hasActiveFilters = computed(
     selectedEventTypes.value.length > 0
 )
 
-const dateSelectClass =
-  'w-full max-w-xs rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 sm:w-52'
 </script>
 
 <template>
   <div>
-    <div v-if="pending" class="text-sm text-gray-500">Loading event report…</div>
-    <p v-else-if="error" class="text-sm text-red-600">
-      {{ error.message || 'Failed to load event report' }}
-    </p>
+    <div
+      v-if="pending"
+      class="flex flex-col items-center justify-center rounded-2xl border border-zinc-200/90 bg-white px-6 py-16 shadow-sm shadow-zinc-950/[0.04] sm:py-20"
+    >
+      <div
+        class="h-10 w-10 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-800"
+        aria-hidden="true"
+      />
+      <p class="mt-4 text-sm font-medium text-zinc-600">
+        Loading event report…
+      </p>
+    </div>
 
-    <div v-else-if="events.length > 0" :class="['overflow-hidden', cardClass]">
-      <div class="border-b border-gray-200 bg-gray-50 px-4 py-3">
-        <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 class="text-sm font-medium text-gray-900">{{ panelTitle }}</h2>
-          <div class="flex flex-wrap items-center gap-3 text-xs">
-            <span class="rounded-md bg-white px-2 py-1 font-medium text-gray-800 ring-1 ring-gray-200">
-              Events: <span class="tabular-nums">{{ displayedEventCount }}</span>
-            </span>
-            <span class="rounded-md bg-white px-2 py-1 font-medium text-gray-800 ring-1 ring-gray-200">
-              Messages: <span class="tabular-nums">{{ tableRows.length }}</span>
-            </span>
-            <span
-              class="rounded-md px-2 py-1 font-medium ring-1 ring-inset"
-              :class="
-                mailinatorCountFiltered > 0
-                  ? 'bg-amber-50 text-amber-900 ring-amber-200'
-                  : 'bg-white text-gray-600 ring-gray-200'
-              "
-            >
-              Mailinator:
-              <span class="tabular-nums">{{ mailinatorCountFiltered }}</span>
-            </span>
-          </div>
-        </div>
-        <p class="mt-2 text-xs text-gray-500">{{ hintText }}</p>
-      </div>
+    <div
+      v-else-if="error"
+      class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+      role="alert"
+    >
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      <span class="min-w-0 leading-relaxed">{{ error.message || 'Failed to load event report' }}</span>
+    </div>
 
-      <div class="space-y-3 border-b border-gray-100 bg-white px-4 py-3">
-        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
-          <label class="block min-w-0 flex-1 sm:max-w-xs">
-            <span class="mb-1 block text-xs font-medium text-gray-600">Search</span>
+    <div v-else-if="events.length > 0" class="space-y-0">
+      <!-- Filters sit on page background (same pattern as campaigns list: controls above the card) -->
+      <div class="mb-6 space-y-4">
+        <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
+          {{ panelHint }}
+        </p>
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+          <div class="relative min-w-0 w-full sm:w-80 md:w-96">
+            <label class="sr-only" for="brevo-tracking-search">Search events</label>
+            <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
+              id="brevo-tracking-search"
               v-model="searchQuery"
               type="search"
               autocomplete="off"
-              placeholder="Subject, email, message ID, campaign ID, tags…"
-              class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              placeholder="Subject, email, message ID, campaign, tags…"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
             >
-          </label>
-          <label class="block shrink-0">
-            <span class="mb-1 block text-xs font-medium text-gray-600">Date range</span>
-            <select v-model="datePreset" :class="dateSelectClass">
+          </div>
+          <div class="shrink-0">
+            <label class="sr-only" for="brevo-tracking-date">Date range</label>
+            <select
+              id="brevo-tracking-date"
+              v-model="datePreset"
+              aria-label="Date range"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[11rem] sm:w-auto"
+            >
               <option v-for="opt in datePresetOptions" :key="opt.id" :value="opt.id">
                 {{ opt.label }}
               </option>
             </select>
-          </label>
+          </div>
           <button
             v-if="hasActiveFilters"
             type="button"
-            class="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
             @click="clearAllFilters"
           >
             Clear filters
@@ -517,35 +488,37 @@ const dateSelectClass =
         </div>
         <div
           v-if="datePreset === 'custom'"
-          class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-3"
+          class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
         >
-          <label class="block sm:w-40">
-            <span class="mb-1 block text-xs font-medium text-gray-500">Custom from</span>
+          <label class="block sm:w-44">
+            <span class="mb-1.5 block text-xs font-medium text-zinc-500">From</span>
             <input
               v-model="customDateFrom"
               type="date"
-              class="w-full rounded-md border border-gray-200 px-2 py-2 text-sm text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
             >
           </label>
-          <label class="block sm:w-40">
-            <span class="mb-1 block text-xs font-medium text-gray-500">Custom to</span>
+          <label class="block sm:w-44">
+            <span class="mb-1.5 block text-xs font-medium text-zinc-500">To</span>
             <input
               v-model="customDateTo"
               type="date"
-              class="w-full rounded-md border border-gray-200 px-2 py-2 text-sm text-gray-900 shadow-sm focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
             >
           </label>
         </div>
-        <div v-if="availableEventTypes.length" class="border-t border-gray-100 pt-3">
-          <p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Event type</p>
+        <div v-if="availableEventTypes.length">
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            Event type
+          </p>
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="rounded-full px-3 py-1 text-xs font-medium ring-1 transition"
+              class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
               :class="
                 selectedEventTypes.length === 0
-                  ? 'bg-gray-900 text-white ring-gray-900'
-                  : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                  : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
               "
               @click="clearEventFilters"
             >
@@ -556,11 +529,11 @@ const dateSelectClass =
               v-for="t in availableEventTypes"
               :key="t"
               type="button"
-              class="rounded-full px-3 py-1 text-xs font-medium capitalize ring-1 transition"
+              class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
               :class="
                 selectedEventTypes.includes(t)
-                  ? 'bg-gray-900 text-white ring-gray-900'
-                  : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                  : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
               "
               @click="toggleEventFilter(t)"
             >
@@ -571,56 +544,83 @@ const dateSelectClass =
         </div>
       </div>
 
-      <div v-if="tableRows.length === 0" class="px-4 py-10 text-center text-sm text-gray-500">
-        No messages match your filters.
-      </div>
+      <div :class="cardClass">
+        <div v-if="tableRows.length === 0" class="px-5 py-14 text-center sm:px-6 sm:py-16">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
+          <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </div>
+        <p class="mt-4 text-sm font-medium text-zinc-900">
+          No messages match your filters
+        </p>
+        <p class="mt-1 text-sm text-zinc-500">
+          Try clearing search, widening the date range, or resetting event types.
+        </p>
+        <button
+          v-if="hasActiveFilters"
+          type="button"
+          class="mt-6 inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+          @click="clearAllFilters"
+        >
+          Clear all filters
+        </button>
+        </div>
 
-      <div v-else class="overflow-x-auto">
+        <div v-else class="overflow-x-auto">
         <table class="w-full min-w-[52rem] text-left text-sm">
           <thead>
-            <tr
-              class="border-b border-gray-200 bg-gray-50/90 text-xs font-semibold uppercase tracking-wide text-gray-600"
-            >
-              <th scope="col" class="px-4 py-3">Campaign</th>
-              <th scope="col" class="min-w-[9rem] px-4 py-3">Recipient</th>
-              <th scope="col" class="min-w-[10rem] px-4 py-3">Subject</th>
-              <th scope="col" class="whitespace-nowrap px-4 py-3">Date</th>
-              <th scope="col" class="px-4 py-3">Events</th>
+            <tr class="border-b border-zinc-200 bg-zinc-50/90">
+              <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                Campaign
+              </th>
+              <th scope="col" class="min-w-[9rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                Recipient
+              </th>
+              <th scope="col" class="min-w-[10rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                Subject
+              </th>
+              <th scope="col" class="whitespace-nowrap px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                Date
+              </th>
+              <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                Events
+              </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-zinc-100">
             <tr
               v-for="(row, idx) in tableRows"
               :key="`${row.messageId}-${idx}`"
-              class="hover:bg-gray-50/80"
+              class="transition-colors hover:bg-zinc-50/80"
             >
-              <td class="px-4 py-3 align-top">
+              <td class="px-5 py-4 align-top sm:px-6">
                 <NuxtLink
                   v-if="row.campaignId && isMongoId(row.campaignId)"
                   :to="`/tenant/campaigns/${row.campaignId}`"
-                  class="text-sm text-sky-700 underline decoration-sky-700/40 hover:text-sky-900"
+                  class="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
                   :title="row.campaignId"
                 >
                   {{ campaignDisplayLabel(row.campaignId) }}
                 </NuxtLink>
-                <span v-else-if="row.campaignId" class="font-mono text-xs text-gray-800">{{
+                <span v-else-if="row.campaignId" class="font-mono text-xs text-zinc-700">{{
                   row.campaignId
                 }}</span>
-                <span v-else class="text-gray-400">—</span>
+                <span v-else class="text-zinc-400">—</span>
               </td>
               <td
-                class="max-w-[14rem] break-all px-4 py-3 align-top text-sm text-gray-800"
-                :class="{ 'text-gray-400': !row.recipientEmail?.trim() }"
+                class="max-w-[14rem] break-all px-5 py-4 align-top text-sm text-zinc-800 sm:px-6"
+                :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
               >
                 {{ row.recipientEmail?.trim() || '—' }}
               </td>
-              <td class="max-w-xs px-4 py-3 align-top text-gray-900" :title="row.subject">
-                <span class="line-clamp-2">{{ row.subject }}</span>
+              <td class="max-w-xs px-5 py-4 align-top text-zinc-900 sm:px-6" :title="row.subject">
+                <span class="line-clamp-2 leading-snug">{{ row.subject }}</span>
               </td>
-              <td class="whitespace-nowrap px-4 py-3 align-top tabular-nums text-gray-700">
+              <td class="whitespace-nowrap px-5 py-4 align-top tabular-nums text-zinc-600 sm:px-6">
                 {{ formatEventDate(row.latestIso) }}
               </td>
-              <td class="px-4 py-3 align-top">
+              <td class="px-5 py-4 align-top sm:px-6">
                 <div class="flex flex-wrap gap-1.5">
                   <span
                     v-for="ev in row.eventTypesOrdered"
@@ -636,8 +636,24 @@ const dateSelectClass =
           </tbody>
         </table>
       </div>
+      </div>
     </div>
 
-    <p v-else class="text-sm text-gray-500">No events in this report.</p>
+    <div
+      v-else
+      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center shadow-sm shadow-zinc-950/[0.04] sm:py-20"
+    >
+      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
+      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+        No events in this report
+      </h3>
+      <p class="mt-2 max-w-sm text-sm text-zinc-500">
+        After you send campaigns, opens, clicks, and delivery events will show up here.
+      </p>
+    </div>
   </div>
 </template>
