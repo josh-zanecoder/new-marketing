@@ -1,4 +1,5 @@
 import type { Connection } from 'mongoose'
+import type { RecipientListMembershipScope } from '@server/types/tenant/recipientList.model'
 import { hashTenantApiKey } from './api-key'
 
 export const ADMIN_ROLE = 'admin' as const
@@ -72,6 +73,102 @@ export function isRegisteredTenantAuthContext(
   value: unknown
 ): value is RegisteredTenantAuthContext {
   return isFirebaseTenantAuthContext(value) || isTenantApiKeyAuthContext(value)
+}
+
+/** For `createdBy` / `metadata.owner`: Firebase `uid` or API key `tenantUserId`. */
+export function tenantUserIdFromAuth(auth: unknown): string {
+  if (isFirebaseTenantAuthContext(auth)) {
+    return typeof auth.uid === 'string' ? auth.uid.trim() : ''
+  }
+  if (isTenantApiKeyAuthContext(auth)) {
+    return typeof auth.tenantUserId === 'string' ? auth.tenantUserId.trim() : ''
+  }
+  return ''
+}
+
+/** Lowercased email for `metadata.ownerEmail` (matches `contactOwnerScope` / contact rows). */
+export function tenantUserEmailFromAuth(auth: unknown): string {
+  if (isFirebaseTenantAuthContext(auth)) {
+    return typeof auth.email === 'string' ? auth.email.trim().toLowerCase() : ''
+  }
+  if (isTenantApiKeyAuthContext(auth)) {
+    return typeof auth.tenantUserEmail === 'string'
+      ? auth.tenantUserEmail.trim().toLowerCase()
+      : ''
+  }
+  return ''
+}
+
+/**
+ * For `createdBy` / `updatedBy`: forwarded user id (API key / Firebase uid) when present,
+ * otherwise tenant user email (browser handoff JWT has email, not id).
+ */
+export function tenantCreatedByFromAuth(auth: unknown): string {
+  const id = tenantUserIdFromAuth(auth)
+  if (id) return id
+  return tenantUserEmailFromAuth(auth)
+}
+
+/** Campaigns: `metadata.owner` + `metadata.ownerEmail` and `createdBy` when known. */
+export function tenantOwnershipFieldsFromAuth(auth: unknown): {
+  createdBy?: string
+  metadata?: { owner?: string; ownerEmail?: string }
+} {
+  const owner = tenantUserIdFromAuth(auth)
+  const ownerEmail = tenantUserEmailFromAuth(auth)
+  const createdBy = tenantCreatedByFromAuth(auth)
+  if (!owner && !ownerEmail && !createdBy) return {}
+  const metadata: { owner?: string; ownerEmail?: string } = {}
+  if (owner) metadata.owner = owner
+  if (ownerEmail) metadata.ownerEmail = ownerEmail
+  return {
+    ...(createdBy ? { createdBy } : {}),
+    ...(Object.keys(metadata).length ? { metadata } : {})
+  }
+}
+
+/** Recipient lists: `metadata` only has `ownerEmail`; `createdBy` uses id or email. */
+export function recipientListOwnershipFromAuth(auth: unknown): {
+  createdBy?: string
+  metadata?: { ownerEmail?: string }
+} {
+  const createdBy = tenantCreatedByFromAuth(auth)
+  const ownerEmail = tenantUserEmailFromAuth(auth)
+  if (!createdBy && !ownerEmail) return {}
+  return {
+    ...(createdBy ? { createdBy } : {}),
+    ...(ownerEmail ? { metadata: { ownerEmail } } : {})
+  }
+}
+
+/**
+ * Persisted on recipient lists: matches contact visibility — tenant-wide vs owner-email scope.
+ * Firebase / no API-key row filter → `tenant`; API key with `contactOwnerScope` → `owner_emails`.
+ */
+export function recipientListMembershipScopeFromAuth(
+  auth: unknown
+): RecipientListMembershipScope {
+  if (!isTenantApiKeyAuthContext(auth)) return 'tenant'
+  if (auth.tenantWideContacts === true) return 'tenant'
+  if (auth.contactOwnerScope?.length) return 'owner_emails'
+  return 'tenant'
+}
+
+/** Persisted on `owner_emails` lists so sync/rebuild match `contactOwnerScope` without session. */
+export function recipientListMembershipOwnerEmailsFromAuth(auth: unknown): string[] {
+  if (isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length) {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const e of auth.contactOwnerScope) {
+      const t = typeof e === 'string' ? e.trim().toLowerCase() : ''
+      if (!t || seen.has(t)) continue
+      seen.add(t)
+      out.push(t)
+    }
+    return out
+  }
+  const em = tenantUserEmailFromAuth(auth)
+  return em ? [em] : []
 }
 
 export function isFirebaseTenantAuthContext(

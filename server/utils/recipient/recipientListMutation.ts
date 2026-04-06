@@ -5,10 +5,13 @@ import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListCriterionJoin,
-  RecipientListFilterMode
+  RecipientListFilterMode,
+  RecipientListMembershipScope
 } from '@server/types/tenant/recipientList.model'
-import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import {
+  mergeContactOwnerScopeFilter,
+  mergeTenantOwnerEmailScopeFilter
+} from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
 import { registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
@@ -204,6 +207,36 @@ export async function resolveRecipientListFiltersFromBody(
   return { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody }
 }
 
+/** Normalized `membershipOwnerEmails` from a list document. */
+export function recipientListStoredMembershipEmails(doc: {
+  membershipOwnerEmails?: unknown
+}): string[] {
+  const raw = doc.membershipOwnerEmails
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const x of raw) {
+    if (typeof x !== 'string') continue
+    const t = x.trim().toLowerCase()
+    if (!t || seen.has(t)) continue
+    seen.add(t)
+    out.push(t)
+  }
+  return out
+}
+
+/** Lowercased `metadata.ownerEmail` when set (fallback for sync when `membershipOwnerEmails` empty). */
+export function recipientListOwnerEmailForContactScope(doc: {
+  metadata?: { ownerEmail?: unknown } | null
+}): string | undefined {
+  const m = doc.metadata
+  if (!m || typeof m !== 'object') return undefined
+  const e = (m as { ownerEmail?: unknown }).ownerEmail
+  if (typeof e !== 'string') return undefined
+  const t = e.trim().toLowerCase()
+  return t || undefined
+}
+
 export async function rebuildRecipientListMembers(
   tenantConn: Connection,
   listId: mongoose.Types.ObjectId,
@@ -212,6 +245,8 @@ export async function rebuildRecipientListMembers(
   filterMode: RecipientListFilterMode,
   criterionGroups: RecipientListCriterion[][],
   auth: unknown,
+  membershipScope: RecipientListMembershipScope,
+  membershipOwnerEmails: string[],
   storedCriterionJoins?: RecipientListCriterionJoin[] | null
 ): Promise<number> {
   const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
@@ -227,14 +262,15 @@ export async function rebuildRecipientListMembers(
     groupsForQuery,
     storedCriterionJoins ?? null
   )
-  const ownerScope =
-    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
-      ? auth.contactOwnerScope
-      : undefined
-  const scopedContactQuery = mergeContactOwnerScopeFilter(
-    contactQuery as Record<string, unknown>,
-    ownerScope
-  )
+  const scopedContactQuery =
+    membershipScope === 'tenant'
+      ? (contactQuery as Record<string, unknown>)
+      : membershipOwnerEmails.length > 0
+        ? mergeContactOwnerScopeFilter(
+            contactQuery as Record<string, unknown>,
+            membershipOwnerEmails
+          )
+        : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
 
   let memberCount = 0
   const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()

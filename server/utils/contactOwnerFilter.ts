@@ -1,3 +1,5 @@
+import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
+
 /**
  * Restricts contacts to `metadata.ownerEmail` in `scopedEmails` (case-insensitive),
  * plus rows with no owner (unassigned) for backward compatibility.
@@ -35,4 +37,17 @@ export function mergeContactOwnerScopeFilter(
       }
     ]
   }
+}
+
+/**
+ * Same email scope as contacts: `contactOwnerScope` on tenant API key sessions, unless
+ * `tenantWideContacts` is set (then no row filter).
+ */
+export function mergeTenantOwnerEmailScopeFilter(
+  base: Record<string, unknown>,
+  auth: unknown
+): Record<string, unknown> {
+  if (!isTenantApiKeyAuthContext(auth)) return base
+  if (auth.tenantWideContacts === true) return base
+  return mergeContactOwnerScopeFilter(base, auth.contactOwnerScope)
 }

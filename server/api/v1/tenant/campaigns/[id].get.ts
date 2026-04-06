@@ -6,6 +6,7 @@ import type { ContactLean, ContactModel } from '@server/types/tenant/contact.mod
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
     getTenantClientModels(conn)
 
   const campaign = await (Campaign as CampaignModel)
-    .findById(id)
+    .findOne(mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth))
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 

@@ -3,6 +3,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { clearManualRecipientsForCampaignsReferencingLists } from '@server/utils/campaign/clearManualRecipientsForCampaignsReferencingLists'
 
 export default defineEventHandler(async (event) => {
@@ -22,7 +23,11 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { RecipientList, RecipientListMember, Campaign } = getTenantClientModels(conn)
 
-  const existing = await RecipientList.findById(listId).select('_id').lean()
+  const existing = await RecipientList.findOne(
+    mergeTenantOwnerEmailScopeFilter({ _id: listId }, auth)
+  )
+    .select('_id')
+    .lean()
   if (!existing) {
     throw createError({ statusCode: 404, message: 'Recipient list not found' })
   }

@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
 
   return beginCampaignSend(conn, campaignId, {
     allowedStatuses: ['Draft'],
+    auth: event.context.auth,
     ...(snap ? { mergeUserSnapshot: snap } : {})
   })
 })

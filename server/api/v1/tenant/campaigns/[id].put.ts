@@ -9,8 +9,10 @@ import type {
   ManualRecipientModel
 } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { tenantCreatedByFromAuth } from '@server/tenant/registry-auth'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -34,7 +36,9 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailTemplate, ManualRecipient, Contact } = getTenantClientModels(conn)
 
-  const campaign = await (Campaign as CampaignModel).findById(id)
+  const campaign = await (Campaign as CampaignModel).findOne(
+    mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth)
+  )
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (!['Draft', 'Scheduled', 'Sent', 'Failed'].includes(campaign.status)) {
     throw createError({
@@ -75,6 +79,8 @@ export default defineEventHandler(async (event) => {
   campaign.subject = body.subject?.trim() || ''
   const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
   if (mergeSnap) campaign.set('mergeUserSnapshot', mergeSnap)
+  const editorId = tenantCreatedByFromAuth(event.context.auth)
+  if (editorId) campaign.set('updatedBy', editorId)
   await campaign.save()
 
   if (recipientsType === 'manual') {

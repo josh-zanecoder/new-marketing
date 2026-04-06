@@ -7,7 +7,11 @@ import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
-import { pickJoinsForQuery } from '@server/utils/recipient/recipientListMutation'
+import {
+  pickJoinsForQuery,
+  recipientListOwnerEmailForContactScope,
+  recipientListStoredMembershipEmails
+} from '@server/utils/recipient/recipientListMutation'
 
 type RecipientListDoc = Record<string, unknown> & { _id: mongoose.Types.ObjectId }
 
@@ -61,7 +65,8 @@ async function criterionGroupsFromFilterRows(
 /**
  * After a contact is created or updated, add or remove `RecipientListMember` rows for every
  * non-static list so membership matches list rules (same query family as full rebuild).
- * Kafka / workers have no API-key owner scope — all tenant contacts are evaluated.
+ * Workers: `membershipScope === 'tenant'` → criteria only; `owner_emails` →
+ * `membershipOwnerEmails` snapshot, else fallback `metadata.ownerEmail`.
  */
 export async function syncContactRecipientListMembership(
   tenantConn: Connection,
@@ -105,10 +110,25 @@ export async function syncContactRecipientListMembership(
       groupsForQuery,
       joinsForQuery
     )
-    const scopedQuery = mergeContactOwnerScopeFilter(
-      baseQuery as Record<string, unknown>,
-      undefined
+    const scopeRaw = (listDoc as { membershipScope?: unknown }).membershipScope
+    const membershipScope =
+      scopeRaw === 'tenant' || scopeRaw === 'owner_emails' ? scopeRaw : 'owner_emails'
+
+    const storedEmails = recipientListStoredMembershipEmails(
+      listDoc as { membershipOwnerEmails?: unknown }
     )
+    const listOE = recipientListOwnerEmailForContactScope(
+      listDoc as { metadata?: { ownerEmail?: unknown } | null }
+    )
+    const ownerScopeForSync =
+      storedEmails.length > 0 ? storedEmails : listOE ? [listOE] : undefined
+    const scopedQuery =
+      membershipScope === 'tenant'
+        ? baseQuery
+        : mergeContactOwnerScopeFilter(
+            baseQuery as Record<string, unknown>,
+            ownerScopeForSync
+          )
 
     const match = await Contact.findOne({
       $and: [{ _id: contactId }, scopedQuery as Record<string, unknown>]

@@ -7,6 +7,7 @@ import {
   isRegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import {
   type DraftRecipientContext,
   previewContactForDraft,
@@ -58,7 +59,9 @@ export default defineEventHandler(async (event) => {
     if (!mongoose.isValidObjectId(campaignId)) {
       throw createError({ statusCode: 400, message: 'Invalid campaignId' })
     }
-    const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+    const campaign = await (Campaign as CampaignModel)
+      .findOne(mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, auth))
+      .lean<CampaignLean | null>()
     if (!campaign) {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }

@@ -1,10 +1,7 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import {
-  isRegisteredTenantAuthContext,
-  isTenantApiKeyAuthContext
-} from '@server/tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
@@ -12,6 +9,7 @@ import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
 } from '@server/utils/recipient/recipientListDocument'
+import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
 function rowCriterionDisplay(
   filterDoc: Record<string, unknown>,
@@ -75,7 +73,11 @@ export default defineEventHandler(async (event) => {
   const { RecipientList, RecipientListMember, Contact, RecipientFilter } =
     getTenantClientModels(tenantConn)
 
-  const doc = (await RecipientList.findById(listId).lean().exec()) as RecipientListDoc | null
+  const doc = (await RecipientList.findOne(
+    mergeTenantOwnerEmailScopeFilter({ _id: listId }, auth)
+  )
+    .lean()
+    .exec()) as RecipientListDoc | null
   if (!doc) {
     throw createError({ statusCode: 404, message: 'List not found' })
   }
@@ -164,9 +166,26 @@ export default defineEventHandler(async (event) => {
   )
   const skip = (page - 1) * pageSize
 
-  const memberTotal = await RecipientListMember.countDocuments({
+  const memberContactIdsRaw = await RecipientListMember.distinct('contactId', {
     recipientListId: listId
   })
+  const memberObjectIds = memberContactIdsRaw
+    .map((id) => {
+      if (id == null) return null
+      const s = String(id)
+      return mongoose.isValidObjectId(s) ? new mongoose.Types.ObjectId(s) : null
+    })
+    .filter((x): x is mongoose.Types.ObjectId => x != null)
+
+  const memberTotal =
+    memberObjectIds.length === 0
+      ? 0
+      : await Contact.countDocuments(
+          mergeTenantOwnerEmailScopeFilter(
+            { _id: { $in: memberObjectIds }, deletedAt: null },
+            auth
+          )
+        )
 
   const memberRows = (await RecipientListMember.find({ recipientListId: listId })
     .select('contactId')
@@ -178,16 +197,12 @@ export default defineEventHandler(async (event) => {
 
   const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
 
-  const ownerScope =
-    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
-      ? auth.contactOwnerScope
-      : undefined
-  const contactByIdsFilter = mergeContactOwnerScopeFilter(
+  const contactByIdsFilter = mergeTenantOwnerEmailScopeFilter(
     {
       _id: { $in: contactIds },
       deletedAt: null
     },
-    ownerScope
+    auth
   )
 
   const contacts: ContactRow[] =
@@ -241,6 +256,13 @@ export default defineEventHandler(async (event) => {
       criterionJoins: criterionJoins ?? [],
       criteriaChain,
       filterRows,
+      membershipScope:
+        doc.membershipScope === 'tenant' || doc.membershipScope === 'owner_emails'
+          ? doc.membershipScope
+          : 'owner_emails',
+      membershipOwnerEmails: recipientListStoredMembershipEmails(
+        doc as { membershipOwnerEmails?: unknown }
+      ),
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     },

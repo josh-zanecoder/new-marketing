@@ -24,6 +24,7 @@ import {
 } from '../utils/emailMerge/composeMergeRoot'
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
+import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -46,6 +47,8 @@ export interface BeginCampaignSendOptions {
   mergeUserSnapshot?: CampaignMergeUserSnapshot | null
   /** Campaign `status` after rollback when enqueue fails. Default `Draft`. */
   statusOnEnqueueFailure?: string
+  /** Tenant HTTP auth: restricts load/update to campaigns visible under owner-email scope. Workers omit this. */
+  auth?: unknown
 }
 
 export interface BeginCampaignSendResult {
@@ -79,7 +82,14 @@ export async function beginCampaignSend(
   const models = getTenantClientModels(conn)
   const { Campaign, CampaignRecipient } = models
 
-  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  const campaignScope = mergeTenantOwnerEmailScopeFilter(
+    { _id: campaignId },
+    options?.auth
+  )
+
+  const campaign = await (Campaign as CampaignModel)
+    .findOne(campaignScope)
+    .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (!allowedStatuses.includes(campaign.status)) {
     throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
@@ -130,10 +140,10 @@ export async function beginCampaignSend(
   if (valid.length === 0) {
     // Scheduled sends: without this, status stays "Scheduled" forever (no batch job).
     if (campaign.status === 'Scheduled') {
-      await (Campaign as CampaignModel).updateOne(
-        { _id: campaignId },
-        { $set: { status: 'Failed' }, $unset: { scheduledAt: 1 } }
-      )
+      await (Campaign as CampaignModel).updateOne(campaignScope, {
+        $set: { status: 'Failed' },
+        $unset: { scheduledAt: 1 }
+      })
     }
     return {
       ok: true,
@@ -148,21 +158,18 @@ export async function beginCampaignSend(
   }
 
   const snap = options?.mergeUserSnapshot
-  await (Campaign as CampaignModel).updateOne(
-    { _id: campaignId },
-    {
-      $set: {
-        status: 'Sending',
-        ...(snap ? { mergeUserSnapshot: snap } : {})
-      }
+  await (Campaign as CampaignModel).updateOne(campaignScope, {
+    $set: {
+      status: 'Sending',
+      ...(snap ? { mergeUserSnapshot: snap } : {})
     }
-  )
+  })
 
   try {
     await enqueueCampaignBatch(campaignId, dbName)
   } catch (e: unknown) {
     await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
-    await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: revertStatus })
+    await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
     console.error('[SendCampaign] Failed to enqueue:', e)
     throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
   }
@@ -182,11 +189,13 @@ export async function beginCampaignSend(
 /** Read-only progress for API polling (sending happens in the BullMQ worker). */
 export async function getCampaignSendProgress(
   models: TenantClientModels,
-  campaignId: string
+  campaignId: string,
+  auth?: unknown
 ): Promise<ProcessBatchResult> {
   const { Campaign, CampaignRecipient } = models
+  const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, auth)
   const campaign = await (Campaign as CampaignModel)
-    .findById(campaignId)
+    .findOne(campaignScope)
     .lean<CampaignLean | null>()
   if (!campaign) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -212,7 +221,9 @@ export async function getCampaignSendProgress(
   // report done once status has left Sending so clients don't stop polling early.
   let campaignStatus = campaign.status
   if (pendingCount === 0) {
-    const fresh = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+    const fresh = await (Campaign as CampaignModel)
+      .findOne(campaignScope)
+      .lean<CampaignLean | null>()
     if (fresh) campaignStatus = fresh.status
   }
 

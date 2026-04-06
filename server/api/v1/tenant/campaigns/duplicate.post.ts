@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import type { Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
@@ -11,6 +11,8 @@ import type {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -20,7 +22,11 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailTemplate, ManualRecipient } = getTenantClientModels(conn)
 
-  const source = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  const source = await (Campaign as CampaignModel)
+    .findOne(
+      mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
+    )
+    .lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   let emailTemplateId: string | undefined
@@ -42,6 +48,8 @@ export default defineEventHandler(async (event) => {
   const mergeSnap =
     tenantUserFieldsFromAuth(event.context.auth) ?? source.mergeUserSnapshot
 
+  const ownership = tenantOwnershipFieldsFromAuth(event.context.auth)
+
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
     sender: source.sender,
@@ -51,7 +59,8 @@ export default defineEventHandler(async (event) => {
     subject: source.subject || '',
     status: 'Draft',
     clientId: '',
-    ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {})
+    ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {}),
+    ...ownership
   }).save()
 
   if (source.recipientsType === 'manual' || source.recipientsType === 'list') {
@@ -59,7 +68,7 @@ export default defineEventHandler(async (event) => {
       .find({ campaign: source._id })
       .lean<ManualRecipientLean[]>()
     const seen = new Set<string>()
-    let contactIds: mongoose.Types.ObjectId[] = []
+    let contactIds: Types.ObjectId[] = []
     for (const r of manualRecipients) {
       if (!r.contact) continue
       const s = String(r.contact)

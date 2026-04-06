@@ -4,6 +4,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const { Campaign, ManualRecipient, Contact } = getTenantClientModels(conn)
 
   const campaigns = await (Campaign as CampaignModel)
-    .find({})
+    .find(mergeTenantOwnerEmailScopeFilter({}, event.context.auth))
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
   const campaignIds = campaigns.map((c) => c._id)
