@@ -1,8 +1,7 @@
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
-import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type ContactDoc = {
   _id: unknown
@@ -32,12 +31,7 @@ export default defineEventHandler(async (event) => {
   const { Contact } = getTenantClientModels(conn)
 
   const auth = event.context.auth as unknown
-  const scope =
-    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
-      ? auth.contactOwnerScope
-      : undefined
-
-  const filter = mergeContactOwnerScopeFilter({ deletedAt: null }, scope)
+  const filter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
   const [total, raw] = await Promise.all([
     Contact.countDocuments(filter),

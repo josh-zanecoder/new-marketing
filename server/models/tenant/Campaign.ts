@@ -14,6 +14,16 @@ const mergeUserSnapshotSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const campaignMetadataSchema = new mongoose.Schema(
+  {
+    /** Tenant user id of the owner (ACL / filtering). */
+    owner: { type: String, default: '', trim: true },
+    /** Lowercased; used with `contactOwnerScope` like contacts. */
+    ownerEmail: { type: String, default: '', trim: true, lowercase: true }
+  },
+  { _id: false }
+)
+
 export const campaignSchema = new mongoose.Schema({
   name: { type: String, required: true },
   sender: {
@@ -29,5 +39,13 @@ export const campaignSchema = new mongoose.Schema({
   scheduledAt: { type: Date, required: false },
   clientId: { type: String, default: '' },
   /** CRM user profile at last save; used at send time for {{ user.* }} when worker has no session. */
-  mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false }
+  mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false },
+  metadata: { type: campaignMetadataSchema, default: () => ({}) },
+  /** Tenant user id who created the campaign. */
+  createdBy: { type: String, default: '', trim: true },
+  /** Tenant user id who last edited the campaign (owner fields above are not changed on edit). */
+  updatedBy: { type: String, default: '', trim: true }
 }, { timestamps: true })
+
+campaignSchema.index({ 'metadata.owner': 1 })
+campaignSchema.index({ 'metadata.ownerEmail': 1 })

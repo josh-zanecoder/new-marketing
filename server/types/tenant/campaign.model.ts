@@ -9,6 +9,12 @@ export interface CampaignMergeUserSnapshot {
   role?: string
 }
 
+/** Tenant-scoped ownership; extend keys here if you add schema fields. */
+export interface CampaignMetadata {
+  owner?: string
+  ownerEmail?: string
+}
+
 export interface CampaignLean {
   _id: Types.ObjectId
   name: string
@@ -24,6 +30,9 @@ export interface CampaignLean {
   updatedAt?: Date
   clientId?: string
   mergeUserSnapshot?: CampaignMergeUserSnapshot
+  metadata?: CampaignMetadata
+  createdBy?: string
+  updatedBy?: string
 }
 
 export interface CampaignDoc {

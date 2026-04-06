@@ -2,6 +2,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { removeScheduledCampaignJob } from '@server/queue/emailQueue'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 export default defineEventHandler(async (event) => {
   const campaignId = getRouterParam(event, 'campaignId')
@@ -14,7 +15,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const { Campaign } = getTenantClientModels(conn)
-  const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
+  const campaign = await (Campaign as CampaignModel)
+    .findOne(mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth))
+    .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (campaign.status !== 'Scheduled') {
     throw createError({ statusCode: 400, message: 'Only scheduled campaigns can be unscheduled' })
@@ -22,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   await removeScheduledCampaignJob(dbName, campaignId)
   await (Campaign as CampaignModel).updateOne(
-    { _id: campaignId },
+    mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth),
     { $set: { status: 'Draft' }, $unset: { scheduledAt: 1 } }
   )
 

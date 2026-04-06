@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const models = getTenantClientModels(conn)
 
-  return getCampaignSendProgress(models, campaignId)
+  return getCampaignSendProgress(models, campaignId, event.context.auth)
 })

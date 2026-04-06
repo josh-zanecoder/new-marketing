@@ -16,6 +16,14 @@ export type RecipientListFilterMode = 'and' | 'or'
 /** Left-associative combinator between consecutive filter rows (gaps). Length = row count − 1. */
 export type RecipientListCriterionJoin = 'and' | 'or'
 
+/** How dynamic list membership is computed; set from session on create/patch. */
+export type RecipientListMembershipScope = 'tenant' | 'owner_emails'
+
+/** Tenant-scoped ownership; extend keys here if you add schema fields. */
+export interface RecipientListMetadata {
+  ownerEmail?: string
+}
+
 /** List definition. Contact membership is stored in `recipient_list_members` (see RecipientListMember). */
 export interface RecipientListLean {
   _id: Types.ObjectId
@@ -28,6 +36,12 @@ export interface RecipientListLean {
   /** Kept for campaign / static flows; default dynamic for criteria-based lists. */
   listType?: 'static' | 'dynamic' | 'hybrid'
   clientId?: string
+  metadata?: RecipientListMetadata
+  createdBy?: string
+  updatedBy?: string
+  membershipScope?: RecipientListMembershipScope
+  /** Snapshot for `owner_emails` membership; empty for `tenant`. */
+  membershipOwnerEmails?: string[]
   createdAt?: Date
   updatedAt?: Date
 }

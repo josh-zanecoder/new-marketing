@@ -1,6 +1,7 @@
 import type { Model, Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 interface CampaignDoc {
   _id: Types.ObjectId
@@ -17,7 +18,9 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, CampaignRecipient, ManualRecipient } = getTenantClientModels(conn)
 
-  const campaign = await (Campaign as Model<CampaignDoc>).findById(id)
+  const campaign = await (Campaign as Model<CampaignDoc>).findOne(
+    mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth)
+  )
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   await Promise.all([

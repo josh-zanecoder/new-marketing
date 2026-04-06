@@ -2,7 +2,12 @@ import type { Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactKind } from '@server/types/tenant/contact.model'
 import type { RecipientListFilterMode } from '@server/types/tenant/recipientList.model'
-import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import {
+  isRegisteredTenantAuthContext,
+  recipientListMembershipOwnerEmailsFromAuth,
+  recipientListMembershipScopeFromAuth,
+  recipientListOwnershipFromAuth
+} from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import {
   pickJoinsForQuery,
@@ -17,6 +22,8 @@ type CreatedRecipientList = {
   filters?: unknown[]
   filterMode?: string
   criterionJoins?: string[]
+  membershipScope?: string
+  membershipOwnerEmails?: string[]
   createdAt?: Date | null
   updatedAt?: Date | null
 }
@@ -69,6 +76,13 @@ export default defineEventHandler(async (event) => {
       ? criterionJoinsFromBody
       : Array.from({ length: Math.max(0, criterionGroups.length - 1) }, () => 'and' as const)
 
+  const ownership = recipientListOwnershipFromAuth(auth)
+  const membershipScope = recipientListMembershipScopeFromAuth(auth)
+  const membershipOwnerEmails =
+    membershipScope === 'owner_emails'
+      ? recipientListMembershipOwnerEmailsFromAuth(auth)
+      : []
+
   const created = await RecipientList.create({
     name,
     description: '',
@@ -78,7 +92,10 @@ export default defineEventHandler(async (event) => {
     filterMode,
     filterRows: persistedFilterRows,
     criterionJoins: joinsToStore,
-    clientId: ''
+    clientId: '',
+    membershipScope,
+    membershipOwnerEmails,
+    ...ownership
   })
 
   const listId = created._id as Types.ObjectId
@@ -95,6 +112,8 @@ export default defineEventHandler(async (event) => {
     filterMode,
     criterionGroups,
     auth,
+    membershipScope,
+    membershipOwnerEmails,
     joinsForRebuild
   )
 
@@ -110,6 +129,13 @@ export default defineEventHandler(async (event) => {
       filterMode: lean.filterMode === 'or' ? 'or' : 'and',
       criterionJoins: Array.isArray(lean.criterionJoins)
         ? lean.criterionJoins.map((j) => (j === 'or' ? 'or' : 'and'))
+        : [],
+      membershipScope:
+        lean.membershipScope === 'tenant' || lean.membershipScope === 'owner_emails'
+          ? lean.membershipScope
+          : 'owner_emails',
+      membershipOwnerEmails: Array.isArray(lean.membershipOwnerEmails)
+        ? lean.membershipOwnerEmails.filter((e): e is string => typeof e === 'string')
         : [],
       memberCount,
       createdAt: lean.createdAt?.toISOString?.() ?? null,

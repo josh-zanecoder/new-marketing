@@ -2,8 +2,14 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactKind } from '@server/types/tenant/contact.model'
 import type { RecipientListFilterMode } from '@server/types/tenant/recipientList.model'
-import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import {
+  isRegisteredTenantAuthContext,
+  recipientListMembershipOwnerEmailsFromAuth,
+  recipientListMembershipScopeFromAuth,
+  tenantCreatedByFromAuth
+} from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListDocument'
 import {
   pickJoinsForQuery,
@@ -61,7 +67,11 @@ export default defineEventHandler(async (event) => {
     await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
   const { RecipientList } = getTenantClientModels(tenantConn)
 
-  const existing = await RecipientList.findById(listId).lean().exec()
+  const existing = await RecipientList.findOne(
+    mergeTenantOwnerEmailScopeFilter({ _id: listId }, auth)
+  )
+    .lean()
+    .exec()
   if (!existing) {
     throw createError({ statusCode: 404, message: 'List not found' })
   }
@@ -76,8 +86,17 @@ export default defineEventHandler(async (event) => {
   if (criterionJoinsFromBody !== null) {
     updateDoc.criterionJoins = criterionJoinsFromBody
   }
+  const editorId = tenantCreatedByFromAuth(auth)
+  if (editorId) updateDoc.updatedBy = editorId
+  const membershipScope = recipientListMembershipScopeFromAuth(auth)
+  const membershipOwnerEmails =
+    membershipScope === 'owner_emails'
+      ? recipientListMembershipOwnerEmailsFromAuth(auth)
+      : []
+  updateDoc.membershipScope = membershipScope
+  updateDoc.membershipOwnerEmails = membershipOwnerEmails
 
-  await RecipientList.findByIdAndUpdate(listId, updateDoc).exec()
+  await RecipientList.findByIdAndUpdate(listId, { $set: updateDoc }).exec()
 
   const joinsForRebuild = pickJoinsForQuery(
     criterionGroups,
@@ -92,6 +111,8 @@ export default defineEventHandler(async (event) => {
     filterMode,
     criterionGroups,
     auth,
+    membershipScope,
+    membershipOwnerEmails,
     joinsForRebuild
   )
 
@@ -117,6 +138,16 @@ export default defineEventHandler(async (event) => {
       filters: normalized.filters,
       filterMode: normalized.filterMode,
       criterionJoins: normalized.criterionJoins ?? [],
+      membershipScope:
+        updated?.membershipScope === 'tenant' ||
+        updated?.membershipScope === 'owner_emails'
+          ? updated.membershipScope
+          : 'owner_emails',
+      membershipOwnerEmails: Array.isArray(updated?.membershipOwnerEmails)
+        ? (updated.membershipOwnerEmails as unknown[]).filter(
+            (e): e is string => typeof e === 'string'
+          )
+        : [],
       memberCount,
       createdAt:
         updated?.createdAt instanceof Date

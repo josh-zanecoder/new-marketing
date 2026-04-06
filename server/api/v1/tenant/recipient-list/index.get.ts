@@ -2,14 +2,14 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import {
   isRegisteredTenantAuthContext,
-  isTenantApiKeyAuthContext,
   resolveTenantIdForTenantAuth
 } from '@server/tenant/registry-auth'
-import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListDocument'
+import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
 const CONTACT_LIMIT = 3000
 type ContactRow = {
@@ -75,11 +75,7 @@ export default defineEventHandler(async (event) => {
   const { Contact, RecipientList, RecipientFilter: FilterModel } =
     getTenantClientModels(tenantConn)
 
-  const ownerScope =
-    isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
-      ? auth.contactOwnerScope
-      : undefined
-  const contactFilter = mergeContactOwnerScopeFilter({ deletedAt: null }, ownerScope)
+  const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
   const [contactTotal, contactsRaw, kindCounts, listsRaw] = await Promise.all([
     Contact.countDocuments(contactFilter),
@@ -103,7 +99,7 @@ export default defineEventHandler(async (event) => {
       { $match: contactFilter },
       { $group: { _id: '$contactKind', count: { $sum: 1 } } }
     ]).exec(),
-    RecipientList.find({})
+    RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
       .sort({ updatedAt: -1 })
       .limit(200)
       .lean()
@@ -165,6 +161,13 @@ export default defineEventHandler(async (event) => {
         filters,
         filterMode,
         criterionJoins: criterionJoins ?? [],
+        membershipScope:
+          doc.membershipScope === 'tenant' || doc.membershipScope === 'owner_emails'
+            ? doc.membershipScope
+            : 'owner_emails',
+        membershipOwnerEmails: recipientListStoredMembershipEmails(
+          doc as { membershipOwnerEmails?: unknown }
+        ),
         createdAt: doc.createdAt?.toISOString?.() ?? null,
         updatedAt: doc.updatedAt?.toISOString?.() ?? null
       }

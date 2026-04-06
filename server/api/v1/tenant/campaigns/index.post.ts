@@ -5,6 +5,7 @@ import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipi
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -55,6 +56,8 @@ export default defineEventHandler(async (event) => {
   }
   if (emailTemplateId) campaignData.emailTemplate = emailTemplateId
   if (mergeSnap) campaignData.mergeUserSnapshot = mergeSnap
+
+  Object.assign(campaignData, tenantOwnershipFieldsFromAuth(event.context.auth))
 
   const campaign = await new Campaign(campaignData).save()
 
