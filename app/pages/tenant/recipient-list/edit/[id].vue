@@ -135,6 +135,26 @@
               :key="idx"
               class="space-y-3"
             >
+              <div
+                v-if="showCombineBeforeFormRow(idx)"
+                class="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200/60 bg-zinc-50/50 px-4 py-3"
+              >
+                <span class="text-xs font-medium uppercase tracking-wide text-zinc-500">Combine</span>
+                <select
+                  v-model="form.criterionJoins[joinSlotBeforeFormRow(idx)]"
+                  class="min-w-[12rem] rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+                >
+                  <option value="and">
+                    AND — both must match
+                  </option>
+                  <option value="or">
+                    OR — either can match
+                  </option>
+                </select>
+                <p class="w-full text-xs leading-relaxed text-zinc-500 sm:ml-auto sm:w-auto">
+                  Then choose the next filter below.
+                </p>
+              </div>
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <label
                   :for="`rl-filter-${idx}`"
@@ -259,27 +279,6 @@
               {{ form.filterRows.length ? 'Add another filter' : 'Add filter' }}
             </button>
 
-            <div v-if="showCombineCriteria" class="border-t border-zinc-100 pt-5">
-              <label for="rl-filter-mode" class="mb-2 block text-sm font-medium text-zinc-700">
-                Combine criteria
-              </label>
-              <select
-                id="rl-filter-mode"
-                v-model="form.filterMode"
-                class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:text-[15px]"
-              >
-                <option value="and">
-                  AND — must match all conditions
-                </option>
-                <option value="or">
-                  OR — match any one of the conditions
-                </option>
-              </select>
-              <p class="mt-2 text-xs leading-relaxed text-zinc-500 sm:text-sm">
-                <span class="font-medium text-zinc-700">AND</span> requires every rule to match.
-                <span class="font-medium text-zinc-700">OR</span> matches if any rule matches.
-              </p>
-            </div>
           </div>
         </div>
 
@@ -333,7 +332,8 @@ const {
   showPropertyRowFor,
   rowRegistryTokens,
   propertyValuePlaceholderFor,
-  showCombineCriteria,
+  showCombineBeforeFormRow,
+  joinSlotBeforeFormRow,
   canSubmitPropertyValue,
   onRowFilterChange,
   addFilterRow,

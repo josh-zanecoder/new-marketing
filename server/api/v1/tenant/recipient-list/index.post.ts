@@ -5,6 +5,7 @@ import type { RecipientListFilterMode } from '@server/types/tenant/recipientList
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import {
+  pickJoinsForQuery,
   rebuildRecipientListMembers,
   resolveRecipientListFiltersFromBody
 } from '@server/utils/recipient/recipientListMutation'
@@ -15,6 +16,7 @@ type CreatedRecipientList = {
   audience?: string
   filters?: unknown[]
   filterMode?: string
+  criterionJoins?: string[]
   createdAt?: Date | null
   updatedAt?: Date | null
 }
@@ -58,9 +60,14 @@ export default defineEventHandler(async (event) => {
 
   const tenantConn = await getTenantConnectionFromEvent(event)
 
-  const { filters, criterionGroups, persistedFilterRows } =
+  const { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody } =
     await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
   const { RecipientList } = getTenantClientModels(tenantConn)
+
+  const joinsToStore =
+    criterionJoinsFromBody !== null
+      ? criterionJoinsFromBody
+      : Array.from({ length: Math.max(0, criterionGroups.length - 1) }, () => 'and' as const)
 
   const created = await RecipientList.create({
     name,
@@ -70,10 +77,16 @@ export default defineEventHandler(async (event) => {
     filters,
     filterMode,
     filterRows: persistedFilterRows,
+    criterionJoins: joinsToStore,
     clientId: ''
   })
 
   const listId = created._id as Types.ObjectId
+  const joinsForRebuild = pickJoinsForQuery(
+    criterionGroups,
+    criterionJoinsFromBody,
+    { criterionJoins: joinsToStore }
+  )
   const memberCount = await rebuildRecipientListMembers(
     tenantConn,
     listId,
@@ -81,7 +94,8 @@ export default defineEventHandler(async (event) => {
     filters,
     filterMode,
     criterionGroups,
-    auth
+    auth,
+    joinsForRebuild
   )
 
   const lean = created.toObject() as CreatedRecipientList
@@ -94,6 +108,9 @@ export default defineEventHandler(async (event) => {
       audience: lean.audience ?? '',
       filters: lean.filters ?? [],
       filterMode: lean.filterMode === 'or' ? 'or' : 'and',
+      criterionJoins: Array.isArray(lean.criterionJoins)
+        ? lean.criterionJoins.map((j) => (j === 'or' ? 'or' : 'and'))
+        : [],
       memberCount,
       createdAt: lean.createdAt?.toISOString?.() ?? null,
       updatedAt: lean.updatedAt?.toISOString?.() ?? null

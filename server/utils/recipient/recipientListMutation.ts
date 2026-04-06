@@ -4,6 +4,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
+  RecipientListCriterionJoin,
   RecipientListFilterMode
 } from '@server/types/tenant/recipientList.model'
 import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
@@ -14,6 +15,65 @@ import { registryDocToCriteria } from '@server/utils/recipient/recipientListDocu
 
 const MEMBER_INSERT_BATCH = 1000
 
+function defaultCriterionJoins(groupCount: number): RecipientListCriterionJoin[] {
+  const need = Math.max(0, groupCount - 1)
+  return Array.from({ length: need }, () => 'and' as const)
+}
+
+/**
+ * Parse `criterionJoins` from API body. Returns `null` when the field is omitted (PATCH: keep existing).
+ */
+export function parseCriterionJoinsFromBody(
+  raw: unknown,
+  groupCount: number
+): RecipientListCriterionJoin[] | null {
+  if (raw === undefined) return null
+  const need = Math.max(0, groupCount - 1)
+  if (need === 0) {
+    if (raw === null) return []
+    if (Array.isArray(raw) && raw.length === 0) return []
+    throw createError({
+      statusCode: 400,
+      message: 'criterionJoins must be an empty array when there is only one filter row'
+    })
+  }
+  if (!Array.isArray(raw)) {
+    throw createError({ statusCode: 400, message: 'criterionJoins must be an array' })
+  }
+  if (raw.length !== need) {
+    throw createError({
+      statusCode: 400,
+      message: `criterionJoins must have length ${need} (one of "and" | "or" between each pair of filter rows)`
+    })
+  }
+  return raw.map((x, i) => {
+    if (x === 'or') return 'or'
+    if (x === 'and' || x === undefined) return 'and'
+    throw createError({
+      statusCode: 400,
+      message: `criterionJoins[${i}] must be "and" or "or"`
+    })
+  })
+}
+
+export function pickJoinsForQuery(
+  groups: RecipientListCriterion[][],
+  fromBody: RecipientListCriterionJoin[] | null,
+  existing: { criterionJoins?: unknown } | null | undefined
+): RecipientListCriterionJoin[] | null {
+  const nonEmpty = groups.filter((g) => g.length > 0)
+  const need = Math.max(0, nonEmpty.length - 1)
+  if (fromBody !== null) {
+    if (fromBody.length === need) return fromBody
+    return null
+  }
+  const ex = existing?.criterionJoins
+  if (Array.isArray(ex) && ex.length === need) {
+    return ex.map((x) => (x === 'or' ? 'or' : ('and' as const)))
+  }
+  return null
+}
+
 export async function resolveRecipientListFiltersFromBody(
   body: Record<string, unknown>,
   tenantConn: Connection,
@@ -22,6 +82,7 @@ export async function resolveRecipientListFiltersFromBody(
   filters: RecipientListCriterion[]
   criterionGroups: RecipientListCriterion[][]
   persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[]
+  criterionJoinsFromBody: RecipientListCriterionJoin[] | null
 }> {
   let filters: RecipientListCriterion[] = []
   const criterionGroups: RecipientListCriterion[][] = []
@@ -135,7 +196,12 @@ export async function resolveRecipientListFiltersFromBody(
     }
   }
 
-  return { filters, criterionGroups, persistedFilterRows }
+  const criterionJoinsFromBody = parseCriterionJoinsFromBody(
+    body?.criterionJoins,
+    criterionGroups.length
+  )
+
+  return { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody }
 }
 
 export async function rebuildRecipientListMembers(
@@ -145,14 +211,22 @@ export async function rebuildRecipientListMembers(
   filters: RecipientListCriterion[],
   filterMode: RecipientListFilterMode,
   criterionGroups: RecipientListCriterion[][],
-  auth: unknown
+  auth: unknown,
+  storedCriterionJoins?: RecipientListCriterionJoin[] | null
 ): Promise<number> {
   const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
   await RecipientListMember.deleteMany({ recipientListId: listId })
 
-  const groupsForAndMode = filterMode === 'and' && criterionGroups.length > 0 ? criterionGroups : undefined
+  const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
+  const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
 
-  const contactQuery = buildContactFilterQuery(audience, filters, filterMode, groupsForAndMode)
+  const contactQuery = buildContactFilterQuery(
+    audience,
+    filters,
+    filterMode,
+    groupsForQuery,
+    storedCriterionJoins ?? null
+  )
   const ownerScope =
     isTenantApiKeyAuthContext(auth) && auth.contactOwnerScope?.length
       ? auth.contactOwnerScope

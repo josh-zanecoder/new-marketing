@@ -27,6 +27,7 @@ interface ListDetailForEdit {
     name: string
     audience: string
     filterMode?: 'and' | 'or'
+    criterionJoins?: ('and' | 'or')[]
     filterRows?: { recipientFilterId: string; listPropertyValue: string }[]
   }
 }
@@ -46,6 +47,7 @@ export type RecipientListFormSharedReturn = {
     audience: string
     filterRows: RecipientListFilterRow[]
     filterMode: 'and' | 'or'
+    criterionJoins: ('and' | 'or')[]
   }
   audienceOptions: ComputedRef<{ value: string; label: string }[]>
   filtersForAudience: ComputedRef<RegistryFilterRow[]>
@@ -54,7 +56,8 @@ export type RecipientListFormSharedReturn = {
   showPropertyRowFor: (row: RecipientListFilterRow) => boolean
   rowRegistryTokens: (row: RecipientListFilterRow) => string[]
   propertyValuePlaceholderFor: (row: RecipientListFilterRow) => string
-  showCombineCriteria: ComputedRef<boolean>
+  showCombineBeforeFormRow: (formIdx: number) => boolean
+  joinSlotBeforeFormRow: (formIdx: number) => number
   canSubmitPropertyValue: ComputedRef<boolean>
   onRowFilterChange: (row: RecipientListFilterRow) => void
   addFilterRow: () => void
@@ -113,7 +116,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     name: '',
     audience: '',
     filterRows: [] as RecipientListFilterRow[],
-    filterMode: 'and' as 'and' | 'or'
+    filterMode: 'and' as 'and' | 'or',
+    criterionJoins: [] as ('and' | 'or')[]
   })
 
   const audienceOptions = computed((): { value: string; label: string }[] => {
@@ -201,9 +205,37 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     return 'Enter value to match'
   }
 
-  const showCombineCriteria = computed(
-    () =>
-      form.filterRows.filter((r) => String(r.recipientFilterId ?? '').trim()).length >= 2
+  function rowHasFilterId(row: RecipientListFilterRow): boolean {
+    return Boolean(String(row.recipientFilterId ?? '').trim())
+  }
+
+  /** AND/OR before this row (row index ≥ 1), once the previous row has a filter — including a newly added empty row. */
+  function showCombineBeforeFormRow(formIdx: number): boolean {
+    if (formIdx <= 0) return false
+    const prev = form.filterRows[formIdx - 1]
+    return prev != null && rowHasFilterId(prev)
+  }
+
+  /** Same slot as join between row formIdx−1 and formIdx (left-associative chain). */
+  function joinSlotBeforeFormRow(formIdx: number): number {
+    return (
+      form.filterRows
+        .slice(0, formIdx)
+        .filter((r) => rowHasFilterId(r)).length - 1
+    )
+  }
+
+  watch(
+    () => form.filterRows.map((r) => String(r.recipientFilterId ?? '').trim()),
+    () => {
+      const n = Math.max(
+        0,
+        form.filterRows.filter((r) => rowHasFilterId(r)).length - 1
+      )
+      while (form.criterionJoins.length < n) form.criterionJoins.push('and')
+      if (form.criterionJoins.length > n) form.criterionJoins.splice(n)
+    },
+    { deep: true, immediate: true }
   )
 
   const canSubmitPropertyValue = computed(() => {
@@ -284,17 +316,23 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   function buildSaveBody(): Record<string, unknown> {
-    return {
+    const persistedRows = form.filterRows
+      .filter((r) => r.recipientFilterId.trim())
+      .map((r) => ({
+        recipientFilterId: r.recipientFilterId.trim(),
+        listPropertyValue: r.listPropertyValue.trim()
+      }))
+    const need = Math.max(0, persistedRows.length - 1)
+    const body: Record<string, unknown> = {
       name: form.name.trim(),
       audience: form.audience,
-      filterRows: form.filterRows
-        .filter((r) => r.recipientFilterId.trim())
-        .map((r) => ({
-          recipientFilterId: r.recipientFilterId.trim(),
-          listPropertyValue: r.listPropertyValue.trim()
-        })),
-      filterMode: showCombineCriteria.value ? form.filterMode : 'and'
+      filterRows: persistedRows,
+      filterMode: form.filterMode
     }
+    if (need > 0) {
+      body.criterionJoins = form.criterionJoins.slice(0, need)
+    }
+    return body
   }
 
   function fetchErrorMessage(e: unknown, fallback: string): string {
@@ -320,6 +358,20 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       const tokens = tokenizePropertyValue(f.propertyValue ?? '')
       if (!row.listPropertyValue.trim() && tokens.length === 1) {
         row.listPropertyValue = tokens[0] ?? ''
+      }
+    }
+
+    const savedCount = form.filterRows.filter((r) => rowHasFilterId(r)).length
+    const need = Math.max(0, savedCount - 1)
+    form.criterionJoins.splice(0, form.criterionJoins.length)
+    const api = list.criterionJoins
+    for (let i = 0; i < need; i++) {
+      if (Array.isArray(api) && api.length === need && (api[i] === 'or' || api[i] === 'and')) {
+        form.criterionJoins.push(api[i] === 'or' ? 'or' : 'and')
+      } else if (need === 1 && list.filterMode === 'or') {
+        form.criterionJoins.push('or')
+      } else {
+        form.criterionJoins.push('and')
       }
     }
   }
@@ -429,7 +481,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     showPropertyRowFor,
     rowRegistryTokens,
     propertyValuePlaceholderFor,
-    showCombineCriteria,
+    showCombineBeforeFormRow,
+    joinSlotBeforeFormRow,
     canSubmitPropertyValue,
     onRowFilterChange,
     addFilterRow,

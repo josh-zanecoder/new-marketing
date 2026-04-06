@@ -156,7 +156,7 @@ export default defineEventHandler(async (event) => {
     },
     recipientFilters,
     lists: lists.map((doc) => {
-      const { audience, filters, filterMode } = normalizeRecipientListDoc(doc)
+      const { audience, filters, filterMode, criterionJoins } = normalizeRecipientListDoc(doc)
       return {
         id: String(doc._id),
         name: doc.name ?? '',
@@ -164,6 +164,7 @@ export default defineEventHandler(async (event) => {
         audience,
         filters,
         filterMode,
+        criterionJoins: criterionJoins ?? [],
         createdAt: doc.createdAt?.toISOString?.() ?? null,
         updatedAt: doc.updatedAt?.toISOString?.() ?? null
       }

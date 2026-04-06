@@ -13,6 +13,9 @@ export interface RecipientListCriterion {
  */
 export type RecipientListFilterMode = 'and' | 'or'
 
+/** Left-associative combinator between consecutive filter rows (gaps). Length = row count − 1. */
+export type RecipientListCriterionJoin = 'and' | 'or'
+
 /** List definition. Contact membership is stored in `recipient_list_members` (see RecipientListMember). */
 export interface RecipientListLean {
   _id: Types.ObjectId
@@ -20,6 +23,8 @@ export interface RecipientListLean {
   audience: ContactKind
   filters: RecipientListCriterion[]
   filterMode?: RecipientListFilterMode
+  /** When set (length = filter row count − 1), row clauses combine with left-associative AND/OR. */
+  criterionJoins?: RecipientListCriterionJoin[]
   /** Kept for campaign / static flows; default dynamic for criteria-based lists. */
   listType?: 'static' | 'dynamic' | 'hybrid'
   clientId?: string

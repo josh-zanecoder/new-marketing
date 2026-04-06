@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 const contactKindEnum = ['prospect', 'client', 'contact'] as const
 const listTypeEnum = ['static', 'dynamic', 'hybrid'] as const
 const filterModeEnum = ['and', 'or'] as const
+const criterionJoinEnum = ['and', 'or'] as const
 
 const recipientListCriterionSchema = new mongoose.Schema(
   {
@@ -44,6 +45,11 @@ export const recipientListSchema = new mongoose.Schema(
       type: String,
       enum: filterModeEnum,
       default: 'and'
+    },
+    /** Left-associative join between each pair of filter rows; length = filterRows.length − 1. */
+    criterionJoins: {
+      type: [{ type: String, enum: criterionJoinEnum }],
+      default: undefined
     },
     /** Source rows from the tenant UI (registry filter id + value); used to repopulate edit. */
     filterRows: {

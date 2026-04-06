@@ -6,11 +6,30 @@ import {
 } from '@server/tenant/registry-auth'
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
 } from '@server/utils/recipient/recipientListDocument'
+
+function rowCriterionDisplay(
+  filterDoc: Record<string, unknown>,
+  listPropertyValue: string
+): { property: string; value: string } {
+  const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
+  const registryVal =
+    typeof filterDoc.propertyValue === 'string' ? filterDoc.propertyValue.trim() : ''
+  const value = (listPropertyValue || registryVal).trim()
+  let prop = String(property || 'unknown').trim() || 'unknown'
+  if (property === 'address') {
+    if (propertyType === 'state') prop = 'state'
+    else if (propertyType === 'city') prop = 'city'
+    else if (propertyType === 'county') prop = 'county'
+    else if (propertyType === 'street') prop = 'street'
+  }
+  return { property: prop, value }
+}
 
 const MAX_PAGE_SIZE = 100
 type RecipientListDoc = {
@@ -61,7 +80,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'List not found' })
   }
 
-  const { audience, filters, filterMode } = normalizeRecipientListDoc(doc)
+  const { audience, filters, filterMode, criterionJoins } = normalizeRecipientListDoc(doc)
 
   const storedRowsRaw = (doc as { filterRows?: unknown }).filterRows
   let filterRows: { recipientFilterId: string; listPropertyValue: string }[] = []
@@ -92,6 +111,49 @@ export default defineEventHandler(async (event) => {
       filters,
       registryDocs as Record<string, unknown>[]
     )
+  }
+
+  const needJoins = Math.max(0, filterRows.length - 1)
+  const rawJoins = doc.criterionJoins as unknown
+  let chainJoins: ('and' | 'or')[] | null = null
+  if (needJoins === 0) {
+    chainJoins = []
+  } else if (Array.isArray(rawJoins) && rawJoins.length === needJoins) {
+    chainJoins = rawJoins.map((x) => (x === 'or' ? 'or' : ('and' as const)))
+  }
+
+  let criteriaChain: {
+    rows: { property: string; value: string }[]
+    joins: ('and' | 'or')[] | null
+  } | null = null
+  if (filterRows.length > 0) {
+    const rowIds = filterRows
+      .map((r) => r.recipientFilterId)
+      .filter((id) => mongoose.isValidObjectId(id))
+    const filterDocs =
+      rowIds.length > 0
+        ? await RecipientFilter.find({
+            _id: { $in: rowIds.map((id) => new mongoose.Types.ObjectId(id)) }
+          })
+            .lean()
+            .exec()
+        : []
+    const byId = new Map(
+      (filterDocs as Record<string, unknown>[]).map((d) => [String(d._id), d as Record<string, unknown>])
+    )
+    const rows: { property: string; value: string }[] = []
+    for (const fr of filterRows) {
+      const fd = byId.get(fr.recipientFilterId)
+      if (!fd) {
+        rows.push({
+          property: 'filter',
+          value: fr.listPropertyValue || fr.recipientFilterId
+        })
+        continue
+      }
+      rows.push(rowCriterionDisplay(fd, fr.listPropertyValue))
+    }
+    criteriaChain = { rows, joins: chainJoins }
   }
 
   const query = getQuery(event)
@@ -176,6 +238,8 @@ export default defineEventHandler(async (event) => {
       audience,
       filters,
       filterMode,
+      criterionJoins: criterionJoins ?? [],
+      criteriaChain,
       filterRows,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null

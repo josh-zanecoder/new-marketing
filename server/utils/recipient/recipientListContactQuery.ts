@@ -162,6 +162,90 @@ function combineCriteriaGroup(
   return { $or: leaves }
 }
 
+/** Left-associative: (...((L0 op0 L1) op1 L2) ...). */
+function foldLeftAssociativeChain(
+  leaves: Record<string, unknown>[],
+  joins: ('and' | 'or')[]
+): Record<string, unknown> {
+  const first = leaves[0]
+  if (first === undefined) return {}
+  let acc: Record<string, unknown> = first
+  for (let i = 1; i < leaves.length; i++) {
+    const leaf = leaves[i]
+    if (!leaf) continue
+    const opKey = joins[i - 1] === 'or' ? '$or' : '$and'
+    acc = { [opKey]: [acc, leaf] }
+  }
+  return acc
+}
+
+function mergeAudienceWithExpr(
+  audience: ContactKind,
+  expr: Record<string, unknown>
+): FilterQuery<Record<string, unknown>> {
+  const base: FilterQuery<Record<string, unknown>> = {
+    deletedAt: null,
+    contactKind: audience
+  }
+  return { ...base, ...expr } as FilterQuery<Record<string, unknown>>
+}
+
+/** One leaf per filter row (OR inside row when a row expands to multiple criteria). */
+export function buildRowChainQuery(
+  audience: ContactKind,
+  rowGroups: RecipientListCriterion[][],
+  joins: ('and' | 'or')[]
+): FilterQuery<Record<string, unknown>> {
+  const base: FilterQuery<Record<string, unknown>> = {
+    deletedAt: null,
+    contactKind: audience
+  }
+  const rowLeaves: Record<string, unknown>[] = []
+  for (const g of rowGroups) {
+    const part = combineCriteriaGroup(g)
+    if (part && Object.keys(part).length) rowLeaves.push(part)
+  }
+  if (rowLeaves.length === 0) return base
+  if (rowLeaves.length === 1) {
+    const one = rowLeaves[0]
+    return one ? mergeAudienceWithExpr(audience, one) : base
+  }
+  const need = rowLeaves.length - 1
+  const norm: ('and' | 'or')[] = []
+  for (let i = 0; i < need; i++) {
+    norm[i] = joins[i] === 'or' ? 'or' : 'and'
+  }
+  return mergeAudienceWithExpr(audience, foldLeftAssociativeChain(rowLeaves, norm))
+}
+
+/** Single chain over flat criteria (no row grouping); same left-associative semantics. */
+export function buildFlatCriterionChainQuery(
+  audience: ContactKind,
+  criteria: RecipientListCriterion[],
+  joins: ('and' | 'or')[]
+): FilterQuery<Record<string, unknown>> {
+  const base: FilterQuery<Record<string, unknown>> = {
+    deletedAt: null,
+    contactKind: audience
+  }
+  const leaves: Record<string, unknown>[] = []
+  for (const c of criteria) {
+    const leaf = criterionToLeaf(c)
+    if (leaf && Object.keys(leaf).length) leaves.push(leaf)
+  }
+  if (leaves.length === 0) return base
+  if (leaves.length === 1) {
+    const one = leaves[0]
+    return one ? mergeAudienceWithExpr(audience, one) : base
+  }
+  const need = leaves.length - 1
+  const norm: ('and' | 'or')[] = []
+  for (let i = 0; i < need; i++) {
+    norm[i] = joins[i] === 'or' ? 'or' : 'and'
+  }
+  return mergeAudienceWithExpr(audience, foldLeftAssociativeChain(leaves, norm))
+}
+
 function buildAndModeGrouped(
   audience: ContactKind,
   groups: RecipientListCriterion[][]
@@ -210,11 +294,33 @@ export function buildContactFilterQuery(
   audience: ContactKind,
   filters: RecipientListCriterion[],
   filterMode: RecipientListFilterMode = 'and',
-  criterionGroups?: RecipientListCriterion[][]
+  criterionGroups?: RecipientListCriterion[][],
+  /** When length matches row-group gaps or flat filter gaps, overrides grouped/flat AND defaults. */
+  storedCriterionJoins?: ('and' | 'or')[] | null
 ): FilterQuery<Record<string, unknown>> {
+  const groups = (criterionGroups ?? []).filter((g) => g.length > 0)
+
+  if (Array.isArray(storedCriterionJoins) && groups.length > 0) {
+    const need = groups.length - 1
+    if (storedCriterionJoins.length === need) {
+      return buildRowChainQuery(audience, groups, storedCriterionJoins)
+    }
+  }
+
+  if (
+    Array.isArray(storedCriterionJoins) &&
+    groups.length === 0 &&
+    filters.length > 0
+  ) {
+    const need = Math.max(0, filters.length - 1)
+    if (storedCriterionJoins.length === need) {
+      return buildFlatCriterionChainQuery(audience, filters, storedCriterionJoins)
+    }
+  }
+
   if (filterMode === 'or') return buildOrMode(audience, filters)
-  if (criterionGroups && criterionGroups.length > 0) {
-    return buildAndModeGrouped(audience, criterionGroups)
+  if (groups.length > 0) {
+    return buildAndModeGrouped(audience, groups)
   }
   return buildAndMode(audience, filters)
 }

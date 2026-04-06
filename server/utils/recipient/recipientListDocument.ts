@@ -1,6 +1,7 @@
 import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
+  RecipientListCriterionJoin,
   RecipientListFilterMode
 } from '@server/types/tenant/recipientList.model'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
@@ -74,12 +75,19 @@ function filterModeFromDoc(doc: Record<string, unknown>): RecipientListFilterMod
   return doc.filterMode === 'or' ? 'or' : 'and'
 }
 
+function criterionJoinsFromDoc(doc: Record<string, unknown>): RecipientListCriterionJoin[] | undefined {
+  const cj = doc.criterionJoins
+  if (!Array.isArray(cj)) return undefined
+  return cj.map((x) => (x === 'or' ? 'or' : ('and' as const)))
+}
+
 export function normalizeRecipientListDoc(
   doc: Record<string, unknown>
 ): {
   audience: ContactKind
   filters: RecipientListCriterion[]
   filterMode: RecipientListFilterMode
+  criterionJoins?: RecipientListCriterionJoin[]
 } {
   const rows = Array.isArray(doc.filters)
     ? (doc.filters as RecipientListCriterion[])
@@ -96,7 +104,8 @@ export function normalizeRecipientListDoc(
     return {
       audience: doc.audience as ContactKind,
       filters: mapCriteriaRows(rows),
-      filterMode: filterModeFromDoc(doc)
+      filterMode: filterModeFromDoc(doc),
+      criterionJoins: criterionJoinsFromDoc(doc)
     }
   }
 
@@ -110,7 +119,8 @@ export function normalizeRecipientListDoc(
     return {
       audience: doc.audience as ContactKind,
       filters: mapCriteriaRows(rows),
-      filterMode: filterModeFromDoc(doc)
+      filterMode: filterModeFromDoc(doc),
+      criterionJoins: criterionJoinsFromDoc(doc)
     }
   }
 

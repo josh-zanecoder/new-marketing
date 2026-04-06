@@ -7,6 +7,7 @@ import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
+import { pickJoinsForQuery } from '@server/utils/recipient/recipientListMutation'
 
 type RecipientListDoc = Record<string, unknown> & { _id: mongoose.Types.ObjectId }
 
@@ -89,10 +90,21 @@ export async function syncContactRecipientListMembership(
       audience,
       listDoc.filterRows
     )
-    const groupsForAnd =
-      filterMode === 'and' && criterionGroups.length > 0 ? criterionGroups : undefined
+    const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
+    const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
+    const joinsForQuery = pickJoinsForQuery(
+      criterionGroups,
+      null,
+      listDoc as { criterionJoins?: unknown }
+    )
 
-    const baseQuery = buildContactFilterQuery(audience, filters, filterMode, groupsForAnd)
+    const baseQuery = buildContactFilterQuery(
+      audience,
+      filters,
+      filterMode,
+      groupsForQuery,
+      joinsForQuery
+    )
     const scopedQuery = mergeContactOwnerScopeFilter(
       baseQuery as Record<string, unknown>,
       undefined

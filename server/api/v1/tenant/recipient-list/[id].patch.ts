@@ -6,6 +6,7 @@ import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListDocument'
 import {
+  pickJoinsForQuery,
   rebuildRecipientListMembers,
   resolveRecipientListFiltersFromBody
 } from '@server/utils/recipient/recipientListMutation'
@@ -56,7 +57,7 @@ export default defineEventHandler(async (event) => {
 
   const tenantConn = await getTenantConnectionFromEvent(event)
 
-  const { filters, criterionGroups, persistedFilterRows } =
+  const { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody } =
     await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
   const { RecipientList } = getTenantClientModels(tenantConn)
 
@@ -65,14 +66,24 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'List not found' })
   }
 
-  await RecipientList.findByIdAndUpdate(listId, {
+  const updateDoc: Record<string, unknown> = {
     name,
     audience,
     filters,
     filterMode,
     filterRows: persistedFilterRows
-  }).exec()
+  }
+  if (criterionJoinsFromBody !== null) {
+    updateDoc.criterionJoins = criterionJoinsFromBody
+  }
 
+  await RecipientList.findByIdAndUpdate(listId, updateDoc).exec()
+
+  const joinsForRebuild = pickJoinsForQuery(
+    criterionGroups,
+    criterionJoinsFromBody,
+    existing as { criterionJoins?: unknown }
+  )
   const memberCount = await rebuildRecipientListMembers(
     tenantConn,
     listId,
@@ -80,7 +91,8 @@ export default defineEventHandler(async (event) => {
     filters,
     filterMode,
     criterionGroups,
-    auth
+    auth,
+    joinsForRebuild
   )
 
   const updated = (await RecipientList.findById(listId).lean().exec()) as Record<
@@ -89,7 +101,12 @@ export default defineEventHandler(async (event) => {
   > | null
   const normalized = updated
     ? normalizeRecipientListDoc(updated)
-    : { audience, filters, filterMode }
+    : {
+        audience,
+        filters,
+        filterMode,
+        criterionJoins: [] as ('and' | 'or')[]
+      }
 
   return {
     list: {
@@ -99,6 +116,7 @@ export default defineEventHandler(async (event) => {
       audience: normalized.audience,
       filters: normalized.filters,
       filterMode: normalized.filterMode,
+      criterionJoins: normalized.criterionJoins ?? [],
       memberCount,
       createdAt:
         updated?.createdAt instanceof Date

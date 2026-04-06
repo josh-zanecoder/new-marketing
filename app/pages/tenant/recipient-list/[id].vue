@@ -74,19 +74,13 @@
       </header>
 
       <section class="mb-8 sm:mb-10">
-        <div class="mb-3 flex flex-wrap items-center gap-2">
+        <div class="mb-3">
           <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Criteria
           </h2>
-          <span
-            v-if="(payload.list.filters?.length ?? 0) >= 2 && payload.list.filterMode"
-            class="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600"
-          >
-            {{ payload.list.filterMode }}
-          </span>
         </div>
         <div
-          v-if="!payload.list.filters?.length"
+          v-if="!hasListCriteria"
           class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-10 text-center shadow-sm sm:flex-row sm:items-center sm:gap-4 sm:py-8 sm:text-left"
         >
           <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500">
@@ -103,20 +97,29 @@
             </p>
           </div>
         </div>
-        <ul
+        <div
           v-else
-          class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
+          class="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/80 p-4 shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-100"
+          role="group"
+          aria-label="List filter criteria"
         >
-          <li
-            v-for="(f, i) in payload.list.filters"
-            :key="i"
-            class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-100 px-4 py-3.5 text-sm last:border-b-0 sm:px-5"
-          >
-            <span class="font-medium capitalize text-zinc-900">{{ f.property }}</span>
-            <span class="rounded-md bg-zinc-200/60 px-1.5 py-0.5 text-xs font-semibold text-zinc-600">=</span>
-            <span class="break-words text-zinc-700">{{ f.value }}</span>
-          </li>
-        </ul>
+          <template v-for="(seg, i) in criteriaSegments" :key="i">
+            <span
+              v-if="seg.kind === 'criterion'"
+              class="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-zinc-200/90 bg-white px-2.5 py-1.5 text-sm shadow-sm ring-1 ring-zinc-100"
+            >
+              <span class="shrink-0 font-medium capitalize text-zinc-500">{{ seg.property }}</span>
+              <span class="shrink-0 rounded bg-zinc-200/70 px-1 py-0.5 text-[10px] font-bold leading-none text-zinc-600">=</span>
+              <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
+            </span>
+            <span
+              v-else
+              class="inline-flex shrink-0 items-center justify-center rounded-md bg-violet-100/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-800 ring-1 ring-violet-200/80"
+            >
+              {{ seg.op }}
+            </span>
+          </template>
+        </div>
       </section>
 
       <section>
@@ -274,6 +277,10 @@ interface ListDetailPayload {
     audience: string
     filters: ListCriterion[]
     filterMode?: 'and' | 'or'
+    criteriaChain?: {
+      rows: ListCriterion[]
+      joins: ('and' | 'or')[] | null
+    } | null
     createdAt: string | null
     updatedAt: string | null
   }
@@ -319,6 +326,46 @@ const deleteDetailMessage = computed(() => {
   const label = name ? `“${name}”` : 'this list'
   return `Permanently delete ${label}? Campaigns that used it will have the list unlinked (they become manual audience with any saved recipients). This cannot be undone.`
 })
+
+type CriteriaSegment =
+  | { kind: 'criterion'; property: string; value: string }
+  | { kind: 'op'; op: 'AND' | 'OR' }
+
+/** Chips + AND/OR indicators for the criteria row. */
+const criteriaSegments = computed((): CriteriaSegment[] => {
+  const list = payload.value?.list
+  if (!list) return []
+  const chain = list.criteriaChain
+  if (chain?.rows?.length) {
+    const rows = chain.rows
+    const joins = chain.joins
+    const fallback: 'AND' | 'OR' = list.filterMode === 'or' ? 'OR' : 'AND'
+    const out: CriteriaSegment[] = []
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]!
+      out.push({ kind: 'criterion', property: r.property, value: r.value })
+      if (i < rows.length - 1) {
+        const j = joins?.[i]
+        const op: 'AND' | 'OR' =
+          j === 'or' ? 'OR' : j === 'and' ? 'AND' : fallback
+        out.push({ kind: 'op', op })
+      }
+    }
+    return out
+  }
+  const filters = list.filters ?? []
+  if (!filters.length) return []
+  const sep: 'AND' | 'OR' = list.filterMode === 'or' ? 'OR' : 'AND'
+  const out: CriteriaSegment[] = []
+  for (let i = 0; i < filters.length; i++) {
+    const f = filters[i]!
+    out.push({ kind: 'criterion', property: f.property, value: f.value })
+    if (i < filters.length - 1) out.push({ kind: 'op', op: sep })
+  }
+  return out
+})
+
+const hasListCriteria = computed(() => criteriaSegments.value.length > 0)
 
 function formatDate(iso: string): string {
   try {
