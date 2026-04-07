@@ -315,6 +315,8 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
 const pending = ref(true)
 const loadError = ref('')
 const data = ref<RecipientListIndexPayload | null>(null)
+const loadedAt = ref(0)
+let loadInFlight: Promise<void> | null = null
 const searchQuery = ref('')
 const audienceFilter = ref<string>('all')
 const currentPage = ref(1)
@@ -452,28 +454,39 @@ function listCardFooterLeft(row: ListRow): string {
   return ''
 }
 
-async function load() {
-  pending.value = true
-  loadError.value = ''
-  try {
-    const res = await $fetch<RecipientListIndexPayload>('/api/v1/tenant/recipient-list', {
-      credentials: 'include',
-      ...serverAuthHeaders()
-    })
-    data.value = {
-      tenantIdConfigured: res.tenantIdConfigured,
-      lists: res.lists ?? [],
-      recipientFilters: res.recipientFilters ?? []
+async function load(options?: { force?: boolean }) {
+  const force = options?.force === true
+  const hasFreshData = !!data.value && Date.now() - loadedAt.value < 15000
+  if (!force && hasFreshData) return
+  if (loadInFlight) return loadInFlight
+
+  loadInFlight = (async () => {
+    pending.value = true
+    loadError.value = ''
+    try {
+      const res = await $fetch<RecipientListIndexPayload>('/api/v1/tenant/recipient-list', {
+        credentials: 'include',
+        ...serverAuthHeaders()
+      })
+      data.value = {
+        tenantIdConfigured: res.tenantIdConfigured,
+        lists: res.lists ?? [],
+        recipientFilters: res.recipientFilters ?? []
+      }
+      loadedAt.value = Date.now()
+    } catch (e: unknown) {
+      loadError.value =
+        e && typeof e === 'object' && 'data' in e
+          ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
+          : 'Failed to load'
+      data.value = null
+    } finally {
+      pending.value = false
+      loadInFlight = null
     }
-  } catch (e: unknown) {
-    loadError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
-        : 'Failed to load'
-    data.value = null
-  } finally {
-    pending.value = false
-  }
+  })()
+
+  return loadInFlight
 }
 
 onMounted(() => {

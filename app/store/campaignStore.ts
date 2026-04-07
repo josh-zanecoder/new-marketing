@@ -30,6 +30,8 @@ function fetchErrorMessage(e: unknown, fallback: string): string {
 
 export const useCampaignStore = defineStore('campaigns', () => {
   const campaigns = ref<Campaign[]>([])
+  const campaignsFetchedAt = ref(0)
+  let campaignsInFlight: Promise<Campaign[]> | null = null
   /** Client cache for GET `/campaigns/:id` — instant detail navigation & post-save paint. */
   const campaignDetailCache = shallowRef(new Map<string, TenantCampaignDetail>())
   const sendingCampaignId = ref<string | null>(null)
@@ -90,16 +92,31 @@ export const useCampaignStore = defineStore('campaigns', () => {
     else campaigns.value = [row, ...list]
   }
 
-  async function fetchCampaigns() {
-    const res = await $fetch<{ campaigns: Campaign[] }>(
-      '/api/v1/tenant/campaigns',
-      {
-        ...apiFetchOptions(),
-        ...serverAuthHeaders()
-      }
-    )
-    campaigns.value = res?.campaigns ?? []
-    return campaigns.value
+  async function fetchCampaigns(options?: { force?: boolean }) {
+    const force = options?.force === true
+    const now = Date.now()
+    const hasRecentCache = campaigns.value.length > 0 && now - campaignsFetchedAt.value < 15000
+    if (!force && hasRecentCache) return campaigns.value
+    if (campaignsInFlight) return campaignsInFlight
+
+    campaignsInFlight = (async () => {
+      const res = await $fetch<{ campaigns: Campaign[] }>(
+        '/api/v1/tenant/campaigns',
+        {
+          ...apiFetchOptions(),
+          ...serverAuthHeaders()
+        }
+      )
+      campaigns.value = res?.campaigns ?? []
+      campaignsFetchedAt.value = Date.now()
+      return campaigns.value
+    })()
+
+    try {
+      return await campaignsInFlight
+    } finally {
+      campaignsInFlight = null
+    }
   }
 
   async function sendCampaign(c: Campaign): Promise<{ poll: boolean }> {

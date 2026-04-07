@@ -488,7 +488,9 @@ watch([isMounted, htmlReady], async () => {
           }
           const isRealId = targetId && /^[a-f0-9]{24}$/i.test(targetId)
           const url = targetId
-            ? `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
+            ? isRealId
+              ? `/tenant/campaigns/edit/${targetId}?campaignId=${targetId}&fromEditor=1`
+              : `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1`
             : '/tenant/campaigns'
           navigateTo(url)
         } catch {
@@ -633,7 +635,9 @@ function handleSaveAndExit() {
     }
     const isRealId = targetId && /^[a-f0-9]{24}$/i.test(targetId)
     const url = targetId
-      ? `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1${isRealId ? `&id=${targetId}` : ''}`
+      ? isRealId
+        ? `/tenant/campaigns/edit/${targetId}?campaignId=${targetId}&fromEditor=1`
+        : `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1`
       : '/tenant/campaigns'
     navigateTo(url)
   } catch {

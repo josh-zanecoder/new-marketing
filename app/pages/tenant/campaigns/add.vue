@@ -17,7 +17,7 @@
         v-if="showWizardSkeleton"
         class="mb-12 space-y-10 animate-pulse"
         aria-busy="true"
-        :aria-label="isEditMode ? 'Loading campaign to edit' : 'Loading campaign builder'"
+        aria-label="Loading campaign builder"
       >
         <header class="space-y-4">
           <div class="h-4 w-40 rounded-md bg-zinc-200" />
@@ -48,7 +48,7 @@
       <template v-else>
       <header class="mb-8 sm:mb-10">
         <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
-          {{ isEditMode ? 'Edit campaign' : 'Create campaign' }}
+          Create campaign
         </h1>
         <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
           Configure your campaign step by step: name, recipients, design, and subject.
@@ -601,7 +601,6 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
-import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -980,75 +979,12 @@ async function loadEmailTemplates() {
 }
 
 const route = useRoute()
-const editId = computed(() => {
-  const q = route.query.id
-  if (typeof q === 'string' && q.trim()) return q.trim()
-  if (Array.isArray(q) && typeof q[0] === 'string' && q[0].trim()) return q[0].trim()
-  const p = route.params.id
-  if (typeof p === 'string' && p.trim()) return p.trim()
-  return ''
-})
-const isEditMode = computed(() => !!editId.value)
-const cancelOrBackHref = computed(() =>
-  isEditMode.value && editId.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns'
-)
-const cancelOrBackLabel = computed(() => (isEditMode.value ? 'Back to campaign' : 'Back to campaigns'))
-/** Preserved from server for cache rows after save (edit). */
-const editCampaignStatus = ref('Draft')
-const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
-const editLoadPending = ref(false)
+const cancelOrBackHref = computed(() => '/tenant/campaigns')
+const cancelOrBackLabel = computed(() => 'Back to campaigns')
 /** Create mode (client): brief skeleton while lists, templates, and variables load. */
 const wizardBootPending = ref(false)
 
-const showWizardSkeleton = computed(
-  () =>
-    (isEditMode.value && editLoadPending.value) || (!isEditMode.value && wizardBootPending.value)
-)
-
-async function loadEditCampaign() {
-  if (!editId.value) {
-    editLoadPending.value = false
-    return
-  }
-  editLoadPending.value = true
-  try {
-    const res = await marketingApi.fetchCampaignById(editId.value)
-    const c = res.campaign
-    campaignStore.setCampaignDetailCache(editId.value, c)
-    editCampaignStatus.value = String(c.status || 'Draft')
-    editCampaignMeta.value = { createdAt: c.createdAt || '', updatedAt: c.updatedAt || '' }
-    const ids: string[] = []
-    const labels: Record<string, { email: string; name: string }> = {}
-    for (const r of c.recipients ?? []) {
-      const cid = r.contactId?.trim()
-      if (cid && isManualContactIdString(cid)) {
-        ids.push(cid)
-        labels[cid] = { email: (r.email ?? '').trim(), name: '' }
-      }
-    }
-    manualRecipientLabels.value = labels
-    form.value = {
-      name: c.name,
-      senderName: c.sender?.name || 'Mortdash',
-      senderEmail: c.sender?.email || 'joshdanielsaraa@gmail.com',
-      subject: c.subject || '',
-      recipientsMode: c.recipientsType || 'manual',
-      recipientsListId: c.recipientsListId || '',
-      recipientsManual: ids,
-      templateMode: 'scratch',
-      selectedTemplateId: ''
-    }
-    returnCampaignId.value = editId.value
-    const fromEditor = route.query.fromEditor === '1'
-    if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
-  } catch {
-    /* ignore load errors; form stays empty */
-  } finally {
-    editLoadPending.value = false
-  }
-}
-
-watch(editId, loadEditCampaign, { immediate: true })
+const showWizardSkeleton = computed(() => wizardBootPending.value)
 
 async function loadFromEditorReturn() {
   const campaignId = route.query.campaignId as string
@@ -1108,87 +1044,83 @@ async function loadFromEditorReturn() {
 
 const designSectionRef = ref<HTMLElement | null>(null)
 
-const mergeRootDraft = ref<Record<string, unknown> | null>(null)
-let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
-let mergeDraftInFlight: Promise<void> | null = null
-let mergeDraftLastKey = ''
-
-function buildMergeDraftRequest() {
-  const recipientsType = form.value.recipientsMode
-  const recipientsListId = form.value.recipientsListId || undefined
-  const manual = recipientsType === 'manual'
-    ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
-    : []
-  const recipientsManual = manual.length ? manual : undefined
-  const key = JSON.stringify({
-    recipientsType,
-    recipientsListId: recipientsListId ?? '',
-    recipientsManual: recipientsManual ?? []
-  })
-  return { key, recipientsType, recipientsListId, recipientsManual }
-}
-
-async function refreshMergeRootDraft() {
-  const req = buildMergeDraftRequest()
-  if (req.key === mergeDraftLastKey) return
-  if (mergeDraftInFlight) return
-
-  mergeDraftInFlight = (async () => {
-    try {
-      const res = await marketingApi.fetchEmailMergeContext({
-        recipientsType: req.recipientsType,
-        recipientsListId: req.recipientsListId,
-        recipientsManual: req.recipientsManual
-      })
-      mergeRootDraft.value = res.mergeRoot
-      mergeDraftLastKey = req.key
-    } catch {
-      mergeRootDraft.value = null
-    } finally {
-      mergeDraftInFlight = null
-    }
-  })()
-  await mergeDraftInFlight
-}
-
-function scheduleMergeRootDraftRefresh() {
-  if (!import.meta.client) return
-  if (mergeDraftTimer) clearTimeout(mergeDraftTimer)
-  mergeDraftTimer = setTimeout(() => {
-    mergeDraftTimer = null
-    void refreshMergeRootDraft()
-  }, 350)
-}
+// Temporarily disabled dynamic-variable merge in design preview.
+// const mergeRootDraft = ref<Record<string, unknown> | null>(null)
+// let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
+// let mergeDraftInFlight: Promise<void> | null = null
+// let mergeDraftLastKey = ''
+//
+// function buildMergeDraftRequest() {
+//   const recipientsType = form.value.recipientsMode
+//   const recipientsListId = form.value.recipientsListId || undefined
+//   const manual = recipientsType === 'manual'
+//     ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
+//     : []
+//   const recipientsManual = manual.length ? manual : undefined
+//   const key = JSON.stringify({
+//     recipientsType,
+//     recipientsListId: recipientsListId ?? '',
+//     recipientsManual: recipientsManual ?? []
+//   })
+//   return { key, recipientsType, recipientsListId, recipientsManual }
+// }
+//
+// async function refreshMergeRootDraft() {
+//   const req = buildMergeDraftRequest()
+//   if (req.key === mergeDraftLastKey) return
+//   if (mergeDraftInFlight) return
+//
+//   mergeDraftInFlight = (async () => {
+//     try {
+//       const res = await marketingApi.fetchEmailMergeContext({
+//         recipientsType: req.recipientsType,
+//         recipientsListId: req.recipientsListId,
+//         recipientsManual: req.recipientsManual
+//       })
+//       mergeRootDraft.value = res.mergeRoot
+//       mergeDraftLastKey = req.key
+//     } catch {
+//       mergeRootDraft.value = null
+//     } finally {
+//       mergeDraftInFlight = null
+//     }
+//   })()
+//   await mergeDraftInFlight
+// }
+//
+// function scheduleMergeRootDraftRefresh() {
+//   if (!import.meta.client) return
+//   if (mergeDraftTimer) clearTimeout(mergeDraftTimer)
+//   mergeDraftTimer = setTimeout(() => {
+//     mergeDraftTimer = null
+//     void refreshMergeRootDraft()
+//   }, 350)
+// }
 
 const addCampaignDesignPreviewHtml = computed(() => {
   const raw = savedTemplateHtml.value
   if (!raw) return ''
-  if (mergeRootDraft.value == null) return raw
-  try {
-    return mergeMustacheTemplate(raw, mergeRootDraft.value)
-  } catch {
-    return raw
-  }
+  return raw
 })
 
-watch(
-  () =>
-    [
-      form.value.recipientsMode,
-      form.value.recipientsListId,
-      form.value.recipientsManual.map((e) => e?.trim()).join('\n'),
-      savedTemplateHtml.value
-    ] as const,
-  () => scheduleMergeRootDraftRefresh()
-)
+// watch(
+//   () =>
+//     [
+//       form.value.recipientsMode,
+//       form.value.recipientsListId,
+//       form.value.recipientsManual.map((e) => e?.trim()).join('\n'),
+//       savedTemplateHtml.value
+//     ] as const,
+//   () => scheduleMergeRootDraftRefresh()
+// )
 
 onMounted(async () => {
   loadFromEditorReturn()
-  if (!isEditMode.value) wizardBootPending.value = true
+  wizardBootPending.value = true
   try {
     await Promise.all([loadRecipientLists(), loadEmailTemplates(), loadDynamicVariables()])
   } finally {
-    void refreshMergeRootDraft()
+    // dynamic-variable preview merge temporarily disabled
     wizardBootPending.value = false
   }
 })
@@ -1201,7 +1133,7 @@ function pickQueryString(q: unknown): string {
 }
 
 const designEditorCampaignId = computed(() =>
-  returnCampaignId.value || editId.value || pickQueryString(route.query.campaignId)
+  returnCampaignId.value || pickQueryString(route.query.campaignId)
 )
 
 function openEditorWithCurrentDesign() {
@@ -1311,7 +1243,7 @@ function handleCreateFromScratch() {
   designModalOpen.value = false
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
-  const campaignId = editId.value || `temp-${Date.now()}`
+  const campaignId = `temp-${Date.now()}`
   if (typeof window !== 'undefined') {
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
       form: { ...form.value, templateMode: 'scratch' },
@@ -1329,7 +1261,7 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   if (fromTemplate) {
     form.value.subject = fromTemplate
   }
-  const campaignId = editId.value || `temp-${Date.now()}`
+  const campaignId = `temp-${Date.now()}`
   if (typeof window !== 'undefined') {
     // Same key the email editor reads after save-and-exit; avoids relying on builderId query + separate storage.
     window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
@@ -1378,9 +1310,6 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     }
   })
   const now = new Date().toISOString()
-  const createdAt = isEditMode.value && editCampaignMeta.value.createdAt
-    ? editCampaignMeta.value.createdAt
-    : now
   return {
     id: campaignId,
     name: form.value.name.trim(),
@@ -1388,10 +1317,10 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     subject: form.value.subject,
-    status: isEditMode.value ? editCampaignStatus.value : 'Draft',
+    status: 'Draft',
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
-    createdAt,
+    createdAt: now,
     updatedAt: now
   }
 }
@@ -1418,10 +1347,6 @@ async function persistSavedCampaign(): Promise<string> {
     templateHtml: savedTemplateHtml.value!
   }
 
-  if (isEditMode.value && editId.value) {
-    await marketingApi.updateCampaign(editId.value, body)
-    return editId.value
-  }
   const res = await marketingApi.createCampaign(body)
   return res.id
 }
@@ -1610,7 +1535,7 @@ async function handleCreate() {
       clearCampaignSessionStorage()
       primeCampaignCacheAfterSave(savedId)
       void campaignStore.fetchCampaigns()
-      await navigateTo(isEditMode.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns')
+      await navigateTo('/tenant/campaigns')
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)
       isSaving.value = false

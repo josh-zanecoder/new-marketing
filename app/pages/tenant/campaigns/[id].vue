@@ -449,7 +449,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             </button>
             <NuxtLink
               v-if="campaign.status === 'Draft' || campaign.status === 'Failed' || campaign.status === 'Scheduled'"
-              :to="`/tenant/campaigns/add?id=${campaign.id}`"
+              :to="`/tenant/campaigns/edit/${campaign.id}`"
               class="inline-flex items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 sm:text-[15px]"
             >
               <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

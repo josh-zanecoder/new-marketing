@@ -601,7 +601,6 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
-import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -1010,6 +1009,38 @@ async function loadEditCampaign() {
     editLoadPending.value = false
     return
   }
+  const cached = campaignStore.getCampaignDetailCache(editId.value)
+  if (cached) {
+    editCampaignStatus.value = String(cached.status || 'Draft')
+    editCampaignMeta.value = { createdAt: cached.createdAt || '', updatedAt: cached.updatedAt || '' }
+    const ids: string[] = []
+    const labels: Record<string, { email: string; name: string }> = {}
+    for (const r of cached.recipients ?? []) {
+      const cid = r.contactId?.trim()
+      if (cid && isManualContactIdString(cid)) {
+        ids.push(cid)
+        labels[cid] = { email: (r.email ?? '').trim(), name: '' }
+      }
+    }
+    manualRecipientLabels.value = labels
+    form.value = {
+      name: cached.name,
+      senderName: cached.sender?.name || 'Mortdash',
+      senderEmail: cached.sender?.email || 'joshdanielsaraa@gmail.com',
+      subject: cached.subject || '',
+      recipientsMode: cached.recipientsType || 'manual',
+      recipientsListId: cached.recipientsListId || '',
+      recipientsManual: ids,
+      templateMode: 'scratch',
+      selectedTemplateId: ''
+    }
+    returnCampaignId.value = editId.value
+    loadedEditCampaignId.value = editId.value
+    const fromEditor = route.query.fromEditor === '1'
+    if (cached.templateHtml && !fromEditor) savedTemplateHtml.value = cached.templateHtml
+    editLoadPending.value = false
+    return
+  }
   editLoadPending.value = true
   try {
     const res = await marketingApi.fetchCampaignById(editId.value)
@@ -1118,86 +1149,82 @@ async function loadFromEditorReturn() {
 
 const designSectionRef = ref<HTMLElement | null>(null)
 
-const mergeRootDraft = ref<Record<string, unknown> | null>(null)
-let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
-let mergeDraftInFlight: Promise<void> | null = null
-let mergeDraftLastKey = ''
-
-function buildMergeDraftRequest() {
-  const recipientsType = form.value.recipientsMode
-  const recipientsListId = form.value.recipientsListId || undefined
-  const manual = recipientsType === 'manual'
-    ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
-    : []
-  const recipientsManual = manual.length ? manual : undefined
-  const key = JSON.stringify({
-    recipientsType,
-    recipientsListId: recipientsListId ?? '',
-    recipientsManual: recipientsManual ?? []
-  })
-  return { key, recipientsType, recipientsListId, recipientsManual }
-}
-
-async function refreshMergeRootDraft() {
-  const req = buildMergeDraftRequest()
-  if (req.key === mergeDraftLastKey) return
-  if (mergeDraftInFlight) return
-
-  mergeDraftInFlight = (async () => {
-    try {
-      const res = await marketingApi.fetchEmailMergeContext({
-        recipientsType: req.recipientsType,
-        recipientsListId: req.recipientsListId,
-        recipientsManual: req.recipientsManual
-      })
-      mergeRootDraft.value = res.mergeRoot
-      mergeDraftLastKey = req.key
-    } catch {
-      mergeRootDraft.value = null
-    } finally {
-      mergeDraftInFlight = null
-    }
-  })()
-  await mergeDraftInFlight
-}
-
-function scheduleMergeRootDraftRefresh() {
-  if (!import.meta.client) return
-  if (mergeDraftTimer) clearTimeout(mergeDraftTimer)
-  mergeDraftTimer = setTimeout(() => {
-    mergeDraftTimer = null
-    void refreshMergeRootDraft()
-  }, 350)
-}
+// Temporarily disabled dynamic-variable merge in design preview.
+// const mergeRootDraft = ref<Record<string, unknown> | null>(null)
+// let mergeDraftTimer: ReturnType<typeof setTimeout> | null = null
+// let mergeDraftInFlight: Promise<void> | null = null
+// let mergeDraftLastKey = ''
+//
+// function buildMergeDraftRequest() {
+//   const recipientsType = form.value.recipientsMode
+//   const recipientsListId = form.value.recipientsListId || undefined
+//   const manual = recipientsType === 'manual'
+//     ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
+//     : []
+//   const recipientsManual = manual.length ? manual : undefined
+//   const key = JSON.stringify({
+//     recipientsType,
+//     recipientsListId: recipientsListId ?? '',
+//     recipientsManual: recipientsManual ?? []
+//   })
+//   return { key, recipientsType, recipientsListId, recipientsManual }
+// }
+//
+// async function refreshMergeRootDraft() {
+//   const req = buildMergeDraftRequest()
+//   if (req.key === mergeDraftLastKey) return
+//   if (mergeDraftInFlight) return
+//
+//   mergeDraftInFlight = (async () => {
+//     try {
+//       const res = await marketingApi.fetchEmailMergeContext({
+//         recipientsType: req.recipientsType,
+//         recipientsListId: req.recipientsListId,
+//         recipientsManual: req.recipientsManual
+//       })
+//       mergeRootDraft.value = res.mergeRoot
+//       mergeDraftLastKey = req.key
+//     } catch {
+//       mergeRootDraft.value = null
+//     } finally {
+//       mergeDraftInFlight = null
+//     }
+//   })()
+//   await mergeDraftInFlight
+// }
+//
+// function scheduleMergeRootDraftRefresh() {
+//   if (!import.meta.client) return
+//   if (mergeDraftTimer) clearTimeout(mergeDraftTimer)
+//   mergeDraftTimer = setTimeout(() => {
+//     mergeDraftTimer = null
+//     void refreshMergeRootDraft()
+//   }, 350)
+// }
 
 const addCampaignDesignPreviewHtml = computed(() => {
   const raw = savedTemplateHtml.value
   if (!raw) return ''
-  if (mergeRootDraft.value == null) return raw
-  try {
-    return mergeMustacheTemplate(raw, mergeRootDraft.value)
-  } catch {
-    return raw
-  }
+  return raw
 })
 
-watch(
-  () =>
-    [
-      form.value.recipientsMode,
-      form.value.recipientsListId,
-      form.value.recipientsManual.map((e) => e?.trim()).join('\n'),
-      savedTemplateHtml.value
-    ] as const,
-  () => scheduleMergeRootDraftRefresh()
-)
+// watch(
+//   () =>
+//     [
+//       form.value.recipientsMode,
+//       form.value.recipientsListId,
+//       form.value.recipientsManual.map((e) => e?.trim()).join('\n'),
+//       savedTemplateHtml.value
+//     ] as const,
+//   () => scheduleMergeRootDraftRefresh()
+// )
 
 onMounted(async () => {
   loadFromEditorReturn()
   try {
     await loadRecipientLists()
   } finally {
-    void refreshMergeRootDraft()
+    // dynamic-variable preview merge temporarily disabled
   }
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
