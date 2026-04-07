@@ -40,6 +40,29 @@ export default defineEventHandler(async (event) => {
 
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''
+  const manualRecipientIds = [
+    ...new Set(
+      (body.recipientsManual || [])
+        .map((id) => String(id ?? '').trim())
+        .filter((id) => mongoose.isValidObjectId(id))
+    )
+  ]
+  const resolvedRecipientContactsPromise: Promise<mongoose.Types.ObjectId[]> =
+    recipientsType === 'manual' && manualRecipientIds.length
+      ? (async () => {
+          const objectIds = manualRecipientIds.map((id) => new mongoose.Types.ObjectId(id))
+          const existing = await (Contact as ContactModel)
+            .find({ _id: { $in: objectIds }, deletedAt: null })
+            .select('_id')
+            .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
+          const allowed = new Set(existing.map((d) => String(d._id)))
+          return manualRecipientIds
+            .filter((id) => allowed.has(id))
+            .map((id) => new mongoose.Types.ObjectId(id))
+        })()
+      : recipientsType === 'list' && recipientsListId
+        ? resolveRecipientListContactIds(conn, recipientsListId)
+        : Promise.resolve([])
 
   const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
   const campaignData: Record<string, unknown> = {
@@ -61,36 +84,8 @@ export default defineEventHandler(async (event) => {
 
   const campaign = await new Campaign(campaignData).save()
 
-  if (recipientsType === 'manual' && body.recipientsManual?.length) {
-    const idStrings = [
-      ...new Set(
-        (body.recipientsManual || [])
-          .map((id) => String(id ?? '').trim())
-          .filter((id) => mongoose.isValidObjectId(id))
-      )
-    ]
-    if (idStrings.length) {
-      const objectIds = idStrings.map((id) => new mongoose.Types.ObjectId(id))
-      const existing = await (Contact as ContactModel)
-        .find({ _id: { $in: objectIds }, deletedAt: null })
-        .select('_id')
-        .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
-      const allowed = new Set(existing.map((d) => String(d._id)))
-      const docs: ManualRecipientInsert[] = idStrings
-        .filter((id) => allowed.has(id))
-        .map((id) => ({
-          campaign: campaign._id,
-          contact: new mongoose.Types.ObjectId(id),
-          clientId: ''
-        }))
-      if (docs.length) {
-        await (ManualRecipient as ManualRecipientModel).insertMany(
-          docs as unknown as ManualRecipientInsertManyCast[]
-        )
-      }
-    }
-  } else if (recipientsType === 'list' && recipientsListId) {
-    const contactIds = await resolveRecipientListContactIds(conn, recipientsListId)
+  if (recipientsType === 'manual' || (recipientsType === 'list' && recipientsListId)) {
+    const contactIds = await resolvedRecipientContactsPromise
     if (contactIds.length) {
       const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({
         campaign: campaign._id,
@@ -98,7 +93,8 @@ export default defineEventHandler(async (event) => {
         clientId: ''
       }))
       await (ManualRecipient as ManualRecipientModel).insertMany(
-        docs as unknown as ManualRecipientInsertManyCast[]
+        docs as unknown as ManualRecipientInsertManyCast[],
+        { ordered: false }
       )
     }
   }

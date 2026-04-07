@@ -17,7 +17,7 @@
         v-if="showWizardSkeleton"
         class="mb-12 space-y-10 animate-pulse"
         aria-busy="true"
-        :aria-label="isEditMode ? 'Loading campaign to edit' : 'Loading campaign builder'"
+        aria-label="Loading campaign to edit"
       >
         <header class="space-y-4">
           <div class="h-4 w-40 rounded-md bg-zinc-200" />
@@ -48,7 +48,7 @@
       <template v-else>
       <header class="mb-8 sm:mb-10">
         <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
-          {{ isEditMode ? 'Edit campaign' : 'Create campaign' }}
+          Edit campaign
         </h1>
         <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
           Configure your campaign step by step: name, recipients, design, and subject.
@@ -629,6 +629,8 @@ const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
 const designModalOpen = ref(false)
 const changeDesignConfirmOpen = ref(false)
+const emailTemplatesLoaded = ref(false)
+const dynamicVariablesLoaded = ref(false)
 
 function openDesignModal() {
   designModalOpen.value = true
@@ -940,9 +942,11 @@ const subjectVariables = computed(() => {
 })
 
 async function loadDynamicVariables() {
+  if (dynamicVariablesLoaded.value) return
   try {
     const res = await marketingApi.fetchDynamicVariables()
     dynamicVariables.value = Array.isArray(res.variables) ? res.variables : []
+    dynamicVariablesLoaded.value = true
   } catch {
     dynamicVariables.value = []
   }
@@ -961,6 +965,7 @@ const emailTemplatesPending = ref(false)
 const emailTemplatesError = ref('')
 
 async function loadEmailTemplates() {
+  if (emailTemplatesLoaded.value || emailTemplatesPending.value) return
   emailTemplatesPending.value = true
   emailTemplatesError.value = ''
   try {
@@ -971,6 +976,7 @@ async function loadEmailTemplates() {
       html: t.htmlTemplate,
       subject: (t.subject ?? '').trim() || undefined
     }))
+    emailTemplatesLoaded.value = true
   } catch {
     emailTemplatesError.value = 'Could not load email templates.'
     existingTemplates.value = []
@@ -988,22 +994,16 @@ const editId = computed(() => {
   if (typeof p === 'string' && p.trim()) return p.trim()
   return ''
 })
-const isEditMode = computed(() => !!editId.value)
 const cancelOrBackHref = computed(() =>
-  isEditMode.value && editId.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns'
+  editId.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns'
 )
-const cancelOrBackLabel = computed(() => (isEditMode.value ? 'Back to campaign' : 'Back to campaigns'))
+const cancelOrBackLabel = computed(() => (editId.value ? 'Back to campaign' : 'Back to campaigns'))
 /** Preserved from server for cache rows after save (edit). */
 const editCampaignStatus = ref('Draft')
 const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
 const editLoadPending = ref(false)
-/** Create mode (client): brief skeleton while lists, templates, and variables load. */
-const wizardBootPending = ref(false)
-
-const showWizardSkeleton = computed(
-  () =>
-    (isEditMode.value && editLoadPending.value) || (!isEditMode.value && wizardBootPending.value)
-)
+const loadedEditCampaignId = ref('')
+const showWizardSkeleton = computed(() => editLoadPending.value)
 
 async function loadEditCampaign() {
   if (!editId.value) {
@@ -1039,6 +1039,7 @@ async function loadEditCampaign() {
       selectedTemplateId: ''
     }
     returnCampaignId.value = editId.value
+    loadedEditCampaignId.value = editId.value
     const fromEditor = route.query.fromEditor === '1'
     if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
   } catch {
@@ -1060,7 +1061,16 @@ async function loadFromEditorReturn() {
     if (template) savedTemplateHtml.value = template
   }
   const isRealCampaignId = /^[a-f0-9]{24}$/i.test(campaignId)
+  const alreadyLoadedCurrentEdit =
+    isRealCampaignId
+    && campaignId === editId.value
+    && loadedEditCampaignId.value === editId.value
   if (isRealCampaignId) {
+    if (alreadyLoadedCurrentEdit) {
+      await nextTick()
+      designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
     try {
       const res = await marketingApi.fetchCampaignById(campaignId)
       const c = res.campaign
@@ -1184,15 +1194,18 @@ watch(
 
 onMounted(async () => {
   loadFromEditorReturn()
-  if (!isEditMode.value) wizardBootPending.value = true
   try {
-    await Promise.all([loadRecipientLists(), loadEmailTemplates(), loadDynamicVariables()])
+    await loadRecipientLists()
   } finally {
     void refreshMergeRootDraft()
-    wizardBootPending.value = false
   }
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
+watch(subjectOpen, (open) => {
+  if (open) {
+    void loadDynamicVariables()
+  }
+})
 
 function pickQueryString(q: unknown): string {
   if (q == null || q === '') return ''
@@ -1308,10 +1321,11 @@ watch(subjectVariable, (val) => {
 })
 
 function handleCreateFromScratch() {
+  if (!editId.value) return
   designModalOpen.value = false
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
-  const campaignId = editId.value || `temp-${Date.now()}`
+  const campaignId = editId.value
   if (typeof window !== 'undefined') {
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
       form: { ...form.value, templateMode: 'scratch' },
@@ -1322,6 +1336,7 @@ function handleCreateFromScratch() {
 }
 
 function handleUseTemplate(template: ExistingTemplateOption) {
+  if (!editId.value) return
   designModalOpen.value = false
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
@@ -1329,7 +1344,7 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   if (fromTemplate) {
     form.value.subject = fromTemplate
   }
-  const campaignId = editId.value || `temp-${Date.now()}`
+  const campaignId = editId.value
   if (typeof window !== 'undefined') {
     // Same key the email editor reads after save-and-exit; avoids relying on builderId query + separate storage.
     window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
@@ -1378,7 +1393,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     }
   })
   const now = new Date().toISOString()
-  const createdAt = isEditMode.value && editCampaignMeta.value.createdAt
+  const createdAt = editCampaignMeta.value.createdAt
     ? editCampaignMeta.value.createdAt
     : now
   return {
@@ -1388,7 +1403,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     subject: form.value.subject,
-    status: isEditMode.value ? editCampaignStatus.value : 'Draft',
+    status: editCampaignStatus.value,
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
     createdAt,
@@ -1418,12 +1433,9 @@ async function persistSavedCampaign(): Promise<string> {
     templateHtml: savedTemplateHtml.value!
   }
 
-  if (isEditMode.value && editId.value) {
-    await marketingApi.updateCampaign(editId.value, body)
-    return editId.value
-  }
-  const res = await marketingApi.createCampaign(body)
-  return res.id
+  if (!editId.value) throw new Error('Missing campaign id.')
+  await marketingApi.updateCampaign(editId.value, body)
+  return editId.value
 }
 
 function setSaveErrorFromCatch(e: unknown) {
@@ -1610,7 +1622,7 @@ async function handleCreate() {
       clearCampaignSessionStorage()
       primeCampaignCacheAfterSave(savedId)
       void campaignStore.fetchCampaigns()
-      await navigateTo(isEditMode.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns')
+      await navigateTo(`/tenant/campaigns/${savedId}`)
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)
       isSaving.value = false

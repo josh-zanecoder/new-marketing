@@ -29,6 +29,26 @@ import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 const BATCH_SIZE = 25
+const SEND_CONCURRENCY = 5
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = next
+      next += 1
+      if (i >= items.length) return
+      out[i] = await mapper(items[i] as T, i)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
 
 export interface ProcessBatchResult {
   campaignId: string
@@ -270,15 +290,51 @@ export async function processBatch(
     .limit(BATCH_SIZE)
     .lean<CampaignRecipientLean[]>()
 
-  const contactByEmail = await contactsByEmailForAudience(
-    models,
-    campaign,
-    pending.map((r) => r.email)
-  )
+  if (pending.length === 0) {
+    const [pendingCount, sentCount, failedCount] = await Promise.all([
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: 'pending'
+      }),
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: 'sent'
+      }),
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: 'failed'
+      })
+    ])
+    if (pendingCount === 0) {
+      const total = sentCount + failedCount
+      const newStatus = failedCount === total ? 'Failed' : 'Sent'
+      await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: newStatus })
+    }
+    const campaignUpdated = await (Campaign as CampaignModel)
+      .findById(campaignId)
+      .lean<CampaignLean | null>()
+    if (!campaignUpdated) {
+      throw createError({ statusCode: 404, message: 'Campaign not found' })
+    }
+    return {
+      campaignId,
+      campaignStatus: campaignUpdated.status,
+      pending: pendingCount,
+      sent: sentCount,
+      failed: failedCount,
+      total: pendingCount + sentCount + failedCount,
+      done: pendingCount === 0
+    }
+  }
 
-  const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(
-    EmailDynamicVariable as EmailDynamicVariableModel
-  )
+  const [contactByEmail, dynamicVariableBindings] = await Promise.all([
+    contactsByEmailForAudience(
+      models,
+      campaign,
+      pending.map((r) => r.email)
+    ),
+    fetchEnabledEmailDynamicVariableBindings(EmailDynamicVariable as EmailDynamicVariableModel)
+  ])
 
   if (pending.length > 0 && (!templateHtml || !campaign.sender?.email)) {
     console.warn('[SendCampaign] Missing template or sender:', {
@@ -305,67 +361,71 @@ export async function processBatch(
     }
   }
 
-  for (const r of pending) {
-    if (!templateHtml || !campaign.sender?.email) {
-      await (CampaignRecipient as CampaignRecipientModel).updateOne(
-        { _id: r._id },
-        { status: 'failed', error: 'Missing email template or sender' }
-      )
-      continue
-    }
-
-    const emailKey = normalizeMarketingEmail(r.email)
-    const contact = emailKey ? contactByEmail.get(emailKey) : undefined
-    const mergeRoot = composeEmailMergeRoot(
-      campaign.mergeUserSnapshot,
-      contact ?? null,
-      dynamicVariableBindings
+  if (!templateHtml || !campaign.sender?.email) {
+    await (CampaignRecipient as CampaignRecipientModel).updateMany(
+      { _id: { $in: pending.map((r) => r._id) } },
+      { $set: { status: 'failed', error: 'Missing email template or sender' } }
     )
-    const toEmail = (r.email ?? '').trim()
-    if (toEmail) {
-      const cur = mergeRoot.recipient
-      const curObj =
-        cur != null && typeof cur === 'object' && !Array.isArray(cur)
-          ? (cur as Record<string, unknown>)
-          : {}
-      if (!String(curObj.email ?? '').trim()) {
-        mergeRoot.recipient = { ...curObj, email: toEmail }
-      }
-    }
-    const subjectRendered = mergeMustacheTemplate(
-      campaign.subject || '(No subject)',
-      mergeRoot
-    )
-    const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
-
+  } else {
     const snap = campaign.mergeUserSnapshot
     const userForTag =
       snap?.email?.trim() ||
       [snap?.firstName, snap?.lastName].filter(Boolean).join(' ').trim() ||
       undefined
 
-    const result = await sendEmail({
-      sender: campaign.sender,
-      to: [{ email: r.email }],
-      subject: subjectRendered,
-      htmlContent: htmlRendered,
-      tags: [`campaign:${campaignId}`],
-      ...(tenantDbNameForTags && brevoTenantTagValue
-        ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
-        : {}),
-      ...(userForTag ? { user: userForTag } : {})
-    })
+    const ops = await mapWithConcurrency(pending, SEND_CONCURRENCY, async (r) => {
+      const emailKey = normalizeMarketingEmail(r.email)
+      const contact = emailKey ? contactByEmail.get(emailKey) : undefined
+      const mergeRoot = composeEmailMergeRoot(
+        campaign.mergeUserSnapshot,
+        contact ?? null,
+        dynamicVariableBindings
+      )
+      const toEmail = (r.email ?? '').trim()
+      if (toEmail) {
+        const cur = mergeRoot.recipient
+        const curObj =
+          cur != null && typeof cur === 'object' && !Array.isArray(cur)
+            ? (cur as Record<string, unknown>)
+            : {}
+        if (!String(curObj.email ?? '').trim()) {
+          mergeRoot.recipient = { ...curObj, email: toEmail }
+        }
+      }
+      const subjectRendered = mergeMustacheTemplate(
+        campaign.subject || '(No subject)',
+        mergeRoot
+      )
+      const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
 
-    if (result.error) {
-      await (CampaignRecipient as CampaignRecipientModel).updateOne(
-        { _id: r._id },
-        { status: 'failed', error: result.error }
-      )
-    } else {
-      await (CampaignRecipient as CampaignRecipientModel).updateOne(
-        { _id: r._id },
-        { status: 'sent', sentAt: new Date() }
-      )
+      const result = await sendEmail({
+        sender: campaign.sender,
+        to: [{ email: r.email }],
+        subject: subjectRendered,
+        htmlContent: htmlRendered,
+        tags: [`campaign:${campaignId}`],
+        ...(tenantDbNameForTags && brevoTenantTagValue
+          ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
+          : {}),
+        ...(userForTag ? { user: userForTag } : {})
+      })
+
+      return result.error
+        ? {
+            updateOne: {
+              filter: { _id: r._id },
+              update: { status: 'failed', error: result.error }
+            }
+          }
+        : {
+            updateOne: {
+              filter: { _id: r._id },
+              update: { status: 'sent', sentAt: new Date() }
+            }
+          }
+    })
+    if (ops.length) {
+      await (CampaignRecipient as CampaignRecipientModel).bulkWrite(ops, { ordered: false })
     }
   }
 

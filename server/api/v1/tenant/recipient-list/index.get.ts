@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import {
@@ -72,7 +73,7 @@ export default defineEventHandler(async (event) => {
   const tenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
 
   const tenantConn = await getTenantConnectionFromEvent(event)
-  const { Contact, RecipientList, RecipientFilter: FilterModel, ContactType } =
+  const { Contact, RecipientList, RecipientListMember, RecipientFilter: FilterModel, ContactType } =
     getTenantClientModels(tenantConn)
 
   const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
@@ -112,6 +113,37 @@ export default defineEventHandler(async (event) => {
   ])
   const contacts = contactsRaw as ContactRow[]
   const lists = listsRaw as RecipientListDoc[]
+
+  const listObjectIds = lists
+    .map((d) => d._id)
+    .filter((id) => id != null && mongoose.isValidObjectId(String(id)))
+    .map((id) => new mongoose.Types.ObjectId(String(id)))
+
+  const memberCountByListId = new Map<string, number>()
+  if (listObjectIds.length > 0) {
+    const countRows = await RecipientListMember.aggregate<{
+      _id: mongoose.Types.ObjectId
+      count: number
+    }>([
+      { $match: { recipientListId: { $in: listObjectIds } } },
+      {
+        $lookup: {
+          from: Contact.collection.name,
+          let: { cid: '$contactId' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', '$$cid'] } } },
+            { $match: contactFilter as Record<string, unknown> }
+          ],
+          as: '_memberContact'
+        }
+      },
+      { $match: { _memberContact: { $ne: [] } } },
+      { $group: { _id: '$recipientListId', count: { $sum: 1 } } }
+    ]).exec()
+    for (const row of countRows) {
+      if (row._id) memberCountByListId.set(String(row._id), row.count)
+    }
+  }
 
   const byKind: Record<string, number> = {}
   for (const row of kindCounts) {
@@ -189,6 +221,7 @@ export default defineEventHandler(async (event) => {
         membershipOwnerEmails: recipientListStoredMembershipEmails(
           doc as { membershipOwnerEmails?: unknown }
         ),
+        memberCount: memberCountByListId.get(String(doc._id)) ?? 0,
         createdAt: doc.createdAt?.toISOString?.() ?? null,
         updatedAt: doc.updatedAt?.toISOString?.() ?? null
       }

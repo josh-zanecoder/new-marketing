@@ -84,7 +84,9 @@ export default defineEventHandler(async (event) => {
   await campaign.save()
 
   if (recipientsType === 'manual') {
-    await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
+    const deleteRecipientsPromise = (ManualRecipient as ManualRecipientModel).deleteMany({
+      campaign: campaign._id
+    })
     const idStrings = [
       ...new Set(
         (body.recipientsManual || [])
@@ -92,32 +94,40 @@ export default defineEventHandler(async (event) => {
           .filter((id) => mongoose.isValidObjectId(id))
       )
     ]
-    if (idStrings.length) {
-      const objectIds = idStrings.map((id) => new mongoose.Types.ObjectId(id))
-      const existing = await (Contact as ContactModel)
-        .find({ _id: { $in: objectIds }, deletedAt: null })
-        .select('_id')
-        .lean()
-      const allowed = new Set(
-        (existing as Array<{ _id: mongoose.Types.ObjectId }>).map((d) => String(d._id))
+    const validatedContactsPromise: Promise<mongoose.Types.ObjectId[]> = idStrings.length
+      ? (async () => {
+          const objectIds = idStrings.map((cid) => new mongoose.Types.ObjectId(cid))
+          const existing = await (Contact as ContactModel)
+            .find({ _id: { $in: objectIds }, deletedAt: null })
+            .select('_id')
+            .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
+          const allowed = new Set(existing.map((d) => String(d._id)))
+          return idStrings
+            .filter((cid) => allowed.has(cid))
+            .map((cid) => new mongoose.Types.ObjectId(cid))
+        })()
+      : Promise.resolve([])
+    const [, contactIds] = await Promise.all([deleteRecipientsPromise, validatedContactsPromise])
+    if (contactIds.length) {
+      const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({
+        campaign: campaign._id,
+        contact,
+        clientId: ''
+      }))
+      await (ManualRecipient as ManualRecipientModel).insertMany(
+        docs as unknown as ManualRecipientInsertManyCast[],
+        { ordered: false }
       )
-      const docs: ManualRecipientInsert[] = idStrings
-        .filter((id) => allowed.has(id))
-        .map((id) => ({
-          campaign: campaign._id,
-          contact: new mongoose.Types.ObjectId(id),
-          clientId: ''
-        }))
-      if (docs.length) {
-        await (ManualRecipient as ManualRecipientModel).insertMany(
-          docs as unknown as ManualRecipientInsertManyCast[]
-        )
-      }
     }
   } else if (recipientsType === 'list') {
-    await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
+    const deleteRecipientsPromise = (ManualRecipient as ManualRecipientModel).deleteMany({
+      campaign: campaign._id
+    })
     if (recipientsListId) {
-      const contactIds = await resolveRecipientListContactIds(conn, recipientsListId)
+      const [_, contactIds] = await Promise.all([
+        deleteRecipientsPromise,
+        resolveRecipientListContactIds(conn, recipientsListId)
+      ])
       if (contactIds.length) {
         const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({
           campaign: campaign._id,
@@ -125,9 +135,12 @@ export default defineEventHandler(async (event) => {
           clientId: ''
         }))
         await (ManualRecipient as ManualRecipientModel).insertMany(
-          docs as unknown as ManualRecipientInsertManyCast[]
+          docs as unknown as ManualRecipientInsertManyCast[],
+          { ordered: false }
         )
       }
+    } else {
+      await deleteRecipientsPromise
     }
   }
 

@@ -3,6 +3,17 @@ import mongoose from 'mongoose'
 
 const clientConnections = new Map<string, mongoose.Connection>()
 
+/** Shared driver options: cap pool size per process so Atlas concurrent connections stay under limit. */
+function mongoConnectionOptions(): mongoose.ConnectOptions {
+  const maxPoolSize = Number(process.env.MONGODB_MAX_POOL_SIZE) || 10
+  return {
+    maxPoolSize: Number.isFinite(maxPoolSize) && maxPoolSize > 0 ? maxPoolSize : 10,
+    minPoolSize: 0,
+    maxIdleTimeMS: 60_000,
+    serverSelectionTimeoutMS: 10_000
+  }
+}
+
 function resolveRegistryMongoConfig(): { uri: string; dbName: string } {
   try {
     const config = useRuntimeConfig()
@@ -36,19 +47,40 @@ export async function getRegistryConnection(): Promise<mongoose.Connection> {
     return conn
   }
 
-  if (conn.readyState !== 0) {
-    await mongoose.disconnect()
+  // Close only the default connection. Never use mongoose.disconnect() here — it tears down
+  // every connection (including tenant pools from createConnection) and causes reconnect churn.
+  if (conn.readyState !== 0 && conn.readyState !== 99) {
+    await conn.close()
   }
-  await mongoose.connect(uri, { dbName: resolvedDbName })
+  await mongoose.connect(uri, {
+    dbName: resolvedDbName,
+    ...mongoConnectionOptions()
+  })
   return mongoose.connection
 }
 
 /** Get or create a Mongoose connection for a client's database */
 export async function getClientConnection(connectionString: string): Promise<mongoose.Connection> {
   const existing = clientConnections.get(connectionString)
-  if (existing?.readyState === 1) return existing
+  if (existing) {
+    if (existing.readyState === 1) return existing
+    // 2 = connecting — wait instead of opening a second pool for the same URI
+    if (existing.readyState === 2) {
+      await existing.asPromise()
+      return existing
+    }
+    try {
+      await existing.close()
+    } catch {
+      /* ignore */
+    }
+    clientConnections.delete(connectionString)
+  }
 
-  const conn = mongoose.createConnection(connectionString)
+  const conn = mongoose.createConnection(
+    connectionString,
+    mongoConnectionOptions()
+  )
   clientConnections.set(connectionString, conn)
   await conn.asPromise()
   return conn

@@ -14,6 +14,7 @@ export interface TenantCampaignDetail {
   recipients: Array<{
     email: string
     contactId?: string
+    name?: string
     status?: string
     sentAt?: string
     error?: string

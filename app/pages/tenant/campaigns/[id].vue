@@ -13,14 +13,22 @@ const { canSendDraft, canScheduleDraft, sendProgress, startSendStatusPolling, cl
   useCampaignSendFlow()
 const id = route.params.id as string
 
-const { data, error, pending, refresh } = await useAsyncData(
+const cachedDetail = campaignStore.getCampaignDetailCache(id)
+const detailAsync = useAsyncData(
   `tenant-campaign-${id}`,
-  () => marketingApi.fetchCampaignById(id)
+  async () => {
+    const res = await marketingApi.fetchCampaignById(id)
+    campaignStore.setCampaignDetailCache(id, res.campaign)
+    return res
+  },
+  cachedDetail ? { default: () => ({ campaign: cachedDetail }) } : {}
 )
-
-const { data: mergeRootPayload } = await useAsyncData(`email-merge-root-${id}`, async () => ({
+const mergeAsync = useAsyncData(`email-merge-root-${id}`, async () => ({
   mergeRoot: await marketingApi.fetchEmailMergeContextOrEmpty({ campaignId: id })
 }))
+
+const { data, error, pending, refresh } = detailAsync
+const { data: mergeRootPayload, pending: mergeRootPending } = mergeAsync
 
 const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
 
@@ -92,7 +100,11 @@ const previewSubject = computed(() => {
 const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
 const previewSubjectDisplay = computed(() => previewSubject.value || campaign.value?.subject || 'No subject')
 
-const showSkeleton = computed(() => pending.value && !error.value)
+const showSkeleton = computed(
+  () =>
+    !error.value &&
+    pending.value
+)
 
 function previewSrcdoc(html: string, scale = 0.45) {
   return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
@@ -283,7 +295,12 @@ const campaignViewTab = ref<CampaignViewTab>('details')
       </div>
 
       <!-- Loading skeleton -->
-      <div v-else-if="showSkeleton" class="space-y-8 animate-pulse sm:space-y-10">
+      <div
+        v-else-if="showSkeleton"
+        class="space-y-8 animate-pulse sm:space-y-10"
+        aria-busy="true"
+        aria-label="Loading campaign"
+      >
         <header class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0 flex-1 space-y-4">
             <div class="flex gap-2">

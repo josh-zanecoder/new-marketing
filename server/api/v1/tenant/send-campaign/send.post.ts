@@ -4,7 +4,7 @@ import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFro
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
-  const campaignId = body?.campaignId
+  const campaignId = String(body?.campaignId ?? '').trim()
   if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
 
   const conn = await getTenantConnectionFromEvent(event)

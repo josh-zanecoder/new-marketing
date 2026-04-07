@@ -26,6 +26,9 @@ export default defineEventHandler(async (event) => {
     .findOne(
       mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
     )
+    .select(
+      '_id name sender recipientsType recipientsListId emailTemplate subject mergeUserSnapshot'
+    )
     .lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
@@ -66,6 +69,7 @@ export default defineEventHandler(async (event) => {
   if (source.recipientsType === 'manual' || source.recipientsType === 'list') {
     const manualRecipients = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: source._id })
+      .select('contact')
       .lean<ManualRecipientLean[]>()
     const seen = new Set<string>()
     let contactIds: Types.ObjectId[] = []
@@ -90,7 +94,8 @@ export default defineEventHandler(async (event) => {
         clientId: ''
       }))
       await (ManualRecipient as ManualRecipientModel).insertMany(
-        docs as unknown as ManualRecipientInsertManyCast[]
+        docs as unknown as ManualRecipientInsertManyCast[],
+        { ordered: false }
       )
     }
   }

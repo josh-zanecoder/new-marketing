@@ -92,6 +92,12 @@ function navLinkLayoutClass(compact: boolean) {
 
 <template>
   <div class="flex min-h-screen bg-zinc-100 text-zinc-900 antialiased">
+    <NuxtLoadingIndicator
+      :height="3"
+      color="#27272a"
+      error-color="#b91c1c"
+      :throttle="50"
+    />
     <Transition
       enter-active-class="transition-opacity duration-200 ease-out"
       leave-active-class="transition-opacity duration-150 ease-in"

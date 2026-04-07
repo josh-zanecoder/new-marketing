@@ -249,20 +249,48 @@ function queueDynamicVariableBlocksSync() {
 
 function hardenTextBlocks(editor: Editor) {
   const bm = editor.BlockManager
+  const safeTextContent = `
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        <td style="padding:10px 0;color:#334155;font-size:14px;line-height:1.6;" data-gjs-type="text">
+          Add your text here
+        </td>
+      </tr>
+    </table>
+  `
+  const safeQuoteContent = `
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        <td style="padding:14px 16px;border-left:4px solid #cbd5e1;background:#f8fafc;color:#334155;font-size:14px;line-height:1.7;" data-gjs-type="text">
+          "Add a quote here"
+        </td>
+      </tr>
+    </table>
+  `
+
   const textBlock = bm.get('text')
-  if (!textBlock) return
-  textBlock.set({
-    activate: false,
-    content: `
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-        <tr>
-          <td style="padding:10px 0;color:#334155;font-size:14px;line-height:1.6;" data-gjs-type="text">
-            Add your text here
-          </td>
-        </tr>
-      </table>
-    `
-  })
+  if (textBlock) {
+    textBlock.set({
+      activate: false,
+      content: safeTextContent
+    })
+  }
+
+  const textSectionBlock = bm.get('text-sect')
+  if (textSectionBlock) {
+    textSectionBlock.set({
+      activate: false,
+      content: safeTextContent
+    })
+  }
+
+  const quoteBlock = bm.get('quote')
+  if (quoteBlock) {
+    quoteBlock.set({
+      activate: false,
+      content: safeQuoteContent
+    })
+  }
 }
 
 function runEditorCleanups() {

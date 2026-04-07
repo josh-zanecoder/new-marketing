@@ -32,7 +32,13 @@ const duplicateModalMessage = computed(() =>
     : ''
 )
 
-await store.fetchCampaigns()
+const { pending: campaignsIndexPending } = useAsyncData(
+  'tenant-campaigns-index',
+  async () => {
+    await store.fetchCampaigns()
+    return true
+  }
+)
 
 const filteredCampaigns = computed(() => {
   let list = campaigns.value
@@ -97,23 +103,47 @@ function openDeleteModal(c: Campaign) {
   campaignToDelete.value = c
 }
 
+const deleteConfirmLoading = ref(false)
+
+function cancelDeleteModal() {
+  if (deleteConfirmLoading.value) return
+  campaignToDelete.value = null
+}
+
+function cancelDuplicateModal() {
+  if (duplicateConfirmLoading.value) return
+  campaignToDuplicate.value = null
+}
+
 async function confirmDelete() {
   const c = campaignToDelete.value
-  if (!c) return
-  campaignToDelete.value = null
-  await store.deleteCampaign(c)
+  if (!c || deleteConfirmLoading.value) return
+  deleteConfirmLoading.value = true
+  try {
+    await store.deleteCampaign(c)
+    campaignToDelete.value = null
+  } finally {
+    deleteConfirmLoading.value = false
+  }
 }
 
 function openDuplicateModal(c: Campaign) {
   campaignToDuplicate.value = c
 }
 
+const duplicateConfirmLoading = ref(false)
+
 async function confirmDuplicate() {
   const c = campaignToDuplicate.value
-  if (!c) return
-  campaignToDuplicate.value = null
-  const newId = await store.duplicateCampaign(c)
-  if (newId) await navigateTo(`/tenant/campaigns/add?id=${newId}`)
+  if (!c || duplicateConfirmLoading.value) return
+  duplicateConfirmLoading.value = true
+  try {
+    const newId = await store.duplicateCampaign(c)
+    campaignToDuplicate.value = null
+    if (newId) await navigateTo(`/tenant/campaigns/add?id=${newId}`)
+  } finally {
+    duplicateConfirmLoading.value = false
+  }
 }
 
 function closeSendSuccessModal() {
@@ -282,8 +312,47 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-      <div class="min-w-0 flex-1">
+    <div
+      v-if="campaignsIndexPending"
+      class="animate-pulse space-y-4"
+      aria-busy="true"
+      aria-label="Loading campaigns"
+    >
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+        <div class="h-10 w-full rounded-lg bg-zinc-200 sm:max-w-md md:max-w-lg" />
+        <div class="h-10 w-full rounded-lg bg-zinc-200 sm:w-44" />
+      </div>
+      <div
+        v-for="n in 5"
+        :key="n"
+        class="rounded-xl border border-zinc-200/90 bg-white px-5 py-4 shadow-sm sm:px-6 sm:py-5"
+      >
+        <div class="flex items-start gap-3 sm:gap-4">
+          <div class="min-w-0 flex-1 space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="h-5 w-48 max-w-[70%] rounded-md bg-zinc-200 sm:w-64" />
+              <div class="h-5 w-16 rounded-full bg-zinc-200" />
+            </div>
+            <div class="h-4 w-40 rounded bg-zinc-200" />
+          </div>
+          <div class="flex shrink-0 gap-1">
+            <div class="h-9 w-9 rounded-lg bg-zinc-200" />
+            <div class="h-9 w-9 rounded-lg bg-zinc-200" />
+          </div>
+        </div>
+      </div>
+      <div class="flex h-14 items-center justify-between rounded-2xl border border-zinc-200/90 bg-white px-4 sm:px-5">
+        <div class="h-4 w-32 rounded bg-zinc-200" />
+        <div class="flex gap-2">
+          <div class="h-9 w-20 rounded-xl bg-zinc-200" />
+          <div class="h-9 w-24 rounded-xl bg-zinc-200" />
+        </div>
+      </div>
+    </div>
+
+    <template v-else>
+    <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+      <div class="relative min-w-0 w-full sm:max-w-md md:max-w-lg">
         <label class="sr-only" for="campaigns-search">Search campaigns</label>
         <input
           id="campaigns-search"
@@ -291,13 +360,13 @@ onUnmounted(() => {
           type="search"
           autocomplete="off"
           placeholder="Search campaigns…"
-          class="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+          class="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300"
         >
       </div>
       <select
         v-model="statusFilter"
         aria-label="Filter by status"
-        class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300 sm:min-w-[10.5rem]"
+        class="w-full shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300 sm:w-auto sm:min-w-[10.5rem]"
       >
         <option value="all">
           All statuses
@@ -469,6 +538,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    </template>
 
     <!-- Delete confirmation modal -->
     <ClientConfirmationModal
@@ -477,8 +547,9 @@ onUnmounted(() => {
       :message="deleteModalMessage"
       confirm-text="Delete"
       variant="danger"
+      :confirm-loading="deleteConfirmLoading"
       @confirm="confirmDelete"
-      @cancel="campaignToDelete = null"
+      @cancel="cancelDeleteModal"
     />
 
     <!-- Duplicate confirmation modal -->
@@ -487,8 +558,9 @@ onUnmounted(() => {
       title="Duplicate campaign"
       :message="duplicateModalMessage"
       confirm-text="Duplicate"
+      :confirm-loading="duplicateConfirmLoading"
       @confirm="confirmDuplicate"
-      @cancel="campaignToDuplicate = null"
+      @cancel="cancelDuplicateModal"
     />
 
     <ClientSendProgressModal

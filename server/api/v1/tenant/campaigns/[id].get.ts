@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
 
   const campaign = await (Campaign as CampaignModel)
     .findOne(mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth))
+    .select(
+      '_id name sender recipientsType recipientsListId subject status scheduledAt emailTemplate mergeUserSnapshot createdAt updatedAt'
+    )
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
@@ -29,9 +32,13 @@ export default defineEventHandler(async (event) => {
     sentAt?: string
     error?: string
   }[] = []
-  const campaignRecipients = await (CampaignRecipient as CampaignRecipientModel)
-    .find({ campaign: campaign._id })
-    .lean<CampaignRecipientLean[]>()
+  const campaignRecipients =
+    campaign.status === 'Draft'
+      ? []
+      : await (CampaignRecipient as CampaignRecipientModel)
+          .find({ campaign: campaign._id })
+          .select('email status sentAt error')
+          .lean<CampaignRecipientLean[]>()
   if (campaignRecipients.length) {
     recipients = campaignRecipients.map((r) => ({
       email: r.email,
@@ -49,6 +56,7 @@ export default defineEventHandler(async (event) => {
   } else if (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list') {
     const docs = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: campaign._id })
+      .select('contact')
       .lean<ManualRecipientLean[]>()
     const contactIds = docs.map((r) => r.contact).filter(Boolean) as mongoose.Types.ObjectId[]
     const uniqueIds = [...new Set(contactIds.map((id) => String(id)))].map(

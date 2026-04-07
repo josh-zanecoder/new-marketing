@@ -13,12 +13,16 @@ export default defineEventHandler(async (event) => {
 
   const campaigns = await (Campaign as CampaignModel)
     .find(mergeTenantOwnerEmailScopeFilter({}, event.context.auth))
+    .select(
+      '_id name sender recipientsType recipientsListId subject status scheduledAt createdAt updatedAt'
+    )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
   const campaignIds = campaigns.map((c) => c._id)
 
   const recipientDocs = await (ManualRecipient as ManualRecipientModel)
     .find({ campaign: { $in: campaignIds } })
+    .select('campaign contact')
     .lean<ManualRecipientLean[]>()
   const allContactIds = [
     ...new Set(
@@ -45,6 +49,7 @@ export default defineEventHandler(async (event) => {
       contactId: String(r.contact)
     })
   }
+  const listEmailCache = new Map<string, string[]>()
 
   const campaignsWithRecipients = await Promise.all(
     campaigns.map(async (c) => {
@@ -52,7 +57,12 @@ export default defineEventHandler(async (event) => {
       let recipients: { email: string; contactId?: string }[] = []
 
       if (c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim()) {
-        const emails = await resolveRecipientListEmails(conn, String(c.recipientsListId))
+        const listId = String(c.recipientsListId)
+        let emails = listEmailCache.get(listId)
+        if (!emails) {
+          emails = await resolveRecipientListEmails(conn, listId)
+          listEmailCache.set(listId, emails)
+        }
         recipients = emails.map((email) => ({ email }))
       } else if (c.recipientsType === 'manual' || c.recipientsType === 'list') {
         recipients = recipientsByCampaign.get(id) || []

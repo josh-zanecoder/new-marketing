@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { Campaign, SendStatus } from '~/types/campaign'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
@@ -29,9 +30,65 @@ function fetchErrorMessage(e: unknown, fallback: string): string {
 
 export const useCampaignStore = defineStore('campaigns', () => {
   const campaigns = ref<Campaign[]>([])
+  /** Client cache for GET `/campaigns/:id` — instant detail navigation & post-save paint. */
+  const campaignDetailCache = shallowRef(new Map<string, TenantCampaignDetail>())
   const sendingCampaignId = ref<string | null>(null)
   const sendStatus = ref<SendStatus | null>(null)
   const sendError = ref<string | null>(null)
+
+  function getCampaignDetailCache(id: string): TenantCampaignDetail | null {
+    return campaignDetailCache.value.get(id) ?? null
+  }
+
+  function setCampaignDetailCache(id: string, detail: TenantCampaignDetail) {
+    const m = new Map(campaignDetailCache.value)
+    m.set(id, { ...detail })
+    campaignDetailCache.value = m
+  }
+
+  function patchCampaignDetailCache(id: string, patch: Partial<TenantCampaignDetail>) {
+    const cur = campaignDetailCache.value.get(id)
+    if (!cur) return
+    const m = new Map(campaignDetailCache.value)
+    m.set(id, { ...cur, ...patch })
+    campaignDetailCache.value = m
+  }
+
+  function removeCampaignDetailCache(id: string) {
+    const m = new Map(campaignDetailCache.value)
+    m.delete(id)
+    campaignDetailCache.value = m
+  }
+
+  function listRowFromDetail(d: TenantCampaignDetail): Campaign {
+    return {
+      id: d.id,
+      name: d.name,
+      sender: d.sender,
+      recipientsType: d.recipientsType,
+      recipientsListId: d.recipientsListId,
+      subject: d.subject,
+      status: d.status,
+      recipients: (d.recipients ?? []).map((r) => ({
+        email: r.email,
+        contactId: r.contactId,
+        name: r.name,
+        status: r.status,
+        sentAt: r.sentAt,
+        error: r.error
+      })),
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      scheduledAt: d.scheduledAt
+    }
+  }
+
+  function upsertCampaignInList(row: Campaign) {
+    const list = campaigns.value
+    const i = list.findIndex((c) => c.id === row.id)
+    if (i !== -1) list[i] = { ...list[i], ...row }
+    else campaigns.value = [row, ...list]
+  }
 
   async function fetchCampaigns() {
     const res = await $fetch<{ campaigns: Campaign[] }>(
@@ -131,6 +188,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...apiFetchOptions(),
         ...serverAuthHeaders()
       })
+      removeCampaignDetailCache(c.id)
       await fetchCampaigns()
       return true
     } catch (e: unknown) {
@@ -182,6 +240,12 @@ export const useCampaignStore = defineStore('campaigns', () => {
     duplicateCampaign,
     setSendStatus,
     setSendingCampaignId,
-    clearSendModal
+    clearSendModal,
+    getCampaignDetailCache,
+    setCampaignDetailCache,
+    patchCampaignDetailCache,
+    removeCampaignDetailCache,
+    listRowFromDetail,
+    upsertCampaignInList
   }
 })

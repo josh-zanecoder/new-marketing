@@ -160,6 +160,12 @@
                 <p class="mt-1 text-sm text-zinc-500">
                   {{ listCardSubtitle(row) }}
                 </p>
+                <p
+                  v-if="typeof row.memberCount === 'number'"
+                  class="mt-2 text-sm font-semibold tabular-nums tracking-tight text-zinc-800"
+                >
+                  {{ formatRecipientCount(row) }}
+                </p>
               </div>
               <div class="flex shrink-0 items-center gap-4 text-sm font-medium">
                 <NuxtLink
@@ -277,7 +283,7 @@ interface ListRow {
   filters: ListCriterion[]
   filterMode?: 'and' | 'or'
   updatedAt: string | null
-  /** When present, shown in the card footer (e.g. from API). */
+  /** Resolved members visible to the current user (from API). */
   memberCount?: number | null
 }
 
@@ -428,12 +434,14 @@ function listCardSubtitle(row: ListRow): string {
   return 'Recipient list'
 }
 
-function listCardFooterLeft(row: ListRow): string {
+function formatRecipientCount(row: ListRow): string {
   const n = row.memberCount
-  if (typeof n === 'number' && Number.isFinite(n) && n >= 0) {
-    const formatted = n.toLocaleString()
-    return `${formatted} ${n === 1 ? 'person' : 'people'}`
-  }
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return ''
+  const formatted = n.toLocaleString()
+  return `${formatted} ${n === 1 ? 'recipient' : 'recipients'}`
+}
+
+function listCardFooterLeft(row: ListRow): string {
   if (row.updatedAt) {
     try {
       return `Updated ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(row.updatedAt))}`

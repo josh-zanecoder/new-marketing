@@ -99,7 +99,7 @@ export function startEmailWorker() {
     },
     {
       connection: getBullMqConnectionOptions(),
-      concurrency: 1
+      concurrency: 3
     }
   )
 

@@ -12,10 +12,10 @@ const MIN_LEAD_MS = 60_000
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string; scheduledAt: string }>(event)
-  const campaignId = body?.campaignId
-  const scheduledAtRaw = body?.scheduledAt
+  const campaignId = String(body?.campaignId ?? '').trim()
+  const scheduledAtRaw = String(body?.scheduledAt ?? '').trim()
   if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
-  if (!scheduledAtRaw?.trim()) {
+  if (!scheduledAtRaw) {
     throw createError({ statusCode: 400, message: 'scheduledAt is required' })
   }
 
@@ -39,8 +39,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const { Campaign } = getTenantClientModels(conn)
+  const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
   const campaign = await (Campaign as CampaignModel)
-    .findOne(mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth))
+    .findOne(campaignScope)
+    .select('_id status')
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (campaign.status !== 'Draft') {
@@ -48,16 +50,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const snap = tenantUserFieldsFromAuth(event.context.auth)
-  await (Campaign as CampaignModel).updateOne(
-    mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth),
-    {
-      $set: {
-        status: 'Scheduled',
-        scheduledAt: when,
-        ...(snap ? { mergeUserSnapshot: snap } : {})
-      }
+  const updateResult = await (Campaign as CampaignModel).updateOne(campaignScope, {
+    $set: {
+      status: 'Scheduled',
+      scheduledAt: when,
+      ...(snap ? { mergeUserSnapshot: snap } : {})
     }
-  )
+  })
+  if (updateResult.matchedCount === 0) {
+    throw createError({ statusCode: 404, message: 'Campaign not found' })
+  }
 
   const delayMs = when.getTime() - now
   try {

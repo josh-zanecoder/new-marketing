@@ -1,17 +1,17 @@
 <template>
-  <div class="w-full min-w-0">
-    <header class="mb-8 sm:mb-10">
-      <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+  <div class="w-full min-w-0 antialiased">
+    <header class="mb-10 sm:mb-12">
+      <h1 class="text-[1.75rem] font-semibold leading-[1.15] tracking-[-0.02em] text-zinc-950 sm:text-[2rem]">
         Contacts
       </h1>
-      <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500 sm:text-[15px]">
+      <p class="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-zinc-500">
         All contacts in your tenant database, newest updates first.
       </p>
     </header>
 
     <div
       v-if="loadError"
-      class="mb-6 flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+      class="mb-8 flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50/90 px-5 py-4 text-[0.9375rem] leading-snug text-red-900 shadow-sm shadow-red-950/5"
       role="alert"
     >
       <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -22,7 +22,7 @@
 
     <div
       v-if="data?.truncated"
-      class="mb-6 flex gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+      class="mb-8 flex gap-3.5 rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50 to-amber-50/40 px-5 py-4 text-[0.9375rem] text-amber-950 shadow-sm shadow-amber-900/5"
       role="status"
     >
       <div class="mt-0.5 shrink-0 text-amber-600">
@@ -34,19 +34,19 @@
         <p class="font-medium text-amber-950">
           Partial list
         </p>
-        <p class="mt-1 text-amber-900/90">
+        <p class="mt-1.5 leading-relaxed text-amber-900/85">
           Showing the <strong class="font-semibold">{{ data.contacts.length }}</strong> most recently updated contacts.
           Total in database: <strong class="font-semibold tabular-nums">{{ data.total.toLocaleString() }}</strong>.
         </p>
       </div>
     </div>
 
-    <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
-      <div class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+    <div class="mb-8">
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
         <div class="min-w-0 flex-1">
           <label class="sr-only" for="contacts-search">Search contacts</label>
           <div class="relative">
-            <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -55,16 +55,16 @@
               type="search"
               autocomplete="off"
               placeholder="Search name, email, company, phone…"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+              class="w-full rounded-xl border border-zinc-200 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-zinc-900 shadow-sm shadow-zinc-950/[0.04] placeholder:text-zinc-400 transition-colors focus:border-zinc-300 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/[0.08]"
             >
           </div>
         </div>
-        <div class="w-full shrink-0 sm:w-[13.5rem]">
+        <div class="w-full shrink-0 sm:w-[14rem]">
           <label class="sr-only" for="contacts-kind-filter">Contact type</label>
           <select
             id="contacts-kind-filter"
             v-model="contactKindFilter"
-            class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-4 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+            class="w-full cursor-pointer rounded-xl border border-zinc-200 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] text-zinc-900 shadow-sm shadow-zinc-950/[0.04] transition-colors focus:border-zinc-300 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/[0.08]"
           >
             <option value="all">
               All types
@@ -85,58 +85,50 @@
           </select>
         </div>
       </div>
-      <p v-if="data" class="shrink-0 tabular-nums text-sm text-zinc-600 lg:pt-3">
-        <span class="font-semibold text-zinc-900">{{ data.total.toLocaleString() }}</span>
-        in database
-        <span v-if="filteredContacts.length !== data.contacts.length" class="text-zinc-400">·</span>
-        <span v-if="filteredContacts.length !== data.contacts.length" class="text-zinc-500">
-          <span class="font-medium text-zinc-800">{{ filteredContacts.length.toLocaleString() }}</span> matching
-        </span>
-      </p>
     </div>
 
-    <div v-if="pending" class="space-y-2 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm sm:p-5">
-      <div v-for="n in 8" :key="n" class="h-11 animate-pulse rounded-xl bg-zinc-100" />
+    <div v-if="pending" class="space-y-3 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm shadow-zinc-950/[0.03] sm:p-6">
+      <div v-for="n in 8" :key="n" class="h-12 animate-pulse rounded-xl bg-zinc-100/90" />
     </div>
 
     <div
       v-else-if="data && !filteredContacts.length"
-      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center shadow-sm sm:py-20"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300/80 bg-white px-6 py-20 text-center shadow-sm shadow-zinc-950/[0.02] sm:py-24"
     >
-      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100/90 text-zinc-500 ring-1 ring-zinc-200/60">
         <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       </div>
-      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+      <h3 class="mt-6 text-lg font-semibold tracking-tight text-zinc-950">
         {{ data.contacts.length ? 'No matching contacts' : 'No contacts yet' }}
       </h3>
-      <p class="mt-2 max-w-sm text-sm text-zinc-500">
+      <p class="mt-2.5 max-w-sm text-[0.9375rem] leading-relaxed text-zinc-500">
         {{ data.contacts.length ? noMatchesHint : 'Contacts will appear here as they sync into your tenant.' }}
       </p>
     </div>
 
-    <div v-else-if="data" class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
+    <div v-else-if="data" class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-950/[0.03]">
       <div class="overflow-x-auto">
-        <table class="min-w-full text-left text-sm">
-          <thead class="border-b border-zinc-200 bg-zinc-50/80">
+        <table class="min-w-full text-left text-[0.9375rem] leading-snug">
+          <thead class="sticky top-0 z-[1] border-b border-zinc-200/90 bg-zinc-50/95 backdrop-blur-sm">
             <tr>
-              <th scope="col" class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+              <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 sm:pl-6 sm:pr-4">
                 Name
               </th>
-              <th scope="col" class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+              <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 sm:px-4">
                 Email
               </th>
-              <th scope="col" class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+              <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 sm:px-4">
                 Kind
               </th>
-              <th scope="col" class="hidden whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 lg:table-cell lg:px-5">
+              <th scope="col" class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 lg:table-cell lg:px-4">
                 Company
               </th>
-              <th scope="col" class="hidden whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 md:table-cell md:px-5">
+              <th scope="col" class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 md:table-cell md:px-4">
                 Phone
               </th>
-              <th scope="col" class="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 sm:px-5">
+              <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-zinc-400 sm:pr-6 sm:pl-4">
                 Updated
               </th>
             </tr>
@@ -145,29 +137,32 @@
             <tr
               v-for="row in paginatedContacts"
               :key="row.id"
-              class="bg-white transition hover:bg-zinc-50/80"
+              class="bg-white transition-colors duration-150 ease-out hover:bg-zinc-50/70"
             >
-              <td class="whitespace-nowrap px-4 py-3 font-medium text-zinc-900 sm:px-5">
+              <td class="whitespace-nowrap px-4 py-4 font-semibold text-zinc-950 sm:pl-6 sm:pr-4">
                 {{ row.name || '—' }}
               </td>
-              <td class="max-w-[200px] truncate px-4 py-3 text-zinc-600 sm:max-w-xs sm:px-5" :title="row.email || undefined">
+              <td class="max-w-[200px] truncate px-4 py-4 text-zinc-600 sm:max-w-xs sm:px-4" :title="row.email || undefined">
                 {{ row.email || '—' }}
               </td>
-              <td class="px-4 py-3 sm:px-5">
+              <td class="px-4 py-4 sm:px-4">
                 <span
-                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset"
+                  class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
                   :class="contactKindBadgeClass(row.contactKind)"
                 >
                   {{ row.contactKindLabel }}
                 </span>
               </td>
-              <td class="hidden max-w-[180px] truncate px-4 py-3 text-zinc-600 lg:table-cell lg:px-5" :title="row.company || undefined">
+              <td class="hidden max-w-[180px] truncate px-4 py-4 text-zinc-600 lg:table-cell lg:px-4" :title="row.company || undefined">
                 {{ row.company || '—' }}
               </td>
-              <td class="hidden whitespace-nowrap px-4 py-3 text-zinc-600 md:table-cell md:px-5">
-                {{ row.phone || '—' }}
+              <td
+                class="hidden whitespace-nowrap px-4 py-4 font-medium tabular-nums text-zinc-700 md:table-cell md:px-4"
+                :title="row.phone || undefined"
+              >
+                {{ row.phone ? formatUsPhoneNumber(row.phone) : '—' }}
               </td>
-              <td class="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-500 sm:px-5">
+              <td class="whitespace-nowrap px-4 py-4 tabular-nums text-[0.875rem] text-zinc-500 sm:pr-6 sm:pl-4">
                 {{ row.updatedAt ? formatDate(row.updatedAt) : '—' }}
               </td>
             </tr>
@@ -177,27 +172,28 @@
 
       <div
         v-if="filteredContacts.length"
-        class="flex flex-col gap-4 border-t border-zinc-200 bg-zinc-50/50 px-4 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+        class="flex flex-col gap-4 border-t border-zinc-200/90 bg-gradient-to-b from-zinc-50/80 to-zinc-50/40 px-4 py-4 text-[0.9375rem] text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
       >
         <p class="tabular-nums text-zinc-500">
-          <span class="font-medium text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          of {{ paginationMeta.total.toLocaleString() }}
+          <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+          <span class="mx-1 text-zinc-300">·</span>
+          <span>{{ paginationMeta.total.toLocaleString() }} total</span>
         </p>
-        <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
           <button
             type="button"
-            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.03] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900/20 disabled:pointer-events-none disabled:opacity-35"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
             Previous
           </button>
-          <span class="min-w-[5rem] text-center tabular-nums text-zinc-500">
+          <span class="min-w-[6.5rem] px-1 text-center tabular-nums text-[0.8125rem] font-medium text-zinc-500">
             Page {{ currentPage }} / {{ totalPages }}
           </span>
           <button
             type="button"
-            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.03] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900/20 disabled:pointer-events-none disabled:opacity-35"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
@@ -210,6 +206,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
+
 definePageMeta({ layout: 'default' })
 
 function contactKindBadgeClass(kind: string): string {
