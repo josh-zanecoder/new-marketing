@@ -72,12 +72,13 @@ export default defineEventHandler(async (event) => {
   const tenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
 
   const tenantConn = await getTenantConnectionFromEvent(event)
-  const { Contact, RecipientList, RecipientFilter: FilterModel } =
+  const { Contact, RecipientList, RecipientFilter: FilterModel, ContactType } =
     getTenantClientModels(tenantConn)
 
   const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
-  const [contactTotal, contactsRaw, kindCounts, listsRaw] = await Promise.all([
+  const [contactTotal, contactsRaw, kindCounts, listsRaw, contactTypeDocs] =
+    await Promise.all([
     Contact.countDocuments(contactFilter),
     Contact.find(contactFilter)
       .select({
@@ -103,6 +104,10 @@ export default defineEventHandler(async (event) => {
       .sort({ updatedAt: -1 })
       .limit(200)
       .lean()
+      .exec(),
+    ContactType.find({ enabled: { $ne: false } })
+      .sort({ sortOrder: 1, key: 1 })
+      .lean()
       .exec()
   ])
   const contacts = contactsRaw as ContactRow[]
@@ -112,6 +117,21 @@ export default defineEventHandler(async (event) => {
   for (const row of kindCounts) {
     if (row._id) byKind[String(row._id)] = row.count
   }
+
+  type ContactTypeLean = {
+    key?: string
+    label?: string
+    sortOrder?: number
+  }
+  const contactTypes = (contactTypeDocs as ContactTypeLean[]).map((d) => {
+    const key = String(d.key ?? '').trim().toLowerCase()
+    const label = String(d.label ?? '').trim() || key
+    return {
+      key,
+      label,
+      sortOrder: Number(d.sortOrder ?? 0)
+    }
+  })
 
   let recipientFilters: ReturnType<typeof serializeRegistryFilter>[] = []
   const docs = await FilterModel.find({ enabled: true })
@@ -150,6 +170,7 @@ export default defineEventHandler(async (event) => {
       client: byKind.client ?? 0,
       contact: byKind.contact ?? 0
     },
+    contactTypes,
     recipientFilters,
     lists: lists.map((doc) => {
       const { audience, filters, filterMode, criterionJoins } = normalizeRecipientListDoc(doc)

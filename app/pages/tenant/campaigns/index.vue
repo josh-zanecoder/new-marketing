@@ -69,10 +69,6 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
-function recipientCount(c: Campaign): number {
-  return c.recipients?.length ?? 0
-}
-
 const sendSuccessSummary = ref<{
   campaignName: string
   sent: number
@@ -178,15 +174,70 @@ async function handleUnschedule(c: Campaign) {
   }
 }
 
-function formatScheduleHint(iso: string) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+/** Human-readable time until scheduled send (updates with `countdownNow`). */
+function scheduleRemainingUntil(iso: string, nowMs: number): string {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const diff = t - nowMs
+  if (diff <= 0) return 'Send time reached'
+  const minTotal = Math.floor(diff / 60000)
+  const day = Math.floor(minTotal / 1440)
+  const hr = Math.floor((minTotal % 1440) / 60)
+  const min = minTotal % 60
+  if (day >= 1) return `in ${day} day${day === 1 ? '' : 's'}`
+  if (hr >= 1) return `in ${hr} hour${hr === 1 ? '' : 's'}${min > 0 ? ` ${min} min` : ''}`
+  if (min >= 1) return `in ${min} min`
+  return 'in less than a minute'
 }
+
+/** Subtitle under campaign title: "Sending Apr 7 • 2:16 AM", "Sent Apr 6", etc. */
+function campaignSubtitle(c: Campaign, nowMs: number): string {
+  if (c.status === 'Scheduled' && c.scheduledAt) {
+    const d = new Date(c.scheduledAt)
+    if (Number.isNaN(d.getTime())) return 'Scheduled'
+    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    const when = `Sending ${md} • ${t}`
+    const rem = scheduleRemainingUntil(c.scheduledAt, nowMs)
+    return rem && rem !== 'Send time reached' ? `${when} • ${rem}` : when
+  }
+  if (c.status === 'Sent') {
+    const raw = c.updatedAt || c.createdAt
+    if (!raw) return 'Sent'
+    const d = new Date(raw)
+    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return `Sent ${md}`
+  }
+  if (c.status === 'Sending') {
+    return 'Sending in progress'
+  }
+  if (c.status === 'Failed') {
+    const raw = c.updatedAt || c.createdAt
+    if (!raw) return 'Failed'
+    const d = new Date(raw)
+    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return `Failed ${md}`
+  }
+  if (c.createdAt) {
+    const d = new Date(c.createdAt)
+    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return `Created ${md}`
+  }
+  return 'Draft'
+}
+
+const countdownNow = ref(Date.now())
+let countdownInterval: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  countdownInterval = setInterval(() => {
+    countdownNow.value = Date.now()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (countdownInterval) clearInterval(countdownInterval)
+})
 </script>
 
 <template>
@@ -231,25 +282,22 @@ function formatScheduleHint(iso: string) {
       </button>
     </div>
 
-    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-      <div class="relative min-w-0 w-full sm:w-80 md:w-96">
+    <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+      <div class="min-w-0 flex-1">
         <label class="sr-only" for="campaigns-search">Search campaigns</label>
-        <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
         <input
           id="campaigns-search"
           v-model="searchQuery"
           type="search"
           autocomplete="off"
-          placeholder="Search by campaign name…"
-          class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+          placeholder="Search campaigns…"
+          class="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300"
         >
       </div>
       <select
         v-model="statusFilter"
         aria-label="Filter by status"
-        class="shrink-0 rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[11rem]"
+        class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300 sm:min-w-[10.5rem]"
       >
         <option value="all">
           All statuses
@@ -299,136 +347,97 @@ function formatScheduleHint(iso: string) {
       </NuxtLink>
     </div>
 
-    <div v-else class="space-y-3">
+    <div v-else class="space-y-4">
       <article
         v-for="c in paginatedCampaigns"
         :key="c.id"
-        class="group/card flex flex-col gap-4 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] transition hover:border-zinc-300 hover:shadow-md hover:shadow-zinc-950/[0.06] sm:flex-row sm:items-center sm:gap-5 sm:p-5"
+        class="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:border-zinc-300/90 sm:px-6 sm:py-5"
       >
-        <NuxtLink
-          :to="`/tenant/campaigns/${c.id}`"
-          class="flex min-w-0 flex-1 flex-col gap-4 outline-none sm:flex-row sm:items-center sm:gap-6 focus-visible:ring-2 focus-visible:ring-zinc-900/15 sm:rounded-lg"
-        >
-          <div class="min-w-0 flex-1">
-            <span class="text-base font-semibold text-zinc-900 transition group-hover/card:text-zinc-700">
-              {{ c.name || 'Untitled' }}
-            </span>
-            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+        <div class="flex items-start gap-3 sm:gap-4">
+          <NuxtLink
+            :to="`/tenant/campaigns/${c.id}`"
+            class="min-w-0 flex-1 outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-zinc-900/15"
+          >
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h2 class="text-[15px] font-semibold leading-snug text-zinc-900 sm:text-base">
+                {{ c.name || 'Untitled' }}
+              </h2>
               <span
-                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
                 :class="{
-                  'bg-amber-50 text-amber-800 ring-amber-200/80': c.status === 'Draft',
-                  'bg-sky-50 text-sky-800 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
-                  'bg-emerald-50 text-emerald-800 ring-emerald-200/80': c.status === 'Sent',
-                  'bg-red-50 text-red-800 ring-red-200/80': c.status === 'Failed',
-                  'bg-zinc-100 text-zinc-700 ring-zinc-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
+                  'bg-amber-50 text-amber-700': c.status === 'Draft',
+                  'bg-sky-50 text-sky-700': c.status === 'Scheduled' || c.status === 'Sending',
+                  'bg-emerald-50 text-emerald-700': c.status === 'Sent',
+                  'bg-red-50 text-red-700': c.status === 'Failed',
+                  'bg-zinc-100 text-zinc-600': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
                 }"
               >
                 {{ c.status }}
               </span>
-              <span class="font-mono tabular-nums text-zinc-400">#{{ c.id.slice(-6) }}</span>
-              <span v-if="c.createdAt" class="tabular-nums">{{ new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
-              <span
-                v-if="c.status === 'Scheduled' && c.scheduledAt"
-                class="text-sky-800"
-              >
-                · Sends {{ formatScheduleHint(c.scheduledAt) }}
-              </span>
             </div>
-          </div>
-          <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-zinc-100 pt-3 text-sm sm:flex-1 sm:border-t-0 sm:pt-0 md:grid-cols-4">
-            <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Recipients
-              </div>
-              <div class="mt-0.5 font-medium tabular-nums text-zinc-800">
-                {{ recipientCount(c).toLocaleString() }}
-              </div>
-            </div>
-            <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Opens
-              </div>
-              <div class="mt-0.5 text-zinc-400">
-                —
-              </div>
-            </div>
-            <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Clicks
-              </div>
-              <div class="mt-0.5 text-zinc-400">
-                —
-              </div>
-            </div>
-            <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Conversions
-              </div>
-              <div class="mt-0.5 text-zinc-400">
-                —
-              </div>
-            </div>
-          </div>
-        </NuxtLink>
-        <div class="flex shrink-0 items-center justify-end gap-1 border-t border-zinc-100 pt-3 sm:border-t-0 sm:pt-0">
+            <p class="mt-2 text-sm text-zinc-500">
+              {{ campaignSubtitle(c, countdownNow) }}
+            </p>
+          </NuxtLink>
+        <div class="flex shrink-0 items-center justify-end gap-0.5">
           <button
             v-if="canSendDraft(c)"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Send campaign"
             @click.stop="handleSend(c)"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           </button>
           <button
             v-if="canScheduleDraft(c)"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-sky-50 hover:text-sky-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Schedule send"
             @click.stop="openScheduleModal(c)"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
           <button
             v-if="c.status === 'Scheduled'"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-amber-600 transition hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-amber-600 transition hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="scheduleBusy"
             title="Cancel schedule"
             @click.stop="handleUnschedule(c)"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <button
             v-if="c.status === 'Sent'"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20"
             title="Duplicate campaign"
             @click.stop="openDuplicateModal(c)"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </button>
           <button
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
             title="Delete campaign"
             @click.stop="openDeleteModal(c)"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
+        </div>
         </div>
       </article>
 

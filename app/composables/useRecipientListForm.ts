@@ -11,9 +11,17 @@ export interface RegistryFilterRow {
   enabled: boolean
 }
 
+export interface RecipientListContactTypeOption {
+  key: string
+  label: string
+  sortOrder: number
+}
+
 export interface RecipientListFormPayload {
   tenantIdConfigured: boolean
   contactCounts: Record<string, number>
+  /** Enabled rows from tenant `contact_types` (labels for audience picker). */
+  contactTypes?: RecipientListContactTypeOption[]
   recipientFilters: RegistryFilterRow[]
 }
 
@@ -126,18 +134,41 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     const seen = new Set<string>()
     for (const f of d.recipientFilters) {
       if (f.enabled && typeof f.contactType === 'string' && f.contactType.trim()) {
-        seen.add(f.contactType.trim())
+        seen.add(f.contactType.trim().toLowerCase())
       }
     }
-    const ordered = AUDIENCE_ORDER.filter((k) => seen.has(k))
-    const extra = [...seen].filter(
-      (k) => !AUDIENCE_ORDER.includes(k as (typeof AUDIENCE_ORDER)[number])
-    )
-    extra.sort()
-    return [...ordered, ...extra].map((value) => ({
-      value,
-      label: value.charAt(0).toUpperCase() + value.slice(1)
-    }))
+    const labelByKey = new Map<string, string>()
+    const orderByKey = new Map<string, number>()
+    for (const t of d.contactTypes ?? []) {
+      const k = t.key.trim().toLowerCase()
+      if (!k) continue
+      labelByKey.set(k, t.label.trim() || k)
+      orderByKey.set(k, t.sortOrder ?? 0)
+    }
+    const keys = [...seen]
+    keys.sort((a, b) => {
+      const oa = orderByKey.has(a) ? orderByKey.get(a)! : 9999
+      const ob = orderByKey.has(b) ? orderByKey.get(b)! : 9999
+      if (oa !== ob) return oa - ob
+      const ia = AUDIENCE_ORDER.indexOf(a as (typeof AUDIENCE_ORDER)[number])
+      const ib = AUDIENCE_ORDER.indexOf(b as (typeof AUDIENCE_ORDER)[number])
+      if (ia !== -1 && ib !== -1) return ia - ib
+      if (ia !== -1) return -1
+      if (ib !== -1) return 1
+      return a.localeCompare(b)
+    })
+    const counts = d.contactCounts
+    return keys.map((value) => {
+      const baseLabel =
+        labelByKey.get(value) ??
+        value.charAt(0).toUpperCase() + value.slice(1)
+      const n = counts[value as keyof typeof counts]
+      const label =
+        typeof n === 'number' && Number.isFinite(n)
+          ? `${baseLabel} (${n.toLocaleString()})`
+          : baseLabel
+      return { value, label }
+    })
   })
 
   watch(
@@ -157,9 +188,11 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   const filtersForAudience = computed(() => {
     const d = data.value
     if (!d) return []
-    return d.recipientFilters.filter(
-      (f) => f.contactType === form.audience && f.enabled
-    )
+    const aud = form.audience.trim().toLowerCase()
+    return d.recipientFilters.filter((f) => {
+      if (!f.enabled) return false
+      return (f.contactType ?? '').trim().toLowerCase() === aud
+    })
   })
 
   function selectableFiltersForRow(_rowIdx: number): RegistryFilterRow[] {
@@ -311,6 +344,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
         client: 0,
         contact: 0
       },
+      contactTypes: res.contactTypes ?? [],
       recipientFilters: res.recipientFilters ?? []
     }
   }
@@ -343,7 +377,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
 
   function hydrateFromList(list: ListDetailForEdit['list']) {
     form.name = list.name ?? ''
-    form.audience = list.audience ?? ''
+    form.audience = (list.audience ?? '').trim().toLowerCase()
     form.filterMode = list.filterMode === 'or' ? 'or' : 'and'
     const rows = list.filterRows?.length
       ? list.filterRows.map((r) => ({

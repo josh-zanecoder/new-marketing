@@ -141,7 +141,7 @@
                   @click="form.recipientsMode = 'manual'"
                 >
                   Enter manually
-                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Pick from CRM contacts or upload a spreadsheet</div>
+                  <div class="mt-1.5 text-sm font-normal text-zinc-500">Pick recipients from your CRM contacts</div>
                 </button>
               </div>
               <div v-if="form.recipientsMode === 'list'">
@@ -236,65 +236,69 @@
                 </div>
               </div>
               <div v-else class="space-y-4">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <label class="text-sm font-medium text-zinc-700 sm:text-[15px]">Recipients</label>
-                  <div class="flex items-center gap-2">
-                    <a
-                      href="#"
-                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900 underline"
-                      @click.prevent="downloadSampleExcel"
-                    >
-                      Download sample
-                    </a>
-                    <span class="text-zinc-300">|</span>
-                    <input
-                      ref="fileInputRef"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      class="hidden"
-                      @change="handleBulkUpload"
-                    >
-                    <button
-                      type="button"
-                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50"
-                      :disabled="isUploading"
-                      @click="fileInputRef?.click()"
-                    >
-                      {{ isUploading ? 'Uploading...' : 'Upload Excel' }}
-                    </button>
-                    <span class="text-zinc-300">|</span>
-                    <button
-                      type="button"
-                      class="text-sm font-medium text-zinc-600 hover:text-zinc-900"
-                      @click="openContactsPicker"
-                    >
-                      Add from contacts
-                    </button>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <label class="text-sm font-medium text-zinc-700 sm:text-[15px]">Recipients</label>
+                    <p class="mt-1 text-sm text-zinc-500">
+                      Add contacts from your CRM in the picker, then review them below.
+                    </p>
                   </div>
-                </div>
-                <p v-if="bulkUploadError" class="text-sm text-red-600">{{ bulkUploadError }}</p>
-                <p
-                  v-if="!manualRecipientsListed.length"
-                  class="rounded-xl border border-dashed border-zinc-200/90 bg-white/80 px-4 py-8 text-center text-sm text-zinc-500"
-                >
-                  No recipients yet. Use <span class="font-medium text-zinc-700">Add from contacts</span> or <span class="font-medium text-zinc-700">Upload Excel</span>.
-                </p>
-                <ul v-else class="divide-y divide-zinc-100 rounded-xl border border-zinc-200/90 bg-white">
-                  <li
-                    v-for="(row, idx) in manualRecipientsListed"
-                    :key="row.contactId + '-' + idx"
-                    class="flex items-center justify-between gap-3 px-4 py-3"
+                  <button
+                    type="button"
+                    class="inline-flex shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
+                    :disabled="contactsCatalogPending && !contactsCatalog.length"
+                    @click="openAddContactsModal"
                   >
-                    <span class="min-w-0 truncate text-sm text-zinc-900" :title="row.email">{{ row.displayLine }}</span>
-                    <button
-                      type="button"
-                      class="shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-sm text-zinc-600 shadow-sm transition hover:bg-zinc-50"
-                      @click="removeManualRecipientById(row.contactId)"
+                    Add contacts…
+                  </button>
+                </div>
+
+                <TenantAddContactInCampaign
+                  v-model:open="addContactsModalOpen"
+                  :contacts="contactsCatalog"
+                  :pending="contactsCatalogPending"
+                  :error="contactsCatalogError"
+                  :truncated="contactsCatalogTruncated"
+                  :kind-counts="contactPickerKindCounts"
+                  :selected-ids="form.recipientsManual"
+                  @refresh="loadContactsCatalog"
+                  @add-contact="addContactFromPicker"
+                />
+
+                <div>
+                  <h3 class="text-sm font-medium text-zinc-800">
+                    Selected
+                    <span
+                      v-if="manualRecipientsListed.length"
+                      class="ml-1 font-normal tabular-nums text-zinc-500"
+                    >({{ manualRecipientsListed.length }})</span>
+                  </h3>
+                  <p
+                    v-if="!manualRecipientsListed.length"
+                    class="mt-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-50/50 px-4 py-6 text-center text-sm text-zinc-500"
+                  >
+                    No recipients yet — tap <span class="font-medium text-zinc-700">Add contacts</span> to open the picker.
+                  </p>
+                  <ul
+                    v-else
+                    class="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200/90 bg-white"
+                  >
+                    <li
+                      v-for="(row, idx) in manualRecipientsListed"
+                      :key="row.contactId + '-' + idx"
+                      class="flex items-center justify-between gap-3 px-4 py-3"
                     >
-                      Remove
-                    </button>
-                  </li>
-                </ul>
+                      <span class="min-w-0 truncate text-sm text-zinc-900" :title="row.email">{{ row.displayLine }}</span>
+                      <button
+                        type="button"
+                        class="shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-sm text-zinc-600 shadow-sm transition hover:bg-zinc-50"
+                        @click="removeManualRecipientById(row.contactId)"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -586,119 +590,12 @@
       </div>
     </Teleport>
 
-    <Teleport to="body">
-      <div
-        v-if="contactsPickerOpen"
-        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="contacts-picker-title"
-      >
-        <div
-          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
-          aria-hidden="true"
-          @click="closeContactsPicker"
-        />
-        <div
-          class="relative flex max-h-[min(92vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:max-h-[85vh] sm:rounded-2xl"
-        >
-          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
-            <div class="min-w-0">
-              <h2 id="contacts-picker-title" class="text-base font-semibold text-zinc-900">
-                Add from contacts
-              </h2>
-              <p class="mt-1 text-sm text-zinc-500">
-                Choose people already in your CRM. Their email is added to this campaign.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
-              aria-label="Close"
-              @click="closeContactsPicker"
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div class="shrink-0 border-b border-zinc-100 px-5 py-3 sm:px-6">
-            <label class="sr-only" for="contact-picker-search">Search contacts</label>
-            <input
-              id="contact-picker-search"
-              v-model="contactPickerSearch"
-              type="search"
-              autocomplete="off"
-              placeholder="Search by name or email…"
-              class="w-full rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-            >
-          </div>
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-3 sm:px-6">
-            <p v-if="contactsCatalogError" class="text-sm text-red-600">
-              {{ contactsCatalogError }}
-            </p>
-            <div
-              v-else-if="contactsCatalogPending"
-              class="space-y-3 py-8 text-center text-sm text-zinc-500"
-            >
-              Loading contacts…
-            </div>
-            <template v-else>
-              <p
-                v-if="contactsCatalogTruncated"
-                class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200/80"
-              >
-                Showing the most recently updated contacts only (list is capped). Refine your search or manage lists for larger audiences.
-              </p>
-              <p
-                v-if="!filteredContactsForPicker.length"
-                class="py-10 text-center text-sm text-zinc-500"
-              >
-                {{
-                  contactPickerSearch.trim()
-                    ? 'No contacts match your search.'
-                    : 'No contacts with an email address yet.'
-                }}
-              </p>
-              <ul v-else class="divide-y divide-zinc-100">
-                <li
-                  v-for="c in filteredContactsForPicker"
-                  :key="c.id"
-                  class="flex items-center justify-between gap-3 py-3.5"
-                >
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium text-zinc-900">
-                      {{ c.name || '—' }}
-                    </p>
-                    <p class="truncate text-sm text-zinc-500">
-                      {{ c.email }}
-                    </p>
-                    <p v-if="c.company" class="truncate text-xs text-zinc-400">
-                      {{ c.company }}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="isManualContactSelected(c.id)"
-                    @click="addContactFromPicker(c)"
-                  >
-                    {{ isManualContactSelected(c.id) ? 'Added' : 'Add' }}
-                  </button>
-                </li>
-              </ul>
-            </template>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
   </div>  
 </template>
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
-import type { WorkSheet } from 'xlsx'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -707,8 +604,6 @@ const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
   useCampaignSendFlow()
-
-type XlsxModule = typeof import('xlsx')
 
 const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
@@ -767,30 +662,24 @@ interface ContactPickerRow {
   name: string
   email: string
   company?: string
+  /** Normalized: `prospect` | `client` | `contact` */
+  contactKind: string
 }
 
-const contactsPickerOpen = ref(false)
-const contactPickerSearch = ref('')
+const addContactsModalOpen = ref(false)
+const contactPickerKindCounts = ref<{ prospect: number; client: number; contact: number } | null>(
+  null
+)
 const contactsCatalog = ref<ContactPickerRow[]>([])
 const contactsCatalogPending = ref(false)
 const contactsCatalogError = ref('')
 const contactsCatalogTruncated = ref(false)
 
-/** Display names/emails for manual recipient contact ids (wizard + Excel match). */
+/** Display names/emails for manual recipient contact ids. */
 const manualRecipientLabels = ref<Record<string, { email: string; name: string }>>({})
-
-function normalizeRecipientEmail(raw: string): string {
-  return String(raw ?? '').trim().toLowerCase()
-}
 
 function isManualContactIdString(raw: string): boolean {
   return /^[a-f0-9]{24}$/i.test(String(raw ?? '').trim())
-}
-
-function isManualContactSelected(contactId: string): boolean {
-  const id = String(contactId ?? '').trim()
-  if (!id) return false
-  return form.value.recipientsManual.includes(id)
 }
 
 function setManualRecipientLabel(contactId: string, email: string, name: string) {
@@ -821,44 +710,57 @@ async function loadContactsCatalog() {
   try {
     const res = await marketingApi.fetchRecipientListResource()
     const rows = Array.isArray(res.contacts) ? res.contacts : []
+    const cc = res.contactCounts
+    contactPickerKindCounts.value =
+      cc && typeof cc === 'object'
+        ? {
+            prospect: Number(cc.prospect) || 0,
+            client: Number(cc.client) || 0,
+            contact: Number(cc.contact) || 0
+          }
+        : null
     contactsCatalog.value = rows
       .map((c) => ({
         id: c.id,
         name: (c.name ?? '').trim(),
         email: (c.email ?? '').trim(),
-        company: (c.company ?? '').trim() || undefined
+        company: (c.company ?? '').trim() || undefined,
+        contactKind: String(c.contactKind ?? '')
+          .trim()
+          .toLowerCase()
       }))
       .filter((c) => c.email.includes('@'))
     contactsCatalogTruncated.value = Boolean(res.contactsTruncated)
+    for (const row of contactsCatalog.value) {
+      if (form.value.recipientsManual.includes(row.id)) {
+        setManualRecipientLabel(row.id, row.email, row.name)
+      }
+    }
   } catch {
     contactsCatalogError.value = 'Could not load contacts.'
     contactsCatalog.value = []
     contactsCatalogTruncated.value = false
+    contactPickerKindCounts.value = null
   } finally {
     contactsCatalogPending.value = false
   }
 }
 
-const filteredContactsForPicker = computed(() => {
-  const q = contactPickerSearch.value.trim().toLowerCase()
-  if (!q) return contactsCatalog.value
-  return contactsCatalog.value.filter((c) => {
-    const name = c.name.toLowerCase()
-    const email = c.email.toLowerCase()
-    const company = (c.company ?? '').toLowerCase()
-    return name.includes(q) || email.includes(q) || company.includes(q)
-  })
-})
-
-async function openContactsPicker() {
-  contactPickerSearch.value = ''
-  contactsPickerOpen.value = true
-  await loadContactsCatalog()
+function openAddContactsModal() {
+  addContactsModalOpen.value = true
+  if (!contactsCatalogPending.value && !contactsCatalog.value.length) {
+    void loadContactsCatalog()
+  }
 }
 
-function closeContactsPicker() {
-  contactsPickerOpen.value = false
-}
+watch(
+  () => form.value.recipientsMode,
+  (mode) => {
+    if (mode === 'manual') {
+      void loadContactsCatalog()
+    }
+  }
+)
 
 const scheduleModalOpen = ref(false)
 const scheduleLocal = ref('')
@@ -1329,90 +1231,6 @@ function removeManualRecipientById(contactId: string) {
   form.value.recipientsManual = form.value.recipientsManual.filter((x) => x.trim() !== id)
   const { [id]: _removed, ...rest } = manualRecipientLabels.value
   manualRecipientLabels.value = rest
-}
-
-const bulkUploadError = ref<string | null>(null)
-const isUploading = ref(false)
-const fileInputRef = ref<HTMLInputElement | null>(null)
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function extractEmailsFromSheet(sheet: WorkSheet, XLSX: XlsxModule): string[] {
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as (string | number)[][]
-  const emails: string[] = []
-  for (const row of rows) {
-    for (const cell of row) {
-      const s = String(cell ?? '').trim()
-      if (s && emailRegex.test(s)) emails.push(s.toLowerCase())
-    }
-  }
-  return [...new Set(emails)]
-}
-
-async function handleBulkUpload(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input?.files?.[0]
-  input.value = ''
-  if (!file) return
-  bulkUploadError.value = null
-  isUploading.value = true
-  try {
-    const XLSX = await import('xlsx')
-    const data = await file.arrayBuffer()
-    const wb = XLSX.read(data, { type: 'array' })
-    const firstSheetName = wb.SheetNames[0]
-    const firstSheet = firstSheetName ? wb.Sheets[firstSheetName] : undefined
-    if (!firstSheet) {
-      bulkUploadError.value = 'No sheets found in file'
-      return
-    }
-    const emails = extractEmailsFromSheet(firstSheet, XLSX)
-    if (!emails.length) {
-      bulkUploadError.value = 'No valid email addresses found. Use a column with email addresses.'
-      return
-    }
-    if (!contactsCatalog.value.length) await loadContactsCatalog()
-    const byEmail = new Map<string, ContactPickerRow>()
-    for (const c of contactsCatalog.value) {
-      byEmail.set(normalizeRecipientEmail(c.email), c)
-    }
-    const existingIds = new Set(form.value.recipientsManual.filter(isManualContactIdString))
-    const toAdd: Array<{ id: string; email: string; name: string }> = []
-    const unknown: string[] = []
-    for (const em of emails) {
-      const row = byEmail.get(em)
-      if (!row) {
-        unknown.push(em)
-        continue
-      }
-      if (existingIds.has(row.id)) continue
-      existingIds.add(row.id)
-      toAdd.push({ id: row.id, email: row.email, name: row.name })
-    }
-    if (unknown.length) {
-      bulkUploadError.value = `No CRM contact for ${unknown.length} address(es). Only existing contacts can be added.`
-      if (!toAdd.length) return
-    }
-    addContactsToManual(toAdd)
-  } catch (err: unknown) {
-    bulkUploadError.value =
-      err instanceof Error ? err.message : 'Failed to parse file. Use .xlsx or .xls format.'
-  } finally {
-    isUploading.value = false
-  }
-}
-
-async function downloadSampleExcel() {
-  const XLSX = await import('xlsx')
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['email'],
-    ['recipient1@example.com'],
-    ['recipient2@example.com'],
-    ['recipient3@example.com']
-  ])
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Recipients')
-  XLSX.writeFile(wb, 'recipients-sample.xlsx')
 }
 
 watch(subjectVariable, (val) => {

@@ -32,8 +32,11 @@ export interface TenantRecipientListResponse {
     name?: string
     email?: string
     company?: string
+    /** `prospect` | `client` | `contact` from CRM */
+    contactKind?: string
   }>
   contactsTruncated?: boolean
+  contactCounts?: { prospect?: number; client?: number; contact?: number }
 }
 
 /** GET `/api/v1/tenant/recipient-list/:id` — paginated members */

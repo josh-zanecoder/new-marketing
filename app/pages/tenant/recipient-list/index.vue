@@ -86,21 +86,30 @@
         </select>
       </div>
 
-      <div v-if="pending" class="space-y-3">
+      <div v-if="pending" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <div
-          v-for="n in 4"
+          v-for="n in 6"
           :key="n"
-          class="space-y-4 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm sm:p-5"
+          class="flex h-full flex-col rounded-xl border border-zinc-200/90 bg-white p-6 shadow-sm shadow-zinc-950/[0.06]"
         >
-          <div class="flex items-start justify-between gap-3">
-            <div class="h-5 min-w-0 flex-1 max-w-[60%] animate-pulse rounded-md bg-zinc-100" />
-            <div class="h-8 w-20 shrink-0 animate-pulse rounded-lg bg-zinc-100" />
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="h-5 max-w-[75%] animate-pulse rounded-md bg-zinc-100" />
+              <div class="h-3.5 w-28 animate-pulse rounded bg-zinc-100" />
+            </div>
+            <div class="flex shrink-0 gap-3">
+              <div class="h-4 w-10 animate-pulse rounded bg-zinc-100" />
+              <div class="h-4 w-12 animate-pulse rounded bg-zinc-100" />
+            </div>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <div class="h-6 w-20 animate-pulse rounded-full bg-zinc-100" />
+          <div class="mt-5 flex-1 space-y-2">
+            <div class="h-3 w-36 animate-pulse rounded bg-zinc-100" />
+            <div class="h-7 w-4/5 max-w-[220px] animate-pulse rounded-full bg-zinc-100" />
           </div>
-          <div class="h-3 w-48 animate-pulse rounded bg-zinc-100" />
-          <div class="h-14 animate-pulse rounded-xl bg-zinc-50" />
+          <div class="mt-6 flex items-end justify-between border-t border-zinc-100 pt-5">
+            <div class="h-3.5 w-24 animate-pulse rounded bg-zinc-100" />
+            <div class="h-4 w-10 animate-pulse rounded bg-zinc-100" />
+          </div>
         </div>
       </div>
 
@@ -131,87 +140,80 @@
         </NuxtLink>
       </div>
 
-      <div v-else-if="data" class="space-y-3">
-        <article
-          v-for="row in paginatedLists"
-          :key="row.id"
-          class="group/card rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] transition hover:border-zinc-300 hover:shadow-md hover:shadow-zinc-950/[0.06] sm:p-5"
-        >
-          <div class="flex flex-col gap-4">
-            <div class="flex items-start justify-between gap-3">
-              <NuxtLink
-                :to="`/tenant/recipient-list/${row.id}`"
-                class="min-w-0 flex-1 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20"
-              >
-                <h2 class="text-base font-semibold leading-snug text-zinc-900 transition group-hover/card:text-zinc-600">
-                  {{ row.name }}
-                </h2>
-              </NuxtLink>
-              <div class="flex shrink-0 items-center gap-1 sm:gap-2">
+      <div v-else-if="data" class="space-y-6">
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          <article
+            v-for="row in paginatedLists"
+            :key="row.id"
+            class="flex h-full flex-col rounded-xl border border-zinc-200/90 bg-white p-6 shadow-sm shadow-zinc-950/[0.06] transition hover:border-zinc-300/90 hover:shadow-md hover:shadow-zinc-950/[0.08]"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <NuxtLink
+                  :to="`/tenant/recipient-list/${row.id}`"
+                  class="block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
+                >
+                  <h2 class="text-base font-semibold leading-snug text-zinc-900">
+                    {{ row.name }}
+                  </h2>
+                </NuxtLink>
+                <p class="mt-1 text-sm text-zinc-500">
+                  {{ listCardSubtitle(row) }}
+                </p>
+              </div>
+              <div class="flex shrink-0 items-center gap-4 text-sm font-medium">
                 <NuxtLink
                   :to="`/tenant/recipient-list/edit/${row.id}`"
-                  class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:px-3 sm:text-sm"
+                  class="text-zinc-700 transition hover:text-zinc-900"
                 >
-                  <svg class="h-3.5 w-3.5 text-zinc-500 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
                   Edit
                 </NuxtLink>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 sm:px-3 sm:text-sm"
+                  class="text-red-600 transition hover:text-red-700"
                   @click="listToDelete = row"
                 >
                   Delete
                 </button>
-                <NuxtLink
-                  :to="`/tenant/recipient-list/${row.id}`"
-                  class="hidden rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 sm:inline-flex"
-                  aria-label="View list details"
-                >
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5l7 7-7 7" />
-                  </svg>
-                </NuxtLink>
               </div>
             </div>
 
-            <div
-              v-if="row.audience"
-              class="flex flex-wrap items-center gap-2"
-            >
-              <span
-                class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium capitalize text-zinc-700 ring-1 ring-zinc-200/80"
-              >
-                {{ row.audience }}
-              </span>
+            <div class="mt-5 flex-1">
+              <p class="text-xs font-medium text-zinc-500">
+                Includes people who:
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <template v-if="row.filters?.length">
+                  <span
+                    v-for="(c, idx) in row.filters"
+                    :key="idx"
+                    class="inline-flex max-w-full items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700"
+                  >
+                    <span class="truncate">{{ c.property }} = {{ c.value }}</span>
+                  </span>
+                </template>
+                <span
+                  v-else
+                  class="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600"
+                >
+                  No filter criteria
+                </span>
+              </div>
             </div>
 
-            <div class="rounded-xl bg-zinc-50/90 px-3.5 py-3 ring-1 ring-zinc-200/60">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Criteria
-              </p>
-              <p class="mt-1.5 text-sm leading-relaxed text-zinc-700 line-clamp-3">
-                {{ formatFilters(row.filters, row.filterMode) }}
+            <div class="mt-6 flex items-end justify-between gap-3 border-t border-zinc-100 pt-5">
+              <p class="text-sm text-zinc-400">
+                {{ listCardFooterLeft(row) }}
               </p>
               <NuxtLink
                 :to="`/tenant/recipient-list/${row.id}`"
-                class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-800"
+                class="shrink-0 text-sm font-medium text-violet-600 transition hover:text-violet-700"
               >
-                View details
-                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
+                View
               </NuxtLink>
             </div>
-
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-              <span v-if="row.updatedAt" class="tabular-nums">{{ formatDate(row.updatedAt) }}</span>
-              <span v-if="row.updatedAt" class="hidden text-zinc-300 sm:inline" aria-hidden="true">·</span>
-              <span class="font-mono tabular-nums text-zinc-400">#{{ row.id.slice(-6) }}</span>
-            </div>
-          </div>
-        </article>
+          </article>
+        </div>
 
         <div
           v-if="filteredLists.length"
@@ -275,6 +277,8 @@ interface ListRow {
   filters: ListCriterion[]
   filterMode?: 'and' | 'or'
   updatedAt: string | null
+  /** When present, shown in the card footer (e.g. from API). */
+  memberCount?: number | null
 }
 
 interface RegistryFilterRow {
@@ -410,27 +414,34 @@ async function confirmDeleteList() {
   }
 }
 
-function formatFilters(
-  filters: ListCriterion[] | undefined,
-  filterMode?: 'and' | 'or'
-): string {
-  if (!filters?.length) return 'No filter criteria'
-  const joined =
-    filters.length >= 2 && filterMode === 'or'
-      ? filters.map((f) => `${f.property} = ${f.value}`).join(' OR ')
-      : filters.map((f) => `${f.property} = ${f.value}`).join(' · ')
-  return joined
+function listCardSubtitle(row: ListRow): string {
+  if (row.audience?.trim()) {
+    return row.audience.charAt(0).toUpperCase() + row.audience.slice(1).toLowerCase()
+  }
+  if (row.updatedAt) {
+    try {
+      return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(row.updatedAt))
+    } catch {
+      return 'Recipient list'
+    }
+  }
+  return 'Recipient list'
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(iso))
-  } catch {
-    return iso
+function listCardFooterLeft(row: ListRow): string {
+  const n = row.memberCount
+  if (typeof n === 'number' && Number.isFinite(n) && n >= 0) {
+    const formatted = n.toLocaleString()
+    return `${formatted} ${n === 1 ? 'person' : 'people'}`
   }
+  if (row.updatedAt) {
+    try {
+      return `Updated ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(row.updatedAt))}`
+    } catch {
+      return ''
+    }
+  }
+  return ''
 }
 
 async function load() {

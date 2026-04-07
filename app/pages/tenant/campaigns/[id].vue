@@ -141,12 +141,52 @@ onBeforeUnmount(() => {
     window.removeEventListener('keydown', previewEscListener)
     previewEscListener = null
   }
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
 })
 
 function formatDate(d: string) {
   if (!d) return '–'
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+function formatScheduledDateTime(iso: string) {
+  if (!iso) return '–'
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function scheduleRemainingUntil(iso: string, nowMs: number): string {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const diff = t - nowMs
+  if (diff <= 0) return 'Send time reached'
+  const minTotal = Math.floor(diff / 60000)
+  const day = Math.floor(minTotal / 1440)
+  const hr = Math.floor((minTotal % 1440) / 60)
+  const min = minTotal % 60
+  if (day >= 1) return `in ${day} day${day === 1 ? '' : 's'}`
+  if (hr >= 1) return `in ${hr} hour${hr === 1 ? '' : 's'}${min > 0 ? ` ${min} min` : ''}`
+  if (min >= 1) return `in ${min} min`
+  return 'in less than a minute'
+}
+
+const countdownNow = ref(Date.now())
+let countdownInterval: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  countdownInterval = setInterval(() => {
+    countdownNow.value = Date.now()
+  }, 30000)
+})
 
 function toDatetimeLocalValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -341,6 +381,20 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <p class="mt-2 text-sm text-zinc-500 sm:text-[15px]">
               Created {{ formatDate(campaign.createdAt) }}
             </p>
+            <div
+              v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
+              class="mt-3 flex flex-col gap-2 rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-2.5 text-sm text-sky-950 shadow-sm ring-1 ring-sky-100/80 sm:flex-row sm:items-center sm:gap-4 sm:py-3 sm:pl-4"
+            >
+              <span class="flex items-center gap-2 min-w-0 font-medium">
+                <svg class="h-4 w-4 shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="tabular-nums">{{ formatScheduledDateTime(campaign.scheduledAt) }}</span>
+              </span>
+              <span class="shrink-0 text-sm font-semibold tabular-nums text-sky-800 sm:ml-auto">
+                {{ scheduleRemainingUntil(campaign.scheduledAt, countdownNow) }}
+              </span>
+            </div>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
@@ -487,9 +541,14 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                     v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
                     class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5"
                   >
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Sends at</dt>
-                    <dd class="text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
-                      {{ formatDate(campaign.scheduledAt) }}
+                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Scheduled send</dt>
+                    <dd class="space-y-1 text-sm sm:col-span-2 sm:text-[15px]">
+                      <div class="font-medium tabular-nums text-zinc-900">
+                        {{ formatScheduledDateTime(campaign.scheduledAt) }}
+                      </div>
+                      <div class="font-semibold tabular-nums text-sky-800">
+                        {{ scheduleRemainingUntil(campaign.scheduledAt, countdownNow) }}
+                      </div>
                     </dd>
                   </div>
                 </dl>

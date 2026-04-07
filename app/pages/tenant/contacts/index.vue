@@ -41,24 +41,51 @@
       </div>
     </div>
 
-    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div class="min-w-0 flex-1">
-        <label class="sr-only" for="contacts-search">Search contacts</label>
-        <div class="relative">
-          <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            id="contacts-search"
-            v-model="searchQuery"
-            type="search"
-            autocomplete="off"
-            placeholder="Search name, email, company, phone…"
-            class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+    <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+      <div class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+        <div class="min-w-0 flex-1">
+          <label class="sr-only" for="contacts-search">Search contacts</label>
+          <div class="relative">
+            <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              id="contacts-search"
+              v-model="searchQuery"
+              type="search"
+              autocomplete="off"
+              placeholder="Search name, email, company, phone…"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+            >
+          </div>
+        </div>
+        <div class="w-full shrink-0 sm:w-[13.5rem]">
+          <label class="sr-only" for="contacts-kind-filter">Contact type</label>
+          <select
+            id="contacts-kind-filter"
+            v-model="contactKindFilter"
+            class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-4 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
           >
+            <option value="all">
+              All types
+            </option>
+            <option
+              v-if="hasContactsWithoutKind"
+              value="__none__"
+            >
+              No type
+            </option>
+            <option
+              v-for="opt in contactTypeFilterOptions"
+              :key="opt.key"
+              :value="opt.key"
+            >
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
       </div>
-      <p v-if="data" class="shrink-0 tabular-nums text-sm text-zinc-600">
+      <p v-if="data" class="shrink-0 tabular-nums text-sm text-zinc-600 lg:pt-3">
         <span class="font-semibold text-zinc-900">{{ data.total.toLocaleString() }}</span>
         in database
         <span v-if="filteredContacts.length !== data.contacts.length" class="text-zinc-400">·</span>
@@ -85,7 +112,7 @@
         {{ data.contacts.length ? 'No matching contacts' : 'No contacts yet' }}
       </h3>
       <p class="mt-2 max-w-sm text-sm text-zinc-500">
-        {{ data.contacts.length ? 'Try a different search.' : 'Contacts will appear here as they sync into your tenant.' }}
+        {{ data.contacts.length ? noMatchesHint : 'Contacts will appear here as they sync into your tenant.' }}
       </p>
     </div>
 
@@ -128,10 +155,10 @@
               </td>
               <td class="px-4 py-3 sm:px-5">
                 <span
-                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset"
                   :class="contactKindBadgeClass(row.contactKind)"
                 >
-                  {{ row.contactKind }}
+                  {{ row.contactKindLabel }}
                 </span>
               </td>
               <td class="hidden max-w-[180px] truncate px-4 py-3 text-zinc-600 lg:table-cell lg:px-5" :title="row.company || undefined">
@@ -186,6 +213,7 @@
 definePageMeta({ layout: 'default' })
 
 function contactKindBadgeClass(kind: string): string {
+  if (!kind.trim()) return 'bg-zinc-100 text-zinc-500 ring-zinc-200/80'
   const k = kind.toLowerCase()
   if (k.includes('prospect')) return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
   if (k.includes('client')) return 'bg-sky-50 text-sky-800 ring-sky-200/80'
@@ -195,11 +223,19 @@ function contactKindBadgeClass(kind: string): string {
 
 const PAGE_SIZE = 25
 
+export interface TenantContactTypeOption {
+  key: string
+  label: string
+  sortOrder: number
+}
+
 export interface ContactRow {
   id: string
   externalId: string
   source: string
   contactKind: string
+  /** Resolved from `contact_types` when available. */
+  contactKindLabel: string
   firstName: string
   lastName: string
   /** Display name: first + last (API-computed). */
@@ -220,6 +256,7 @@ export interface ContactRow {
 
 interface ContactsIndexPayload {
   contacts: ContactRow[]
+  contactTypes?: TenantContactTypeOption[]
   total: number
   truncated: boolean
 }
@@ -237,19 +274,74 @@ const pending = ref(true)
 const loadError = ref('')
 const data = ref<ContactsIndexPayload | null>(null)
 const searchQuery = ref('')
+/** `'all'`, `'__none__'` (no kind), or lowercase contact type key. */
+const contactKindFilter = ref('all')
 const currentPage = ref(1)
 
+const KIND_FILTER_NONE = '__none__'
+
+const hasContactsWithoutKind = computed(() =>
+  (data.value?.contacts ?? []).some((row) => !row.contactKind?.trim())
+)
+
+const contactTypeFilterOptions = computed(() => {
+  const api = data.value?.contactTypes ?? []
+  const ordered = [...api].sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+  const base = ordered.map((t) => ({ key: t.key, label: t.label }))
+  const keysFromApi = new Set(base.map((o) => o.key.toLowerCase()))
+  const extras: { key: string; label: string }[] = []
+  for (const row of data.value?.contacts ?? []) {
+    const raw = row.contactKind?.trim()
+    if (!raw) continue
+    const k = raw.toLowerCase()
+    if (keysFromApi.has(k)) continue
+    keysFromApi.add(k)
+    extras.push({ key: k, label: row.contactKindLabel || raw })
+  }
+  extras.sort((a, b) => a.label.localeCompare(b.label))
+  return [...base, ...extras]
+})
+
 const filteredContacts = computed(() => {
-  const list = data.value?.contacts ?? []
+  let list = data.value?.contacts ?? []
+  const kind = contactKindFilter.value
+  if (kind !== 'all') {
+    if (kind === KIND_FILTER_NONE) {
+      list = list.filter((row) => !row.contactKind?.trim())
+    } else {
+      const k = kind.toLowerCase()
+      list = list.filter(
+        (row) => (row.contactKind?.trim().toLowerCase() ?? '') === k
+      )
+    }
+  }
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((row) => {
-    const blob = [row.firstName, row.lastName, row.name, row.email, row.company, row.phone, row.contactKind]
+    const blob = [
+      row.firstName,
+      row.lastName,
+      row.name,
+      row.email,
+      row.company,
+      row.phone,
+      row.contactKind,
+      row.contactKindLabel
+    ]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
     return blob.includes(q)
   })
+})
+
+const noMatchesHint = computed(() => {
+  const hasSearch = Boolean(searchQuery.value.trim())
+  const hasKind = contactKindFilter.value !== 'all'
+  if (hasSearch && hasKind) return 'Try a different search or contact type.'
+  if (hasSearch) return 'Try a different search.'
+  if (hasKind) return 'No contacts match this type. Try another type or choose “All types”.'
+  return 'Try a different search or filter.'
 })
 
 const totalPages = computed(() =>
@@ -269,7 +361,7 @@ const paginationMeta = computed(() => {
   return { from, to, total }
 })
 
-watch([searchQuery], () => {
+watch([searchQuery, contactKindFilter], () => {
   currentPage.value = 1
 })
 
@@ -296,10 +388,23 @@ async function load() {
       credentials: 'include',
       ...serverAuthHeaders()
     })
+    const contacts = (res.contacts ?? []).map((row) => ({
+      ...row,
+      contactKindLabel:
+        row.contactKindLabel ??
+        (row.contactKind ? row.contactKind : '—')
+    }))
     data.value = {
-      contacts: res.contacts ?? [],
+      contacts,
+      contactTypes: res.contactTypes ?? [],
       total: res.total ?? 0,
       truncated: res.truncated ?? false
+    }
+    if (
+      !contacts.some((r) => !r.contactKind?.trim()) &&
+      contactKindFilter.value === KIND_FILTER_NONE
+    ) {
+      contactKindFilter.value = 'all'
     }
   } catch (e: unknown) {
     loadError.value =
