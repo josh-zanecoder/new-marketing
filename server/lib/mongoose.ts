@@ -3,12 +3,9 @@ import mongoose from 'mongoose'
 
 const clientConnections = new Map<string, mongoose.Connection>()
 
-/** Shared driver options: cap pool size per process so Atlas concurrent connections stay under limit. */
+/** Shared driver options for registry and per-tenant connections. */
 function mongoConnectionOptions(): mongoose.ConnectOptions {
-  const maxPoolSize = Number(process.env.MONGODB_MAX_POOL_SIZE) || 10
   return {
-    maxPoolSize: Number.isFinite(maxPoolSize) && maxPoolSize > 0 ? maxPoolSize : 10,
-    minPoolSize: 0,
     maxIdleTimeMS: 60_000,
     serverSelectionTimeoutMS: 10_000
   }
