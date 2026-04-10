@@ -1,4 +1,4 @@
-const PUBLIC_PATHS = ['/auth/login', '/auth/tenant-callback']
+const PUBLIC_PATHS = ['/auth/login', '/auth/tenant-callback', '/api-docs']
 
 function cookieHeaderAllowsTenantSession(cookieHeader: string | undefined): boolean {
   if (!cookieHeader) return false

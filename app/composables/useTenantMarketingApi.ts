@@ -76,6 +76,34 @@ export interface TenantEmailTemplateRow {
   subject?: string
 }
 
+export interface TenantDashboardStats {
+  totalCampaigns: number
+  sentThisMonth: number
+  scheduledCampaigns: number
+  recipientLists: number
+  contacts: number
+  /** Share of sends that reached `sent` vs `failed` (excludes `pending`). Null when none finished. */
+  deliveryRatePercent: number | null
+  emailsDeliveredTotal: number
+  emailsFailedTotal: number
+  emailsPendingTotal: number
+}
+
+export interface TenantDashboardRecentCampaign {
+  id: string
+  name: string
+  subject: string
+  status: string
+  scheduledAt?: string
+  updatedAt: string
+}
+
+export interface TenantDashboardResponse {
+  stats: TenantDashboardStats
+  statusBreakdown: Record<string, number>
+  recentCampaigns: TenantDashboardRecentCampaign[]
+}
+
 export type EmailMergeContextBody =
   | { campaignId: string }
   | {
@@ -159,6 +187,10 @@ export function useTenantMarketingApi() {
     return $fetch<unknown>('/api/v1/tenant/me', tenantFetchInit())
   }
 
+  async function fetchDashboard() {
+    return $fetch<TenantDashboardResponse>('/api/v1/tenant/dashboard', tenantFetchInit())
+  }
+
   async function fetchSendCampaignStatus(campaignId: string) {
     return $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
       timeout: 60000,
@@ -203,6 +235,7 @@ export function useTenantMarketingApi() {
     fetchDynamicVariables,
     fetchEmailTemplates,
     fetchTenantMe,
+    fetchDashboard,
     fetchSendCampaignStatus,
     createCampaign,
     updateCampaign,

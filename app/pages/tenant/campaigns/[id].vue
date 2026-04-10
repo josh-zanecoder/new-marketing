@@ -268,14 +268,14 @@ const campaignViewTab = ref<CampaignViewTab>('details')
 </script>
 
 <template>
-  <div class="w-full min-w-0">
-    <div class="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:max-w-5xl lg:px-8 xl:max-w-6xl 2xl:max-w-7xl">
+  <div class="w-full min-w-0 antialiased">
+    <div class="w-full min-w-0">
       <NuxtLink
         to="/tenant/campaigns"
-        class="group mb-8 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900"
+        class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
         @click="campaignStore.fetchCampaigns()"
       >
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm shadow-slate-900/[0.04] transition group-hover:border-indigo-200 group-hover:bg-indigo-50/80 group-hover:text-indigo-700">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
@@ -285,7 +285,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
 
       <div
         v-if="error"
-        class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+        class="mt-8 flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50 px-5 py-4 text-sm text-red-900 shadow-sm"
         role="alert"
       >
         <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -297,48 +297,48 @@ const campaignViewTab = ref<CampaignViewTab>('details')
       <!-- Loading skeleton -->
       <div
         v-else-if="showSkeleton"
-        class="space-y-8 animate-pulse sm:space-y-10"
+        class="mt-8 space-y-8 animate-pulse sm:space-y-10"
         aria-busy="true"
         aria-label="Loading campaign"
       >
         <header class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0 flex-1 space-y-4">
             <div class="flex gap-2">
-              <div class="h-4 w-24 rounded-md bg-zinc-200" />
-              <div class="h-4 w-4 rounded bg-zinc-200" />
-              <div class="h-4 w-32 rounded-md bg-zinc-200" />
+              <div class="h-4 w-24 rounded-md bg-slate-200/90" />
+              <div class="h-4 w-4 rounded bg-slate-200/90" />
+              <div class="h-4 w-32 rounded-md bg-slate-200/90" />
             </div>
-            <div class="h-9 max-w-xl rounded-xl bg-zinc-200" />
-            <div class="h-4 w-56 rounded-md bg-zinc-200" />
+            <div class="h-9 max-w-xl rounded-xl bg-slate-200/90" />
+            <div class="h-4 w-56 rounded-md bg-slate-200/90" />
           </div>
           <div class="flex shrink-0 gap-3">
-            <div class="h-10 w-24 rounded-xl bg-zinc-200" />
-            <div class="h-10 w-28 rounded-full bg-zinc-200" />
+            <div class="h-10 w-24 rounded-xl bg-slate-200/90" />
+            <div class="h-10 w-28 rounded-full bg-slate-200/90" />
           </div>
         </header>
 
         <div class="flex flex-col gap-8 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12">
           <div class="min-w-0 space-y-8 xl:col-span-5 2xl:col-span-4">
             <div class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 xl:grid-cols-1 xl:gap-8">
-              <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-                <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
-                  <div class="h-3.5 w-24 rounded bg-zinc-200" />
+              <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+                <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+                  <div class="h-3.5 w-24 rounded bg-slate-200/90" />
                 </div>
-                <div class="divide-y divide-zinc-100 px-5 py-4 space-y-6 sm:px-6 sm:py-5">
+                <div class="divide-y divide-slate-100 space-y-6 px-5 py-4 sm:px-6 sm:py-5">
                   <div v-for="n in 4" :key="n" class="grid gap-3 sm:grid-cols-3">
-                    <div class="h-4 w-20 rounded bg-zinc-200" />
-                    <div class="h-4 sm:col-span-2 rounded-lg bg-zinc-200" />
+                    <div class="h-4 w-20 rounded bg-slate-200/90" />
+                    <div class="h-4 rounded-lg bg-slate-200/90 sm:col-span-2" />
                   </div>
                 </div>
               </div>
-              <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-                <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
-                  <div class="h-3.5 w-40 rounded bg-zinc-200" />
+              <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+                <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+                  <div class="h-3.5 w-40 rounded bg-slate-200/90" />
                 </div>
-                <ul class="divide-y divide-zinc-100 px-5 py-1 sm:px-6">
+                <ul class="divide-y divide-slate-100 px-5 py-1 sm:px-6">
                   <li v-for="n in 5" :key="n" class="flex items-center justify-between gap-4 py-3.5">
-                    <div class="h-4 flex-1 max-w-[280px] rounded bg-zinc-200" />
-                    <div class="h-6 w-14 shrink-0 rounded-full bg-zinc-200" />
+                    <div class="h-4 max-w-[280px] flex-1 rounded bg-slate-200/90" />
+                    <div class="h-6 w-14 shrink-0 rounded-full bg-slate-200/90" />
                   </li>
                 </ul>
               </div>
@@ -346,22 +346,22 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           </div>
 
           <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
-            <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-              <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
-                <div class="h-3.5 w-32 rounded bg-zinc-200" />
+            <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+              <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+                <div class="h-3.5 w-32 rounded bg-slate-200/90" />
               </div>
-              <div class="min-h-[400px] bg-zinc-100/80 p-4 sm:p-6 xl:min-h-[min(55vh,480px)] 2xl:min-h-[min(60vh,560px)]">
-                <div class="mx-auto h-full min-h-[360px] max-w-3xl rounded-xl bg-zinc-200 2xl:max-w-none" />
+              <div class="min-h-[400px] bg-slate-100/80 p-4 sm:p-6 xl:min-h-[min(55vh,480px)] 2xl:min-h-[min(60vh,560px)]">
+                <div class="mx-auto h-full min-h-[360px] max-w-3xl rounded-xl bg-slate-200/90 2xl:max-w-none" />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-else-if="campaign" class="space-y-8 sm:space-y-10">
+      <div v-else-if="campaign" class="mt-8 space-y-8 sm:space-y-10">
         <div
           v-if="sendError && !sendingCampaignId"
-          class="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+          class="flex items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
           role="alert"
         >
           <div class="mt-0.5 shrink-0 text-amber-600">
@@ -372,7 +372,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
           <button
             type="button"
-            class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100/80"
+            class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100/90"
             @click="closeSendModal()"
           >
             Dismiss
@@ -381,21 +381,21 @@ const campaignViewTab = ref<CampaignViewTab>('details')
 
         <header class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
-            <nav class="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
+            <nav class="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
               <NuxtLink
                 to="/tenant/campaigns"
-                class="font-medium text-zinc-600 transition-colors hover:text-zinc-900"
+                class="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
                 @click="campaignStore.fetchCampaigns()"
               >
                 Campaigns
               </NuxtLink>
-              <span class="text-zinc-300" aria-hidden="true">/</span>
-              <span class="truncate text-zinc-700">{{ campaign.name }}</span>
+              <span class="text-slate-300" aria-hidden="true">/</span>
+              <span class="truncate font-medium text-slate-700">{{ campaign.name }}</span>
             </nav>
-            <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+            <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               {{ campaign.name }}
             </h1>
-            <p class="mt-2 text-sm text-zinc-500 sm:text-[15px]">
+            <p class="mt-2 text-sm text-slate-500 sm:text-[0.9375rem]">
               Created {{ formatDate(campaign.createdAt) }}
             </p>
             <div
@@ -417,7 +417,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <button
               v-if="campaignForSend && canSendDraft(campaignForSend)"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="!!sendingCampaignId || scheduleBusy"
               @click="handleSend"
             >
@@ -429,7 +429,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <button
               v-if="campaignForSend && canScheduleDraft(campaignForSend)"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="!!sendingCampaignId || scheduleBusy"
               @click="openScheduleModal"
             >
@@ -441,7 +441,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <button
               v-if="campaign?.status === 'Scheduled'"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/80 px-4 py-2.5 text-sm font-medium text-amber-950 shadow-sm transition hover:bg-amber-100/80 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition-colors hover:bg-amber-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="scheduleBusy"
               @click="handleUnschedule"
             >
@@ -450,7 +450,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <NuxtLink
               v-if="campaign.status === 'Draft' || campaign.status === 'Failed' || campaign.status === 'Scheduled'"
               :to="`/tenant/campaigns/edit/${campaign.id}`"
-              class="inline-flex items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:text-[15px]"
             >
               <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -458,13 +458,13 @@ const campaignViewTab = ref<CampaignViewTab>('details')
               Edit
             </NuxtLink>
             <span
-              class="inline-flex rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 sm:px-4 sm:py-2 sm:text-[15px]"
+              class="inline-flex rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 ring-inset sm:px-4 sm:py-2 sm:text-[15px]"
               :class="{
                 'bg-amber-50 text-amber-800 ring-amber-200/80': campaign.status === 'Draft',
-                'bg-blue-50 text-blue-800 ring-blue-200/80': campaign.status === 'Scheduled' || campaign.status === 'Sending',
+                'bg-sky-50 text-sky-800 ring-sky-200/80': campaign.status === 'Scheduled' || campaign.status === 'Sending',
                 'bg-emerald-50 text-emerald-800 ring-emerald-200/80': campaign.status === 'Sent',
                 'bg-red-50 text-red-800 ring-red-200/80': campaign.status === 'Failed',
-                'bg-zinc-50 text-zinc-700 ring-zinc-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
+                'bg-slate-100 text-slate-700 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
               }"
             >
               {{ campaign.status }}
@@ -473,16 +473,16 @@ const campaignViewTab = ref<CampaignViewTab>('details')
         </header>
 
         <nav
-          class="flex gap-1 border-b border-zinc-200/90"
+          class="flex gap-1 border-b border-slate-200/90"
           aria-label="Campaign views"
         >
           <button
             type="button"
-            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 sm:text-[15px]"
+            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:text-[15px]"
             :class="
               campaignViewTab === 'details'
-                ? 'border-zinc-900 text-zinc-900'
-                : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-800'
+                ? 'border-indigo-600 text-indigo-900'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'details' ? 'page' : undefined"
             @click="campaignViewTab = 'details'"
@@ -491,11 +491,11 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           </button>
           <button
             type="button"
-            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 sm:text-[15px]"
+            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:text-[15px]"
             :class="
               campaignViewTab === 'tracking'
-                ? 'border-zinc-900 text-zinc-900'
-                : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-800'
+                ? 'border-indigo-600 text-indigo-900'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'tracking' ? 'page' : undefined"
             @click="campaignViewTab = 'tracking'"
@@ -517,28 +517,28 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                   (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
               }"
             >
-              <div class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-                <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
-                  <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+                <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+                  <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Overview
                   </h2>
                 </div>
-                <dl class="divide-y divide-zinc-100">
+                <dl class="divide-y divide-slate-100">
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Sender</dt>
-                    <dd class="break-words text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Sender</dt>
+                    <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       {{ campaign.sender?.name }} &lt;{{ campaign.sender?.email }}&gt;
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Subject</dt>
-                    <dd class="break-words text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Subject</dt>
+                    <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       {{ previewSubject || '–' }}
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Recipients</dt>
-                    <dd class="text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Recipients</dt>
+                    <dd class="text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       <span v-if="campaign.recipientsType === 'manual'">
                         {{ campaign.recipients?.length ?? 0 }} manual recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }}
                       </span>
@@ -549,8 +549,8 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Updated</dt>
-                    <dd class="text-sm text-zinc-900 sm:col-span-2 sm:text-[15px]">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Updated</dt>
+                    <dd class="text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       {{ formatDate(campaign.updatedAt) }}
                     </dd>
                   </div>
@@ -558,9 +558,9 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                     v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
                     class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5"
                   >
-                    <dt class="text-sm font-medium text-zinc-500 sm:text-[15px]">Scheduled send</dt>
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Scheduled send</dt>
                     <dd class="space-y-1 text-sm sm:col-span-2 sm:text-[15px]">
-                      <div class="font-medium tabular-nums text-zinc-900">
+                      <div class="font-medium tabular-nums text-slate-900">
                         {{ formatScheduledDateTime(campaign.scheduledAt) }}
                       </div>
                       <div class="font-semibold tabular-nums text-sky-800">
@@ -576,29 +576,29 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                   campaign.recipients?.length &&
                   (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
                 "
-                class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
+                class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
               >
-                <div class="flex flex-col gap-3 border-b border-zinc-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                  <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Recipients ({{ campaign.recipients.length }})
                   </h2>
                   <div
                     v-if="campaign.recipients.some(r => r.status)"
-                    class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600 sm:text-sm"
+                    class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"
                   >
                     <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
                     <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
                     <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
                   </div>
                 </div>
-                <ul class="max-h-80 divide-y divide-zinc-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
+                <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
                   <li
                     v-for="(r, i) in campaign.recipients"
                     :key="i"
-                    class="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-zinc-50/50 sm:px-6"
+                    class="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50/80 sm:px-6"
                   >
                     <div class="min-w-0 flex-1">
-                      <span class="text-sm text-zinc-900 sm:text-[15px]">{{ r.email }}</span>
+                      <span class="text-sm text-slate-900 sm:text-[15px]">{{ r.email }}</span>
                       <p
                         v-if="r.status === 'failed' && r.error"
                         class="mt-1 truncate text-sm text-red-600"
@@ -625,19 +625,19 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           </div>
 
           <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
-            <div v-if="campaign.templateHtml" class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]">
-              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
+            <div v-if="campaign.templateHtml" class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
                 <div class="min-w-0">
-                  <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                     {{ previewTitle }}
                   </h2>
-                  <p class="mt-1 truncate text-sm text-zinc-600" :title="previewSubjectDisplay">
+                  <p class="mt-1 truncate text-sm text-slate-600" :title="previewSubjectDisplay">
                     Subject: {{ previewSubjectDisplay }}
                   </p>
                 </div>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                  class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
                   @click="openPreviewModal"
                 >
                   <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -661,7 +661,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                   class="pointer-events-none min-h-[400px] w-full select-none border-0 xl:min-h-[min(48vh,520px)]"
                   sandbox="allow-same-origin"
                 />
-                <p class="pointer-events-none mt-3 text-center text-xs text-zinc-500">
+                <p class="pointer-events-none mt-3 text-center text-xs text-slate-500">
                   Click to open full preview
                 </p>
               </div>
@@ -669,9 +669,9 @@ const campaignViewTab = ref<CampaignViewTab>('details')
 
             <div
               v-else
-              class="rounded-2xl border border-dashed border-zinc-200/90 bg-zinc-50/50 px-5 py-10 text-center sm:px-8 sm:py-12 xl:py-16"
+              class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-10 text-center shadow-sm shadow-slate-900/[0.02] sm:px-8 sm:py-12 xl:py-16"
             >
-              <p class="text-sm text-zinc-500 sm:text-[15px]">No email template</p>
+              <p class="text-sm text-slate-500 sm:text-[0.9375rem]">No email template</p>
             </div>
           </div>
         </div>
@@ -695,25 +695,25 @@ const campaignViewTab = ref<CampaignViewTab>('details')
         aria-labelledby="email-preview-modal-title"
       >
         <div
-          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
           aria-hidden="true"
           @click="closePreviewModal"
         />
         <div
-          class="relative flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:h-[92vh] sm:rounded-2xl"
+          class="relative flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:h-[92vh] sm:rounded-2xl"
         >
-          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4 sm:px-6">
+          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
             <div class="min-w-0">
-              <p id="email-preview-modal-title" class="text-base font-semibold text-zinc-900 sm:text-lg">
+              <p id="email-preview-modal-title" class="text-base font-semibold text-slate-900 sm:text-lg">
                 {{ previewTitle }}
               </p>
-              <p class="mt-1 truncate text-sm text-zinc-600 sm:text-base" :title="previewSubjectDisplay">
+              <p class="mt-1 truncate text-sm text-slate-600 sm:text-base" :title="previewSubjectDisplay">
                 Subject: {{ previewSubjectDisplay }}
               </p>
             </div>
             <button
               type="button"
-              class="shrink-0 rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+              class="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
               aria-label="Close preview"
               @click="closePreviewModal"
             >
@@ -760,27 +760,27 @@ const campaignViewTab = ref<CampaignViewTab>('details')
         aria-labelledby="schedule-send-title"
       >
         <div
-          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
           aria-hidden="true"
           @click="closeScheduleModal"
         />
         <div
-          class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200/90 sm:rounded-2xl sm:p-6"
+          class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6"
         >
-          <h2 id="schedule-send-title" class="text-lg font-semibold text-zinc-900">
+          <h2 id="schedule-send-title" class="text-lg font-semibold text-slate-900">
             Schedule send
           </h2>
-          <p class="mt-1 text-sm text-zinc-500">
+          <p class="mt-1 text-sm text-slate-500">
             Choose when this campaign should start sending (your local time).
           </p>
-          <label class="mt-4 block text-sm font-medium text-zinc-700" for="schedule-datetime">
+          <label class="mt-4 block text-sm font-medium text-slate-700" for="schedule-datetime">
             Date &amp; time
           </label>
           <input
             id="schedule-datetime"
             v-model="scheduleLocal"
             type="datetime-local"
-            class="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
           >
           <p
             v-if="scheduleError"
@@ -792,7 +792,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
-              class="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
               :disabled="scheduleBusy"
               @click="closeScheduleModal"
             >
@@ -800,7 +800,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             </button>
             <button
               type="button"
-              class="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
               :disabled="scheduleBusy"
               @click="confirmSchedule"
             >

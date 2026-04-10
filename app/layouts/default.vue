@@ -77,13 +77,13 @@ async function handleLogout() {
 }
 
 const navLinkClass =
-  'group flex items-center gap-3 rounded-xl text-sm font-medium text-zinc-600 transition-[padding,gap] duration-200 hover:bg-zinc-100 hover:text-zinc-900'
+  'group flex items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-[padding,gap,background-color,color] duration-200 hover:bg-slate-100 hover:text-slate-900'
 
 const navLinkActiveClass =
-  '!bg-zinc-900 !text-white shadow-sm !shadow-zinc-900/20 hover:!bg-zinc-800 hover:!text-white [&_span]:!text-white [&_svg]:!text-white'
+  '!bg-indigo-600 !text-white shadow-md shadow-indigo-600/25 hover:!bg-indigo-700 hover:!text-white [&_span]:!text-white [&_svg]:!text-white'
 
 const navIconClass =
-  'w-5 h-5 shrink-0 text-zinc-400 group-[.router-link-active]:!text-white'
+  'w-5 h-5 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600 group-[.router-link-active]:!text-white'
 
 function navLinkLayoutClass(compact: boolean) {
   return compact ? 'justify-center px-2 py-2.5 [&>span]:sr-only' : 'px-3 py-2.5'
@@ -91,11 +91,11 @@ function navLinkLayoutClass(compact: boolean) {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-zinc-100 text-zinc-900 antialiased">
+  <div class="flex min-h-screen bg-slate-50 text-slate-900 antialiased">
     <NuxtLoadingIndicator
       :height="3"
-      color="#27272a"
-      error-color="#b91c1c"
+      color="#4f46e5"
+      error-color="#dc2626"
       :throttle="50"
     />
     <Transition
@@ -106,7 +106,7 @@ function navLinkLayoutClass(compact: boolean) {
     >
       <div
         v-if="!sidebarCompact"
-        class="fixed inset-0 z-40 bg-zinc-950/40 backdrop-blur-[2px] lg:hidden"
+        class="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm lg:hidden"
         aria-hidden="true"
         @click="sidebarCompact = true"
       />
@@ -114,25 +114,25 @@ function navLinkLayoutClass(compact: boolean) {
 
     <aside
       id="marketing-app-sidebar"
-      class="fixed inset-y-0 left-0 z-50 flex h-svh min-h-0 flex-col overflow-hidden border-r border-zinc-200/80 bg-white shadow-xl shadow-zinc-950/5 transition-[width] duration-200 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-svh lg:max-w-none lg:shrink-0 lg:shadow-none"
+      class="fixed inset-y-0 left-0 z-50 flex h-svh min-h-0 flex-col overflow-hidden border-r border-slate-200/90 bg-white shadow-lg shadow-slate-900/[0.06] transition-[width] duration-200 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-svh lg:max-w-none lg:shrink-0 lg:shadow-sm lg:shadow-slate-900/[0.04]"
       :class="sidebarCompact ? 'w-16 lg:w-16' : 'w-[min(18rem,88vw)] lg:w-72'"
     >
       <div
-        class="flex shrink-0 items-center gap-2 border-b border-zinc-200/80 transition-[padding] duration-200"
+        class="flex shrink-0 items-center gap-2 border-b border-slate-100 transition-[padding] duration-200"
         :class="sidebarCompact ? 'flex-col px-2 py-3' : 'justify-between px-4 py-4 lg:px-5 lg:py-5'"
       >
         <div
           class="min-w-0 transition-[opacity] duration-200"
           :class="sidebarCompact ? 'sr-only' : 'flex-1'"
         >
-          <h1 class="truncate text-base font-semibold tracking-tight text-zinc-900">
+          <h1 class="truncate text-base font-semibold tracking-tight text-slate-900">
             {{ me?.authType === 'apiKey' ? me.tenantName : 'Mortdash' }}
           </h1>
-          <p class="mt-0.5 text-xs font-medium text-zinc-500">Marketing</p>
+          <p class="mt-0.5 text-xs font-semibold uppercase tracking-wider text-indigo-600">Marketing</p>
         </div>
         <button
           type="button"
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           :aria-expanded="!sidebarCompact"
           aria-controls="marketing-app-sidebar-nav"
           :aria-label="sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar to icons'"
@@ -173,7 +173,7 @@ function navLinkLayoutClass(compact: boolean) {
 
       <nav
         id="marketing-app-sidebar-nav"
-        class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-3"
+        class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3"
         aria-label="Primary"
       >
         <NuxtLink
@@ -233,17 +233,17 @@ function navLinkLayoutClass(compact: boolean) {
         </NuxtLink>
       </nav>
 
-      <div class="shrink-0 border-t border-zinc-200/80 p-3">
+      <div class="shrink-0 border-t border-slate-100 p-3">
         <div
           v-if="!isApiKeyBrowserSession && !sidebarCompact"
-          class="mb-3 rounded-xl border border-zinc-200/90 bg-zinc-50/80 px-3 py-2.5"
+          class="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/90 px-3.5 py-3 shadow-sm shadow-slate-900/[0.03]"
         >
-          <p class="truncate text-xs font-medium text-zinc-900">{{ sidebarAccount.primary }}</p>
-          <p v-if="sidebarAccount.secondary" class="mt-0.5 text-xs text-zinc-500">{{ sidebarAccount.secondary }}</p>
+          <p class="truncate text-xs font-medium text-slate-900">{{ sidebarAccount.primary }}</p>
+          <p v-if="sidebarAccount.secondary" class="mt-0.5 text-xs text-slate-500">{{ sidebarAccount.secondary }}</p>
         </div>
         <button
           v-if="isApiKeyBrowserSession"
-          class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+          class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           :class="sidebarCompact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5 text-left'"
           type="button"
           title="Back to CRM"
@@ -261,7 +261,7 @@ function navLinkLayoutClass(compact: boolean) {
         </button>
         <button
           v-else
-          class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-zinc-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
+          class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
           :class="sidebarCompact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'"
           type="button"
           title="Logout"

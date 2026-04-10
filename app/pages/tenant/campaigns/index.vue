@@ -271,19 +271,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="w-full min-w-0">
-    <header class="mb-8 flex flex-col gap-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
-      <div class="min-w-0 space-y-1">
-        <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+  <div class="w-full min-w-0 space-y-8 antialiased">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
           Campaigns
         </h1>
-        <p class="max-w-xl text-sm text-zinc-500 sm:text-[15px]">
+        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
           Create sends, track draft and delivery status, and manage campaigns from one place.
         </p>
       </div>
       <NuxtLink
         to="/tenant/campaigns/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-zinc-900/20 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -294,7 +294,7 @@ onUnmounted(() => {
 
     <div
       v-if="sendError && !sendingCampaignId"
-      class="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-amber-50/30 px-4 py-3.5 text-sm text-amber-950 shadow-sm shadow-amber-900/5"
+      class="flex items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
       role="alert"
     >
       <div class="mt-0.5 shrink-0 text-amber-600">
@@ -305,7 +305,7 @@ onUnmounted(() => {
       <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
       <button
         type="button"
-        class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100/80"
+        class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100/90"
         @click="closeSendModal()"
       >
         Dismiss
@@ -314,60 +314,72 @@ onUnmounted(() => {
 
     <div
       v-if="campaignsIndexPending"
-      class="animate-pulse space-y-4"
+      class="animate-pulse space-y-5"
       aria-busy="true"
       aria-label="Loading campaigns"
     >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-        <div class="h-10 w-full rounded-lg bg-zinc-200 sm:max-w-md md:max-w-lg" />
-        <div class="h-10 w-full rounded-lg bg-zinc-200 sm:w-44" />
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+        <div class="h-11 w-full flex-1 rounded-xl bg-slate-200/80" />
+        <div class="h-11 w-full shrink-0 rounded-xl bg-slate-200/80 sm:w-[11rem]" />
       </div>
       <div
         v-for="n in 5"
         :key="n"
-        class="rounded-xl border border-zinc-200/90 bg-white px-5 py-4 shadow-sm sm:px-6 sm:py-5"
+        class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:px-6 sm:py-5"
       >
         <div class="flex items-start gap-3 sm:gap-4">
           <div class="min-w-0 flex-1 space-y-3">
             <div class="flex flex-wrap items-center gap-2">
-              <div class="h-5 w-48 max-w-[70%] rounded-md bg-zinc-200 sm:w-64" />
-              <div class="h-5 w-16 rounded-full bg-zinc-200" />
+              <div class="h-5 w-48 max-w-[70%] rounded-md bg-slate-200/90 sm:w-64" />
+              <div class="h-5 w-16 rounded-full bg-slate-200/90" />
             </div>
-            <div class="h-4 w-40 rounded bg-zinc-200" />
+            <div class="h-4 w-40 rounded bg-slate-200/90" />
           </div>
           <div class="flex shrink-0 gap-1">
-            <div class="h-9 w-9 rounded-lg bg-zinc-200" />
-            <div class="h-9 w-9 rounded-lg bg-zinc-200" />
+            <div class="h-9 w-9 rounded-lg bg-slate-200/90" />
+            <div class="h-9 w-9 rounded-lg bg-slate-200/90" />
           </div>
         </div>
       </div>
-      <div class="flex h-14 items-center justify-between rounded-2xl border border-zinc-200/90 bg-white px-4 sm:px-5">
-        <div class="h-4 w-32 rounded bg-zinc-200" />
+      <div
+        class="flex h-14 items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 shadow-sm sm:px-6"
+      >
+        <div class="h-4 w-32 rounded bg-slate-200/90" />
         <div class="flex gap-2">
-          <div class="h-9 w-20 rounded-xl bg-zinc-200" />
-          <div class="h-9 w-24 rounded-xl bg-zinc-200" />
+          <div class="h-9 w-20 rounded-xl bg-slate-200/90" />
+          <div class="h-9 w-24 rounded-xl bg-slate-200/90" />
         </div>
       </div>
     </div>
 
     <template v-else>
-    <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="relative min-w-0 w-full sm:max-w-md md:max-w-lg">
+    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+      <div class="relative min-w-0 flex-1">
         <label class="sr-only" for="campaigns-search">Search campaigns</label>
+        <svg
+          class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
         <input
           id="campaigns-search"
           v-model="searchQuery"
           type="search"
           autocomplete="off"
           placeholder="Search campaigns…"
-          class="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+          class="w-full rounded-xl border border-slate-200/90 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
         >
       </div>
-      <select
-        v-model="statusFilter"
-        aria-label="Filter by status"
-        class="w-full shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-300 sm:w-auto sm:min-w-[10.5rem]"
-      >
+      <div class="relative w-full shrink-0 sm:w-[11rem]">
+        <select
+          v-model="statusFilter"
+          aria-label="Filter by status"
+          class="h-full w-full min-h-[2.875rem] cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] font-medium text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+        >
         <option value="all">
           All statuses
         </option>
@@ -386,28 +398,40 @@ onUnmounted(() => {
         <option value="Failed">
           Failed
         </option>
-      </select>
+        </select>
+        <svg
+          class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
     </div>
 
     <div
       v-if="!filteredCampaigns.length"
-      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center shadow-sm sm:py-20"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
     >
-      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+      <div
+        class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
+      >
         <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
       </div>
-      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+      <h3 class="mt-6 text-lg font-semibold tracking-tight text-slate-900">
         {{ campaigns.length ? 'No matching campaigns' : 'No campaigns yet' }}
       </h3>
-      <p class="mt-2 max-w-sm text-sm text-zinc-500">
+      <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
         {{ campaigns.length ? 'Try a different search or status filter.' : 'Create your first campaign to start sending email.' }}
       </p>
       <NuxtLink
         v-if="!campaigns.length"
         to="/tenant/campaigns/add"
-        class="mt-8 inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+        class="mt-8 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
       >
         Create campaign
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -416,35 +440,35 @@ onUnmounted(() => {
       </NuxtLink>
     </div>
 
-    <div v-else class="space-y-4">
+    <div v-else class="space-y-5">
       <article
         v-for="c in paginatedCampaigns"
         :key="c.id"
-        class="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:border-zinc-300/90 sm:px-6 sm:py-5"
+        class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:px-6 sm:py-5"
       >
         <div class="flex items-start gap-3 sm:gap-4">
           <NuxtLink
             :to="`/tenant/campaigns/${c.id}`"
-            class="min-w-0 flex-1 outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-zinc-900/15"
+            class="min-w-0 flex-1 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
           >
             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h2 class="text-[15px] font-semibold leading-snug text-zinc-900 sm:text-base">
+              <h2 class="text-[15px] font-semibold leading-snug text-slate-900 sm:text-base">
                 {{ c.name || 'Untitled' }}
               </h2>
               <span
-                class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
+                class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset"
                 :class="{
-                  'bg-amber-50 text-amber-700': c.status === 'Draft',
-                  'bg-sky-50 text-sky-700': c.status === 'Scheduled' || c.status === 'Sending',
-                  'bg-emerald-50 text-emerald-700': c.status === 'Sent',
-                  'bg-red-50 text-red-700': c.status === 'Failed',
-                  'bg-zinc-100 text-zinc-600': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
+                  'bg-amber-50 text-amber-700 ring-amber-200/80': c.status === 'Draft',
+                  'bg-sky-50 text-sky-700 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
+                  'bg-emerald-50 text-emerald-700 ring-emerald-200/80': c.status === 'Sent',
+                  'bg-red-50 text-red-700 ring-red-200/80': c.status === 'Failed',
+                  'bg-slate-100 text-slate-600 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
                 }"
               >
                 {{ c.status }}
               </span>
             </div>
-            <p class="mt-2 text-sm text-zinc-500">
+            <p class="mt-2 text-sm text-slate-500">
               {{ campaignSubtitle(c, countdownNow) }}
             </p>
           </NuxtLink>
@@ -452,7 +476,7 @@ onUnmounted(() => {
           <button
             v-if="canSendDraft(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Send campaign"
             @click.stop="handleSend(c)"
@@ -464,7 +488,7 @@ onUnmounted(() => {
           <button
             v-if="canScheduleDraft(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Schedule send"
             @click.stop="openScheduleModal(c)"
@@ -476,7 +500,7 @@ onUnmounted(() => {
           <button
             v-if="c.status === 'Scheduled'"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-amber-600 transition hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="scheduleBusy"
             title="Cancel schedule"
             @click.stop="handleUnschedule(c)"
@@ -488,7 +512,7 @@ onUnmounted(() => {
           <button
             v-if="c.status === 'Sent'"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-zinc-900/20"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/25"
             title="Duplicate campaign"
             @click.stop="openDuplicateModal(c)"
           >
@@ -498,7 +522,7 @@ onUnmounted(() => {
           </button>
           <button
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
             title="Delete campaign"
             @click.stop="openDeleteModal(c)"
           >
@@ -510,26 +534,29 @@ onUnmounted(() => {
         </div>
       </article>
 
-      <div class="flex flex-col gap-4 rounded-2xl border border-zinc-200/90 bg-white px-4 py-4 text-sm text-zinc-600 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <p class="tabular-nums text-zinc-500">
-          <span class="font-medium text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          of {{ paginationMeta.total.toLocaleString() }}
+      <div
+        class="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4 text-sm text-slate-600 shadow-sm shadow-slate-900/[0.03] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
+      >
+        <p class="tabular-nums text-slate-500">
+          <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+          <span class="mx-1.5 text-slate-300">·</span>
+          <span>{{ paginationMeta.total.toLocaleString() }} campaigns</span>
         </p>
-        <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
           <button
             type="button"
-            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
             Previous
           </button>
-          <span class="min-w-[5rem] text-center tabular-nums text-zinc-500">
+          <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-slate-500">
             Page {{ currentPage }} / {{ totalPages }}
           </span>
           <button
             type="button"
-            class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
@@ -589,27 +616,27 @@ onUnmounted(() => {
         aria-labelledby="schedule-campaign-list-title"
       >
         <div
-          class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
           aria-hidden="true"
           @click="closeScheduleModal"
         />
         <div
-          class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200/90 sm:rounded-2xl sm:p-6"
+          class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6"
         >
-          <h2 id="schedule-campaign-list-title" class="text-lg font-semibold text-zinc-900">
+          <h2 id="schedule-campaign-list-title" class="text-lg font-semibold text-slate-900">
             Schedule send
           </h2>
-          <p class="mt-1 truncate text-sm text-zinc-600" :title="campaignToSchedule.name">
+          <p class="mt-1 truncate text-sm text-slate-600" :title="campaignToSchedule.name">
             {{ campaignToSchedule.name || 'Untitled' }}
           </p>
-          <label class="mt-4 block text-sm font-medium text-zinc-700" for="schedule-list-datetime">
+          <label class="mt-4 block text-sm font-medium text-slate-700" for="schedule-list-datetime">
             Date &amp; time
           </label>
           <input
             id="schedule-list-datetime"
             v-model="scheduleLocal"
             type="datetime-local"
-            class="mt-2 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
           >
           <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
             {{ scheduleError }}
@@ -617,7 +644,7 @@ onUnmounted(() => {
           <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
-              class="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
               :disabled="scheduleBusy"
               @click="closeScheduleModal"
             >
@@ -625,7 +652,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
               :disabled="scheduleBusy"
               @click="confirmScheduleFromList"
             >
