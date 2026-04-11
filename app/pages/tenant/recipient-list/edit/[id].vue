@@ -101,7 +101,7 @@
                     required
                   >
                     <option v-if="!audienceOptions.length" disabled value="">
-                      No audiences from filters
+                      No audience types available
                     </option>
                     <option
                       v-for="opt in audienceOptions"
@@ -115,7 +115,7 @@
                     v-if="data.tenantIdConfigured && !audienceOptions.length"
                     class="mt-2 text-sm text-slate-500"
                   >
-                    Add at least one recipient filter in admin (per contact type) to choose an audience here.
+                    Enable prospect, client, or contact under tenant contact types (Admin), or add a recipient filter for that type.
                   </p>
                 </div>
               </div>

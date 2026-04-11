@@ -21,8 +21,7 @@ export function normalizeContactTypeInput(raw: unknown): string[] {
   return s ? [s] : []
 }
 
-/** Pick a single `contactKind` enum for legacy queries / merge fields from `contactType` keys. */
-export function deriveContactKindFromContactTypes(types: string[]): ContactKind {
+export function primaryLifecycleKeyFromTypes(types: string[]): ContactKind {
   const set = new Set(types.map((t) => t.trim().toLowerCase()).filter(Boolean))
   for (const k of KIND_PRIORITY) {
     if (set.has(k)) return k
@@ -30,9 +29,12 @@ export function deriveContactKindFromContactTypes(types: string[]): ContactKind 
   return 'contact'
 }
 
+/** @deprecated Use `primaryLifecycleKeyFromTypes`. */
+export const deriveContactKindFromContactTypes = primaryLifecycleKeyFromTypes
+
 /**
- * Mutates a `$set`-style object: sets normalized `contactType` (string[]) and derived `contactKind`.
- * Call before `Contact.updateOne` / etc. when the payload may include `contactType` and/or `contactKind`.
+ * Mutates a `$set`-style object: sets normalized `contactType` (string[]) only.
+ * Inbound payloads may still send legacy `contactKind` as a string — it is folded into `contactType`.
  */
 export function applyContactTypeFieldsToSetDoc(set: Record<string, unknown>): void {
   const rawArr = set.contactType
@@ -47,27 +49,13 @@ export function applyContactTypeFieldsToSetDoc(set: Record<string, unknown>): vo
   }
 
   set.contactType = types
-  set.contactKind = deriveContactKindFromContactTypes(types)
+  delete set.contactKind
 }
 
-/** Recipient list audience: match `contactType` array or legacy `contactKind` when types are empty. */
+/** Recipient list audience: `contactType` array must include the audience key. */
 export function audienceBaseQuery(audience: ContactKind): FilterQuery<Record<string, unknown>> {
   return {
     deletedAt: null,
-    $or: [
-      { contactType: audience },
-      {
-        $and: [
-          { contactKind: audience },
-          {
-            $or: [
-              { contactType: { $exists: false } },
-              { contactType: null },
-              { contactType: { $size: 0 } }
-            ]
-          }
-        ]
-      }
-    ]
+    contactType: audience
   }
 }

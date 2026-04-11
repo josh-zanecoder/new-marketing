@@ -12,15 +12,17 @@ import type { RecipientListMemberModel } from '@server/types/tenant/recipientLis
 import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { primaryLifecycleKeyFromTypes } from '@server/utils/contact/contactTypeWrite'
 
-function contactKindRank(k: string): number {
+function lifecycleRankFromTypes(types: string[] | undefined): number {
+  const k = primaryLifecycleKeyFromTypes(types ?? [])
   const order: Record<string, number> = { client: 0, prospect: 1, contact: 2 }
   return order[k] ?? 3
 }
 
 function pickPreferredContact(a: ContactLean, b: ContactLean): ContactLean {
-  const ra = contactKindRank(a.contactKind)
-  const rb = contactKindRank(b.contactKind)
+  const ra = lifecycleRankFromTypes(a.contactType)
+  const rb = lifecycleRankFromTypes(b.contactType)
   if (ra !== rb) return ra < rb ? a : b
   const ta = a.updatedAt?.getTime() ?? 0
   const tb = b.updatedAt?.getTime() ?? 0

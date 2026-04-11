@@ -603,6 +603,7 @@
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { CampaignContactPickerRow } from '~/types/tenantContact'
+import { primaryLifecycleKeyFromTypes } from '~~/shared/utils/contactLifecycle'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -734,16 +735,14 @@ async function loadContactsCatalog() {
         const typeKeys = [
           ...new Set(rawTypes.map((k) => String(k).trim().toLowerCase()).filter(Boolean))
         ]
-        const kind = String(c.contactKind ?? '')
-          .trim()
-          .toLowerCase()
+        const keys = typeKeys.length ? typeKeys : (['contact'] as string[])
         return {
           id: c.id,
           name: (c.name ?? '').trim(),
           email: (c.email ?? '').trim(),
           company: (c.company ?? '').trim() || undefined,
-          contactKind: kind,
-          contactType: typeKeys.length ? typeKeys : kind ? [kind] : []
+          lifecycleKey: primaryLifecycleKeyFromTypes(keys),
+          contactType: keys
         }
       })
       .filter((c) => c.email.includes('@'))

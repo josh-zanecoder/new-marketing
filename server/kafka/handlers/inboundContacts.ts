@@ -43,7 +43,7 @@ type SyncSnapshotUpsertRow = {
   channel: string
   ownerId: string
   ownerEmail: string
-  /** Normalized keys written to `contactType` + derived `contactKind`. */
+  /** Normalized keys written to `contactType` on the tenant contact. */
   contactTypeKeys: string[]
 }
 

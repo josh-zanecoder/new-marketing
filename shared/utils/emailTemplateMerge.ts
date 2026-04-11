@@ -73,7 +73,6 @@ const RECIPIENT_MERGE_KEYS = [
   'email',
   'phone',
   'company',
-  'contactKind',
   'contactType',
   'channel',
   'street',

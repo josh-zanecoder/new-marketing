@@ -49,7 +49,6 @@ type ContactRow = {
   name?: string
   email?: string
   phone?: string | null
-  contactKind?: string
   contactType?: string[]
   company?: string | null
   channel?: string | null
@@ -216,7 +215,6 @@ export default defineEventHandler(async (event) => {
             name: 1,
             email: 1,
             phone: 1,
-            contactKind: 1,
             contactType: 1,
             company: 1,
             channel: 1,
@@ -239,7 +237,6 @@ export default defineEventHandler(async (event) => {
         name: formatContactFullName(firstName, lastName),
         email: c!.email ?? '',
         phone: c!.phone ?? '',
-        contactKind: c!.contactKind ?? '',
         contactType:
           Array.isArray(c!.contactType) && c!.contactType.length
             ? [...new Set(c!.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean))]

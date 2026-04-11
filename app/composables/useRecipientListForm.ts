@@ -15,6 +15,8 @@ export interface RecipientListContactTypeOption {
   key: string
   label: string
   sortOrder: number
+  /** When false, exclude from audience picker. */
+  enabled?: boolean
 }
 
 export interface RecipientListFormPayload {
@@ -86,6 +88,9 @@ export type RecipientListFormEditReturn = RecipientListFormSharedReturn & {
 
 const AUDIENCE_ORDER = ['prospect', 'client', 'contact'] as const
 
+/** RecipientList.audience in Mongo is limited to these three keys. */
+const LIST_AUDIENCE_ENUM = new Set<string>(AUDIENCE_ORDER)
+
 const PROPERTY_FIELD_LABELS: Record<string, string> = {
   none: 'None',
   address: 'Address',
@@ -130,12 +135,18 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
 
   const audienceOptions = computed((): { value: string; label: string }[] => {
     const d = data.value
-    if (!d?.recipientFilters?.length) return []
+    if (!d) return []
     const seen = new Set<string>()
-    for (const f of d.recipientFilters) {
+    for (const f of d.recipientFilters ?? []) {
       if (f.enabled && typeof f.contactType === 'string' && f.contactType.trim()) {
-        seen.add(f.contactType.trim().toLowerCase())
+        const k = f.contactType.trim().toLowerCase()
+        if (LIST_AUDIENCE_ENUM.has(k)) seen.add(k)
       }
+    }
+    for (const t of d.contactTypes ?? []) {
+      if (t.enabled === false) continue
+      const k = t.key.trim().toLowerCase()
+      if (k && LIST_AUDIENCE_ENUM.has(k)) seen.add(k)
     }
     const labelByKey = new Map<string, string>()
     const orderByKey = new Map<string, number>()

@@ -19,7 +19,6 @@ type ContactRow = {
   lastName?: string
   name?: string
   email?: string
-  contactKind?: string
   contactType?: string[]
   company?: string | null
   channel?: string | null
@@ -79,8 +78,15 @@ export default defineEventHandler(async (event) => {
 
   const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
-  const [contactTotal, contactsRaw, kindCounts, listsRaw, contactTypeDocs] =
-    await Promise.all([
+  const [
+    contactTotal,
+    contactsRaw,
+    countProspect,
+    countClient,
+    countContact,
+    listsRaw,
+    contactTypeDocs
+  ] = await Promise.all([
     Contact.countDocuments(contactFilter),
     Contact.find(contactFilter)
       .select({
@@ -88,7 +94,6 @@ export default defineEventHandler(async (event) => {
         lastName: 1,
         name: 1,
         email: 1,
-        contactKind: 1,
         contactType: 1,
         company: 1,
         channel: 1,
@@ -99,10 +104,9 @@ export default defineEventHandler(async (event) => {
       .limit(CONTACT_LIMIT)
       .lean()
       .exec(),
-    Contact.aggregate<{ _id: string; count: number }>([
-      { $match: contactFilter },
-      { $group: { _id: '$contactKind', count: { $sum: 1 } } }
-    ]).exec(),
+    Contact.countDocuments({ ...contactFilter, contactType: 'prospect' }),
+    Contact.countDocuments({ ...contactFilter, contactType: 'client' }),
+    Contact.countDocuments({ ...contactFilter, contactType: 'contact' }),
     RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
       .sort({ updatedAt: -1 })
       .limit(200)
@@ -147,11 +151,6 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const byKind: Record<string, number> = {}
-  for (const row of kindCounts) {
-    if (row._id) byKind[String(row._id)] = row.count
-  }
-
   type ContactTypeLean = {
     key?: string
     label?: string
@@ -194,7 +193,6 @@ export default defineEventHandler(async (event) => {
         lastName,
         name: formatContactFullName(firstName, lastName),
         email: c.email ?? '',
-        contactKind: c.contactKind ?? '',
         contactType: keys,
         company: c.company ?? '',
         channel: c.channel ?? '',
@@ -205,9 +203,9 @@ export default defineEventHandler(async (event) => {
     contactTotal,
     contactsTruncated: contactTotal > CONTACT_LIMIT,
     contactCounts: {
-      prospect: byKind.prospect ?? 0,
-      client: byKind.client ?? 0,
-      contact: byKind.contact ?? 0
+      prospect: countProspect,
+      client: countClient,
+      contact: countContact
     },
     contactTypes,
     recipientFilters,

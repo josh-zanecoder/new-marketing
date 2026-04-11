@@ -244,9 +244,9 @@
                     </div>
                     <span
                       v-else
-                      class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
+                      class="text-xs text-zinc-400"
                     >
-                      {{ m.contactKind }}
+                      —
                     </span>
                   </td>
                   <td class="hidden max-w-[10rem] truncate px-4 py-3.5 text-zinc-700 sm:table-cell sm:max-w-[12rem] sm:px-6" :title="m.company || undefined">

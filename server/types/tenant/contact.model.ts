@@ -15,8 +15,7 @@ export interface ContactLean {
   _id: Types.ObjectId
   externalId?: string
   source?: string
-  contactKind: ContactKind
-  /** Keys aligned with tenant `ContactType.key`; empty on legacy docs until next write. */
+  /** Keys aligned with tenant `ContactType.key`; at least one after sync / save hooks. */
   contactType?: string[]
   firstName: string
   lastName: string

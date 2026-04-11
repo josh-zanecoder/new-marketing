@@ -1,10 +1,5 @@
 import mongoose from 'mongoose'
-import {
-  deriveContactKindFromContactTypes,
-  normalizeContactTypeInput
-} from '@server/utils/contact/contactTypeWrite'
-
-const contactKindEnum = ['prospect', 'client', 'contact'] as const
+import { normalizeContactTypeInput } from '@server/utils/contact/contactTypeWrite'
 
 const addressSchema = new mongoose.Schema(
   {
@@ -20,16 +15,10 @@ export const contactSchema = new mongoose.Schema(
   {
     externalId: { type: String, default: '' },
     source: { type: String, default: '' },
-    contactKind: {
-      type: String,
-      enum: contactKindEnum,
-      required: true,
-      index: true
-    },
     /** Tenant marketing contact-type keys (same vocabulary as `contact_types.key`); multiple allowed. */
     contactType: {
       type: [{ type: String, trim: true, lowercase: true }],
-      default: () => []
+      default: () => ['contact']
     },
     firstName: { type: String, required: true, trim: true, default: '' },
     lastName: { type: String, required: true, trim: true, default: '' },
@@ -46,17 +35,15 @@ export const contactSchema = new mongoose.Schema(
   { timestamps: true }
 )
 
-contactSchema.index({ email: 1, contactKind: 1 })
+contactSchema.index({ email: 1 })
 contactSchema.index({ contactType: 1 })
 contactSchema.index({ externalId: 1, source: 1 }, { sparse: true })
 contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
 
-contactSchema.pre('save', function syncContactTypeAndKind(next) {
+contactSchema.pre('save', function syncContactTypes(next) {
   let types = normalizeContactTypeInput(this.get('contactType'))
-  if (!types.length) types = normalizeContactTypeInput(this.get('contactKind'))
   if (!types.length) types = ['contact']
   this.set('contactType', types)
-  this.set('contactKind', deriveContactKindFromContactTypes(types))
   next()
 })

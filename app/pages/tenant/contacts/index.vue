@@ -62,7 +62,7 @@
         <label class="sr-only" for="contacts-kind-filter">Contact type</label>
         <select
           id="contacts-kind-filter"
-          v-model="contactKindFilter"
+          v-model="contactTypeFilter"
           class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
         >
             <option value="all">
@@ -187,7 +187,7 @@
                     v-for="(label, idx) in row.contactTypeLabels"
                     :key="`${row.id}-${row.contactType![idx]}`"
                     class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-                    :class="contactKindBadgeClass(row.contactType![idx] ?? '')"
+                    :class="typeKeyBadgeClass(row.contactType![idx] ?? '')"
                   >
                     {{ label }}
                   </span>
@@ -195,9 +195,9 @@
                 <span
                   v-else
                   class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-                  :class="contactKindBadgeClass(row.contactKind)"
+                  :class="typeKeyBadgeClass(row.contactType?.[0] ?? '')"
                 >
-                  {{ row.contactKindLabel }}
+                  {{ row.primaryTypeLabel }}
                 </span>
               </td>
               <td
@@ -265,7 +265,7 @@ import type {
 
 definePageMeta({ layout: 'default' })
 
-function contactKindBadgeClass(kind: string): string {
+function typeKeyBadgeClass(kind: string): string {
   if (!kind.trim()) return 'bg-slate-100 text-slate-500 ring-slate-200/80'
   const k = kind.toLowerCase()
   if (k.includes('prospect')) return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
@@ -291,15 +291,14 @@ const pending = ref(true)
 const loadError = ref('')
 const data = ref<TenantContactsListPayload | null>(null)
 const searchQuery = ref('')
-/** `'all'`, `'__none__'` (no kind), or lowercase contact type key. */
-const contactKindFilter = ref('all')
+/** `'all'`, `'__none__'` (no types), or lowercase contact type key. */
+const contactTypeFilter = ref('all')
 const currentPage = ref(1)
 
 const KIND_FILTER_NONE = '__none__'
 
 function rowHasAnyContactType(row: TenantContactListRow): boolean {
-  if (row.contactType?.length) return true
-  return Boolean(row.contactKind?.trim())
+  return Boolean(row.contactType?.length)
 }
 
 const hasContactsWithoutKind = computed(() =>
@@ -313,18 +312,12 @@ const contactTypeFilterOptions = computed(() => {
   const keysFromApi = new Set(base.map((o) => o.key.toLowerCase()))
   const extras: { key: string; label: string }[] = []
   for (const row of data.value?.contacts ?? []) {
-    const keys = row.contactType?.length
-      ? row.contactType
-      : row.contactKind?.trim()
-        ? [row.contactKind.trim().toLowerCase()]
-        : []
+    const keys = row.contactType?.length ? row.contactType : []
     for (let i = 0; i < keys.length; i++) {
       const k = String(keys[i]).trim().toLowerCase()
       if (!k || keysFromApi.has(k)) continue
       keysFromApi.add(k)
-      const label = row.contactType?.length
-        ? row.contactTypeLabels[i] || k
-        : row.contactKindLabel || k
+      const label = row.contactType?.length ? row.contactTypeLabels[i] || k : row.primaryTypeLabel || k
       extras.push({ key: k, label })
     }
   }
@@ -334,7 +327,7 @@ const contactTypeFilterOptions = computed(() => {
 
 const filteredContacts = computed(() => {
   let list = data.value?.contacts ?? []
-  const kind = contactKindFilter.value
+  const kind = contactTypeFilter.value
   if (kind !== 'all') {
     if (kind === KIND_FILTER_NONE) {
       list = list.filter((row) => !rowHasAnyContactType(row))
@@ -342,8 +335,7 @@ const filteredContacts = computed(() => {
       const k = kind.toLowerCase()
       list = list.filter((row) => {
         const keys = (row.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
-        if (keys.length) return keys.includes(k)
-        return (row.contactKind?.trim().toLowerCase() ?? '') === k
+        return keys.includes(k)
       })
     }
   }
@@ -357,8 +349,7 @@ const filteredContacts = computed(() => {
       row.email,
       row.company,
       row.phone,
-      row.contactKind,
-      row.contactKindLabel,
+      row.primaryTypeLabel,
       ...(row.contactType ?? []),
       ...(row.contactTypeLabels ?? [])
     ]
@@ -371,7 +362,7 @@ const filteredContacts = computed(() => {
 
 const noMatchesHint = computed(() => {
   const hasSearch = Boolean(searchQuery.value.trim())
-  const hasKind = contactKindFilter.value !== 'all'
+  const hasKind = contactTypeFilter.value !== 'all'
   if (hasSearch && hasKind) return 'Try a different search or contact type.'
   if (hasSearch) return 'Try a different search.'
   if (hasKind) return 'No contacts match this type. Try another type or choose “All types”.'
@@ -395,7 +386,7 @@ const paginationMeta = computed(() => {
   return { from, to, total }
 })
 
-watch([searchQuery, contactKindFilter], () => {
+watch([searchQuery, contactTypeFilter], () => {
   currentPage.value = 1
 })
 
@@ -426,9 +417,7 @@ async function load() {
       ...row,
       contactType: Array.isArray(row.contactType) ? row.contactType : [],
       contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
-      contactKindLabel:
-        row.contactKindLabel ??
-        (row.contactKind ? row.contactKind : '—')
+      primaryTypeLabel: row.primaryTypeLabel ?? '—'
     }))
     data.value = {
       contacts,
@@ -436,8 +425,8 @@ async function load() {
       total: res.total ?? 0,
       truncated: res.truncated ?? false
     }
-    if (!contacts.some((r) => !rowHasAnyContactType(r)) && contactKindFilter.value === KIND_FILTER_NONE) {
-      contactKindFilter.value = 'all'
+    if (!contacts.some((r) => !rowHasAnyContactType(r)) && contactTypeFilter.value === KIND_FILTER_NONE) {
+      contactTypeFilter.value = 'all'
     }
   } catch (e: unknown) {
     loadError.value =

@@ -20,7 +20,6 @@ loadEnv({ path: join(rootDir, '.env') })
 
 const FIXTURES = [
   {
-    contactKind: 'prospect' as const,
     contactType: ['prospect'],
     firstName: 'Alex',
     lastName: 'Rivera',
@@ -34,7 +33,6 @@ const FIXTURES = [
     metadata: { segment: 'inbound', score: 42 }
   },
   {
-    contactKind: 'client' as const,
     contactType: ['client'],
     firstName: 'Jordan',
     lastName: 'Lee',
@@ -48,7 +46,6 @@ const FIXTURES = [
     metadata: { tier: 'gold' }
   },
   {
-    contactKind: 'contact' as const,
     contactType: ['contact'],
     firstName: 'Sam',
     lastName: 'Taylor',
@@ -62,7 +59,6 @@ const FIXTURES = [
     metadata: { note: 'Generic contact row' }
   },
   {
-    contactKind: 'prospect' as const,
     contactType: ['prospect', 'referral'],
     firstName: 'Riley',
     lastName: 'Chen',

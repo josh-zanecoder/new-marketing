@@ -93,7 +93,7 @@
                 <div>
                   <label for="rl-audience" class="mb-2 block text-sm font-medium text-slate-700">Contact type</label>
                   <p class="mb-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
-                    Only types that have recipient filters in admin appear here. Labels come from your tenant contact types.
+                    Prospect, client, and contact appear when enabled under tenant contact types. Optional recipient filters (Admin) add rules below for each type.
                   </p>
                   <select
                     id="rl-audience"
@@ -104,7 +104,7 @@
                     :aria-describedby="data.tenantIdConfigured && !audienceOptions.length ? 'rl-audience-hint' : undefined"
                   >
                     <option v-if="!audienceOptions.length" disabled value="">
-                      No contact types from filters
+                      No audience types available
                     </option>
                     <option
                       v-for="opt in audienceOptions"
@@ -119,7 +119,7 @@
                     id="rl-audience-hint"
                     class="mt-2 text-sm text-slate-500"
                   >
-                    Add at least one recipient filter in admin (per contact type) to choose a type here.
+                    Enable at least one of prospect, client, or contact under tenant contact types (Admin), or add a recipient filter scoped to that type.
                   </p>
                 </div>
               </div>

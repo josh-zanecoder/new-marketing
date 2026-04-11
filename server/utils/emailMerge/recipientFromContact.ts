@@ -8,7 +8,6 @@ export type CrmContactFieldsForMerge = {
   email?: string
   phone?: string
   company?: string
-  contactKind?: string
   /** Marketing contact-type keys (same as stored `contactType` on Contact). */
   contactType?: string[]
   channel?: string
@@ -40,7 +39,6 @@ export function recipientFieldsFromContact(
   if (contact.email) out.email = contact.email
   if (contact.phone) out.phone = contact.phone
   if (contact.company) out.company = contact.company
-  if (contact.contactKind) out.contactKind = contact.contactKind
   if (Array.isArray(contact.contactType) && contact.contactType.length) {
     out.contactType = contact.contactType.join(', ')
   }

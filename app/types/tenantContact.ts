@@ -20,8 +20,8 @@ export interface TenantContactListRow {
   source: string
   contactType: string[]
   contactTypeLabels: string[]
-  contactKind: string
-  contactKindLabel: string
+  /** Label for the first type key (single-chip fallback). */
+  primaryTypeLabel: string
   firstName: string
   lastName: string
   name: string
@@ -54,7 +54,6 @@ export interface TenantRecipientListCatalogContact {
   name?: string
   email?: string
   company?: string
-  contactKind?: string
   contactType?: string[]
 }
 
@@ -66,7 +65,6 @@ export interface TenantRecipientListMemberRow {
   name: string
   email: string
   phone: string
-  contactKind: string
   contactType?: string[]
   company: string
   channel: string
@@ -130,7 +128,9 @@ export interface CampaignContactPickerRow {
   name: string
   email: string
   company?: string
-  contactKind: string
-  /** When empty/omitted, UI may fall back to `contactKind`. */
+  /**
+   * Dominant `prospect` | `client` | `contact` for the type filter (derived from `contactType`).
+   */
+  lifecycleKey: string
   contactType?: string[]
 }

@@ -198,7 +198,7 @@ function isSelected(contactId: string): boolean {
 function contactTypeTags(c: CampaignContactPickerRow): string[] {
   const keys = (c.contactType ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean)
   if (keys.length) return [...new Set(keys)]
-  const k = String(c.contactKind ?? '').trim().toLowerCase()
+  const k = String(c.lifecycleKey ?? '').trim().toLowerCase()
   return k ? [k] : []
 }
 
@@ -215,7 +215,7 @@ const filteredRows = computed(() => {
     rows = rows.filter((c) => {
       const keys = (c.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
       if (keys.length) return keys.includes(kind)
-      return (c.contactKind ?? '').trim().toLowerCase() === kind
+      return (c.lifecycleKey ?? '').trim().toLowerCase() === kind
     })
   }
   const q = searchQuery.value.trim().toLowerCase()
