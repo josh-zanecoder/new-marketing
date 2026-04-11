@@ -144,7 +144,7 @@
                 scope="col"
                 class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:px-4"
               >
-                Kind
+                Types
               </th>
               <th
                 scope="col"
@@ -181,8 +181,19 @@
               >
                 {{ row.email || '—' }}
               </td>
-              <td class="px-4 py-4 sm:px-4">
+              <td class="max-w-[14rem] px-4 py-4 sm:px-4">
+                <div v-if="row.contactType?.length" class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="(label, idx) in row.contactTypeLabels"
+                    :key="`${row.id}-${row.contactType![idx]}`"
+                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
+                    :class="contactKindBadgeClass(row.contactType![idx] ?? '')"
+                  >
+                    {{ label }}
+                  </span>
+                </div>
                 <span
+                  v-else
                   class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
                   :class="contactKindBadgeClass(row.contactKind)"
                 >
@@ -246,6 +257,11 @@
 
 <script setup lang="ts">
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
+import type {
+  TenantContactListRow,
+  TenantContactsListPayload,
+  TenantContactTypeOption
+} from '~/types/tenantContact'
 
 definePageMeta({ layout: 'default' })
 
@@ -260,43 +276,7 @@ function contactKindBadgeClass(kind: string): string {
 
 const PAGE_SIZE = 25
 
-export interface TenantContactTypeOption {
-  key: string
-  label: string
-  sortOrder: number
-}
-
-export interface ContactRow {
-  id: string
-  externalId: string
-  source: string
-  contactKind: string
-  /** Resolved from `contact_types` when available. */
-  contactKindLabel: string
-  firstName: string
-  lastName: string
-  /** Display name: first + last (API-computed). */
-  name: string
-  email: string
-  phone: string
-  company: string
-  channel: string
-  address: {
-    street: string
-    city: string
-    state: string
-    county: string
-  }
-  createdAt: string | null
-  updatedAt: string | null
-}
-
-interface ContactsIndexPayload {
-  contacts: ContactRow[]
-  contactTypes?: TenantContactTypeOption[]
-  total: number
-  truncated: boolean
-}
+export type { TenantContactListRow, TenantContactTypeOption }
 
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
@@ -309,7 +289,7 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
 
 const pending = ref(true)
 const loadError = ref('')
-const data = ref<ContactsIndexPayload | null>(null)
+const data = ref<TenantContactsListPayload | null>(null)
 const searchQuery = ref('')
 /** `'all'`, `'__none__'` (no kind), or lowercase contact type key. */
 const contactKindFilter = ref('all')
@@ -317,8 +297,13 @@ const currentPage = ref(1)
 
 const KIND_FILTER_NONE = '__none__'
 
+function rowHasAnyContactType(row: TenantContactListRow): boolean {
+  if (row.contactType?.length) return true
+  return Boolean(row.contactKind?.trim())
+}
+
 const hasContactsWithoutKind = computed(() =>
-  (data.value?.contacts ?? []).some((row) => !row.contactKind?.trim())
+  (data.value?.contacts ?? []).some((row) => !rowHasAnyContactType(row))
 )
 
 const contactTypeFilterOptions = computed(() => {
@@ -328,12 +313,20 @@ const contactTypeFilterOptions = computed(() => {
   const keysFromApi = new Set(base.map((o) => o.key.toLowerCase()))
   const extras: { key: string; label: string }[] = []
   for (const row of data.value?.contacts ?? []) {
-    const raw = row.contactKind?.trim()
-    if (!raw) continue
-    const k = raw.toLowerCase()
-    if (keysFromApi.has(k)) continue
-    keysFromApi.add(k)
-    extras.push({ key: k, label: row.contactKindLabel || raw })
+    const keys = row.contactType?.length
+      ? row.contactType
+      : row.contactKind?.trim()
+        ? [row.contactKind.trim().toLowerCase()]
+        : []
+    for (let i = 0; i < keys.length; i++) {
+      const k = String(keys[i]).trim().toLowerCase()
+      if (!k || keysFromApi.has(k)) continue
+      keysFromApi.add(k)
+      const label = row.contactType?.length
+        ? row.contactTypeLabels[i] || k
+        : row.contactKindLabel || k
+      extras.push({ key: k, label })
+    }
   }
   extras.sort((a, b) => a.label.localeCompare(b.label))
   return [...base, ...extras]
@@ -344,12 +337,14 @@ const filteredContacts = computed(() => {
   const kind = contactKindFilter.value
   if (kind !== 'all') {
     if (kind === KIND_FILTER_NONE) {
-      list = list.filter((row) => !row.contactKind?.trim())
+      list = list.filter((row) => !rowHasAnyContactType(row))
     } else {
       const k = kind.toLowerCase()
-      list = list.filter(
-        (row) => (row.contactKind?.trim().toLowerCase() ?? '') === k
-      )
+      list = list.filter((row) => {
+        const keys = (row.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+        if (keys.length) return keys.includes(k)
+        return (row.contactKind?.trim().toLowerCase() ?? '') === k
+      })
     }
   }
   const q = searchQuery.value.trim().toLowerCase()
@@ -363,7 +358,9 @@ const filteredContacts = computed(() => {
       row.company,
       row.phone,
       row.contactKind,
-      row.contactKindLabel
+      row.contactKindLabel,
+      ...(row.contactType ?? []),
+      ...(row.contactTypeLabels ?? [])
     ]
       .filter(Boolean)
       .join(' ')
@@ -421,12 +418,14 @@ async function load() {
   pending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<ContactsIndexPayload>('/api/v1/tenant/contacts', {
+    const res = await $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
       credentials: 'include',
       ...serverAuthHeaders()
     })
     const contacts = (res.contacts ?? []).map((row) => ({
       ...row,
+      contactType: Array.isArray(row.contactType) ? row.contactType : [],
+      contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
       contactKindLabel:
         row.contactKindLabel ??
         (row.contactKind ? row.contactKind : '—')
@@ -437,10 +436,7 @@ async function load() {
       total: res.total ?? 0,
       truncated: res.truncated ?? false
     }
-    if (
-      !contacts.some((r) => !r.contactKind?.trim()) &&
-      contactKindFilter.value === KIND_FILTER_NONE
-    ) {
+    if (!contacts.some((r) => !rowHasAnyContactType(r)) && contactKindFilter.value === KIND_FILTER_NONE) {
       contactKindFilter.value = 'all'
     }
   } catch (e: unknown) {

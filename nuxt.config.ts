@@ -38,7 +38,20 @@ export default defineNuxtConfig({
     kafkaSaPrivateKey: process.env.KAFKA_SA_PRIVATE_KEY || '',
     kafkaSaProjectId: process.env.KAFKA_SA_PROJECT_ID || '',
     kafkaSsl: process.env.KAFKA_SSL !== 'false',
-    kafkaSaslMechanism: process.env.KAFKA_SASL_MECHANISM || 'plain'
+    kafkaSaslMechanism: process.env.KAFKA_SASL_MECHANISM || 'plain',
+    /**
+     * Tenant handoff JWT claims — must match the issuer (CRM / tenant backend).
+     * Runtime: `NUXT_MARKETING_HANDOFF_ISS` / `NUXT_MARKETING_HANDOFF_AUD`, or
+     * `MARKETING_HANDOFF_JWT_ISS` / `MARKETING_HANDOFF_JWT_AUD` (read at config load).
+     */
+    marketingHandoffIss:
+      process.env.NUXT_MARKETING_HANDOFF_ISS ||
+      process.env.MARKETING_HANDOFF_JWT_ISS ||
+      'marketing-tenant',
+    marketingHandoffAud:
+      process.env.NUXT_MARKETING_HANDOFF_AUD ||
+      process.env.MARKETING_HANDOFF_JWT_AUD ||
+      'new-marketing'
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {

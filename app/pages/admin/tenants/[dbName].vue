@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page">
+  <section class="min-w-0 p-6">
     <nav class="mb-4 text-sm text-slate-500">
       <NuxtLink to="/admin/tenants" class="hover:text-indigo-600">
         Tenants
@@ -8,9 +8,11 @@
       <span class="text-slate-800">{{ tenant?.name || dbName }}</span>
     </nav>
 
-    <header v-if="tenant" class="page-header">
-      <h1>{{ tenant.name }}</h1>
-      <p class="text-slate-500">
+    <header v-if="tenant">
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">
+        {{ tenant.name }}
+      </h1>
+      <p class="mt-1.5 mb-5 text-sm text-slate-500">
         Registry database: <span class="font-mono text-slate-700">{{ tenant.dbName }}</span>
       </p>
     </header>
@@ -108,14 +110,14 @@
                 <span v-if="contactTypesPending" class="filters-loading">Loading…</span>
               </div>
 
-              <div class="table-card filters-table-card">
-                <table class="clients-table clients-table--filters">
+              <div :class="tenantDataTableWrapClass">
+                <table :class="tenantDataTableClass">
                   <thead>
                     <tr>
                       <th>Key</th>
                       <th>Label</th>
                       <th>Status</th>
-                      <th class="th-actions" />
+                      <th :class="tenantDataThActionsClass" />
                     </tr>
                   </thead>
                   <tbody>
@@ -131,7 +133,7 @@
                         <td>
                           <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
                         </td>
-                        <td class="td-actions">
+                        <td :class="tenantDataTdActionsClass">
                           <div class="row-actions">
                             <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
                               Edit
@@ -284,8 +286,8 @@
               <span v-if="filtersPending" class="filters-loading">Loading…</span>
             </div>
 
-            <div class="table-card filters-table-card">
-              <table class="clients-table clients-table--filters">
+            <div :class="tenantDataTableWrapClass">
+              <table :class="tenantDataTableClass">
                 <colgroup>
                   <col class="col-name">
                   <col class="col-contact">
@@ -303,7 +305,7 @@
                     <th>Property type</th>
                     <th>Values</th>
                     <th>Status</th>
-                    <th class="th-actions" />
+                    <th :class="tenantDataThActionsClass" />
                   </tr>
                 </thead>
                 <tbody>
@@ -344,7 +346,7 @@
                           :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
                         >{{ f.enabled ? 'On' : 'Off' }}</span>
                       </td>
-                      <td class="td-actions">
+                      <td :class="tenantDataTdActionsClass">
                         <div class="row-actions">
                           <button
                             type="button"
@@ -486,8 +488,8 @@
               <span v-if="dynamicPending" class="filters-loading">Loading…</span>
             </div>
 
-            <div class="table-card filters-table-card">
-              <table class="clients-table clients-table--filters">
+            <div :class="tenantDataTableWrapClass">
+              <table :class="tenantDataTableClass">
                 <thead>
                   <tr>
                     <th>Label</th>
@@ -496,7 +498,7 @@
                     <th>Scopes</th>
                     <th>Fallback</th>
                     <th>Status</th>
-                    <th class="th-actions" />
+                    <th :class="tenantDataThActionsClass" />
                   </tr>
                 </thead>
                 <tbody>
@@ -517,7 +519,7 @@
                       <td>
                         <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
                       </td>
-                      <td class="td-actions">
+                      <td :class="tenantDataTdActionsClass">
                         <div class="row-actions">
                           <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
                             Edit
@@ -551,6 +553,18 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'admin' })
+
+const tenantDataTableWrapClass =
+  'filters-table-card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5'
+
+const tenantDataTableClass =
+  'clients-table--filters w-full border-collapse table-fixed text-left text-sm text-slate-900 [&_thead_tr]:border-b [&_thead_tr]:border-slate-100 [&_thead_tr]:bg-slate-50/90 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-slate-500 [&_tbody_tr]:border-t [&_tbody_tr]:border-slate-100 [&_tbody_tr]:text-sm [&_tbody_tr:hover]:bg-slate-50/80 [&_td]:px-4 [&_td]:py-3.5 [&_td]:align-middle'
+
+const tenantDataThActionsClass =
+  'whitespace-nowrap px-4 py-3.5 text-right align-middle text-xs font-semibold uppercase tracking-wide text-slate-500'
+
+const tenantDataTdActionsClass =
+  'whitespace-nowrap px-4 py-3.5 text-right align-middle'
 
 const route = useRoute()
 const dbName = computed(() =>
@@ -592,6 +606,8 @@ interface TenantDetail {
   tenantId: string | null
   apiKeyPrefix: string | null
   createdAt: string
+  crmAppUrl: string | null
+  kafkaOutboundTopic: string | null
 }
 
 interface FilterRow {
@@ -1101,8 +1117,6 @@ watch(
 )
 </script>
 
-<style scoped src="./index.css" />
-
 <style scoped>
 .tab-list {
   display: flex;
@@ -1131,42 +1145,6 @@ watch(
   border-bottom-color: #4f46e5;
   color: #4f46e5;
   background: #fafaff;
-}
-
-.overview-card {
-  max-width: 42rem;
-  border-radius: 1rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-}
-
-.overview-grid {
-  display: grid;
-  gap: 1.25rem 2rem;
-  grid-template-columns: 1fr;
-}
-
-@media (min-width: 640px) {
-  .overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.overview-item dt {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: #64748b;
-  margin-bottom: 0.35rem;
-}
-
-.overview-item dd {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: #0f172a;
 }
 
 .filters-tab {

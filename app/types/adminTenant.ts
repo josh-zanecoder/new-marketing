@@ -7,5 +7,9 @@ export interface AdminTenantRow {
   apiKeyPrefix: string | null
   /** Registry `crmAppUrl` for handoff “Back to CRM”. */
   crmAppUrl: string | null
+  /**
+   * Full Kafka topic for outbound marketing events, or `null` for default `{prefix}.{tenant}`.
+   */
+  kafkaOutboundTopic: string | null
   status: string
 }

@@ -292,25 +292,65 @@ function toTopicSuffix(value: string): string {
   return s || 'tenant'
 }
 
+const KAFKA_TOPIC_NAME_MAX_LEN = 249
+
+/**
+ * Sanitize a user-supplied **full** Kafka topic name (per-tenant override).
+ * Returns `null` if the result would be empty or invalid length.
+ */
+export function sanitizeKafkaOutboundTopic(raw: string): string | null {
+  const t = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .replace(/_{2,}/g, '_')
+  if (!t || t.length > KAFKA_TOPIC_NAME_MAX_LEN) return null
+  return t
+}
+
 export function getTenantEventTopic(tenantNameOrDbName: string): string {
   const base = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
   return `${base}.${toTopicSuffix(tenantNameOrDbName)}`
 }
 
+/**
+ * Outbound topic derived from registry display name (preferred) or `dbName`, matching
+ * `getTenantEventTopicByDbName` when no separate override is applied.
+ */
+export function computeDefaultMarketingOutboundTopicForTenant(
+  displayName: string,
+  tenantDbName: string
+): string {
+  const name = displayName.trim()
+  const source = name || tenantDbName.trim() || 'tenant'
+  return getTenantEventTopic(source)
+}
+
 export async function getTenantEventTopicByDbName(tenantDbName: string): Promise<string> {
   const cached = tenantTopicCache.get(tenantDbName)
   if (cached) return cached
-  let topic = getTenantEventTopic(tenantDbName)
+  let topic: string
   try {
     const registry = await getRegistryConnection()
     const row = await registry
       .collection('clients')
       .findOne({ dbName: tenantDbName })
-      .then((d) => d as { name?: string } | null)
+      .then((d) => d as { name?: string; kafkaOutboundTopic?: string } | null)
+    const customRaw =
+      typeof row?.kafkaOutboundTopic === 'string' ? row.kafkaOutboundTopic.trim() : ''
+    if (customRaw) {
+      const direct = sanitizeKafkaOutboundTopic(customRaw)
+      if (direct) {
+        tenantTopicCache.set(tenantDbName, direct)
+        return direct
+      }
+    }
+    topic = getTenantEventTopic(tenantDbName)
     const tenantName = typeof row?.name === 'string' ? row.name.trim() : ''
     if (tenantName) topic = getTenantEventTopic(tenantName)
   } catch {
-    /* registry unavailable */
+    topic = getTenantEventTopic(tenantDbName)
   }
   tenantTopicCache.set(tenantDbName, topic)
   return topic
@@ -423,12 +463,13 @@ function topicReplicationFactor(): number {
   return 1
 }
 
-export async function ensureTenantEventTopic(tenantNameOrDbName: string): Promise<string | null> {
+/** Ensure the Kafka topic used for this tenant’s outbound events exists (matches `getTenantEventTopicByDbName`). */
+export async function ensureTenantEventTopic(tenantDbName: string): Promise<string | null> {
   if (!isKafkaConfigured()) {
     logger.warn('Kafka: KAFKA_BROKERS is empty; skip tenant topic creation')
     return null
   }
-  const topic = getTenantEventTopic(tenantNameOrDbName)
+  const topic = await getTenantEventTopicByDbName(tenantDbName.trim())
   const a = await getAdmin()
   if (!a) return null
   const replicationFactor = topicReplicationFactor()

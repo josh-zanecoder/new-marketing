@@ -20,6 +20,7 @@ type ContactRow = {
   name?: string
   email?: string
   contactKind?: string
+  contactType?: string[]
   company?: string | null
   channel?: string | null
   source?: string | null
@@ -88,6 +89,7 @@ export default defineEventHandler(async (event) => {
         name: 1,
         email: 1,
         contactKind: 1,
+        contactType: 1,
         company: 1,
         channel: 1,
         source: 1,
@@ -182,6 +184,10 @@ export default defineEventHandler(async (event) => {
     tenantIdConfigured: Boolean(tenantId),
     contacts: contacts.map((c) => {
       const { firstName, lastName } = contactFirstLastFromDoc(c)
+      const keys =
+        Array.isArray(c.contactType) && c.contactType.length
+          ? [...new Set(c.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean))]
+          : []
       return {
         id: String(c._id),
         firstName,
@@ -189,6 +195,7 @@ export default defineEventHandler(async (event) => {
         name: formatContactFullName(firstName, lastName),
         email: c.email ?? '',
         contactKind: c.contactKind ?? '',
+        contactType: keys,
         company: c.company ?? '',
         channel: c.channel ?? '',
         source: c.source ?? '',

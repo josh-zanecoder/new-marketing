@@ -27,9 +27,13 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
       ? crmRaw.trim().replace(/\/+$/, '')
       : null
 
+  const koRaw = doc.kafkaOutboundTopic
+  const kafkaOutboundTopic =
+    typeof koRaw === 'string' && koRaw.trim() ? koRaw.trim() : null
+
   if (!name || !dbName || !createdAt) return null
   /** `tenantId` is included for admin UI and APIs keyed by registry id (e.g. recipient filters). */
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl }
+  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl, kafkaOutboundTopic }
 }
 
 export default defineEventHandler(async (event) => {

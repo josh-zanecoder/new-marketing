@@ -280,21 +280,17 @@
 </template>
 
 <script setup lang="ts">
+import type { TenantRecipientListCriterion } from '~/types/tenantContact'
 
 definePageMeta({ layout: 'default' })
 
 const PAGE_SIZE = 10
 
-interface ListCriterion {
-  property: string
-  value: string
-}
-
 interface ListRow {
   id: string
   name: string
   audience: string
-  filters: ListCriterion[]
+  filters: TenantRecipientListCriterion[]
   filterMode?: 'and' | 'or'
   updatedAt: string | null
   /** Resolved members visible to the current user (from API). */

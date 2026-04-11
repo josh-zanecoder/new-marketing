@@ -1,0 +1,136 @@
+/**
+ * Tenant contact shapes returned by marketing APIs (JSON).
+ * `ContactKind` stays aligned with `@server/types/tenant/contact.model`.
+ */
+import type { ContactKind } from '@server/types/tenant/contact.model'
+
+export type { ContactKind }
+
+/** Registry option from `contact_types` (GET contacts / recipient-list). */
+export interface TenantContactTypeOption {
+  key: string
+  label: string
+  sortOrder: number
+}
+
+/** GET `/api/v1/tenant/contacts` — one row. */
+export interface TenantContactListRow {
+  id: string
+  externalId: string
+  source: string
+  contactType: string[]
+  contactTypeLabels: string[]
+  contactKind: string
+  contactKindLabel: string
+  firstName: string
+  lastName: string
+  name: string
+  email: string
+  phone: string
+  company: string
+  channel: string
+  ownerEmail?: string
+  address: {
+    street: string
+    city: string
+    state: string
+    county: string
+  }
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+/** GET `/api/v1/tenant/contacts` response body. */
+export interface TenantContactsListPayload {
+  contacts: TenantContactListRow[]
+  contactTypes?: TenantContactTypeOption[]
+  total: number
+  truncated: boolean
+}
+
+/** Contact row from GET `/api/v1/tenant/recipient-list` (picker / catalog). */
+export interface TenantRecipientListCatalogContact {
+  id: string
+  name?: string
+  email?: string
+  company?: string
+  contactKind?: string
+  contactType?: string[]
+}
+
+/** GET `/api/v1/tenant/recipient-list/:id` — one member row. */
+export interface TenantRecipientListMemberRow {
+  id: string
+  firstName: string
+  lastName: string
+  name: string
+  email: string
+  phone: string
+  contactKind: string
+  contactType?: string[]
+  company: string
+  channel: string
+  source: string
+  address: Record<string, unknown>
+}
+
+/** GET `/api/v1/tenant/recipient-list` resource wrapper (lists + contacts catalog). */
+export interface TenantRecipientListResourcePayload {
+  lists?: Array<{ id: string; name: string }>
+  contacts?: TenantRecipientListCatalogContact[]
+  contactsTruncated?: boolean
+  contactCounts?: { prospect?: number; client?: number; contact?: number }
+}
+
+export interface TenantRecipientListCriterion {
+  property: string
+  value: string
+}
+
+export interface TenantRecipientListFilterRow {
+  recipientFilterId: string
+  listPropertyValue: string
+}
+
+/** List header from GET `/api/v1/tenant/recipient-list/:id`. */
+export interface TenantRecipientListDetailList {
+  id: string
+  name: string
+  listType: string
+  audience: string
+  filters: TenantRecipientListCriterion[]
+  filterMode?: 'and' | 'or'
+  criterionJoins?: ('and' | 'or')[]
+  criteriaChain?: {
+    rows: TenantRecipientListCriterion[]
+    joins: ('and' | 'or')[] | null
+  } | null
+  filterRows?: TenantRecipientListFilterRow[]
+  membershipScope?: 'tenant' | 'owner_emails'
+  membershipOwnerEmails?: string[]
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+/** GET `/api/v1/tenant/recipient-list/:id` — full response. */
+export interface TenantRecipientListDetailPayload {
+  list: TenantRecipientListDetailList
+  members: {
+    items: TenantRecipientListMemberRow[]
+    total: number
+    page: number
+    pageSize: number
+    totalPages: number
+  }
+}
+
+/** Manual campaign contact picker (subset of catalog with required name/email). */
+export interface CampaignContactPickerRow {
+  id: string
+  name: string
+  email: string
+  company?: string
+  contactKind: string
+  /** When empty/omitted, UI may fall back to `contactKind`. */
+  contactType?: string[]
+}

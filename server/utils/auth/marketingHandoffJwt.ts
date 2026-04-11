@@ -1,8 +1,19 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
 
-const ISS = 'mortdash-crm'
-const AUD = 'mortdash-marketing'
+const DEFAULT_HANDOFF_ISS = 'marketing-tenant'
+const DEFAULT_HANDOFF_AUD = 'new-marketing'
+
+function resolveHandoffIssAud(): { iss: string; aud: string } {
+  try {
+    const c = useRuntimeConfig()
+    const iss = String(c.marketingHandoffIss ?? '').trim() || DEFAULT_HANDOFF_ISS
+    const aud = String(c.marketingHandoffAud ?? '').trim() || DEFAULT_HANDOFF_AUD
+    return { iss, aud }
+  } catch {
+    return { iss: DEFAULT_HANDOFF_ISS, aud: DEFAULT_HANDOFF_AUD }
+  }
+}
 
 function base64urlToBuffer(s: string): Buffer {
   const pad = '='.repeat((4 - (s.length % 4)) % 4)
@@ -39,7 +50,8 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   if (!h || !p || !s) throw new Error('Invalid token')
 
   const payload = JSON.parse(base64urlToBuffer(p).toString('utf8')) as Record<string, unknown>
-  if (payload.iss !== ISS || payload.aud !== AUD) {
+  const { iss, aud } = resolveHandoffIssAud()
+  if (payload.iss !== iss || payload.aud !== aud) {
     throw new Error('Invalid issuer or audience')
   }
   const sub = typeof payload.sub === 'string' ? payload.sub.trim() : ''
@@ -103,4 +115,12 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   }
 }
 
-export { ISS as MARKETING_HANDOFF_ISS, AUD as MARKETING_HANDOFF_AUD }
+/** Current expected issuer (from runtime config / defaults). */
+export function getMarketingHandoffIss(): string {
+  return resolveHandoffIssAud().iss
+}
+
+/** Current expected audience (from runtime config / defaults). */
+export function getMarketingHandoffAud(): string {
+  return resolveHandoffIssAud().aud
+}

@@ -26,7 +26,10 @@ export type ContactPayload = {
   phone?: string
   company: string
   address: ContactAddress
-  contactType: 'prospect' | 'client' | 'contact'
+  /** Single CRM / marketing type key (legacy triad or tenant-defined). */
+  contactType?: string
+  /** Multiple type keys when CRM sends a list (preferred for multi-label). */
+  contactTypes?: string[]
   channel: string | null
 }
 
@@ -109,8 +112,13 @@ export function parseContactEventEnvelope(input: unknown): ContactEventEnvelope 
   if (typeof p.address.city !== 'string') return null
   if (typeof p.address.state !== 'string') return null
   if (typeof p.address.county !== 'string') return null
-  if (p.contactType !== 'prospect' && p.contactType !== 'client' && p.contactType !== 'contact')
-    return null
+  const multi = p.contactTypes
+  const single = p.contactType
+  const hasTypes =
+    (Array.isArray(multi) && multi.some((x) => String(x ?? '').trim())) ||
+    (typeof single === 'string' && single.trim()) ||
+    (Array.isArray(single) && single.some((x) => String(x ?? '').trim()))
+  if (!hasTypes) return null
   if (!(typeof p.channel === 'string' || p.channel === null)) return null
 
   return input as ContactEventEnvelope

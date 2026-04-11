@@ -122,10 +122,11 @@
                       {{ c.company }}
                     </p>
                     <span
-                      v-if="c.contactKind"
+                      v-for="tag in contactTypeTags(c)"
+                      :key="tag"
                       class="inline-flex shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold capitalize leading-none text-zinc-600 ring-1 ring-zinc-200/80"
                     >
-                      {{ c.contactKind }}
+                      {{ tag }}
                     </span>
                   </div>
                 </div>
@@ -157,13 +158,7 @@
 </template>
 
 <script setup lang="ts">
-export interface CampaignContactPickerRow {
-  id: string
-  name: string
-  email: string
-  company?: string
-  contactKind: string
-}
+import type { CampaignContactPickerRow } from '~/types/tenantContact'
 
 const props = defineProps<{
   contacts: CampaignContactPickerRow[]
@@ -200,6 +195,13 @@ function isSelected(contactId: string): boolean {
   return id ? props.selectedIds.includes(id) : false
 }
 
+function contactTypeTags(c: CampaignContactPickerRow): string[] {
+  const keys = (c.contactType ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean)
+  if (keys.length) return [...new Set(keys)]
+  const k = String(c.contactKind ?? '').trim().toLowerCase()
+  return k ? [k] : []
+}
+
 function typeLabel(value: 'prospect' | 'client' | 'contact', fallback: string): string {
   const n = props.kindCounts?.[value]
   const suffix = typeof n === 'number' ? ` (${n.toLocaleString()})` : ''
@@ -210,7 +212,11 @@ const filteredRows = computed(() => {
   const kind = kindFilter.value
   let rows = props.contacts
   if (kind !== 'all') {
-    rows = rows.filter((c) => c.contactKind === kind)
+    rows = rows.filter((c) => {
+      const keys = (c.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+      if (keys.length) return keys.includes(kind)
+      return (c.contactKind ?? '').trim().toLowerCase() === kind
+    })
   }
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return rows

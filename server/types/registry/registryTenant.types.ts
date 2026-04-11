@@ -11,6 +11,11 @@ export interface RegistryTenantDoc {
   createdAt?: unknown
   /** CRM web app base URL for “Back to CRM” after tenant handoff. */
   crmAppUrl?: unknown
+  /**
+   * When set, outbound marketing Kafka events use this **full** topic name instead of
+   * `{KAFKA_TOPIC_MARKETING_EVENTS}.{tenantSuffix}`.
+   */
+  kafkaOutboundTopic?: unknown
 }
 
 /** Admin list row for a registered tenant (registry). */
@@ -24,4 +29,9 @@ export interface TenantAdminRow {
   createdAt: string
   /** Per-tenant CRM origin, e.g. https://app.client.com */
   crmAppUrl: string | null
+  /**
+   * Full Kafka topic for this tenant’s outbound marketing events, or `null` to use the default
+   * `{prefix}.{sanitized tenant name}` pattern.
+   */
+  kafkaOutboundTopic: string | null
 }

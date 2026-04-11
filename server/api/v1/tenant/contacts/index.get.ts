@@ -8,6 +8,7 @@ type ContactDoc = {
   externalId?: string
   source?: string
   contactKind?: string
+  contactType?: string[]
   firstName?: string
   lastName?: string
   name?: string
@@ -37,6 +38,15 @@ function contactKindDisplayLabel(keyRaw: string, labelByKey: Map<string, string>
   const key = keyRaw.trim().toLowerCase()
   if (!key) return '—'
   return labelByKey.get(key) ?? keyRaw.trim()
+}
+
+function effectiveContactTypeKeys(doc: ContactDoc): string[] {
+  const fromArr = Array.isArray(doc.contactType)
+    ? doc.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean)
+    : []
+  if (fromArr.length) return [...new Set(fromArr)]
+  const k = String(doc.contactKind ?? '').trim().toLowerCase()
+  return k ? [k] : []
 }
 
 export default defineEventHandler(async (event) => {
@@ -75,13 +85,18 @@ export default defineEventHandler(async (event) => {
     const meta = c.metadata && typeof c.metadata === 'object' ? c.metadata : {}
     const ownerRaw = meta && typeof meta.ownerEmail === 'string' ? meta.ownerEmail : ''
     const { firstName, lastName } = contactFirstLastFromDoc(c)
-    const contactKind = c.contactKind ?? ''
+    const typeKeys = effectiveContactTypeKeys(c)
+    const storedKind = String(c.contactKind ?? '').trim().toLowerCase()
+    const primaryKey = storedKind || typeKeys[0] || ''
     return {
     id: String(c._id),
     externalId: c.externalId ?? '',
     source: c.source ?? '',
-    contactKind,
-    contactKindLabel: contactKindDisplayLabel(contactKind, labelByKey),
+    /** Same keys as tenant `contact_types` (may be empty on very old rows). */
+    contactType: typeKeys,
+    contactKind: c.contactKind ?? '',
+    contactKindLabel: contactKindDisplayLabel(primaryKey, labelByKey),
+    contactTypeLabels: typeKeys.map((key) => contactKindDisplayLabel(key, labelByKey)),
     firstName,
     lastName,
     name: formatContactFullName(firstName, lastName),

@@ -1,4 +1,9 @@
 import type { SendStatus } from '~/types/campaign'
+import type {
+  TenantRecipientListDetailPayload,
+  TenantRecipientListMemberRow,
+  TenantRecipientListResourcePayload
+} from '~/types/tenantContact'
 
 /** Response from GET `/api/v1/tenant/campaigns/:id` */
 export interface TenantCampaignDetail {
@@ -26,39 +31,14 @@ export interface TenantCampaignDetail {
   updatedAt: string
 }
 
-export interface TenantRecipientListResponse {
-  lists?: Array<{ id: string; name: string }>
-  contacts?: Array<{
-    id: string
-    name?: string
-    email?: string
-    company?: string
-    /** `prospect` | `client` | `contact` from CRM */
-    contactKind?: string
-  }>
-  contactsTruncated?: boolean
-  contactCounts?: { prospect?: number; client?: number; contact?: number }
-}
+/** @deprecated Use `TenantRecipientListResourcePayload` from `~/types/tenantContact`. */
+export type TenantRecipientListResponse = TenantRecipientListResourcePayload
 
-/** GET `/api/v1/tenant/recipient-list/:id` — paginated members */
-export interface TenantRecipientListMemberItem {
-  id: string
-  name: string
-  email: string
-  company?: string
-  contactKind?: string
-}
+/** @deprecated Use `TenantRecipientListMemberRow` from `~/types/tenantContact`. */
+export type TenantRecipientListMemberItem = TenantRecipientListMemberRow
 
-export interface TenantRecipientListDetailResponse {
-  list: { id: string; name: string; listType?: string }
-  members: {
-    items: TenantRecipientListMemberItem[]
-    total: number
-    page: number
-    pageSize: number
-    totalPages: number
-  }
-}
+/** @deprecated Use `TenantRecipientListDetailPayload` from `~/types/tenantContact`. */
+export type TenantRecipientListDetailResponse = TenantRecipientListDetailPayload
 
 export interface TenantDynamicVariableItem {
   id?: string

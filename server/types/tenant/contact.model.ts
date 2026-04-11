@@ -16,6 +16,8 @@ export interface ContactLean {
   externalId?: string
   source?: string
   contactKind: ContactKind
+  /** Keys aligned with tenant `ContactType.key`; empty on legacy docs until next write. */
+  contactType?: string[]
   firstName: string
   lastName: string
   email: string

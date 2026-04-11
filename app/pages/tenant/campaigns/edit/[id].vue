@@ -601,6 +601,7 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
+import type { CampaignContactPickerRow } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -664,20 +665,11 @@ const listPreviewError = ref('')
 const listPreviewContacts = ref<Array<{ id: string; name: string; email: string }>>([])
 const listPreviewTotal = ref(0)
 
-interface ContactPickerRow {
-  id: string
-  name: string
-  email: string
-  company?: string
-  /** Normalized: `prospect` | `client` | `contact` */
-  contactKind: string
-}
-
 const addContactsModalOpen = ref(false)
 const contactPickerKindCounts = ref<{ prospect: number; client: number; contact: number } | null>(
   null
 )
-const contactsCatalog = ref<ContactPickerRow[]>([])
+const contactsCatalog = ref<CampaignContactPickerRow[]>([])
 const contactsCatalogPending = ref(false)
 const contactsCatalogError = ref('')
 const contactsCatalogTruncated = ref(false)
@@ -718,7 +710,7 @@ function addContactsToManual(rows: Array<{ id: string; email: string; name: stri
   form.value.recipientsManual = [...next]
 }
 
-function addContactFromPicker(row: ContactPickerRow) {
+function addContactFromPicker(row: CampaignContactPickerRow) {
   addContactsToManual([{ id: row.id, email: row.email, name: row.name }])
 }
 
@@ -738,15 +730,23 @@ async function loadContactsCatalog() {
           }
         : null
     contactsCatalog.value = rows
-      .map((c) => ({
-        id: c.id,
-        name: (c.name ?? '').trim(),
-        email: (c.email ?? '').trim(),
-        company: (c.company ?? '').trim() || undefined,
-        contactKind: String(c.contactKind ?? '')
+      .map((c) => {
+        const rawTypes = Array.isArray(c.contactType) ? c.contactType : []
+        const typeKeys = [
+          ...new Set(rawTypes.map((k) => String(k).trim().toLowerCase()).filter(Boolean))
+        ]
+        const kind = String(c.contactKind ?? '')
           .trim()
           .toLowerCase()
-      }))
+        return {
+          id: c.id,
+          name: (c.name ?? '').trim(),
+          email: (c.email ?? '').trim(),
+          company: (c.company ?? '').trim() || undefined,
+          contactKind: kind,
+          contactType: typeKeys.length ? typeKeys : kind ? [kind] : []
+        }
+      })
       .filter((c) => c.email.includes('@'))
     contactsCatalogTruncated.value = Boolean(res.contactsTruncated)
     for (const row of contactsCatalog.value) {

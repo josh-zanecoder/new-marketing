@@ -1,6 +1,10 @@
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
-import { invalidateTenantTopicCacheForDbName } from '@server/services/kafkaProducer'
+import {
+  computeDefaultMarketingOutboundTopicForTenant,
+  ensureTenantEventTopic,
+  invalidateTenantTopicCacheForDbName
+} from '@server/services/kafkaProducer'
 import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -30,8 +34,12 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
       ? crmRaw.trim().replace(/\/+$/, '')
       : null
 
+  const koRaw = doc.kafkaOutboundTopic
+  const kafkaOutboundTopic =
+    typeof koRaw === 'string' && koRaw.trim() ? koRaw.trim() : null
+
   if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl }
+  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl, kafkaOutboundTopic }
 }
 
 export default defineEventHandler(async (event) => {
@@ -119,19 +127,23 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await registryConn.collection('clients').updateOne(
-    { dbName },
-    {
-      $set: {
-        name: displayName,
-        email: contactEmail,
-        crmAppUrl,
-        tenantId
-      }
-    }
-  )
+  const $set: Record<string, unknown> = {
+    name: displayName,
+    email: contactEmail,
+    crmAppUrl,
+    tenantId,
+    kafkaOutboundTopic: computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
+  }
+
+  await registryConn.collection('clients').updateOne({ dbName }, { $set })
 
   invalidateTenantTopicCacheForDbName(dbName)
+
+  try {
+    await ensureTenantEventTopic(dbName)
+  } catch (err) {
+    console.error('[Kafka] failed to ensure tenant topic after patch:', err)
+  }
 
   const doc = await registryConn.collection('clients').findOne({ dbName })
   const tenant = doc ? toTenantAdminRow(doc as RegistryTenantDoc) : null

@@ -232,8 +232,20 @@
                   <td class="max-w-[14rem] truncate px-4 py-3.5 text-zinc-700 sm:max-w-xs sm:px-6" :title="m.email">
                     {{ m.email }}
                   </td>
-                  <td class="whitespace-nowrap px-4 py-3.5 sm:px-6">
-                    <span class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80">
+                  <td class="max-w-[12rem] px-4 py-3.5 sm:px-6">
+                    <div v-if="m.contactType?.length" class="flex flex-wrap gap-1">
+                      <span
+                        v-for="t in m.contactType"
+                        :key="`${m.id}-${t}`"
+                        class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
+                      >
+                        {{ t }}
+                      </span>
+                    </div>
+                    <span
+                      v-else
+                      class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
+                    >
                       {{ m.contactKind }}
                     </span>
                   </td>
@@ -295,51 +307,9 @@
 </template>
 
 <script setup lang="ts">
+import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
 
 definePageMeta({ layout: 'default' })
-
-interface ListCriterion {
-  property: string
-  value: string
-}
-
-interface MemberRow {
-  id: string
-  firstName: string
-  lastName: string
-  name: string
-  email: string
-  phone: string
-  contactKind: string
-  company: string
-  channel: string
-  source: string
-  address: Record<string, unknown>
-}
-
-interface ListDetailPayload {
-  list: {
-    id: string
-    name: string
-    listType: string
-    audience: string
-    filters: ListCriterion[]
-    filterMode?: 'and' | 'or'
-    criteriaChain?: {
-      rows: ListCriterion[]
-      joins: ('and' | 'or')[] | null
-    } | null
-    createdAt: string | null
-    updatedAt: string | null
-  }
-  members: {
-    items: MemberRow[]
-    total: number
-    page: number
-    pageSize: number
-    totalPages: number
-  }
-}
 
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
@@ -364,7 +334,7 @@ function listTypeBadgeClass(listType: string): string {
 const pending = ref(true)
 const pageLoading = ref(false)
 const loadError = ref('')
-const payload = ref<ListDetailPayload | null>(null)
+const payload = ref<TenantRecipientListDetailPayload | null>(null)
 const page = ref(1)
 const deleteConfirmOpen = ref(false)
 const deleteDetailPending = ref(false)
@@ -450,7 +420,7 @@ async function load(p: number) {
   if (!isInitial) pageLoading.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<ListDetailPayload>(
+    const res = await $fetch<TenantRecipientListDetailPayload>(
       `/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`,
       {
         credentials: 'include',

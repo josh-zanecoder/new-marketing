@@ -27,8 +27,12 @@ function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
       ? crmRaw.trim().replace(/\/+$/, '')
       : null
 
+  const koRaw = doc.kafkaOutboundTopic
+  const kafkaOutboundTopic =
+    typeof koRaw === 'string' && koRaw.trim() ? koRaw.trim() : null
+
   if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl }
+  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl, kafkaOutboundTopic }
 }
 
 /** Resolve a tenant by registry database name (for admin URLs that use `dbName` in the path). */

@@ -13,13 +13,14 @@ useHead({
   ]
 })
 
-type DocsTab = 'overview' | 'setup' | 'auth'
+type DocsTab = 'overview' | 'setup' | 'sending' | 'auth'
 
 const activeTab = ref<DocsTab>('overview')
 
 const tabs: { id: DocsTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'setup', label: 'Set up' },
+  { id: 'sending', label: 'Sending events' },
   { id: 'auth', label: 'Auth' }
 ]
 
@@ -31,10 +32,25 @@ KAFKA_PASSWORD
 KAFKA_CLIENT_ID
 KAFKA_SASL_MECHANISM`
 
-/** Sample decoded JWT payload (illustrative iss/aud — see Required claims note on this server). */
+/**
+ * retail-origination: `MARKETING_*` in `.env` → `nuxt.config` runtime config (server-only).
+ * Tenant-specific values (`MARKETING_DB_NAME`, `MARKETING_TENANT_ID`, `MARKETING_API_KEY`,
+ * `MARKETING_KAFKA_TOPIC_MARKETING_EVENTS`) are omitted here — use the Marketing admin values from **Tenant config** above.
+ */
+const retailMarketingEnvKeys = `MARKETING_BASE_URL
+MARKETING_HANDOFF_JWT_ISS
+MARKETING_HANDOFF_JWT_AUD
+MARKETING_KAFKA_BROKERS
+MARKETING_KAFKA_CLIENT_ID
+MARKETING_KAFKA_SSL
+MARKETING_KAFKA_USERNAME
+MARKETING_KAFKA_PASSWORD
+MARKETING_KAFKA_SASL_MECHANISM`
+
+/** Sample decoded JWT payload (iss/aud are fixed protocol constants for this server). */
 const jwtPayloadRequiredExample = `{
-  "iss": "https://api.partner.example",
-  "aud": "urn:example:marketing-handoff",
+  "iss": "marketing-tenant",
+  "aud": "new-marketing",
   "sub": "9293be5e-ffe4-44a1-a724-1596be97c750",
   "iat": 1710000000,
   "exp": 1710000300,
@@ -58,6 +74,71 @@ const handoffRequestExample = `{
 const handoffResponseExample = `{
   "ok": true,
   "tenantName": "Acme Corp"
+}`
+
+const crmEventTypes = `contact.created
+contact.updated
+contact.deleted
+marketing.email_template.created
+marketing.email_template.updated
+marketing.email_template.deleted
+marketing.sync.requested`
+
+const crmEnvelopeExample = `{
+  "eventType": "contact.created",
+  "occurredAt": "2026-04-10T17:31:00.000Z",
+  "dBname": "marketing_acme",
+  "tenantId": "9293be5e-ffe4-44a1-a724-1596be97c750",
+  "payload": {
+    "externalId": "contact_123",
+    "tenantId": "9293be5e-ffe4-44a1-a724-1596be97c750",
+    "dBname": "marketing_acme",
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "company": "Acme Corp",
+    "contactType": "prospect",
+    "channel": "retail"
+  }
+}`
+
+/** Where producers send inbound platform events (CRM reference + typical custom integrations). */
+const whereToSendKafka = `Cluster:  KAFKA_BROKERS          (comma-separated host:port; same cluster Marketing consumes)
+Topic:    KAFKA_TOPIC_MARKETING_EVENTS   (default: marketing.events)
+Key:      Marketing TENANT_ID            (UUID string from tenant config)
+Value:    JSON envelope                  (single object, UTF-8 string body — not double-encoded)`
+
+/** marketing.sync.requested — first chunk (chunkIndex 1); later chunks omit ownerEmails / requestedBy*. */
+const syncRequestedExample = `{
+  "eventType": "marketing.sync.requested",
+  "occurredAt": "2026-04-10T17:31:00.000Z",
+  "dBname": "marketing_acme",
+  "tenantId": "9293be5e-ffe4-44a1-a724-1596be97c750",
+  "payload": {
+    "tenantId": "9293be5e-ffe4-44a1-a724-1596be97c750",
+    "dBname": "marketing_acme",
+    "syncType": "login_reconcile",
+    "syncId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "chunkIndex": 1,
+    "chunkCount": 3,
+    "tenantWideContacts": false,
+    "ownerEmails": ["user@example.com"],
+    "requestedByUserId": "crm-user-id",
+    "requestedByEmail": "user@example.com",
+    "contacts": [
+      {
+        "externalId": "contact_1",
+        "tenantId": "9293be5e-ffe4-44a1-a724-1596be97c750",
+        "dBname": "marketing_acme",
+        "firstName": "Jane",
+        "lastName": "Doe",
+        "email": "jane@example.com",
+        "company": "Acme",
+        "contactType": "prospect",
+        "channel": "retail"
+      }
+    ]
+  }
 }`
 </script>
 
@@ -177,8 +258,150 @@ const handoffResponseExample = `{
           <code>KAFKA_BROKERS</code> is required to connect. Together with the tenant config above, your producer can publish.
         </p>
 
+        <h2 class="text-base font-semibold text-slate-900 mt-10">Retail backend (<code>MARKETING_*</code> in <code>.env</code>)</h2>
+        <p class="text-slate-600">
+          The <strong>retail-origination</strong> Nuxt app maps these environment variables in <code>nuxt.config</code> (server-side).
+          Use your Marketing app origin for <code>MARKETING_BASE_URL</code> (no trailing slash). For local Redpanda from the host,
+          use <code>127.0.0.1:19092</code> — not the Docker service hostname unless the retail server runs on the same Docker network.
+          Set <code>MARKETING_KAFKA_SSL=false</code> for local plaintext; defaults in code assume TLS unless you disable it.
+        </p>
+        <p class="mt-2 text-slate-600">
+          <strong>Tenant-specific</strong> settings belong in the same <code>.env</code> but are <strong>not</strong> listed below:
+          <code>MARKETING_DB_NAME</code>, <code>MARKETING_TENANT_ID</code>, <code>MARKETING_API_KEY</code> (<code>nmk_…</code>),
+          and <code>MARKETING_KAFKA_TOPIC_MARKETING_EVENTS</code> — copy those from your Marketing admin / tenant registry
+          (same meanings as <code>DB_NAME</code>, <code>TENANT_ID</code>, tenant API key, and <code>KAFKA_TOPIC_MARKETING_EVENTS</code> above).
+        </p>
+        <p class="mt-2 text-slate-600">
+          Handoff <code>iss</code> / <code>aud</code> must match this app&rsquo;s
+          <code>marketingHandoffIss</code> / <code>marketingHandoffAud</code> (defaults shown in <strong>Auth</strong>).
+        </p>
+        <pre
+          class="mt-3 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >{{ retailMarketingEnvKeys }}</pre>
+        <p class="mt-3 text-xs text-slate-500 font-mono">
+          Example (fill in brokers; adjust iss/aud only if you changed them in Marketing):
+        </p>
+        <pre
+          class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >MARKETING_BASE_URL=http://localhost:3001
+MARKETING_HANDOFF_JWT_ISS=marketing-tenant
+MARKETING_HANDOFF_JWT_AUD=new-marketing
+MARKETING_KAFKA_BROKERS=127.0.0.1:19092
+MARKETING_KAFKA_CLIENT_ID=retail-origination
+MARKETING_KAFKA_SSL=false
+MARKETING_KAFKA_USERNAME=
+MARKETING_KAFKA_PASSWORD=
+MARKETING_KAFKA_SASL_MECHANISM=plain</pre>
+
         <footer class="mt-10 border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
           Event shapes: <strong>Overview</strong>. Handoff JWT: <strong>Auth</strong>.
+        </footer>
+      </div>
+
+      <!-- Sending events -->
+      <div v-show="activeTab === 'sending'" role="tabpanel" aria-label="Sending events">
+        <p class="text-slate-600">
+          This tab is for the producer side (CRM) and how Marketing consumes those messages.
+        </p>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Where to send</h2>
+        <p class="text-slate-600">
+          You send to your Kafka <strong>cluster</strong> (brokers), on one <strong>topic</strong>, with each record&rsquo;s
+          <strong>key</strong> and <strong>value</strong> set like this:
+        </p>
+        <pre
+          class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >{{ whereToSendKafka }}</pre>
+        <p class="mt-2 text-slate-600">
+          The reference CRM producer publishes every inbound event type to that single topic name (not per-tenant topic
+          suffixes). Marketing&rsquo;s consumer subscribes to the <strong>base</strong> topic above and also to
+          <code>&lt;base&gt;.&lt;suffix&gt;</code> topics derived from registered tenants; using the base topic is the
+          usual path for CRM-style contact/template/sync events. If your admin gives a non-default topic, use that exact
+          string for <code>KAFKA_TOPIC_MARKETING_EVENTS</code>.
+        </p>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">How CRM resolves runtime</h2>
+        <p class="text-slate-600">
+          CRM first checks enabled external-connection metadata for Kafka values, then falls back per field to env.
+          If <code>KAFKA_BROKERS</code> is empty, publish is skipped.
+        </p>
+        <ul>
+          <li><code>KAFKA_BROKERS</code>, <code>KAFKA_SSL</code>, <code>KAFKA_USERNAME</code>, <code>KAFKA_PASSWORD</code>, <code>KAFKA_CLIENT_ID</code>, <code>KAFKA_SASL_MECHANISM</code></li>
+          <li><code>KAFKA_TOPIC_MARKETING_EVENTS</code> defaults to <code>marketing.events</code></li>
+          <li><code>TENANT_ID</code> and <code>DB_NAME</code> must be the Marketing tenant values (not CRM registry ids)</li>
+        </ul>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Event types CRM publishes</h2>
+        <pre
+          class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >{{ crmEventTypes }}</pre>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Envelope shape and Kafka key</h2>
+        <p class="text-slate-600">
+          CRM publishes one JSON envelope per message. Kafka message <code>key</code> should be the Marketing
+          <code>tenantId</code>. Keep root <code>tenantId</code>/<code>dBname</code> aligned with payload values.
+        </p>
+        <pre
+          class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >{{ crmEnvelopeExample }}</pre>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Snapshot sync — <code>marketing.sync.requested</code></h2>
+        <p class="text-slate-600">
+          Use this to push a <strong>bulk contact snapshot</strong> (for example right after handoff / when opening
+          Marketing). Same Kafka destination as other events: base topic, key = Marketing <code>tenantId</code>.
+        </p>
+        <ul class="mt-2">
+          <li>
+            <code>syncType</code> should be <code>login_reconcile</code> (reference CRM uses this when reconciling after
+            launch).
+          </li>
+          <li>
+            Split large lists into multiple Kafka messages: one shared <code>syncId</code>, <code>chunkIndex</code> from
+            <code>1</code> … <code>chunkCount</code>, same <code>occurredAt</code> across the run is fine.
+          </li>
+          <li>
+            <strong>First chunk only:</strong> include <code>ownerEmails</code> (lowercased, de-duplicated) when
+            <code>tenantWideContacts</code> is <code>false</code>; omit or use an empty list when tenant-wide. Optional
+            <code>requestedByUserId</code> / <code>requestedByEmail</code> on the first chunk for audit trails.
+          </li>
+          <li>
+            <strong>CRM chunk size:</strong> env <code>MARKETING_SYNC_CHUNK_SIZE</code> (default <code>25</code>, clamped
+            between <code>5</code> and <code>120</code> contacts per message) to stay under broker size limits.
+          </li>
+          <li>
+            Each <code>contacts[]</code> entry mirrors contact fields (plus optional <code>metadata</code> for
+            <code>ownerId</code> / <code>ownerEmail</code> on the row).
+          </li>
+        </ul>
+        <p class="mt-2 text-slate-600">
+          Marketing handles each message by <strong>upserting</strong> the contacts in that chunk into the tenant DB
+          (source <code>crm-kafka</code>). Align this snapshot with your ongoing <code>contact.*</code> stream and
+          handoff <code>ownerEmails</code> / <code>tenantWideContacts</code> so visibility stays consistent.
+        </p>
+        <pre
+          class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
+        >{{ syncRequestedExample }}</pre>
+        <p class="mt-2 text-sm text-slate-600">
+          Chunks after the first repeat the same envelope shape but usually only add <code>contacts</code> (no
+          <code>ownerEmails</code> / <code>requestedBy*</code>).
+        </p>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">How Marketing consumes</h2>
+        <ul>
+          <li>Consumer subscribes to the base topic plus tenant-scoped topics when present.</li>
+          <li>Only inbound platform events are handled: contact.*, email_template.*, and <code>marketing.sync.requested</code>.</li>
+          <li>Invalid schema or non-JSON messages are skipped with logs.</li>
+        </ul>
+
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Common mistakes</h2>
+        <ul>
+          <li>Using CRM tenant id instead of Marketing <code>TENANT_ID</code> in envelope/payload.</li>
+          <li>Missing <code>DB_NAME</code>, which breaks tenant routing on the Marketing side.</li>
+          <li>Large sync snapshots without chunking; keep <code>marketing.sync.requested</code> chunked.</li>
+        </ul>
+
+        <footer class="mt-10 border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
+          Kafka schema basics: <strong>Overview</strong>. Runtime keys: <strong>Set up</strong>. Session handoff: <strong>Auth</strong>.
         </footer>
       </div>
 
@@ -208,7 +431,12 @@ const handoffResponseExample = `{
         </ol>
 
         <h2 class="text-base font-semibold text-slate-900 mt-8">GET — redirect URL</h2>
-        <p class="text-slate-600">Encode the JWT with <code>encodeURIComponent</code> before placing it in the query string.</p>
+        <p class="text-slate-600">
+          <strong>Why GET:</strong> The user&rsquo;s browser moves from your product to Marketing in one step, and the
+          one-time JWT travels in the URL—your frontend and Marketing&rsquo;s frontend never need a direct integration
+          for that hop. Use <code>encodeURIComponent</code> on the JWT so characters like <code>.</code> do not break the
+          query string.
+        </p>
         <pre
           class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
         >https://&lt;marketing-host&gt;/auth/tenant-callback?token=&lt;url-encoded-jwt&gt;</pre>
@@ -236,12 +464,21 @@ const handoffResponseExample = `{
           <code>.</code>
         </p>
 
+        <h2 class="text-base font-semibold text-slate-900 mt-8">Issuer and audience (<code>iss</code> / <code>aud</code>)</h2>
+        <p class="text-slate-600">
+          Standard JWT claims: <code>iss</code> = who <strong>issued</strong> the token, <code>aud</code> = who it is
+          <strong>for</strong>. They are not tenant id or API key.
+        </p>
+        <p class="mt-2 text-slate-600">
+          This server only accepts <code>iss</code> <code>marketing-tenant</code> and <code>aud</code>
+          <code>new-marketing</code> — a fixed pairing so other tokens are rejected early. Treat them like required
+          protocol constants. <strong>Tenant identity</strong> is <code>sub</code> + <code>k</code> + the signature.
+        </p>
+
         <h2 class="text-base font-semibold text-slate-900 mt-8">Required claims</h2>
         <p class="text-slate-600">
-          The JSON below is a <strong>sample shape</strong> only. For tokens this Marketing server will accept,
-          <code>iss</code> must be exactly <code>mortdash-crm</code> and <code>aud</code> exactly
-          <code>mortdash-marketing</code> (fixed protocol values — replace <code>sub</code> and <code>k</code> with your
-          real tenant id and API key).
+          Use your real <code>sub</code> and <code>k</code>; <code>iss</code> and <code>aud</code> must match the literals
+          above.
         </p>
         <pre
           class="mt-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs leading-relaxed font-mono text-slate-100"
@@ -262,8 +499,14 @@ const handoffResponseExample = `{
 
         <h2 class="text-base font-semibold text-slate-900 mt-8">API — <code>POST /api/v1/auth/tenant-handoff</code></h2>
         <p class="text-slate-600">
-          Called from this Marketing origin with <code>credentials: 'include'</code>. Typical errors: <code>400</code> missing
-          body, <code>401</code> invalid or expired token / unknown key / tenant mismatch.
+          <strong>Why POST:</strong> Marketing&rsquo;s server verifies the JWT (signature, <code>iss</code>/<code>aud</code>,
+          expiry, tenant/key) and then issues an <strong>httpOnly</strong> session cookie. You do not keep relying on the
+          token in the address bar. <code>credentials: 'include'</code> lets the browser send and store cookies for this
+          Marketing origin on follow-up requests.
+        </p>
+        <p class="mt-2 text-slate-600">
+          Called from this Marketing origin (the callback page). Typical errors: <code>400</code> missing body,
+          <code>401</code> invalid or expired token / unknown key / tenant mismatch.
         </p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Request body</p>
         <pre

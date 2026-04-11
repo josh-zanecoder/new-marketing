@@ -1,5 +1,6 @@
 import type { FilterQuery } from 'mongoose'
 import type { ContactKind } from '@server/types/tenant/contact.model'
+import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
 import type {
   RecipientListCriterion,
   RecipientListFilterMode
@@ -72,10 +73,7 @@ function buildAndMode(
   audience: ContactKind,
   filters: RecipientListCriterion[]
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   if (!filters.length) return base
 
   const byProp = new Map<string, string[]>()
@@ -183,10 +181,7 @@ function mergeAudienceWithExpr(
   audience: ContactKind,
   expr: Record<string, unknown>
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   return { ...base, ...expr } as FilterQuery<Record<string, unknown>>
 }
 
@@ -196,10 +191,7 @@ export function buildRowChainQuery(
   rowGroups: RecipientListCriterion[][],
   joins: ('and' | 'or')[]
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   const rowLeaves: Record<string, unknown>[] = []
   for (const g of rowGroups) {
     const part = combineCriteriaGroup(g)
@@ -224,10 +216,7 @@ export function buildFlatCriterionChainQuery(
   criteria: RecipientListCriterion[],
   joins: ('and' | 'or')[]
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   const leaves: Record<string, unknown>[] = []
   for (const c of criteria) {
     const leaf = criterionToLeaf(c)
@@ -250,10 +239,7 @@ function buildAndModeGrouped(
   audience: ContactKind,
   groups: RecipientListCriterion[][]
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
 
   const nonEmpty = groups.filter((g) => g.length > 0)
   if (!nonEmpty.length) return base
@@ -273,10 +259,7 @@ function buildOrMode(
   audience: ContactKind,
   filters: RecipientListCriterion[]
 ): FilterQuery<Record<string, unknown>> {
-  const base: FilterQuery<Record<string, unknown>> = {
-    deletedAt: null,
-    contactKind: audience
-  }
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   if (!filters.length) return base
 
   const orParts: Record<string, unknown>[] = []

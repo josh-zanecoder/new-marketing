@@ -1,7 +1,11 @@
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { ensureTenantDatabaseInitialized } from '@server/tenant/provisioning'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
-import { ensureTenantEventTopic } from '@server/services/kafkaProducer'
+import {
+  computeDefaultMarketingOutboundTopicForTenant,
+  ensureTenantEventTopic,
+  invalidateTenantTopicCacheForDbName
+} from '@server/services/kafkaProducer'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -45,9 +49,16 @@ export default defineEventHandler(async (event) => {
       tenantId,
       { crmAppUrl }
     )
+
+  const autoTopic = computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
+  await registryConn.collection('clients').updateOne(
+    { dbName },
+    { $set: { kafkaOutboundTopic: autoTopic } }
+  )
+  invalidateTenantTopicCacheForDbName(dbName)
   let kafkaTopic: string | null = null
   try {
-    kafkaTopic = await ensureTenantEventTopic(displayName)
+    kafkaTopic = await ensureTenantEventTopic(dbName)
   } catch (err) {
     console.error('[Kafka] failed to ensure tenant topic:', err)
   }

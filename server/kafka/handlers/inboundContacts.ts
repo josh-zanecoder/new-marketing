@@ -1,12 +1,17 @@
-import mongoose from 'mongoose'
+import type { Types } from 'mongoose'
 import {
   namesFromContactPayload,
   type ContactDeletedEventEnvelope,
-  type ContactEventEnvelope
+  type ContactEventEnvelope,
+  type ContactPayload
 } from '../../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import {
+  applyContactTypeFieldsToSetDoc,
+  normalizeContactTypeInput
+} from '@server/utils/contact/contactTypeWrite'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -22,6 +27,7 @@ type SyncSnapshotContact = {
   company?: string
   address?: Record<string, unknown>
   contactType?: string
+  contactTypes?: string[]
   channel?: string
   metadata?: Record<string, unknown>
 }
@@ -29,7 +35,6 @@ type SyncSnapshotContact = {
 type SyncSnapshotUpsertRow = {
   externalId: string
   email: string
-  contactKind: 'prospect' | 'client' | 'contact'
   firstName: string
   lastName: string
   phone: string
@@ -38,6 +43,8 @@ type SyncSnapshotUpsertRow = {
   channel: string
   ownerId: string
   ownerEmail: string
+  /** Normalized keys written to `contactType` + derived `contactKind`. */
+  contactTypeKeys: string[]
 }
 
 export async function createContactFromCreatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
@@ -55,33 +62,36 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
   const { firstName, lastName } = namesFromContactPayload(contactEvent.payload)
+  const p = contactEvent.payload as ContactPayload & { contactTypes?: unknown }
+  const setDoc: Record<string, unknown> = {
+    externalId: contactEvent.payload.externalId,
+    source: KAFKA_INBOUND_CONTACT_SOURCE,
+    firstName,
+    lastName,
+    email,
+    phone: contactEvent.payload.phone ?? '',
+    address: contactEvent.payload.address,
+    company: contactEvent.payload.company || '',
+    channel: contactEvent.payload.channel ?? 'email',
+    deletedAt: null,
+    metadata: {
+      tenantId: contactEvent.tenantId,
+      eventType: contactEvent.eventType,
+      occurredAt: contactEvent.occurredAt,
+      ...(ownerId ? { ownerId } : {}),
+      ...(ownerEmail ? { ownerEmail } : {})
+    }
+  }
+  const fromMulti = normalizeContactTypeInput(p.contactTypes)
+  const fromSingle = normalizeContactTypeInput(p.contactType)
+  setDoc.contactType = fromMulti.length ? fromMulti : fromSingle
+  applyContactTypeFieldsToSetDoc(setDoc)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
       source: KAFKA_INBOUND_CONTACT_SOURCE
     },
-    {
-      $set: {
-        externalId: contactEvent.payload.externalId,
-        source: KAFKA_INBOUND_CONTACT_SOURCE,
-        contactKind: contactEvent.payload.contactType,
-        firstName,
-        lastName,
-        email,
-        phone: contactEvent.payload.phone ?? '',
-        address: contactEvent.payload.address,
-        company: contactEvent.payload.company || '',
-        channel: contactEvent.payload.channel ?? 'email',
-        deletedAt: null,
-        metadata: {
-          tenantId: contactEvent.tenantId,
-          eventType: contactEvent.eventType,
-          occurredAt: contactEvent.occurredAt,
-          ...(ownerId ? { ownerId } : {}),
-          ...(ownerEmail ? { ownerEmail } : {})
-        }
-      }
-    },
+    { $set: setDoc },
     { upsert: true }
   )
   const doc = await models.Contact.findOne(
@@ -92,7 +102,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     { _id: 1 }
   ).lean()
   if (doc?._id) {
-    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+    await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
   }
 }
 
@@ -111,33 +121,36 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
   const { firstName: fnU, lastName: lnU } = namesFromContactPayload(contactEvent.payload)
+  const pU = contactEvent.payload as ContactPayload & { contactTypes?: unknown }
+  const setDocU: Record<string, unknown> = {
+    externalId: contactEvent.payload.externalId,
+    source: KAFKA_INBOUND_CONTACT_SOURCE,
+    firstName: fnU,
+    lastName: lnU,
+    email,
+    phone: contactEvent.payload.phone ?? '',
+    address: contactEvent.payload.address,
+    company: contactEvent.payload.company || '',
+    channel: contactEvent.payload.channel ?? 'email',
+    deletedAt: null,
+    metadata: {
+      tenantId: contactEvent.tenantId,
+      eventType: contactEvent.eventType,
+      occurredAt: contactEvent.occurredAt,
+      ...(ownerId ? { ownerId } : {}),
+      ...(ownerEmail ? { ownerEmail } : {})
+    }
+  }
+  const fromMultiU = normalizeContactTypeInput(pU.contactTypes)
+  const fromSingleU = normalizeContactTypeInput(pU.contactType)
+  setDocU.contactType = fromMultiU.length ? fromMultiU : fromSingleU
+  applyContactTypeFieldsToSetDoc(setDocU)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
       source: KAFKA_INBOUND_CONTACT_SOURCE
     },
-    {
-      $set: {
-        externalId: contactEvent.payload.externalId,
-        source: KAFKA_INBOUND_CONTACT_SOURCE,
-        contactKind: contactEvent.payload.contactType,
-        firstName: fnU,
-        lastName: lnU,
-        email,
-        phone: contactEvent.payload.phone ?? '',
-        address: contactEvent.payload.address,
-        company: contactEvent.payload.company || '',
-        channel: contactEvent.payload.channel ?? 'email',
-        deletedAt: null,
-        metadata: {
-          tenantId: contactEvent.tenantId,
-          eventType: contactEvent.eventType,
-          occurredAt: contactEvent.occurredAt,
-          ...(ownerId ? { ownerId } : {}),
-          ...(ownerEmail ? { ownerEmail } : {})
-        }
-      }
-    },
+    { $set: setDocU },
     { upsert: true }
   )
   const doc = await models.Contact.findOne(
@@ -148,7 +161,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     { _id: 1 }
   ).lean()
   if (doc?._id) {
-    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+    await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
   }
 }
 
@@ -194,7 +207,7 @@ export async function softDeleteContactFromDeletedEvent(
     { _id: 1 }
   ).lean()
   if (doc?._id) {
-    await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+    await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
   }
 }
 
@@ -225,11 +238,17 @@ export async function upsertContactsFromSyncSnapshot(params: {
       const legacy = String(c.name ?? '').trim()
       const firstName = fn || legacy
       const lastName = ln
+      let contactTypeKeys = normalizeContactTypeInput(
+        Array.isArray(c.contactTypes) && c.contactTypes.length ? c.contactTypes : c.contactType
+      )
+      if (!contactTypeKeys.length) {
+        contactTypeKeys = normalizeContactTypeInput(
+          c.contactType === 'client' || c.contactType === 'contact' ? c.contactType : 'prospect'
+        )
+      }
       const row: SyncSnapshotUpsertRow = {
         externalId,
         email,
-        contactKind:
-          c.contactType === 'client' || c.contactType === 'contact' ? c.contactType : 'prospect',
         firstName,
         lastName,
         phone: c.phone ?? '',
@@ -237,7 +256,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         company: c.company ?? '',
         channel: c.channel ?? 'email',
         ownerId,
-        ownerEmail
+        ownerEmail,
+        contactTypeKeys
       }
       return row
     })
@@ -246,30 +266,30 @@ export async function upsertContactsFromSyncSnapshot(params: {
   if (rows.length === 0) return 0
   await Promise.all(
     rows.map(async (r) => {
+      const snapSet: Record<string, unknown> = {
+        externalId: r.externalId,
+        source: KAFKA_INBOUND_CONTACT_SOURCE,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        phone: r.phone,
+        address: r.address,
+        company: r.company,
+        channel: r.channel,
+        deletedAt: null,
+        metadata: {
+          tenantId: params.tenantId,
+          eventType: 'marketing.sync.requested',
+          occurredAt: params.occurredAt,
+          ...(r.ownerId ? { ownerId: r.ownerId } : {}),
+          ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+        },
+        contactType: r.contactTypeKeys
+      }
+      applyContactTypeFieldsToSetDoc(snapSet)
       await models.Contact.updateOne(
         { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
-        {
-          $set: {
-            externalId: r.externalId,
-            source: KAFKA_INBOUND_CONTACT_SOURCE,
-            contactKind: r.contactKind,
-            firstName: r.firstName,
-            lastName: r.lastName,
-            email: r.email,
-            phone: r.phone,
-            address: r.address,
-            company: r.company,
-            channel: r.channel,
-            deletedAt: null,
-            metadata: {
-              tenantId: params.tenantId,
-              eventType: 'marketing.sync.requested',
-              occurredAt: params.occurredAt,
-              ...(r.ownerId ? { ownerId: r.ownerId } : {}),
-              ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
-            }
-          }
-        },
+        { $set: snapSet },
         { upsert: true }
       )
       const doc = await models.Contact.findOne(
@@ -277,7 +297,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
         { _id: 1 }
       ).lean()
       if (doc?._id) {
-        await syncContactRecipientListMembership(tenantConn, doc._id as mongoose.Types.ObjectId)
+        await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
       }
     })
   )
