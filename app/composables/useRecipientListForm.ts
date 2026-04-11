@@ -409,7 +409,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   async function loadFormPayload(): Promise<void> {
     const res = await $fetch<RecipientListFormPayload>('/api/v1/tenant/recipient-list', {
       credentials: 'include',
-      ...serverAuthHeaders()
+      ...serverAuthHeaders(),
+      query: { scope: 'form' }
     })
     data.value = normalizePayload(res)
   }
@@ -458,7 +459,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       const [res, detail] = await Promise.all([
         $fetch<RecipientListFormPayload>('/api/v1/tenant/recipient-list', {
           credentials: 'include',
-          ...serverAuthHeaders()
+          ...serverAuthHeaders(),
+          query: { scope: 'form' }
         }),
         $fetch<ListDetailForEdit>(`/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`, {
           credentials: 'include',

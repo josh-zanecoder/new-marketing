@@ -1,3 +1,4 @@
+import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
@@ -9,7 +10,7 @@ import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilt
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
-import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListDocument'
+import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
 import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
 const CONTACT_LIMIT = 3000
@@ -63,6 +64,68 @@ function serializeRegistryFilter(
   }
 }
 
+type ContactTypeLean = {
+  key?: string
+  label?: string
+  sortOrder?: number
+}
+
+async function buildRecipientListFormMetadata(params: {
+  tenantConn: Connection
+  auth: unknown
+  tenantId: string | null
+  contactTypeDocs: unknown[]
+  distinctContactTypes: unknown[]
+  filterDocsRaw: unknown[]
+}) {
+  const { Contact } = getTenantClientModels(params.tenantConn)
+  const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, params.auth)
+
+  const contactTypes = (params.contactTypeDocs as ContactTypeLean[]).map((d) => {
+    const key = String(d.key ?? '').trim().toLowerCase()
+    const label = String(d.label ?? '').trim() || key
+    return {
+      key,
+      label,
+      sortOrder: Number(d.sortOrder ?? 0)
+    }
+  })
+
+  const countKeySet = new Set<string>()
+  for (const t of contactTypes) {
+    if (t.key) countKeySet.add(t.key)
+  }
+  for (const row of params.distinctContactTypes as unknown[]) {
+    const k = String(row).trim().toLowerCase()
+    if (k) countKeySet.add(k)
+  }
+  for (const d of params.filterDocsRaw as { contactType?: string }[]) {
+    const k = String(d.contactType ?? '')
+      .trim()
+      .toLowerCase()
+    if (k) countKeySet.add(k)
+  }
+  const countKeys = [...countKeySet].sort((a, b) => a.localeCompare(b))
+  const contactCounts: Record<string, number> = {}
+  await Promise.all(
+    countKeys.map(async (key) => {
+      contactCounts[key] = await Contact.countDocuments({
+        ...contactFilter,
+        contactType: key
+      })
+    })
+  )
+
+  const recipientFilters = (params.filterDocsRaw as unknown[]).map((d) =>
+    serializeRegistryFilter(
+      d as unknown as Parameters<typeof serializeRegistryFilter>[0],
+      params.tenantId
+    )
+  )
+
+  return { contactTypes, contactCounts, recipientFilters }
+}
+
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
   if (!isRegisteredTenantAuthContext(auth)) {
@@ -77,6 +140,37 @@ export default defineEventHandler(async (event) => {
     getTenantClientModels(tenantConn)
 
   const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
+
+  /** `scope=form` — contact types, registry filters, per-type counts only (create/edit list form). */
+  const scopeParam = getQuery(event).scope
+  const scope = Array.isArray(scopeParam) ? scopeParam[0] : scopeParam
+  if (String(scope ?? '').toLowerCase() === 'form') {
+    const [contactTypeDocs, distinctContactTypes, filterDocsRaw] = await Promise.all([
+      ContactType.find({ enabled: { $ne: false } })
+        .sort({ sortOrder: 1, key: 1 })
+        .lean()
+        .exec(),
+      Contact.distinct('contactType', contactFilter),
+      FilterModel.find({ enabled: true }).sort({ updatedAt: -1 }).lean().exec()
+    ])
+    const meta = await buildRecipientListFormMetadata({
+      tenantConn,
+      auth,
+      tenantId,
+      contactTypeDocs,
+      distinctContactTypes,
+      filterDocsRaw
+    })
+    return {
+      tenantId,
+      tenantIdConfigured: Boolean(tenantId),
+      ...meta,
+      contacts: [],
+      contactTotal: 0,
+      contactsTruncated: false,
+      lists: []
+    }
+  }
 
   const [
     contactTotal,
@@ -149,52 +243,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  type ContactTypeLean = {
-    key?: string
-    label?: string
-    sortOrder?: number
-  }
-  const contactTypes = (contactTypeDocs as ContactTypeLean[]).map((d) => {
-    const key = String(d.key ?? '').trim().toLowerCase()
-    const label = String(d.label ?? '').trim() || key
-    return {
-      key,
-      label,
-      sortOrder: Number(d.sortOrder ?? 0)
-    }
+  const { contactTypes, contactCounts, recipientFilters } = await buildRecipientListFormMetadata({
+    tenantConn,
+    auth,
+    tenantId,
+    contactTypeDocs,
+    distinctContactTypes,
+    filterDocsRaw
   })
-
-  const countKeySet = new Set<string>()
-  for (const t of contactTypes) {
-    if (t.key) countKeySet.add(t.key)
-  }
-  for (const row of distinctContactTypes as unknown[]) {
-    const k = String(row).trim().toLowerCase()
-    if (k) countKeySet.add(k)
-  }
-  for (const d of filterDocsRaw as { contactType?: string }[]) {
-    const k = String(d.contactType ?? '')
-      .trim()
-      .toLowerCase()
-    if (k) countKeySet.add(k)
-  }
-  const countKeys = [...countKeySet].sort((a, b) => a.localeCompare(b))
-  const contactCounts: Record<string, number> = {}
-  await Promise.all(
-    countKeys.map(async (key) => {
-      contactCounts[key] = await Contact.countDocuments({
-        ...contactFilter,
-        contactType: key
-      })
-    })
-  )
-
-  const recipientFilters = (filterDocsRaw as unknown[]).map((d) =>
-    serializeRegistryFilter(
-      d as unknown as Parameters<typeof serializeRegistryFilter>[0],
-      tenantId
-    )
-  )
 
   return {
     tenantId,

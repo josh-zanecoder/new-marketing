@@ -1,3 +1,7 @@
+/**
+ * Legacy list shapes and persisted Mongo → stable `{ audience, filters, filterMode, criterionJoins }`.
+ * For membership **Mongo filter** construction see `recipientListMembershipQuery.ts`.
+ */
 import type {
   RecipientListCriterion,
   RecipientListCriterionJoin,

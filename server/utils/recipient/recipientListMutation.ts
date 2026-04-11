@@ -3,25 +3,11 @@ import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
   RecipientListCriterion,
-  RecipientListCriterionJoin,
-  RecipientListFilterMode,
-  RecipientListMembershipScope
+  RecipientListCriterionJoin
 } from '@server/types/tenant/recipientList.model'
-import {
-  mergeContactOwnerScopeFilter,
-  mergeTenantOwnerEmailScopeFilter
-} from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
-import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
-import { registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
-
-const MEMBER_INSERT_BATCH = 1000
-
-function defaultCriterionJoins(groupCount: number): RecipientListCriterionJoin[] {
-  const need = Math.max(0, groupCount - 1)
-  return Array.from({ length: need }, () => 'and' as const)
-}
+import { registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
 
 /**
  * Parse `criterionJoins` from API body. Returns `null` when the field is omitted (PATCH: keep existing).
@@ -235,59 +221,4 @@ export function recipientListOwnerEmailForContactScope(doc: {
   if (typeof e !== 'string') return undefined
   const t = e.trim().toLowerCase()
   return t || undefined
-}
-
-export async function rebuildRecipientListMembers(
-  tenantConn: Connection,
-  listId: mongoose.Types.ObjectId,
-  audience: string,
-  filters: RecipientListCriterion[],
-  filterMode: RecipientListFilterMode,
-  criterionGroups: RecipientListCriterion[][],
-  auth: unknown,
-  membershipScope: RecipientListMembershipScope,
-  membershipOwnerEmails: string[],
-  storedCriterionJoins?: RecipientListCriterionJoin[] | null
-): Promise<number> {
-  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
-  await RecipientListMember.deleteMany({ recipientListId: listId })
-
-  const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
-  const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
-
-  const contactQuery = buildContactFilterQuery(
-    audience,
-    filters,
-    filterMode,
-    groupsForQuery,
-    storedCriterionJoins ?? null
-  )
-  const scopedContactQuery =
-    membershipScope === 'tenant'
-      ? (contactQuery as Record<string, unknown>)
-      : membershipOwnerEmails.length > 0
-        ? mergeContactOwnerScopeFilter(
-            contactQuery as Record<string, unknown>,
-            membershipOwnerEmails
-          )
-        : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
-
-  let memberCount = 0
-  const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()
-  let batch: { recipientListId: typeof listId; contactId: unknown }[] = []
-
-  for await (const doc of cursor) {
-    batch.push({ recipientListId: listId, contactId: doc._id })
-    if (batch.length >= MEMBER_INSERT_BATCH) {
-      await RecipientListMember.insertMany(batch, { ordered: false })
-      memberCount += batch.length
-      batch = []
-    }
-  }
-  if (batch.length) {
-    await RecipientListMember.insertMany(batch, { ordered: false })
-    memberCount += batch.length
-  }
-
-  return memberCount
 }

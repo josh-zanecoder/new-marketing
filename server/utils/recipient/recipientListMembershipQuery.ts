@@ -1,9 +1,23 @@
-import type { FilterQuery } from 'mongoose'
-import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
+/**
+ * Mongo **Contact** filter for recipient list membership + **rebuild** of `recipient_list_members`.
+ * Criteria → query: `buildContactFilterQuery` (and row/flat helpers). Writes: `rebuildRecipientListMembers`.
+ */
+import type { Connection, FilterQuery } from 'mongoose'
+import mongoose from 'mongoose'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
   RecipientListCriterion,
-  RecipientListFilterMode
+  RecipientListCriterionJoin,
+  RecipientListFilterMode,
+  RecipientListMembershipScope
 } from '@server/types/tenant/recipientList.model'
+import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
+import {
+  mergeContactOwnerScopeFilter,
+  mergeTenantOwnerEmailScopeFilter
+} from '@server/utils/contactOwnerFilter'
+
+const MEMBER_INSERT_BATCH = 1000
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -305,4 +319,59 @@ export function buildContactFilterQuery(
     return buildAndModeGrouped(audience, groups)
   }
   return buildAndMode(audience, filters)
+}
+
+export async function rebuildRecipientListMembers(
+  tenantConn: Connection,
+  listId: mongoose.Types.ObjectId,
+  audience: string,
+  filters: RecipientListCriterion[],
+  filterMode: RecipientListFilterMode,
+  criterionGroups: RecipientListCriterion[][],
+  auth: unknown,
+  membershipScope: RecipientListMembershipScope,
+  membershipOwnerEmails: string[],
+  storedCriterionJoins?: RecipientListCriterionJoin[] | null
+): Promise<number> {
+  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
+  await RecipientListMember.deleteMany({ recipientListId: listId })
+
+  const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
+  const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
+
+  const contactQuery = buildContactFilterQuery(
+    audience,
+    filters,
+    filterMode,
+    groupsForQuery,
+    storedCriterionJoins ?? null
+  )
+  const scopedContactQuery =
+    membershipScope === 'tenant'
+      ? (contactQuery as Record<string, unknown>)
+      : membershipOwnerEmails.length > 0
+        ? mergeContactOwnerScopeFilter(
+            contactQuery as Record<string, unknown>,
+            membershipOwnerEmails
+          )
+        : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
+
+  let memberCount = 0
+  const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()
+  let batch: { recipientListId: typeof listId; contactId: unknown }[] = []
+
+  for await (const doc of cursor) {
+    batch.push({ recipientListId: listId, contactId: doc._id })
+    if (batch.length >= MEMBER_INSERT_BATCH) {
+      await RecipientListMember.insertMany(batch, { ordered: false })
+      memberCount += batch.length
+      batch = []
+    }
+  }
+  if (batch.length) {
+    await RecipientListMember.insertMany(batch, { ordered: false })
+    memberCount += batch.length
+  }
+
+  return memberCount
 }

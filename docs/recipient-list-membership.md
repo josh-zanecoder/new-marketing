@@ -29,17 +29,17 @@ Implemented in `server/tenant/registry-auth.ts`:
 
 ### Create — `POST /api/v1/tenant/recipient-list`
 
-1. Resolve filters from the body (`resolveRecipientListFiltersFromBody`).
+1. **`createRecipientList`** in `server/utils/recipient/recipientListService.ts` calls **`resolveRecipientListFiltersFromBody`** (`recipientListMutation.ts`).
 2. Set **`membershipScope`** and **`membershipOwnerEmails`** from auth (see above).
 3. Set ownership fields via **`recipientListOwnershipFromAuth`** (`metadata.ownerEmail`, `createdBy`, …).
-4. Insert the list, then **`rebuildRecipientListMembers`**:
+4. Insert the list, then **`rebuildRecipientListMembers`** (`recipientListMembershipQuery.ts`):
    - **`tenant`**: query = filter criteria only (+ `deletedAt` via query builder).
    - **`owner_emails`** + non-empty **`membershipOwnerEmails`**: criteria **and** `mergeContactOwnerScopeFilter(..., membershipOwnerEmails)`.
    - **`owner_emails`** + empty emails: fallback **`mergeTenantOwnerEmailScopeFilter`** with current `auth`.
 
 ### Patch — `PATCH /api/v1/tenant/recipient-list/:id`
 
-Same membership fields are **recomputed from the current session** and saved, then membership is **rebuilt** with the same rules as create.
+**`updateRecipientList`** in `recipientListService.ts` recomputes the same membership fields from the current session, saves, then **rebuilds** members with the same rules as create.
 
 ### Read — `GET` (index and by id)
 
@@ -62,12 +62,16 @@ Then add/remove **`RecipientListMember`** rows for the changed contact.
 | Area | Path |
 |------|------|
 | Auth helpers | `server/tenant/registry-auth.ts` |
-| Rebuild + filter parsing | `server/utils/recipient/recipientListMutation.ts` |
+| **Create / patch orchestration** | `server/utils/recipient/recipientListService.ts` |
+| **Mongo membership query + rebuild** | `server/utils/recipient/recipientListMembershipQuery.ts` |
+| **Filter rows from body** | `server/utils/recipient/recipientListMutation.ts` |
+| **Legacy / doc normalization** | `server/utils/recipient/recipientListNormalization.ts` |
 | Contact sync | `server/utils/recipient/syncContactRecipientListMembership.ts` |
 | Owner-email Mongo filter | `server/utils/contactOwnerFilter.ts` |
 | Mongoose schema | `server/models/tenant/RecipientList.ts` |
 | Types | `server/types/tenant/recipientList.model.ts` |
 | HTTP handlers | `server/api/v1/tenant/recipient-list/index.post.ts`, `[id].patch.ts`, `index.get.ts`, `[id].get.ts` |
+| Module map | `server/utils/recipient/README.md` |
 
 ## Session vs marketing cookie
 

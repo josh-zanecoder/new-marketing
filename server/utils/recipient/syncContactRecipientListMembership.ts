@@ -6,8 +6,8 @@ import type { RecipientListCriterion } from '@server/types/tenant/recipientList.
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
-import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
-import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
+import { buildContactFilterQuery } from '@server/utils/recipient/recipientListMembershipQuery'
+import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
 import {
   pickJoinsForQuery,
   recipientListOwnerEmailForContactScope,

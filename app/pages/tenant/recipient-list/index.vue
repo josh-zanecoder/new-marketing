@@ -447,7 +447,7 @@ async function confirmDeleteList() {
       ...serverAuthHeaders()
     })
     listToDelete.value = null
-    await load()
+    await load({ force: true })
   } catch (e: unknown) {
     loadError.value =
       e && typeof e === 'object' && 'data' in e

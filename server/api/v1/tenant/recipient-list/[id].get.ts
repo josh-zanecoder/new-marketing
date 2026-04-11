@@ -8,7 +8,7 @@ import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/co
 import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
-} from '@server/utils/recipient/recipientListDocument'
+} from '@server/utils/recipient/recipientListNormalization'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
