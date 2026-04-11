@@ -115,7 +115,7 @@
                     v-if="data.tenantIdConfigured && !audienceOptions.length"
                     class="mt-2 text-sm text-slate-500"
                   >
-                    Enable prospect, client, or contact under tenant contact types (Admin), or add a recipient filter for that type.
+                    Add at least one enabled contact type under tenant contact types (Admin), or add a recipient filter scoped to a contact type.
                   </p>
                 </div>
               </div>

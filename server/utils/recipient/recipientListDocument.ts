@@ -1,12 +1,11 @@
-import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListCriterionJoin,
   RecipientListFilterMode
 } from '@server/types/tenant/recipientList.model'
+import { LAST_RESORT_CONTACT_TYPE_KEY } from '@server/utils/contact/resolveDefaultContactTypeKey'
+import { parseAudienceKey } from '@server/utils/recipient/recipientListAudience'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
-
-const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
 
 export function tokenizePropertyValue(raw: unknown): string[] {
   if (raw == null || typeof raw !== 'string') return []
@@ -16,19 +15,16 @@ export function tokenizePropertyValue(raw: unknown): string[] {
     .filter(Boolean)
 }
 
-function asAudience(raw: unknown): ContactKind {
-  if (typeof raw === 'string' && AUDIENCES.has(raw as ContactKind)) {
-    return raw as ContactKind
-  }
-  return 'prospect'
+function asAudience(raw: unknown): string {
+  return parseAudienceKey(raw) || LAST_RESORT_CONTACT_TYPE_KEY
 }
 
 export function legacyFilterToAudienceAndCriteria(
   filter: Record<string, unknown> | null | undefined
-): { audience: ContactKind; filters: RecipientListCriterion[] } {
+): { audience: string; filters: RecipientListCriterion[] } {
   const f = filter ?? {}
   const kinds = f.contactKinds as unknown
-  let audience: ContactKind = 'prospect'
+  let audience = LAST_RESORT_CONTACT_TYPE_KEY
   if (Array.isArray(kinds) && kinds.length && typeof kinds[0] === 'string') {
     audience = asAudience(kinds[0])
   }
@@ -84,7 +80,7 @@ function criterionJoinsFromDoc(doc: Record<string, unknown>): RecipientListCrite
 export function normalizeRecipientListDoc(
   doc: Record<string, unknown>
 ): {
-  audience: ContactKind
+  audience: string
   filters: RecipientListCriterion[]
   filterMode: RecipientListFilterMode
   criterionJoins?: RecipientListCriterionJoin[]
@@ -96,13 +92,11 @@ export function normalizeRecipientListDoc(
     (c) => String(c?.property ?? '').trim() || String(c?.value ?? '').trim()
   )
 
-  if (
-    hasSavedCriteria &&
-    typeof doc.audience === 'string' &&
-    AUDIENCES.has(doc.audience as ContactKind)
-  ) {
+  const docAudience = parseAudienceKey(doc.audience) || LAST_RESORT_CONTACT_TYPE_KEY
+
+  if (hasSavedCriteria) {
     return {
-      audience: doc.audience as ContactKind,
+      audience: docAudience,
       filters: mapCriteriaRows(rows),
       filterMode: filterModeFromDoc(doc),
       criterionJoins: criterionJoinsFromDoc(doc)
@@ -115,16 +109,16 @@ export function normalizeRecipientListDoc(
     return { ...legacyResult, filterMode: 'and' }
   }
 
-  if (typeof doc.audience === 'string' && AUDIENCES.has(doc.audience as ContactKind)) {
+  if (typeof doc.audience === 'string' && doc.audience.trim()) {
     return {
-      audience: doc.audience as ContactKind,
+      audience: docAudience,
       filters: mapCriteriaRows(rows),
       filterMode: filterModeFromDoc(doc),
       criterionJoins: criterionJoinsFromDoc(doc)
     }
   }
 
-  return { audience: 'prospect', filters: [], filterMode: 'and' }
+  return { audience: LAST_RESORT_CONTACT_TYPE_KEY, filters: [], filterMode: 'and' }
 }
 
 export function registryDocToCriteria(doc: {
@@ -157,13 +151,18 @@ export function registryDocToCriteria(doc: {
 }
 
 export function suggestFilterRowsFromCriteria(
-  audience: ContactKind,
+  audience: string,
   criteria: RecipientListCriterion[],
   registryDocs: Record<string, unknown>[]
 ): { recipientFilterId: string; listPropertyValue: string }[] {
-  const pool = registryDocs.filter(
-    (d) => d.enabled === true && d.contactType === audience
-  )
+  const aud = audience.trim().toLowerCase()
+  const pool = registryDocs.filter((d) => {
+    if (d.enabled !== true) return false
+    const ct = String(d.contactType ?? '')
+      .trim()
+      .toLowerCase()
+    return ct === aud
+  })
   const used = new Set<string>()
   const rows: { recipientFilterId: string; listPropertyValue: string }[] = []
 

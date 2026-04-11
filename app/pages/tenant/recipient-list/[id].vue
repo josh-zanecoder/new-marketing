@@ -327,7 +327,7 @@ function listTypeBadgeClass(listType: string): string {
   const t = listType.toLowerCase()
   if (t.includes('dynamic')) return 'bg-violet-50 text-violet-800 ring-violet-200/80'
   if (t.includes('static')) return 'bg-sky-50 text-sky-800 ring-sky-200/80'
-  if (t.includes('prospect')) return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+  if (t.includes('hybrid')) return 'bg-amber-50 text-amber-900 ring-amber-200/70'
   return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
 }
 

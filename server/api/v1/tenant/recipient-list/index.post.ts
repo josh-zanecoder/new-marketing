@@ -1,6 +1,5 @@
 import type { Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import type { ContactKind } from '@server/types/tenant/contact.model'
 import type { RecipientListFilterMode } from '@server/types/tenant/recipientList.model'
 import {
   isRegisteredTenantAuthContext,
@@ -14,6 +13,7 @@ import {
   rebuildRecipientListMembers,
   resolveRecipientListFiltersFromBody
 } from '@server/utils/recipient/recipientListMutation'
+import { assertRecipientListAudience } from '@server/utils/recipient/recipientListAudience'
 
 type CreatedRecipientList = {
   name?: string
@@ -26,18 +26,6 @@ type CreatedRecipientList = {
   membershipOwnerEmails?: string[]
   createdAt?: Date | null
   updatedAt?: Date | null
-}
-
-const AUDIENCES = new Set<ContactKind>(['prospect', 'client', 'contact'])
-
-function assertAudience(raw: unknown): ContactKind {
-  if (typeof raw === 'string' && AUDIENCES.has(raw as ContactKind)) {
-    return raw as ContactKind
-  }
-  throw createError({
-    statusCode: 400,
-    message: 'Invalid audience (use prospect, client, or contact)'
-  })
 }
 
 function assertFilterMode(raw: unknown): RecipientListFilterMode {
@@ -62,10 +50,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Name is required' })
   }
 
-  const audience = assertAudience(body?.audience)
   const filterMode = assertFilterMode(body?.filterMode)
 
   const tenantConn = await getTenantConnectionFromEvent(event)
+  const audience = await assertRecipientListAudience(tenantConn, body?.audience)
 
   const { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody } =
     await resolveRecipientListFiltersFromBody(body, tenantConn, audience)

@@ -12,6 +12,7 @@ import {
   applyContactTypeFieldsToSetDoc,
   normalizeContactTypeInput
 } from '@server/utils/contact/contactTypeWrite'
+import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -85,7 +86,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
   const fromMulti = normalizeContactTypeInput(p.contactTypes)
   const fromSingle = normalizeContactTypeInput(p.contactType)
   setDoc.contactType = fromMulti.length ? fromMulti : fromSingle
-  applyContactTypeFieldsToSetDoc(setDoc)
+  await applyContactTypeFieldsToSetDoc(setDoc, tenantConn)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
@@ -144,7 +145,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
   const fromMultiU = normalizeContactTypeInput(pU.contactTypes)
   const fromSingleU = normalizeContactTypeInput(pU.contactType)
   setDocU.contactType = fromMultiU.length ? fromMultiU : fromSingleU
-  applyContactTypeFieldsToSetDoc(setDocU)
+  await applyContactTypeFieldsToSetDoc(setDocU, tenantConn)
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
@@ -223,6 +224,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
   })
   if (!tenantConn || !Array.isArray(params.contacts) || params.contacts.length === 0) return 0
   const models = getTenantClientModels(tenantConn)
+  const defaultTypeKey = await resolveDefaultContactTypeKey(tenantConn)
 
   const rows = params.contacts
     .map((c) => {
@@ -242,9 +244,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
         Array.isArray(c.contactTypes) && c.contactTypes.length ? c.contactTypes : c.contactType
       )
       if (!contactTypeKeys.length) {
-        contactTypeKeys = normalizeContactTypeInput(
-          c.contactType === 'client' || c.contactType === 'contact' ? c.contactType : 'prospect'
-        )
+        contactTypeKeys = [defaultTypeKey]
       }
       const row: SyncSnapshotUpsertRow = {
         externalId,
@@ -286,7 +286,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
         },
         contactType: r.contactTypeKeys
       }
-      applyContactTypeFieldsToSetDoc(snapSet)
+      await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
       await models.Contact.updateOne(
         { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
         { $set: snapSet },

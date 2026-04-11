@@ -264,7 +264,8 @@
                   :pending="contactsCatalogPending"
                   :error="contactsCatalogError"
                   :truncated="contactsCatalogTruncated"
-                  :kind-counts="contactPickerKindCounts"
+                  :type-counts="contactPickerTypeCounts"
+                  :type-options="contactPickerTypeOptions"
                   :selected-ids="form.recipientsManual"
                   @refresh="loadContactsCatalog"
                   @add-contact="addContactFromPicker"
@@ -602,8 +603,7 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
-import type { CampaignContactPickerRow } from '~/types/tenantContact'
-import { primaryLifecycleKeyFromTypes } from '~~/shared/utils/contactLifecycle'
+import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -666,9 +666,8 @@ const listPreviewContacts = ref<Array<{ id: string; name: string; email: string 
 const listPreviewTotal = ref(0)
 
 const addContactsModalOpen = ref(false)
-const contactPickerKindCounts = ref<{ prospect: number; client: number; contact: number } | null>(
-  null
-)
+const contactPickerTypeCounts = ref<Record<string, number> | null>(null)
+const contactPickerTypeOptions = ref<TenantContactTypeOption[]>([])
 const contactsCatalog = ref<CampaignContactPickerRow[]>([])
 const contactsCatalogPending = ref(false)
 const contactsCatalogError = ref('')
@@ -721,27 +720,41 @@ async function loadContactsCatalog() {
     const res = await fetchRecipientListResourceOnce()
     const rows = Array.isArray(res.contacts) ? res.contacts : []
     const cc = res.contactCounts
-    contactPickerKindCounts.value =
+    contactPickerTypeCounts.value =
       cc && typeof cc === 'object'
-        ? {
-            prospect: Number(cc.prospect) || 0,
-            client: Number(cc.client) || 0,
-            contact: Number(cc.contact) || 0
-          }
+        ? Object.fromEntries(
+            Object.entries(cc as Record<string, unknown>).map(([k, v]) => [
+              String(k).trim().toLowerCase(),
+              Number(v) || 0
+            ])
+          )
         : null
+    contactPickerTypeOptions.value = Array.isArray(res.contactTypes)
+      ? (res.contactTypes as TenantContactTypeOption[])
+      : []
     contactsCatalog.value = rows
       .map((c) => {
         const rawTypes = Array.isArray(c.contactType) ? c.contactType : []
         const typeKeys = [
           ...new Set(rawTypes.map((k) => String(k).trim().toLowerCase()).filter(Boolean))
         ]
-        const keys = typeKeys.length ? typeKeys : (['contact'] as string[])
+        const opts = contactPickerTypeOptions.value
+        const fallbackKey =
+          Array.isArray(opts) && opts.length
+            ? String(
+                opts.find((t) => t.enabled !== false)?.key ??
+                  opts[0]?.key ??
+                  ''
+              )
+                .trim()
+                .toLowerCase()
+            : ''
+        const keys = typeKeys.length ? typeKeys : fallbackKey ? [fallbackKey] : []
         return {
           id: c.id,
           name: (c.name ?? '').trim(),
           email: (c.email ?? '').trim(),
           company: (c.company ?? '').trim() || undefined,
-          lifecycleKey: primaryLifecycleKeyFromTypes(keys),
           contactType: keys
         }
       })
@@ -756,7 +769,8 @@ async function loadContactsCatalog() {
     contactsCatalogError.value = 'Could not load contacts.'
     contactsCatalog.value = []
     contactsCatalogTruncated.value = false
-    contactPickerKindCounts.value = null
+    contactPickerTypeCounts.value = null
+    contactPickerTypeOptions.value = []
   } finally {
     contactsCatalogPending.value = false
   }

@@ -81,11 +81,10 @@ export default defineEventHandler(async (event) => {
   const [
     contactTotal,
     contactsRaw,
-    countProspect,
-    countClient,
-    countContact,
     listsRaw,
-    contactTypeDocs
+    contactTypeDocs,
+    distinctContactTypes,
+    filterDocsRaw
   ] = await Promise.all([
     Contact.countDocuments(contactFilter),
     Contact.find(contactFilter)
@@ -104,9 +103,6 @@ export default defineEventHandler(async (event) => {
       .limit(CONTACT_LIMIT)
       .lean()
       .exec(),
-    Contact.countDocuments({ ...contactFilter, contactType: 'prospect' }),
-    Contact.countDocuments({ ...contactFilter, contactType: 'client' }),
-    Contact.countDocuments({ ...contactFilter, contactType: 'contact' }),
     RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
       .sort({ updatedAt: -1 })
       .limit(200)
@@ -115,7 +111,9 @@ export default defineEventHandler(async (event) => {
     ContactType.find({ enabled: { $ne: false } })
       .sort({ sortOrder: 1, key: 1 })
       .lean()
-      .exec()
+      .exec(),
+    Contact.distinct('contactType', contactFilter),
+    FilterModel.find({ enabled: true }).sort({ updatedAt: -1 }).lean().exec()
   ])
   const contacts = contactsRaw as ContactRow[]
   const lists = listsRaw as RecipientListDoc[]
@@ -166,12 +164,32 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  let recipientFilters: ReturnType<typeof serializeRegistryFilter>[] = []
-  const docs = await FilterModel.find({ enabled: true })
-    .sort({ updatedAt: -1 })
-    .lean()
-    .exec()
-  recipientFilters = docs.map((d) =>
+  const countKeySet = new Set<string>()
+  for (const t of contactTypes) {
+    if (t.key) countKeySet.add(t.key)
+  }
+  for (const row of distinctContactTypes as unknown[]) {
+    const k = String(row).trim().toLowerCase()
+    if (k) countKeySet.add(k)
+  }
+  for (const d of filterDocsRaw as { contactType?: string }[]) {
+    const k = String(d.contactType ?? '')
+      .trim()
+      .toLowerCase()
+    if (k) countKeySet.add(k)
+  }
+  const countKeys = [...countKeySet].sort((a, b) => a.localeCompare(b))
+  const contactCounts: Record<string, number> = {}
+  await Promise.all(
+    countKeys.map(async (key) => {
+      contactCounts[key] = await Contact.countDocuments({
+        ...contactFilter,
+        contactType: key
+      })
+    })
+  )
+
+  const recipientFilters = (filterDocsRaw as unknown[]).map((d) =>
     serializeRegistryFilter(
       d as unknown as Parameters<typeof serializeRegistryFilter>[0],
       tenantId
@@ -202,11 +220,7 @@ export default defineEventHandler(async (event) => {
     }),
     contactTotal,
     contactsTruncated: contactTotal > CONTACT_LIMIT,
-    contactCounts: {
-      prospect: countProspect,
-      client: countClient,
-      contact: countContact
-    },
+    contactCounts,
     contactTypes,
     recipientFilters,
     lists: lists.map((doc) => {

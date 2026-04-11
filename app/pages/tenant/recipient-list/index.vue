@@ -339,18 +339,13 @@ const searchQuery = ref('')
 const audienceFilter = ref<string>('all')
 const currentPage = ref(1)
 
-/** Same ordering as add.vue — list audience is only prospect | client | contact in Mongo. */
-const AUDIENCE_ORDER = ['prospect', 'client', 'contact'] as const
-const LIST_AUDIENCE_ENUM = new Set<string>(AUDIENCE_ORDER)
-
 const audienceOptions = computed((): { value: string; label: string }[] => {
   const d = data.value
   if (!d) return []
   const seen = new Set<string>()
   for (const f of d.recipientFilters ?? []) {
     if (f.enabled && typeof f.contactType === 'string' && f.contactType.trim()) {
-      const k = f.contactType.trim().toLowerCase()
-      if (LIST_AUDIENCE_ENUM.has(k)) seen.add(k)
+      seen.add(f.contactType.trim().toLowerCase())
     }
   }
   for (const t of d.contactTypes ?? []) {
@@ -358,7 +353,7 @@ const audienceOptions = computed((): { value: string; label: string }[] => {
     const k = String(t.key ?? '')
       .trim()
       .toLowerCase()
-    if (k && LIST_AUDIENCE_ENUM.has(k)) seen.add(k)
+    if (k) seen.add(k)
   }
   if (!seen.size) return []
   const labelByKey = new Map<string, string>()
@@ -376,11 +371,6 @@ const audienceOptions = computed((): { value: string; label: string }[] => {
     const oa = orderByKey.has(a) ? orderByKey.get(a)! : 9999
     const ob = orderByKey.has(b) ? orderByKey.get(b)! : 9999
     if (oa !== ob) return oa - ob
-    const ia = AUDIENCE_ORDER.indexOf(a as (typeof AUDIENCE_ORDER)[number])
-    const ib = AUDIENCE_ORDER.indexOf(b as (typeof AUDIENCE_ORDER)[number])
-    if (ia !== -1 && ib !== -1) return ia - ib
-    if (ia !== -1) return -1
-    if (ib !== -1) return 1
     return a.localeCompare(b)
   })
   return keys.map((value) => ({

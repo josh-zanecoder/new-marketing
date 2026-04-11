@@ -1,7 +1,8 @@
-import type { FilterQuery } from 'mongoose'
-import type { ContactKind } from '@server/types/tenant/contact.model'
-
-const KIND_PRIORITY: ContactKind[] = ['client', 'prospect', 'contact']
+import type { Connection, FilterQuery } from 'mongoose'
+import {
+  LAST_RESORT_CONTACT_TYPE_KEY,
+  resolveDefaultContactTypeKey
+} from '@server/utils/contact/resolveDefaultContactTypeKey'
 
 /** Normalize inbound values to unique lowercase keys (order preserved). */
 export function normalizeContactTypeInput(raw: unknown): string[] {
@@ -21,22 +22,15 @@ export function normalizeContactTypeInput(raw: unknown): string[] {
   return s ? [s] : []
 }
 
-export function primaryLifecycleKeyFromTypes(types: string[]): ContactKind {
-  const set = new Set(types.map((t) => t.trim().toLowerCase()).filter(Boolean))
-  for (const k of KIND_PRIORITY) {
-    if (set.has(k)) return k
-  }
-  return 'contact'
-}
-
-/** @deprecated Use `primaryLifecycleKeyFromTypes`. */
-export const deriveContactKindFromContactTypes = primaryLifecycleKeyFromTypes
-
 /**
  * Mutates a `$set`-style object: sets normalized `contactType` (string[]) only.
  * Inbound payloads may still send legacy `contactKind` as a string — it is folded into `contactType`.
+ * When still empty, uses the tenant’s first enabled `contact_types` key when `tenantConn` is passed.
  */
-export function applyContactTypeFieldsToSetDoc(set: Record<string, unknown>): void {
+export async function applyContactTypeFieldsToSetDoc(
+  set: Record<string, unknown>,
+  tenantConn?: Connection | null
+): Promise<void> {
   const rawArr = set.contactType
   const rawKind = set.contactKind
 
@@ -45,7 +39,11 @@ export function applyContactTypeFieldsToSetDoc(set: Record<string, unknown>): vo
     types = normalizeContactTypeInput(rawKind)
   }
   if (types.length === 0) {
-    types = ['contact']
+    types = [
+      tenantConn
+        ? await resolveDefaultContactTypeKey(tenantConn)
+        : LAST_RESORT_CONTACT_TYPE_KEY
+    ]
   }
 
   set.contactType = types
@@ -53,7 +51,7 @@ export function applyContactTypeFieldsToSetDoc(set: Record<string, unknown>): vo
 }
 
 /** Recipient list audience: `contactType` array must include the audience key. */
-export function audienceBaseQuery(audience: ContactKind): FilterQuery<Record<string, unknown>> {
+export function audienceBaseQuery(audience: string): FilterQuery<Record<string, unknown>> {
   return {
     deletedAt: null,
     contactType: audience

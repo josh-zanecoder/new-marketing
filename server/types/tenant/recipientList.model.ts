@@ -1,5 +1,4 @@
 import type { Model, Types } from 'mongoose'
-import type { ContactKind } from './contact.model'
 
 /** One condition: field key + value (e.g. state + TX). Lists may have many. */
 export interface RecipientListCriterion {
@@ -28,7 +27,8 @@ export interface RecipientListMetadata {
 export interface RecipientListLean {
   _id: Types.ObjectId
   name: string
-  audience: ContactKind
+  /** Tenant `contact_types` key (or filter contact type) used as `Contact.contactType` membership. */
+  audience: string
   filters: RecipientListCriterion[]
   filterMode?: RecipientListFilterMode
   /** When set (length = filter row count − 1), row clauses combine with left-associative AND/OR. */

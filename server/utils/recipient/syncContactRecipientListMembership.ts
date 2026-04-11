@@ -1,10 +1,11 @@
 import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import type { ContactKind, ContactLean } from '@server/types/tenant/contact.model'
+import type { ContactLean } from '@server/types/tenant/contact.model'
 import type { RecipientListCriterion } from '@server/types/tenant/recipientList.model'
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
+import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
 import {
@@ -21,7 +22,7 @@ type RecipientListDoc = Record<string, unknown> & { _id: mongoose.Types.ObjectId
  */
 async function criterionGroupsFromFilterRows(
   tenantConn: Connection,
-  audience: ContactKind,
+  audience: string,
   rawRows: unknown
 ): Promise<RecipientListCriterion[][]> {
   if (!Array.isArray(rawRows) || !rawRows.length) return []
@@ -41,7 +42,7 @@ async function criterionGroupsFromFilterRows(
     const doc = await FilterModel.findOne({
       _id: new mongoose.Types.ObjectId(recipientFilterId),
       enabled: true,
-      contactType: audience
+      ...recipientFilterContactTypeMatch(audience)
     })
       .lean()
       .exec()

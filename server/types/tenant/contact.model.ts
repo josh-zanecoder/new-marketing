@@ -1,7 +1,7 @@
 import type { Model, Types } from 'mongoose'
 
-/** `contact` = generic person record; `prospect` / `client` = CRM-style lifecycle. */
-export type ContactKind = 'prospect' | 'client' | 'contact'
+/** Per-tenant `contact_types.key` (e.g. lead, buyer); not a fixed global enum. */
+export type ContactKind = string
 
 /** Optional structured address; all fields optional for partial CRM sync. */
 export interface ContactAddress {

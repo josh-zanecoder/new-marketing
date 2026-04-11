@@ -1,6 +1,6 @@
 /**
  * Tenant contact shapes returned by marketing APIs (JSON).
- * `ContactKind` stays aligned with `@server/types/tenant/contact.model`.
+ * `ContactKind` is a tenant `contact_types` key string (see `@server/types/tenant/contact.model`).
  */
 import type { ContactKind } from '@server/types/tenant/contact.model'
 
@@ -11,6 +11,7 @@ export interface TenantContactTypeOption {
   key: string
   label: string
   sortOrder: number
+  enabled?: boolean
 }
 
 /** GET `/api/v1/tenant/contacts` — one row. */
@@ -77,7 +78,9 @@ export interface TenantRecipientListResourcePayload {
   lists?: Array<{ id: string; name: string }>
   contacts?: TenantRecipientListCatalogContact[]
   contactsTruncated?: boolean
-  contactCounts?: { prospect?: number; client?: number; contact?: number }
+  /** Counts per `contactType` key (union of registry types, filters, and distinct contact values). */
+  contactCounts?: Record<string, number>
+  contactTypes?: TenantContactTypeOption[]
 }
 
 export interface TenantRecipientListCriterion {
@@ -128,9 +131,5 @@ export interface CampaignContactPickerRow {
   name: string
   email: string
   company?: string
-  /**
-   * Dominant `prospect` | `client` | `contact` for the type filter (derived from `contactType`).
-   */
-  lifecycleKey: string
   contactType?: string[]
 }

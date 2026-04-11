@@ -119,7 +119,7 @@
                     id="rl-audience-hint"
                     class="mt-2 text-sm text-slate-500"
                   >
-                    Enable at least one of prospect, client, or contact under tenant contact types (Admin), or add a recipient filter scoped to that type.
+                    Add at least one enabled contact type under tenant contact types (Admin), or add a recipient filter scoped to a contact type.
                   </p>
                 </div>
               </div>

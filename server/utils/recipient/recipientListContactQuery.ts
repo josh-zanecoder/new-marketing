@@ -1,5 +1,4 @@
 import type { FilterQuery } from 'mongoose'
-import type { ContactKind } from '@server/types/tenant/contact.model'
 import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
 import type {
   RecipientListCriterion,
@@ -70,7 +69,7 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
 }
 
 function buildAndMode(
-  audience: ContactKind,
+  audience: string,
   filters: RecipientListCriterion[]
 ): FilterQuery<Record<string, unknown>> {
   const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
@@ -178,7 +177,7 @@ function foldLeftAssociativeChain(
 }
 
 function mergeAudienceWithExpr(
-  audience: ContactKind,
+  audience: string,
   expr: Record<string, unknown>
 ): FilterQuery<Record<string, unknown>> {
   const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
@@ -187,7 +186,7 @@ function mergeAudienceWithExpr(
 
 /** One leaf per filter row (OR inside row when a row expands to multiple criteria). */
 export function buildRowChainQuery(
-  audience: ContactKind,
+  audience: string,
   rowGroups: RecipientListCriterion[][],
   joins: ('and' | 'or')[]
 ): FilterQuery<Record<string, unknown>> {
@@ -212,7 +211,7 @@ export function buildRowChainQuery(
 
 /** Single chain over flat criteria (no row grouping); same left-associative semantics. */
 export function buildFlatCriterionChainQuery(
-  audience: ContactKind,
+  audience: string,
   criteria: RecipientListCriterion[],
   joins: ('and' | 'or')[]
 ): FilterQuery<Record<string, unknown>> {
@@ -236,7 +235,7 @@ export function buildFlatCriterionChainQuery(
 }
 
 function buildAndModeGrouped(
-  audience: ContactKind,
+  audience: string,
   groups: RecipientListCriterion[][]
 ): FilterQuery<Record<string, unknown>> {
   const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
@@ -256,7 +255,7 @@ function buildAndModeGrouped(
 }
 
 function buildOrMode(
-  audience: ContactKind,
+  audience: string,
   filters: RecipientListCriterion[]
 ): FilterQuery<Record<string, unknown>> {
   const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
@@ -274,7 +273,7 @@ function buildOrMode(
 }
 
 export function buildContactFilterQuery(
-  audience: ContactKind,
+  audience: string,
   filters: RecipientListCriterion[],
   filterMode: RecipientListFilterMode = 'and',
   criterionGroups?: RecipientListCriterion[][],

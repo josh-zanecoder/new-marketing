@@ -1,6 +1,7 @@
 import type { Types } from 'mongoose'
 
-export type RecipientFilterContactType = 'prospect' | 'client' | 'contact'
+/** Tenant `contact_types` key (normalized lowercase in APIs; see `parseAudienceKey`). */
+export type RecipientFilterContactType = string
 
 /** High-level field on the contact (e.g. address vs channel). */
 export type RecipientFilterProperty =

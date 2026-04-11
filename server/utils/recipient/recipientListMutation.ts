@@ -1,7 +1,6 @@
 import mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import type { ContactKind } from '@server/types/tenant/contact.model'
 import type {
   RecipientListCriterion,
   RecipientListCriterionJoin,
@@ -13,6 +12,7 @@ import {
   mergeTenantOwnerEmailScopeFilter
 } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
+import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { buildContactFilterQuery } from '@server/utils/recipient/recipientListContactQuery'
 import { registryDocToCriteria } from '@server/utils/recipient/recipientListDocument'
 
@@ -80,7 +80,7 @@ export function pickJoinsForQuery(
 export async function resolveRecipientListFiltersFromBody(
   body: Record<string, unknown>,
   tenantConn: Connection,
-  audience: ContactKind
+  audience: string
 ): Promise<{
   filters: RecipientListCriterion[]
   criterionGroups: RecipientListCriterion[][]
@@ -116,7 +116,7 @@ export async function resolveRecipientListFiltersFromBody(
       const doc = await FilterModel.findOne({
         _id: new mongoose.Types.ObjectId(recipientFilterId),
         enabled: true,
-        contactType: audience
+        ...recipientFilterContactTypeMatch(audience)
       }).lean().exec()
 
       if (!doc) {
@@ -167,7 +167,7 @@ export async function resolveRecipientListFiltersFromBody(
       const doc = await FilterModel.findOne({
         _id: new mongoose.Types.ObjectId(recipientFilterId),
         enabled: true,
-        contactType: audience
+        ...recipientFilterContactTypeMatch(audience)
       }).lean().exec()
 
       if (!doc) {
@@ -240,7 +240,7 @@ export function recipientListOwnerEmailForContactScope(doc: {
 export async function rebuildRecipientListMembers(
   tenantConn: Connection,
   listId: mongoose.Types.ObjectId,
-  audience: ContactKind,
+  audience: string,
   filters: RecipientListCriterion[],
   filterMode: RecipientListFilterMode,
   criterionGroups: RecipientListCriterion[][],

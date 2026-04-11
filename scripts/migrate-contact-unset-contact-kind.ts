@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 import mongoose from 'mongoose'
+import { LAST_RESORT_CONTACT_TYPE_KEY } from '../server/utils/contact/resolveDefaultContactTypeKey'
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 loadEnv({ path: join(rootDir, '.env') })
@@ -65,7 +66,11 @@ async function main() {
       .trim()
       .toLowerCase()
     const contactType =
-      existing.length > 0 ? [...new Set(existing)] : kind ? [kind] : (['contact'] as string[])
+      existing.length > 0
+        ? [...new Set(existing)]
+        : kind
+          ? [kind]
+          : [LAST_RESORT_CONTACT_TYPE_KEY]
     batch.push({
       updateOne: {
         filter: { _id: raw._id },

@@ -9,6 +9,7 @@ import {
   normalizeRecipientListDoc,
   suggestFilterRowsFromCriteria
 } from '@server/utils/recipient/recipientListDocument'
+import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
 function rowCriterionDisplay(
@@ -104,7 +105,7 @@ export default defineEventHandler(async (event) => {
   if (!filterRows.length && filters.length) {
     const registryDocs = await RecipientFilter.find({
       enabled: true,
-      contactType: audience
+      ...recipientFilterContactTypeMatch(audience)
     })
       .lean()
       .exec()

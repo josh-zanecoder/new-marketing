@@ -1,6 +1,5 @@
 import mongoose from 'mongoose'
 
-const contactKindEnum = ['prospect', 'client', 'contact'] as const
 const listTypeEnum = ['static', 'dynamic', 'hybrid'] as const
 const filterModeEnum = ['and', 'or'] as const
 const criterionJoinEnum = ['and', 'or'] as const
@@ -42,8 +41,10 @@ export const recipientListSchema = new mongoose.Schema(
     },
     audience: {
       type: String,
-      enum: contactKindEnum,
-      default: 'prospect',
+      trim: true,
+      lowercase: true,
+      maxlength: 64,
+      default: 'contact',
       index: true
     },
     filters: {

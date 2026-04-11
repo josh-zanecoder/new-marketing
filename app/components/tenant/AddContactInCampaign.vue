@@ -46,23 +46,21 @@
             placeholder="Search by name or email…"
             class="min-w-0 w-full flex-1 rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[12rem] sm:basis-[14rem]"
           >
-          <label class="sr-only" for="modal-contact-kind">Contact type</label>
+          <label class="sr-only" for="modal-contact-type">Contact type</label>
           <select
-            id="modal-contact-kind"
-            v-model="kindFilter"
+            id="modal-contact-type"
+            v-model="typeFilter"
             class="w-full shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-auto sm:min-w-[11rem]"
           >
             <option value="all">
               All types
             </option>
-            <option value="prospect">
-              {{ typeLabel('prospect', 'Prospect') }}
-            </option>
-            <option value="client">
-              {{ typeLabel('client', 'Client') }}
-            </option>
-            <option value="contact">
-              {{ typeLabel('contact', 'Contact') }}
+            <option
+              v-for="opt in typeFilterSelectOptions"
+              :key="opt.key"
+              :value="opt.key"
+            >
+              {{ typeOptionDisplay(opt) }}
             </option>
           </select>
           <button
@@ -99,7 +97,7 @@
               {{
                 searchQuery.trim()
                   ? 'No contacts match your search.'
-                  : kindFilter !== 'all'
+                  : typeFilter !== 'all'
                     ? 'No contacts of this type with an email. Try a different type or clear the filter.'
                     : 'No contacts with an email address yet.'
               }}
@@ -158,14 +156,17 @@
 </template>
 
 <script setup lang="ts">
-import type { CampaignContactPickerRow } from '~/types/tenantContact'
+import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
 
 const props = defineProps<{
   contacts: CampaignContactPickerRow[]
   pending: boolean
   error: string
   truncated: boolean
-  kindCounts: { prospect: number; client: number; contact: number } | null
+  /** Per-key counts from GET recipient-list (any keys the API returns). */
+  typeCounts: Record<string, number> | null
+  /** Tenant registry rows; drives filter labels and order. When empty, keys are inferred from `contacts`. */
+  typeOptions: TenantContactTypeOption[]
   selectedIds: string[]
 }>()
 
@@ -177,12 +178,12 @@ const emit = defineEmits<{
 }>()
 
 const searchQuery = ref('')
-const kindFilter = ref<'all' | 'prospect' | 'client' | 'contact'>('all')
+const typeFilter = ref('all')
 
 watch(open, (isOpen) => {
   if (isOpen) {
     searchQuery.value = ''
-    kindFilter.value = 'all'
+    typeFilter.value = 'all'
   }
 })
 
@@ -195,28 +196,56 @@ function isSelected(contactId: string): boolean {
   return id ? props.selectedIds.includes(id) : false
 }
 
-function contactTypeTags(c: CampaignContactPickerRow): string[] {
-  const keys = (c.contactType ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean)
-  if (keys.length) return [...new Set(keys)]
-  const k = String(c.lifecycleKey ?? '').trim().toLowerCase()
-  return k ? [k] : []
+const keysFromContacts = computed(() => {
+  const s = new Set<string>()
+  for (const c of props.contacts) {
+    for (const raw of c.contactType ?? []) {
+      const k = String(raw).trim().toLowerCase()
+      if (k) s.add(k)
+    }
+  }
+  return [...s].sort((a, b) => a.localeCompare(b))
+})
+
+const typeFilterSelectOptions = computed((): { key: string; label: string }[] => {
+  const registry = props.typeOptions ?? []
+  if (registry.length) {
+    const rows = registry
+      .filter((t) => t.enabled !== false)
+      .map((t) => {
+        const key = t.key.trim().toLowerCase()
+        return {
+          key,
+          label: (t.label || t.key).trim() || key,
+          sortOrder: Number(t.sortOrder ?? 0)
+        }
+      })
+      .filter((t) => t.key)
+    rows.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+    return rows.map(({ key, label }) => ({ key, label }))
+  }
+  return keysFromContacts.value.map((key) => ({ key, label: key }))
+})
+
+function typeOptionDisplay(opt: { key: string; label: string }): string {
+  const n = props.typeCounts?.[opt.key]
+  const suffix = typeof n === 'number' && Number.isFinite(n) ? ` (${n.toLocaleString()})` : ''
+  return `${opt.label}${suffix}`
 }
 
-function typeLabel(value: 'prospect' | 'client' | 'contact', fallback: string): string {
-  const n = props.kindCounts?.[value]
-  const suffix = typeof n === 'number' ? ` (${n.toLocaleString()})` : ''
-  return `${fallback}${suffix}`
+function contactTypeTags(c: CampaignContactPickerRow): string[] {
+  const keys = (c.contactType ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean)
+  return keys.length ? [...new Set(keys)] : []
 }
 
 const filteredRows = computed(() => {
-  const kind = kindFilter.value
   let rows = props.contacts
-  if (kind !== 'all') {
-    rows = rows.filter((c) => {
-      const keys = (c.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
-      if (keys.length) return keys.includes(kind)
-      return (c.lifecycleKey ?? '').trim().toLowerCase() === kind
-    })
+  const t = typeFilter.value
+  if (t !== 'all') {
+    const want = t.trim().toLowerCase()
+    rows = rows.filter((c) =>
+      (c.contactType ?? []).some((x) => String(x).trim().toLowerCase() === want)
+    )
   }
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return rows

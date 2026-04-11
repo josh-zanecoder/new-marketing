@@ -20,7 +20,7 @@ loadEnv({ path: join(rootDir, '.env') })
 
 const FIXTURES = [
   {
-    contactType: ['prospect'],
+    contactType: ['lead'],
     firstName: 'Alex',
     lastName: 'Rivera',
     email: 'alex.rivera@example.com',
@@ -29,11 +29,11 @@ const FIXTURES = [
     channel: 'email',
     address: { street: '100 Market St', city: 'San Francisco', state: 'CA', county: 'San Francisco' },
     source: 'seed',
-    externalId: 'seed-prospect-1',
+    externalId: 'seed-lead-1',
     metadata: { segment: 'inbound', score: 42 }
   },
   {
-    contactType: ['client'],
+    contactType: ['buyer'],
     firstName: 'Jordan',
     lastName: 'Lee',
     email: 'jordan.lee@example.com',
@@ -42,11 +42,11 @@ const FIXTURES = [
     channel: 'email',
     address: { street: '22 Oak Ave', city: 'Austin', state: 'TX', county: 'Travis' },
     source: 'seed',
-    externalId: 'seed-client-1',
+    externalId: 'seed-buyer-1',
     metadata: { tier: 'gold' }
   },
   {
-    contactType: ['contact'],
+    contactType: ['partner'],
     firstName: 'Sam',
     lastName: 'Taylor',
     email: 'sam.taylor@example.com',
@@ -55,11 +55,11 @@ const FIXTURES = [
     channel: 'linkedin',
     address: { street: '', city: 'Denver', state: 'CO', county: 'Denver' },
     source: 'seed',
-    externalId: 'seed-contact-1',
-    metadata: { note: 'Generic contact row' }
+    externalId: 'seed-partner-1',
+    metadata: { note: 'Partner row' }
   },
   {
-    contactType: ['prospect', 'referral'],
+    contactType: ['lead', 'referral'],
     firstName: 'Riley',
     lastName: 'Chen',
     email: 'riley.chen@example.com',
@@ -68,7 +68,7 @@ const FIXTURES = [
     channel: 'sms',
     address: { street: '5 Harbor Rd', city: 'Boston', state: 'MA', county: 'Suffolk' },
     source: 'seed',
-    externalId: 'seed-prospect-2',
+    externalId: 'seed-lead-2',
     metadata: {}
   }
 ]

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
+import type { Connection } from 'mongoose'
 import { normalizeContactTypeInput } from '@server/utils/contact/contactTypeWrite'
+import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
 
 const addressSchema = new mongoose.Schema(
   {
@@ -18,7 +20,7 @@ export const contactSchema = new mongoose.Schema(
     /** Tenant marketing contact-type keys (same vocabulary as `contact_types.key`); multiple allowed. */
     contactType: {
       type: [{ type: String, trim: true, lowercase: true }],
-      default: () => ['contact']
+      default: () => []
     },
     firstName: { type: String, required: true, trim: true, default: '' },
     lastName: { type: String, required: true, trim: true, default: '' },
@@ -41,9 +43,11 @@ contactSchema.index({ externalId: 1, source: 1 }, { sparse: true })
 contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
 
-contactSchema.pre('save', function syncContactTypes(next) {
+contactSchema.pre('save', async function syncContactTypes(this: mongoose.Document) {
   let types = normalizeContactTypeInput(this.get('contactType'))
-  if (!types.length) types = ['contact']
+  if (!types.length) {
+    const key = await resolveDefaultContactTypeKey(this.db as Connection)
+    types = [key]
+  }
   this.set('contactType', types)
-  next()
 })

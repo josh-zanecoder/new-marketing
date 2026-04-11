@@ -3,12 +3,8 @@ import type {
   RecipientFilterProperty,
   RecipientFilterPropertyType
 } from '@server/types/registry/recipientFilter.types'
-
-const CONTACT_TYPES = new Set<RecipientFilterContactType>([
-  'prospect',
-  'client',
-  'contact'
-])
+import { LAST_RESORT_CONTACT_TYPE_KEY } from '@server/utils/contact/resolveDefaultContactTypeKey'
+import { parseAudienceKey } from '@server/utils/recipient/recipientListAudience'
 
 const PROPERTIES = new Set<RecipientFilterProperty>([
   'none',
@@ -35,16 +31,14 @@ const LEGACY_PROPERTY_TO_PAIR: Record<
   'address.street': { property: 'address', propertyType: 'street' }
 }
 
+/**
+ * Normalizes registry / API `contactType` to a stable tenant key (same rules as list audience).
+ * Invalid or empty input falls back to `LAST_RESORT_CONTACT_TYPE_KEY` when the shape is not parseable.
+ */
 export function normalizeRecipientFilterContactType(
   raw: unknown
 ): RecipientFilterContactType {
-  if (
-    typeof raw === 'string' &&
-    CONTACT_TYPES.has(raw as RecipientFilterContactType)
-  ) {
-    return raw as RecipientFilterContactType
-  }
-  return 'prospect'
+  return parseAudienceKey(raw) || LAST_RESORT_CONTACT_TYPE_KEY
 }
 
 export function normalizeRecipientFilterProperty(raw: unknown): RecipientFilterProperty {

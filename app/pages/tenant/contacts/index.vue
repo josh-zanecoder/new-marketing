@@ -256,6 +256,7 @@
 </template>
 
 <script setup lang="ts">
+import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactListRow,
@@ -266,12 +267,7 @@ import type {
 definePageMeta({ layout: 'default' })
 
 function typeKeyBadgeClass(kind: string): string {
-  if (!kind.trim()) return 'bg-slate-100 text-slate-500 ring-slate-200/80'
-  const k = kind.toLowerCase()
-  if (k.includes('prospect')) return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
-  if (k.includes('client')) return 'bg-indigo-50 text-indigo-800 ring-indigo-200/80'
-  if (k.includes('contact')) return 'bg-violet-50 text-violet-800 ring-violet-200/80'
-  return 'bg-slate-100 text-slate-700 ring-slate-200/80'
+  return contactTypeKeyBadgeClass(kind)
 }
 
 const PAGE_SIZE = 25
