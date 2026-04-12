@@ -4,7 +4,7 @@ import {
   computeDefaultMarketingOutboundTopicForTenant,
   ensureTenantEventTopic,
   invalidateTenantTopicCacheForDbName
-} from '@server/services/kafkaProducer'
+} from '@server/kafka/kafkaProducer'
 import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

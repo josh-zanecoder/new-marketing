@@ -5,7 +5,7 @@ import {
   computeDefaultMarketingOutboundTopicForTenant,
   ensureTenantEventTopic,
   invalidateTenantTopicCacheForDbName
-} from '@server/services/kafkaProducer'
+} from '@server/kafka/kafkaProducer'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown

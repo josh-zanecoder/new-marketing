@@ -4,7 +4,7 @@ import {
   type ContactDeletedEventEnvelope,
   type ContactEventEnvelope,
   type ContactPayload
-} from '../../schemas/events/contactEvents'
+} from '../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'

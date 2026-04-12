@@ -69,5 +69,9 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/': { redirect: '/tenant/dashboard' }
+  },
+  nitro: {
+    /** Path is relative to `server/` (Nitro prepends `server/` itself). */
+    plugins: ['kafka/plugins/kafka-inbound-consumer.ts']
   }
 })

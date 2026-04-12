@@ -7,7 +7,7 @@ import {
   type Producer,
   type SASLOptions
 } from 'kafkajs'
-import type { MarketingKafkaEnvelope } from '../types/marketingKafkaEvent'
+import type { MarketingKafkaEnvelope } from './marketingKafkaEvent'
 import { getRegistryConnection } from '../lib/mongoose'
 import { logger } from '../utils/logger'
 import {
@@ -15,25 +15,25 @@ import {
   namesFromContactPayload,
   parseContactDeletedEventEnvelope,
   parseContactEventEnvelope
-} from '../schemas/events/contactEvents'
+} from './schemas/events/contactEvents'
 import { formatContactFullName } from '../utils/contactPersonName'
 import {
   EMAIL_TEMPLATE_EVENT_TYPES,
   parseEmailTemplateCreatedEventEnvelope,
   parseEmailTemplateDeletedEventEnvelope,
   parseEmailTemplateUpdatedEventEnvelope
-} from '../schemas/events/emailTemplateEvents'
+} from './schemas/events/emailTemplateEvents'
 import {
   createContactFromCreatedEvent,
   softDeleteContactFromDeletedEvent,
   updateContactFromUpdatedEvent,
   upsertContactsFromSyncSnapshot
-} from '../kafka/handlers/inboundContacts'
+} from './handlers/inboundContacts'
 import {
   deleteMarketingEmailTemplateFromDeletedEvent,
   saveMarketingEmailTemplateFromCreatedEvent,
   saveMarketingEmailTemplateFromUpdatedEvent
-} from '../kafka/handlers/inboundEmailTemplates'
+} from './handlers/inboundEmailTemplates'
 
 // --- Runtime / client config -------------------------------------------------
 const SYNC_REQUESTED_EVENT_TYPE = 'marketing.sync.requested' as const

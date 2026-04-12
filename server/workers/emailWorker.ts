@@ -9,7 +9,7 @@ import {
   getEmailQueue
 } from '../queue/emailQueue'
 import { beginCampaignSend, processBatch } from '../services/send-campaign.service'
-import { publishCampaignSendCompleted } from '../services/kafkaProducer'
+import { publishCampaignSendCompleted } from '../kafka/kafkaProducer'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 
 const G = globalThis as typeof globalThis & { __emailBullWorker?: Worker | null }

@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger'
+import { logger } from '../../utils/logger'
 
 function isInboundConsumerDisabled(): boolean {
   return (
@@ -9,7 +9,7 @@ function isInboundConsumerDisabled(): boolean {
 
 export default defineNitroPlugin(() => {
   if (isInboundConsumerDisabled()) return
-  import('../services/kafkaProducer')
+  import('../kafkaProducer')
     .then(({ startInboundEventsConsumer }) => startInboundEventsConsumer())
     .catch((err) => {
       logger.error(

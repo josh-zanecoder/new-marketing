@@ -6,7 +6,7 @@ import {
   EMAIL_TEMPLATE_EVENT_TYPES,
   type EmailTemplateDeletedEventEnvelope,
   type EmailTemplateUpsertEventEnvelope
-} from '../../schemas/events/emailTemplateEvents'
+} from '../schemas/events/emailTemplateEvents'
 import { logger } from '../../utils/logger'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 
