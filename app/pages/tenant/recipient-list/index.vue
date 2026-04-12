@@ -208,7 +208,7 @@
                   :key="idx"
                   class="inline-flex max-w-full items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200/80"
                 >
-                  <span class="truncate">{{ c.property }} = {{ c.value }}</span>
+                  <span class="truncate">{{ criterionChipLabel(c) }}</span>
                 </span>
               </template>
               <span
@@ -281,8 +281,15 @@
 
 <script setup lang="ts">
 import type { TenantRecipientListCriterion } from '~/types/tenantContact'
+import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 
 definePageMeta({ layout: 'default' })
+
+function criterionChipLabel(c: TenantRecipientListCriterion): string {
+  const p = formatRegistryLabelForDisplay(c.property)
+  const v = formatRegistryLabelForDisplay(c.value)
+  return `${p} = ${v}`
+}
 
 const PAGE_SIZE = 10
 
@@ -461,7 +468,8 @@ async function confirmDeleteList() {
 
 function listCardSubtitle(row: ListRow): string {
   if (row.audience?.trim()) {
-    return row.audience.charAt(0).toUpperCase() + row.audience.slice(1).toLowerCase()
+    const show = formatRegistryLabelForDisplay(row.audience)
+    return show.replace(/\b\w/g, (m) => m.toUpperCase())
   }
   if (row.updatedAt) {
     try {

@@ -1,3 +1,36 @@
+<script lang="ts">
+/** Shared with `admin/tenants/[dbName].vue` recipient filter form. */
+export const recipientFilterPropertyFieldOptions = [
+  { value: 'none', label: 'None' },
+  { value: 'address', label: 'Address' },
+  { value: 'channel', label: 'Channel' },
+  { value: 'company', label: 'Company' },
+  { value: 'contact_profile', label: 'Contact profile' }
+] as const
+
+export const recipientFilterAddressPropertyTypeOptions = [
+  { value: 'state', label: 'State' },
+  { value: 'city', label: 'City' },
+  { value: 'county', label: 'County' },
+  { value: 'street', label: 'Street' }
+] as const
+
+/** When property is Contact profile (same pattern as address + state/city/…). */
+export const recipientFilterContactProfilePropertyTypeOptions = [
+  { value: 'profile_type', label: 'Type' },
+  { value: 'profile_subtype', label: 'Sub Type' }
+] as const
+
+export type RecipientFilterPropertyFieldValue =
+  (typeof recipientFilterPropertyFieldOptions)[number]['value']
+
+export type RecipientFilterAddressPropertyTypeValue =
+  (typeof recipientFilterAddressPropertyTypeOptions)[number]['value']
+
+export type RecipientFilterContactProfilePropertyTypeValue =
+  (typeof recipientFilterContactProfilePropertyTypeOptions)[number]['value']
+</script>
+
 <template>
   <section class="rf-shell">
     <div class="rf-intro">
@@ -5,8 +38,9 @@
       <h2 class="rf-intro__title">Build and manage recipient filters</h2>
       <p class="rf-intro__text">
         Each row is stored by <strong>tenant ID</strong>. Set a <strong>contact type</strong>, then optionally add a
-        <strong>property</strong>, an address <strong>property type</strong> when relevant, and <strong>property value</strong>. You can
-        separate multiple values with commas or new lines.
+        <strong>property</strong>. For <strong>Address</strong> or <strong>Contact profile</strong>, pick a
+        <strong>property type</strong> (e.g. state vs city, or type vs sub type), then enter
+        <strong>property values</strong> — separate multiple keys with commas or new lines.
       </p>
     </div>
 

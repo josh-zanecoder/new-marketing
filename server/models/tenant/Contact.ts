@@ -13,6 +13,18 @@ const addressSchema = new mongoose.Schema(
   { _id: false }
 )
 
+/** Contact segment profile (type + subtypes); keys align with Kafka-synced tenant catalog. */
+const contactProfileSchema = new mongoose.Schema(
+  {
+    typeKey: { type: String, trim: true, lowercase: true, default: '' },
+    subtypeKeys: {
+      type: [{ type: String, trim: true, lowercase: true }],
+      default: () => []
+    }
+  },
+  { _id: false }
+)
+
 export const contactSchema = new mongoose.Schema(
   {
     externalId: { type: String, default: '' },
@@ -30,6 +42,8 @@ export const contactSchema = new mongoose.Schema(
     company: { type: String, default: '', trim: true },
     /** Outreach / attribution channel (e.g. email, sms, linkedin); free-form for CRM sync. */
     channel: { type: String, default: 'email', trim: true },
+    /** Structured segment (e.g. partner type + subtypes) when synced from CRM. */
+    contactProfile: { type: contactProfileSchema, default: undefined },
     /** CRM / integration extras (tags, custom fields, raw sync payload slices). */
     metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     deletedAt: { type: Date, default: null },
@@ -42,6 +56,8 @@ contactSchema.index({ contactType: 1 })
 contactSchema.index({ externalId: 1, source: 1 }, { sparse: true })
 contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
+contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
+contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
 
 contactSchema.pre('save', async function syncContactTypes(this: mongoose.Document) {
   let types = normalizeContactTypeInput(this.get('contactType'))

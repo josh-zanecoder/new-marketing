@@ -27,6 +27,11 @@ function rowCriterionDisplay(
     else if (propertyType === 'county') prop = 'county'
     else if (propertyType === 'street') prop = 'street'
   }
+  if (property === 'contact_profile') {
+    if (propertyType === 'profile_type') prop = 'profile_type'
+    else if (propertyType === 'profile_subtype') prop = 'profile_subtype'
+    else prop = 'profile_type'
+  }
   return { property: prop, value }
 }
 

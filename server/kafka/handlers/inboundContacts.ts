@@ -17,6 +17,21 @@ import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefau
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
 
+function readContactProfileFromInboundPayload(
+  payload: Record<string, unknown>
+): { typeKey: string; subtypeKeys: string[] } | null {
+  const raw = payload.contactProfile
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const typeKey = typeof o.typeKey === 'string' ? o.typeKey.trim().toLowerCase() : ''
+  if (!typeKey) return null
+  const sk = o.subtypeKeys
+  const subtypeKeys = Array.isArray(sk)
+    ? sk.map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+    : []
+  return { typeKey, subtypeKeys }
+}
+
 type SyncSnapshotContact = {
   externalId: string
   firstName?: string
@@ -87,6 +102,10 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
   const fromSingle = normalizeContactTypeInput(p.contactType)
   setDoc.contactType = fromMulti.length ? fromMulti : fromSingle
   await applyContactTypeFieldsToSetDoc(setDoc, tenantConn)
+  const profile = readContactProfileFromInboundPayload(p as unknown as Record<string, unknown>)
+  if (profile) {
+    setDoc.contactProfile = profile
+  }
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,
@@ -146,6 +165,10 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
   const fromSingleU = normalizeContactTypeInput(pU.contactType)
   setDocU.contactType = fromMultiU.length ? fromMultiU : fromSingleU
   await applyContactTypeFieldsToSetDoc(setDocU, tenantConn)
+  const profileU = readContactProfileFromInboundPayload(pU as unknown as Record<string, unknown>)
+  if (profileU) {
+    setDocU.contactProfile = profileU
+  }
   await models.Contact.updateOne(
     {
       externalId: contactEvent.payload.externalId,

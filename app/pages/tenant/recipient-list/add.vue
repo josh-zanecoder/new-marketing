@@ -277,7 +277,7 @@
                         </p>
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-12 sm:items-end sm:gap-4">
                           <div class="sm:col-span-5">
-                            <label :for="`rl-filter-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">Field</label>
+                            <label :for="`rl-filter-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">{{ matchRuleFieldLabel(row) }}</label>
                             <select
                               :id="`rl-filter-${idx}`"
                               v-model="row.recipientFilterId"
@@ -316,7 +316,7 @@
                                   :key="opt"
                                   :value="opt"
                                 >
-                                  {{ opt }}
+                                  {{ registryValueDisplay(opt) }}
                                 </option>
                               </select>
                             </template>
@@ -324,7 +324,7 @@
                               v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
                               class="break-words rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:text-[15px]"
                             >
-                              {{ rowRegistryTokens(row)[0] }}
+                              {{ registryValueDisplay(rowRegistryTokens(row)[0] ?? '') }}
                             </p>
                             <input
                               v-else-if="showPropertyRowFor(row)"
@@ -418,6 +418,8 @@ const {
   addFilterRow,
   removeFilterRow,
   filterOptionLabel,
+  matchRuleFieldLabel,
+  registryValueDisplay,
   submitCreate
 } = useRecipientListForm({ mode: 'create' })
 </script>

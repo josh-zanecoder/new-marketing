@@ -5,12 +5,21 @@ const propertyEnum = [
   'address',
   'channel',
   'company',
+  'contact_profile',
   'address.state',
   'address.city',
   'address.county',
   'address.street'
 ] as const
-const propertyTypeEnum = ['none', 'state', 'city', 'county', 'street'] as const
+const propertyTypeEnum = [
+  'none',
+  'state',
+  'city',
+  'county',
+  'street',
+  'profile_type',
+  'profile_subtype'
+] as const
 
 /** Audience filters for recipient lists; one physical DB per tenant (no tenantId field). */
 export const recipientFilterSchema = new mongoose.Schema(

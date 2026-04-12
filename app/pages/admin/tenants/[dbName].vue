@@ -189,14 +189,14 @@
                 <select
                   id="rf-contact-type"
                   v-model="form.contactType"
-                  class="field-input capitalize"
+                  class="field-input"
                 >
                   <option
                     v-for="ct in contactTypes"
                     :key="ct.id"
                     :value="ct.key"
                   >
-                    {{ ct.key }}
+                    {{ contactTypeSelectLabel(ct) }}
                   </option>
                 </select>
               </div>
@@ -209,7 +209,7 @@
                   class="field-input"
                 >
                   <option
-                    v-for="opt in propertyFieldOptions"
+                    v-for="opt in recipientFilterPropertyFieldOptions"
                     :key="opt.value"
                     :value="opt.value"
                   >
@@ -226,7 +226,24 @@
                   class="field-input"
                 >
                   <option
-                    v-for="opt in addressPropertyTypeOptions"
+                    v-for="opt in recipientFilterAddressPropertyTypeOptions"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div v-else-if="form.property === 'contact_profile'" class="field">
+                <label for="rf-contact-profile-type">Type or sub type</label>
+                <select
+                  id="rf-contact-profile-type"
+                  v-model="form.propertyType"
+                  class="field-input"
+                >
+                  <option
+                    v-for="opt in recipientFilterContactProfilePropertyTypeOptions"
                     :key="opt.value"
                     :value="opt.value"
                   >
@@ -317,13 +334,15 @@
                   <template v-else-if="filtersDisplay.length">
                     <tr v-for="f in filtersDisplay" :key="f.id">
                       <td class="td-name">{{ f.name }}</td>
-                      <td class="td-contact capitalize">{{ f.contactType }}</td>
+                      <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
                       <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
                       <td class="td-muted">
                         {{
                           f.property === 'address'
-                            ? propertyTypeLabel(f.propertyType || 'state')
-                            : '—'
+                            ? addressPropertyTypeLabel(f.propertyType || 'state')
+                            : f.property === 'contact_profile'
+                              ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+                              : '—'
                         }}
                       </td>
                       <td class="td-values">
@@ -336,7 +355,7 @@
                             v-for="(token, i) in f.valueTokens"
                             :key="i"
                             class="value-chip"
-                          >{{ token }}</span>
+                          >{{ formatRegistryLabelForDisplay(token) }}</span>
                         </div>
                         <span v-else class="td-muted">—</span>
                       </td>
@@ -552,6 +571,16 @@
 </template>
 
 <script setup lang="ts">
+import {
+  recipientFilterAddressPropertyTypeOptions,
+  recipientFilterContactProfilePropertyTypeOptions,
+  recipientFilterPropertyFieldOptions,
+  type RecipientFilterAddressPropertyTypeValue,
+  type RecipientFilterContactProfilePropertyTypeValue,
+  type RecipientFilterPropertyFieldValue
+} from '~/components/tenant-tabs/RecipientFiltersTab.vue'
+import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+
 definePageMeta({ layout: 'admin' })
 
 const tenantDataTableWrapClass =
@@ -581,23 +610,9 @@ interface ContactTypeRow {
   sortOrder: number
 }
 
-const propertyFieldOptions = [
-  { value: 'none', label: 'None' },
-  { value: 'address', label: 'Address' },
-  { value: 'channel', label: 'Channel' },
-  { value: 'company', label: 'Company' }
-] as const
-
-const addressPropertyTypeOptions = [
-  { value: 'state', label: 'State' },
-  { value: 'city', label: 'City' },
-  { value: 'county', label: 'County' },
-  { value: 'street', label: 'Street' }
-] as const
-
-type PropertyFieldValue = (typeof propertyFieldOptions)[number]['value']
-type AddressPropertyTypeValue =
-  (typeof addressPropertyTypeOptions)[number]['value']
+type PropertyFieldValue = RecipientFilterPropertyFieldValue
+type AddressPropertyTypeValue = RecipientFilterAddressPropertyTypeValue
+type ContactProfilePropertyTypeValue = RecipientFilterContactProfilePropertyTypeValue
 
 interface TenantDetail {
   name: string
@@ -677,7 +692,7 @@ const form = reactive({
   name: '',
   contactType: '',
   property: 'none' as PropertyFieldValue,
-  propertyType: 'state' as AddressPropertyTypeValue,
+  propertyType: 'state' as AddressPropertyTypeValue | ContactProfilePropertyTypeValue,
   propertyValue: '',
   enabled: true
 })
@@ -705,20 +720,42 @@ watch(
   () => form.property,
   (p) => {
     if (p === 'address') {
-      const ok = addressPropertyTypeOptions.some((o) => o.value === form.propertyType)
+      const ok = recipientFilterAddressPropertyTypeOptions.some((o) => o.value === form.propertyType)
       if (!ok) form.propertyType = 'state'
+    } else if (p === 'contact_profile') {
+      const ok = recipientFilterContactProfilePropertyTypeOptions.some((o) => o.value === form.propertyType)
+      if (!ok) form.propertyType = 'profile_type'
     }
   }
 )
 
 function propertyFieldLabel(value: string): string {
-  const opt = propertyFieldOptions.find((o) => o.value === value)
-  return opt?.label ?? value
+  const opt = recipientFilterPropertyFieldOptions.find((o) => o.value === value)
+  return opt?.label ?? formatRegistryLabelForDisplay(value)
 }
 
-function propertyTypeLabel(value: string): string {
-  const opt = addressPropertyTypeOptions.find((o) => o.value === value)
-  return opt?.label ?? value
+function addressPropertyTypeLabel(value: string): string {
+  const opt = recipientFilterAddressPropertyTypeOptions.find((o) => o.value === value)
+  return opt?.label ?? formatRegistryLabelForDisplay(value)
+}
+
+function contactProfilePropertyTypeLabel(value: string): string {
+  const opt = recipientFilterContactProfilePropertyTypeOptions.find((o) => o.value === value)
+  return opt?.label ?? formatRegistryLabelForDisplay(value)
+}
+
+function contactTypeSelectLabel(ct: ContactTypeRow): string {
+  const lab = String(ct.label ?? '').trim()
+  if (lab) return lab
+  return formatRegistryLabelForDisplay(ct.key)
+}
+
+function contactTypeTableLabel(contactTypeKey: string): string {
+  const k = String(contactTypeKey ?? '').trim().toLowerCase()
+  const row = contactTypes.value.find((c) => String(c.key ?? '').trim().toLowerCase() === k)
+  const lab = row?.label?.trim()
+  if (lab) return lab
+  return formatRegistryLabelForDisplay(contactTypeKey)
 }
 
 function tenantByDbUrl() {
@@ -819,18 +856,25 @@ function fillForm(f: FilterRow) {
   form.name = f.name
   form.enabled = f.enabled
   form.contactType = f.contactType
-  form.property = (propertyFieldOptions as readonly { value: string }[]).some(
+  form.property = (recipientFilterPropertyFieldOptions as readonly { value: string }[]).some(
     (o) => o.value === f.property
   )
     ? (f.property as PropertyFieldValue)
     : 'none'
   if (form.property === 'address') {
     const t = f.propertyType
-    form.propertyType = (addressPropertyTypeOptions as readonly { value: string }[]).some(
+    form.propertyType = (recipientFilterAddressPropertyTypeOptions as readonly { value: string }[]).some(
       (o) => o.value === t
     )
       ? (t as AddressPropertyTypeValue)
       : 'state'
+  } else if (form.property === 'contact_profile') {
+    const t = f.propertyType
+    form.propertyType = (recipientFilterContactProfilePropertyTypeOptions as readonly { value: string }[]).some(
+      (o) => o.value === t
+    )
+      ? (t as ContactProfilePropertyTypeValue)
+      : 'profile_type'
   } else {
     form.propertyType = 'state'
   }
@@ -959,7 +1003,9 @@ async function saveFilter() {
       contactType: form.contactType,
       property: form.property,
       propertyType:
-        form.property === 'address' ? form.propertyType : 'none',
+        form.property === 'address' || form.property === 'contact_profile'
+          ? form.propertyType
+          : 'none',
       propertyValue: form.propertyValue,
       enabled: form.enabled
     }

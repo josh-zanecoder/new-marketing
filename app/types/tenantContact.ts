@@ -2,9 +2,9 @@
  * Tenant contact shapes returned by marketing APIs (JSON).
  * `ContactKind` is a tenant `contact_types` key string (see `@server/types/tenant/contact.model`).
  */
-import type { ContactKind } from '@server/types/tenant/contact.model'
+import type { ContactKind, ContactProfile } from '@server/types/tenant/contact.model'
 
-export type { ContactKind }
+export type { ContactKind, ContactProfile }
 
 /** Registry option from `contact_types` (GET contacts / recipient-list). */
 export interface TenantContactTypeOption {
@@ -37,6 +37,8 @@ export interface TenantContactListRow {
     state: string
     county: string
   }
+  /** Present when contact is a partner with retail type / subtype keys. */
+  contactProfile?: ContactProfile | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -56,6 +58,7 @@ export interface TenantRecipientListCatalogContact {
   email?: string
   company?: string
   contactType?: string[]
+  contactProfile?: ContactProfile | null
 }
 
 /** GET `/api/v1/tenant/recipient-list/:id` — one member row. */
@@ -71,6 +74,7 @@ export interface TenantRecipientListMemberRow {
   channel: string
   source: string
   address: Record<string, unknown>
+  contactProfile?: ContactProfile | null
 }
 
 /** GET `/api/v1/tenant/recipient-list` resource wrapper (lists + contacts catalog). */

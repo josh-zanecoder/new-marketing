@@ -136,7 +136,7 @@
                 v-if="seg.kind === 'criterion'"
                 class="inline-flex max-w-full items-center gap-2 rounded-xl border border-zinc-200/90 bg-gradient-to-b from-zinc-50/80 to-white px-3 py-2 text-sm shadow-sm ring-1 ring-zinc-100/60"
               >
-                <span class="shrink-0 text-xs font-semibold capitalize tracking-wide text-zinc-500">{{ seg.property }}</span>
+                <span class="shrink-0 text-xs font-semibold tracking-wide text-zinc-500">{{ formatRegistryLabelForDisplay(seg.property) }}</span>
                 <span class="shrink-0 rounded-md bg-zinc-900/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">equals</span>
                 <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
               </span>
@@ -308,6 +308,7 @@
 
 <script setup lang="ts">
 import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
+import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 
 definePageMeta({ layout: 'default' })
 

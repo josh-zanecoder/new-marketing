@@ -23,6 +23,31 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Audience filter match for `contact_profile` type/subtype keys: ignores case and treats
+ * spaces, underscores, and hyphens as interchangeable separators (e.g. `real estate` matches `real_estate`).
+ */
+function profileKeyFlexibleRegex(raw: string): RegExp | null {
+  const s = String(raw ?? '').trim()
+  if (!s) return null
+  const parts = s.toLowerCase().split(/[^a-z0-9]+/).filter((p) => p.length > 0)
+  if (parts.length === 0) return null
+  const body = parts.map((p) => escapeRegex(p)).join('[\\s_-]*')
+  return new RegExp(`^${body}$`, 'i')
+}
+
+function contactProfileTypeKeyMatchQuery(value: string): Record<string, unknown> {
+  const re = profileKeyFlexibleRegex(value)
+  if (!re) return {}
+  return { 'contactProfile.typeKey': { $regex: re } }
+}
+
+function contactProfileSubtypeMatchQuery(value: string): Record<string, unknown> {
+  const re = profileKeyFlexibleRegex(value)
+  if (!re) return {}
+  return { 'contactProfile.subtypeKeys': { $regex: re } }
+}
+
 function canonicalCriterionKey(raw: string): string {
   return String(raw ?? '').trim().toLowerCase()
 }
@@ -68,6 +93,14 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       return exactField('source', val)
     case 'email':
       return exactField('email', val)
+    case 'profile_type': {
+      const q = contactProfileTypeKeyMatchQuery(val)
+      return Object.keys(q).length ? q : null
+    }
+    case 'profile_subtype': {
+      const q = contactProfileSubtypeMatchQuery(val)
+      return Object.keys(q).length ? q : null
+    }
     case 'search':
       return {
         $or: [
@@ -137,6 +170,32 @@ function buildAndMode(
       case 'email':
         andParts.push(orExactField('email', uniq))
         break
+      case 'profile_type': {
+        const ors = uniq
+          .map((v) => contactProfileTypeKeyMatchQuery(v))
+          .filter((o) => Object.keys(o).length > 0)
+        if (!ors.length) break
+        if (ors.length === 1) {
+          const one = ors[0]
+          if (one) andParts.push(one)
+        } else {
+          andParts.push({ $or: ors })
+        }
+        break
+      }
+      case 'profile_subtype': {
+        const ors = uniq
+          .map((v) => contactProfileSubtypeMatchQuery(v))
+          .filter((o) => Object.keys(o).length > 0)
+        if (!ors.length) break
+        if (ors.length === 1) {
+          const one = ors[0]
+          if (one) andParts.push(one)
+        } else {
+          andParts.push({ $or: ors })
+        }
+        break
+      }
       case 'search': {
         const v = uniq[0]
         if (v) {

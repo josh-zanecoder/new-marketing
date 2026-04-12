@@ -30,6 +30,8 @@ export type ContactPayload = {
   contactType?: string
   /** Multiple type keys when CRM sends a list (preferred for multi-label). */
   contactTypes?: string[]
+  /** Structured segment (e.g. retail partner type + subtype keys). */
+  contactProfile?: { typeKey: string; subtypeKeys?: string[] }
   channel: string | null
 }
 

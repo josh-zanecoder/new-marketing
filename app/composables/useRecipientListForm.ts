@@ -1,5 +1,6 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, isRef, toValue } from 'vue'
+import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 
 export interface RegistryFilterRow {
   id: string
@@ -73,6 +74,9 @@ export type RecipientListFormSharedReturn = {
   addFilterRow: () => void
   removeFilterRow: (idx: number) => void
   filterOptionLabel: (f: RegistryFilterRow) => string
+  matchRuleFieldLabel: (row: RecipientListFilterRow) => string
+  /** Display-only: spaces instead of underscores for chips and read-only values. */
+  registryValueDisplay: (raw: string) => string
 }
 
 export type RecipientListFormCreateReturn = RecipientListFormSharedReturn & {
@@ -92,7 +96,9 @@ const PROPERTY_FIELD_LABELS: Record<string, string> = {
   channel: 'Channel',
   company: 'Company',
   source: 'Source',
-  email: 'Email'
+  email: 'Email',
+  contact_profile: 'Contact profile',
+  search: 'Search'
 }
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
@@ -100,7 +106,9 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   state: 'State',
   city: 'City',
   county: 'County',
-  street: 'Street'
+  street: 'Street',
+  profile_type: 'Type',
+  profile_subtype: 'Sub Type'
 }
 
 export function useRecipientListForm(options: { mode: 'create' }): RecipientListFormCreateReturn
@@ -319,11 +327,11 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   function propertyFieldLabel(property: string): string {
-    return PROPERTY_FIELD_LABELS[property] ?? property
+    return PROPERTY_FIELD_LABELS[property] ?? formatRegistryLabelForDisplay(property)
   }
 
   function propertyTypeLabel(propertyType: string): string {
-    return PROPERTY_TYPE_LABELS[propertyType] ?? propertyType
+    return PROPERTY_TYPE_LABELS[propertyType] ?? formatRegistryLabelForDisplay(propertyType)
   }
 
   function filterOptionLabel(f: RegistryFilterRow): string {
@@ -334,6 +342,13 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       return `${prop} · ${propertyTypeLabel(f.propertyType)}`
     }
     return prop
+  }
+
+  /** Column label for the filter row (admin UI uses “Type or sub type” for contact profile). */
+  function matchRuleFieldLabel(row: RecipientListFilterRow): string {
+    const f = rowFilter(row)
+    if (f?.property === 'contact_profile') return 'Type or sub type'
+    return 'Field'
   }
 
   function normalizePayload(res: RecipientListFormPayload): RecipientListFormPayload {
@@ -519,7 +534,9 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     onRowFilterChange,
     addFilterRow,
     removeFilterRow,
-    filterOptionLabel
+    filterOptionLabel,
+    matchRuleFieldLabel,
+    registryValueDisplay: formatRegistryLabelForDisplay
   }
 
   if (options.mode === 'create') {

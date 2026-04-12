@@ -9,16 +9,22 @@ export type RecipientFilterProperty =
   | 'address'
   | 'channel'
   | 'company'
+  | 'contact_profile'
   | 'source'
   | 'email'
 
-/** Sub-field when `property` is `address`; otherwise always `none`. */
+/**
+ * Sub-field when `property` is `address` (state, city, …) or `contact_profile` (`profile_type` / `profile_subtype`);
+ * otherwise `none`.
+ */
 export type RecipientFilterPropertyType =
   | 'none'
   | 'state'
   | 'city'
   | 'county'
   | 'street'
+  | 'profile_type'
+  | 'profile_subtype'
 
 export interface RecipientFilterLean {
   _id: Types.ObjectId

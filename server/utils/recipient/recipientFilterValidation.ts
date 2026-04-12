@@ -10,7 +10,8 @@ const PROPERTIES = new Set<RecipientFilterProperty>([
   'none',
   'address',
   'channel',
-  'company'
+  'company',
+  'contact_profile'
 ])
 
 const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
@@ -18,7 +19,9 @@ const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
   'state',
   'city',
   'county',
-  'street'
+  'street',
+  'profile_type',
+  'profile_subtype'
 ])
 
 const LEGACY_PROPERTY_TO_PAIR: Record<
@@ -76,6 +79,10 @@ export function normalizeRecipientFilterPropertyFields(
 
   if (property === 'address') {
     if (propertyType === 'none') propertyType = 'state'
+  } else if (property === 'contact_profile') {
+    if (propertyType !== 'profile_type' && propertyType !== 'profile_subtype') {
+      propertyType = 'profile_type'
+    }
   } else {
     propertyType = 'none'
   }
@@ -95,6 +102,10 @@ export function canonicalRecipientFilterFieldsFromDoc(doc: {
   let propertyType = normalizeRecipientFilterPropertyType(doc.propertyType)
   if (property === 'address') {
     if (propertyType === 'none') propertyType = 'state'
+  } else if (property === 'contact_profile') {
+    if (propertyType !== 'profile_type' && propertyType !== 'profile_subtype') {
+      propertyType = 'profile_type'
+    }
   } else {
     propertyType = 'none'
   }

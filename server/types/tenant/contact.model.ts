@@ -11,6 +11,17 @@ export interface ContactAddress {
   county?: string
 }
 
+/**
+ * Segmentation profile on a contact (e.g. retail partner type + subtypes).
+ * Keys are stable lowercase ids from Kafka-synced tenant catalog.
+ */
+export interface ContactProfile {
+  /** Top-level profile type key (e.g. real_estate). */
+  typeKey: string
+  /** Subtype keys under `typeKey`; empty when none assigned. */
+  subtypeKeys: string[]
+}
+
 export interface ContactLean {
   _id: Types.ObjectId
   externalId?: string
@@ -25,6 +36,8 @@ export interface ContactLean {
   phone?: string
   address?: ContactAddress
   company?: string
+  /** Optional structured segment (type + subtypes), e.g. synced from retail partners. */
+  contactProfile?: ContactProfile | null
   /** CRM / Kafka idempotency; optional until integrations land. */
   /** Arbitrary key-value data from CRM/Kafka (not indexed by default). */
   metadata?: Record<string, unknown>
