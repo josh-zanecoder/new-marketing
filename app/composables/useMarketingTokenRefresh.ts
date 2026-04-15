@@ -1,4 +1,5 @@
 import type { Auth, User } from 'firebase/auth'
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 let sessionLogoutPromise: Promise<void> | null = null
 let authPromise: Promise<Auth> | null = null
@@ -64,7 +65,10 @@ export function logoutMarketingSession(): Promise<void> {
 
     await syncMarketingTokenCookieFromFirebaseUser(null)
 
-    const tenantBridge = useCookie<string | null>('marketing_tenant_bridge')
+    const tenantBridge = useCookie<string | null>(
+      'marketing_tenant_bridge',
+      marketingTenantHandoffCookieBase()
+    )
     tenantBridge.value = null
 
     await clearNuxtData('marketing-me')

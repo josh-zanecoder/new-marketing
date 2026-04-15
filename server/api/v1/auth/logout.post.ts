@@ -1,5 +1,7 @@
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+
 export default defineEventHandler((event) => {
-  const opts = { path: '/' as const }
+  const opts = marketingTenantHandoffCookieBase()
   for (const name of [
     'marketing_tenant_session',
     'marketing_tenant_api_key',

@@ -5,6 +5,7 @@ import {
   logoutMarketingSession,
   syncMarketingTokenCookieFromFirebaseUser
 } from '~/composables/useMarketingTokenRefresh'
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 function requestUrl(request: unknown): string {
   if (typeof request === 'string') return request
@@ -43,10 +44,10 @@ export default defineNuxtPlugin({
 
       const auth = await getMarketingFirebaseAuth()
       onIdTokenChanged(auth, async (user) => {
-        const bridge = useCookie<string | null>('marketing_tenant_bridge', {
-          path: '/',
-          sameSite: 'lax'
-        })
+        const bridge = useCookie<string | null>(
+          'marketing_tenant_bridge',
+          marketingTenantHandoffCookieBase()
+        )
         if (bridge.value === '1') {
           await syncMarketingTokenCookieFromFirebaseUser(null)
           return

@@ -8,6 +8,7 @@ import {
   MARKETING_TENANT_SESSION_COOKIE,
   TENANT_AUTH_COOKIE_MAX_AGE
 } from '../../../constants/tenantAuth.constants'
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 interface Body {
   token?: string
@@ -74,8 +75,7 @@ export default defineEventHandler(async (event) => {
         : {})
   })
 
-  const secure = process.env.NODE_ENV === 'production'
-  const base = { path: '/', sameSite: 'lax' as const, maxAge: TENANT_AUTH_COOKIE_MAX_AGE, secure }
+  const base = marketingTenantHandoffCookieBase()
 
   deleteCookie(event, 'marketing_token', { path: '/' })
 

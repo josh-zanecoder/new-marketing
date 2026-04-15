@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+
 const route = useRoute()
 const { data: me, pending, refresh } = useMarketingMe()
 
@@ -54,7 +56,10 @@ const sidebarAccount = computed(() => {
 /** CRM handoff / tenant API-key browser session — use “Back to tenant” instead of Logout. */
 const isApiKeyBrowserSession = computed(() => me.value?.authType === 'apiKey')
 
-const tenantBridgeCookie = useCookie<string | null>('marketing_tenant_bridge')
+const tenantBridgeCookie = useCookie<string | null>(
+  'marketing_tenant_bridge',
+  marketingTenantHandoffCookieBase()
+)
 
 async function handleBackToCrm() {
   const u = me.value?.authType === 'apiKey' ? me.value.crmAppUrl : undefined

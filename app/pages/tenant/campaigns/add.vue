@@ -430,7 +430,7 @@
               <input
                 v-model="form.subject"
                 type="text"
-                placeholder="Enter email subject line"
+                placeholder="Build with text and Insert variable (merge fields)"
                 class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
               >
               <select
@@ -930,13 +930,7 @@ interface DynamicVariableOption {
 
 const dynamicVariables = ref<DynamicVariableOption[]>([])
 
-const baseSubjectVariables = [
-  { value: '{{user.firstName}}', label: 'First name' },
-  { value: '{{user.lastName}}', label: 'Last name' },
-  { value: '{{user.email}}', label: 'Email' },
-  { value: '{{user.company}}', label: 'Company' }
-]
-
+/** Subject “Insert variable” options come only from tenant dynamic variables (API). */
 const subjectVariables = computed(() => {
   const vars = dynamicVariables.value
     .filter((v) => v.enabled !== false && (!v.scopes?.length || v.scopes.includes('subject')))
@@ -945,7 +939,7 @@ const subjectVariables = computed(() => {
       label: v.label || v.key
     }))
   const seen = new Set<string>()
-  return [...baseSubjectVariables, ...vars].filter((v) => {
+  return vars.filter((v) => {
     if (seen.has(v.value)) return false
     seen.add(v.value)
     return true

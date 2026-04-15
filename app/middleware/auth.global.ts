@@ -1,3 +1,5 @@
+import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+
 const PUBLIC_PATHS = ['/auth/login', '/auth/tenant-callback', '/api-docs']
 
 function cookieHeaderAllowsTenantSession(cookieHeader: string | undefined): boolean {
@@ -10,7 +12,10 @@ export default defineNuxtRouteMiddleware((to) => {
   if (PUBLIC_PATHS.some((path) => to.path.startsWith(path))) return
 
   const token = useCookie<string | null>('marketing_token')
-  const tenantBridge = useCookie<string | null>('marketing_tenant_bridge')
+  const tenantBridge = useCookie<string | null>(
+    'marketing_tenant_bridge',
+    marketingTenantHandoffCookieBase()
+  )
   if (token.value || tenantBridge.value === '1') return
 
   if (import.meta.server) {
