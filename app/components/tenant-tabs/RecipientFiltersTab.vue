@@ -5,7 +5,8 @@ export const recipientFilterPropertyFieldOptions = [
   { value: 'address', label: 'Address' },
   { value: 'channel', label: 'Channel' },
   { value: 'company', label: 'Company' },
-  { value: 'contact_profile', label: 'Contact profile' }
+  { value: 'contact_profile', label: 'Contact profile' },
+  { value: 'relationship_partner', label: 'Relationship partner' }
 ] as const
 
 export const recipientFilterAddressPropertyTypeOptions = [
@@ -21,6 +22,13 @@ export const recipientFilterContactProfilePropertyTypeOptions = [
   { value: 'profile_subtype', label: 'Sub Type' }
 ] as const
 
+/** When property is Relationship partner (agent linkage). */
+export const recipientFilterRelationshipPartnerPropertyTypeOptions = [
+  { value: 'partner_email', label: 'Partner email' },
+  { value: 'partner_external_id', label: 'Partner external ID' },
+  { value: 'partner_owner_email', label: 'Partner owner email' }
+] as const
+
 export type RecipientFilterPropertyFieldValue =
   (typeof recipientFilterPropertyFieldOptions)[number]['value']
 
@@ -29,6 +37,9 @@ export type RecipientFilterAddressPropertyTypeValue =
 
 export type RecipientFilterContactProfilePropertyTypeValue =
   (typeof recipientFilterContactProfilePropertyTypeOptions)[number]['value']
+
+export type RecipientFilterRelationshipPartnerPropertyTypeValue =
+  (typeof recipientFilterRelationshipPartnerPropertyTypeOptions)[number]['value']
 </script>
 
 <template>

@@ -11,7 +11,10 @@ const PROPERTIES = new Set<RecipientFilterProperty>([
   'address',
   'channel',
   'company',
-  'contact_profile'
+  'contact_profile',
+  'relationship_partner',
+  'source',
+  'email'
 ])
 
 const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
@@ -21,7 +24,11 @@ const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
   'county',
   'street',
   'profile_type',
-  'profile_subtype'
+  'profile_subtype',
+  'partner_email',
+  'partner_external_id',
+  'partner_type',
+  'partner_owner_email'
 ])
 
 const LEGACY_PROPERTY_TO_PAIR: Record<
@@ -83,6 +90,15 @@ export function normalizeRecipientFilterPropertyFields(
     if (propertyType !== 'profile_type' && propertyType !== 'profile_subtype') {
       propertyType = 'profile_type'
     }
+  } else if (property === 'relationship_partner') {
+    if (
+      propertyType !== 'partner_email' &&
+      propertyType !== 'partner_external_id' &&
+      propertyType !== 'partner_type' &&
+      propertyType !== 'partner_owner_email'
+    ) {
+      propertyType = 'partner_email'
+    }
   } else {
     propertyType = 'none'
   }
@@ -105,6 +121,15 @@ export function canonicalRecipientFilterFieldsFromDoc(doc: {
   } else if (property === 'contact_profile') {
     if (propertyType !== 'profile_type' && propertyType !== 'profile_subtype') {
       propertyType = 'profile_type'
+    }
+  } else if (property === 'relationship_partner') {
+    if (
+      propertyType !== 'partner_email' &&
+      propertyType !== 'partner_external_id' &&
+      propertyType !== 'partner_type' &&
+      propertyType !== 'partner_owner_email'
+    ) {
+      propertyType = 'partner_email'
     }
   } else {
     propertyType = 'none'

@@ -58,6 +58,9 @@ contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
 contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
+/** Borrower -> partner/agent relationship filters (avoid compound index across parallel array fields). */
+contactSchema.index({ 'metadata.relationships.partnerExternalIds': 1, deletedAt: 1 })
+contactSchema.index({ 'metadata.relationships.partnerTypeKeys': 1, deletedAt: 1 })
 
 contactSchema.pre('save', async function syncContactTypes(this: mongoose.Document) {
   let types = normalizeContactTypeInput(this.get('contactType'))

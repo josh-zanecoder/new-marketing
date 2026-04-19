@@ -69,6 +69,43 @@ function orExactField(path: string, values: string[]): Record<string, unknown> {
   return { $or: uniq.map((v) => exactField(path, v)) }
 }
 
+/** Partner relationship by email; accept current + legacy metadata paths. */
+function relatedPartnerEmailMatch(value: string): Record<string, unknown> {
+  return {
+    $or: [
+      exactField('metadata.relationships.partnerEmails', value),
+      exactField('metadata.relationships.partnerExternalIds', value),
+      exactField('metadata.relationships.partnerOwnerEmails', value)
+    ]
+  }
+}
+
+function relatedPartnerEmailOrMatch(values: string[]): Record<string, unknown> {
+  const uniq = [...new Set(values)].filter(Boolean)
+  if (uniq.length === 0) return {}
+  if (uniq.length === 1) {
+    const only = uniq[0]
+    if (!only) return {}
+    return relatedPartnerEmailMatch(only)
+  }
+  return { $or: uniq.map((v) => relatedPartnerEmailMatch(v)) }
+}
+
+function relatedPartnerExternalIdMatch(value: string): Record<string, unknown> {
+  return exactField('metadata.relationships.partnerExternalIds', value)
+}
+
+function relatedPartnerExternalIdOrMatch(values: string[]): Record<string, unknown> {
+  const uniq = [...new Set(values)].filter(Boolean)
+  if (uniq.length === 0) return {}
+  if (uniq.length === 1) {
+    const only = uniq[0]
+    if (!only) return {}
+    return relatedPartnerExternalIdMatch(only)
+  }
+  return { $or: uniq.map((v) => relatedPartnerExternalIdMatch(v)) }
+}
+
 function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> | null {
   const prop = canonicalCriterionKey(row.property)
   const val = String(row.value ?? '').trim()
@@ -101,6 +138,14 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       const q = contactProfileSubtypeMatchQuery(val)
       return Object.keys(q).length ? q : null
     }
+    case 'related_partner_external_id':
+      return relatedPartnerExternalIdMatch(val)
+    case 'related_partner_email':
+      return relatedPartnerEmailMatch(val)
+    case 'related_partner_type':
+      return exactField('metadata.relationships.partnerTypeKeys', val)
+    case 'related_partner_owner_email':
+      return exactField('metadata.relationships.partnerOwnerEmails', val)
     case 'search':
       return {
         $or: [
@@ -196,6 +241,18 @@ function buildAndMode(
         }
         break
       }
+      case 'related_partner_external_id':
+        andParts.push(relatedPartnerExternalIdOrMatch(uniq))
+        break
+      case 'related_partner_email':
+        andParts.push(relatedPartnerEmailOrMatch(uniq))
+        break
+      case 'related_partner_type':
+        andParts.push(orExactField('metadata.relationships.partnerTypeKeys', uniq))
+        break
+      case 'related_partner_owner_email':
+        andParts.push(orExactField('metadata.relationships.partnerOwnerEmails', uniq))
+        break
       case 'search': {
         const v = uniq[0]
         if (v) {

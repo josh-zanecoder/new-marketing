@@ -252,6 +252,23 @@
                 </select>
               </div>
 
+              <div v-else-if="form.property === 'relationship_partner'" class="field">
+                <label for="rf-relationship-partner-type">Partner field</label>
+                <select
+                  id="rf-relationship-partner-type"
+                  v-model="form.propertyType"
+                  class="field-input"
+                >
+                  <option
+                    v-for="opt in recipientFilterRelationshipPartnerPropertyTypeOptions"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+
               <div class="field">
                 <label for="rf-property-value">Property value</label>
                 <input
@@ -342,6 +359,8 @@
                             ? addressPropertyTypeLabel(f.propertyType || 'state')
                             : f.property === 'contact_profile'
                               ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+                              : f.property === 'relationship_partner'
+                                ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
                               : '—'
                         }}
                       </td>
@@ -575,9 +594,11 @@ import {
   recipientFilterAddressPropertyTypeOptions,
   recipientFilterContactProfilePropertyTypeOptions,
   recipientFilterPropertyFieldOptions,
+  recipientFilterRelationshipPartnerPropertyTypeOptions,
   type RecipientFilterAddressPropertyTypeValue,
   type RecipientFilterContactProfilePropertyTypeValue,
-  type RecipientFilterPropertyFieldValue
+  type RecipientFilterPropertyFieldValue,
+  type RecipientFilterRelationshipPartnerPropertyTypeValue
 } from '~/components/tenant-tabs/RecipientFiltersTab.vue'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 
@@ -613,6 +634,7 @@ interface ContactTypeRow {
 type PropertyFieldValue = RecipientFilterPropertyFieldValue
 type AddressPropertyTypeValue = RecipientFilterAddressPropertyTypeValue
 type ContactProfilePropertyTypeValue = RecipientFilterContactProfilePropertyTypeValue
+type RelationshipPartnerPropertyTypeValue = RecipientFilterRelationshipPartnerPropertyTypeValue
 
 interface TenantDetail {
   name: string
@@ -692,7 +714,10 @@ const form = reactive({
   name: '',
   contactType: '',
   property: 'none' as PropertyFieldValue,
-  propertyType: 'state' as AddressPropertyTypeValue | ContactProfilePropertyTypeValue,
+  propertyType: 'state' as
+    | AddressPropertyTypeValue
+    | ContactProfilePropertyTypeValue
+    | RelationshipPartnerPropertyTypeValue,
   propertyValue: '',
   enabled: true
 })
@@ -725,6 +750,11 @@ watch(
     } else if (p === 'contact_profile') {
       const ok = recipientFilterContactProfilePropertyTypeOptions.some((o) => o.value === form.propertyType)
       if (!ok) form.propertyType = 'profile_type'
+    } else if (p === 'relationship_partner') {
+      const ok = recipientFilterRelationshipPartnerPropertyTypeOptions.some(
+        (o) => o.value === form.propertyType
+      )
+      if (!ok) form.propertyType = 'partner_email'
     }
   }
 )
@@ -741,6 +771,11 @@ function addressPropertyTypeLabel(value: string): string {
 
 function contactProfilePropertyTypeLabel(value: string): string {
   const opt = recipientFilterContactProfilePropertyTypeOptions.find((o) => o.value === value)
+  return opt?.label ?? formatRegistryLabelForDisplay(value)
+}
+
+function relationshipPartnerPropertyTypeLabel(value: string): string {
+  const opt = recipientFilterRelationshipPartnerPropertyTypeOptions.find((o) => o.value === value)
   return opt?.label ?? formatRegistryLabelForDisplay(value)
 }
 
@@ -875,6 +910,13 @@ function fillForm(f: FilterRow) {
     )
       ? (t as ContactProfilePropertyTypeValue)
       : 'profile_type'
+  } else if (form.property === 'relationship_partner') {
+    const t = f.propertyType
+    form.propertyType = (recipientFilterRelationshipPartnerPropertyTypeOptions as readonly {
+      value: string
+    }[]).some((o) => o.value === t)
+      ? (t as RelationshipPartnerPropertyTypeValue)
+      : 'partner_email'
   } else {
     form.propertyType = 'state'
   }
@@ -1003,7 +1045,9 @@ async function saveFilter() {
       contactType: form.contactType,
       property: form.property,
       propertyType:
-        form.property === 'address' || form.property === 'contact_profile'
+        form.property === 'address' ||
+        form.property === 'contact_profile' ||
+        form.property === 'relationship_partner'
           ? form.propertyType
           : 'none',
       propertyValue: form.propertyValue,

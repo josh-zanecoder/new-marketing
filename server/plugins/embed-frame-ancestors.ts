@@ -7,6 +7,7 @@ import { setResponseHeader } from 'h3'
  * - **Non-production** (typical `nuxt dev`): `frame-ancestors *` so any local host/port works.
  * - **Production**: set `MARKETING_FRAME_ANCESTORS` / `NUXT_MARKETING_FRAME_ANCESTORS`
  *   (space- or comma-separated full origins, e.g. `https://crm.example.com`).
+ * - Retail local tenants use `http://{tenant}.localhost:3002` — included below via `*.localhost:3002`.
  */
 export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('beforeResponse', (event) => {
@@ -32,12 +33,9 @@ export default defineNitroPlugin((nitroApp) => {
 
     const bases = [
       "'self'",
-      'http://localhost:3002',
-      'http://127.0.0.1:3002',
-      'http://[::1]:3002',
-      'http://0.0.0.0:3002',
-      'https://localhost:3002',
-      'https://127.0.0.1:3002'
+      /** e.g. `http://acme.localhost:3002` (CSP host is origin-level; path is ignored). */
+      'http://*.localhost:3002',
+      'https://*.localhost:3002'
     ]
 
     const merged = [...new Set([...bases, ...extras])].join(' ')

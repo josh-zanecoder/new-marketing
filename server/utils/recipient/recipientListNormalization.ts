@@ -157,6 +157,20 @@ export function registryDocToCriteria(doc: {
         return tokens.map((value) => ({ property: 'profile_subtype', value }))
       }
       return []
+    case 'relationship_partner':
+      if (propertyType === 'partner_email') {
+        return tokens.map((value) => ({ property: 'related_partner_email', value }))
+      }
+      if (propertyType === 'partner_external_id') {
+        return tokens.map((value) => ({ property: 'related_partner_external_id', value }))
+      }
+      if (propertyType === 'partner_type') {
+        return tokens.map((value) => ({ property: 'related_partner_type', value }))
+      }
+      if (propertyType === 'partner_owner_email') {
+        return tokens.map((value) => ({ property: 'related_partner_owner_email', value }))
+      }
+      return []
     default:
       return []
   }

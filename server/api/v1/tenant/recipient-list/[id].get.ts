@@ -32,6 +32,13 @@ function rowCriterionDisplay(
     else if (propertyType === 'profile_subtype') prop = 'profile_subtype'
     else prop = 'profile_type'
   }
+  if (property === 'relationship_partner') {
+    if (propertyType === 'partner_email') prop = 'related_partner_email'
+    else if (propertyType === 'partner_external_id') prop = 'related_partner_external_id'
+    else if (propertyType === 'partner_type') prop = 'related_partner_type'
+    else if (propertyType === 'partner_owner_email') prop = 'related_partner_owner_email'
+    else prop = 'related_partner_email'
+  }
   return { property: prop, value }
 }
 

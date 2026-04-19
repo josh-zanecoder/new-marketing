@@ -32,6 +32,34 @@ function readContactProfileFromInboundPayload(
   return { typeKey, subtypeKeys }
 }
 
+function normalizeStringArray(raw: unknown, lower = false): string[] {
+  if (!Array.isArray(raw)) return []
+  const out = raw
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean)
+    .map((x) => (lower ? x.toLowerCase() : x))
+  return [...new Set(out)]
+}
+
+function readPartnerRelationshipsFromMetadata(
+  metadata: Record<string, unknown>
+): {
+  partnerEmails: string[]
+  partnerExternalIds: string[]
+  partnerOwnerEmails: string[]
+} | null {
+  const relRaw = metadata.relationships
+  if (!relRaw || typeof relRaw !== 'object') return null
+  const rel = relRaw as Record<string, unknown>
+  const partnerEmails = normalizeStringArray(rel.partnerEmails, true)
+  const partnerExternalIds = normalizeStringArray(rel.partnerExternalIds, false)
+  const partnerOwnerEmails = normalizeStringArray(rel.partnerOwnerEmails, true)
+  if (!partnerEmails.length && !partnerExternalIds.length && !partnerOwnerEmails.length) {
+    return null
+  }
+  return { partnerEmails, partnerExternalIds, partnerOwnerEmails }
+}
+
 type SyncSnapshotContact = {
   externalId: string
   firstName?: string
@@ -61,6 +89,11 @@ type SyncSnapshotUpsertRow = {
   ownerEmail: string
   /** Normalized keys written to `contactType` on the tenant contact. */
   contactTypeKeys: string[]
+  partnerRelationships: {
+    partnerEmails: string[]
+    partnerExternalIds: string[]
+    partnerOwnerEmails: string[]
+  } | null
 }
 
 export async function createContactFromCreatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
@@ -91,9 +124,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     channel: contactEvent.payload.channel ?? 'email',
     deletedAt: null,
     metadata: {
-      tenantId: contactEvent.tenantId,
-      eventType: contactEvent.eventType,
-      occurredAt: contactEvent.occurredAt,
+      ...payloadMetadata,
       ...(ownerId ? { ownerId } : {}),
       ...(ownerEmail ? { ownerEmail } : {})
     }
@@ -105,6 +136,13 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
   const profile = readContactProfileFromInboundPayload(p as unknown as Record<string, unknown>)
   if (profile) {
     setDoc.contactProfile = profile
+  }
+  const relationships = readPartnerRelationshipsFromMetadata(payloadMetadata)
+  if (relationships) {
+    setDoc.metadata = {
+      ...(setDoc.metadata as Record<string, unknown>),
+      relationships
+    }
   }
   await models.Contact.updateOne(
     {
@@ -154,9 +192,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     channel: contactEvent.payload.channel ?? 'email',
     deletedAt: null,
     metadata: {
-      tenantId: contactEvent.tenantId,
-      eventType: contactEvent.eventType,
-      occurredAt: contactEvent.occurredAt,
+      ...payloadMetadata,
       ...(ownerId ? { ownerId } : {}),
       ...(ownerEmail ? { ownerEmail } : {})
     }
@@ -168,6 +204,13 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
   const profileU = readContactProfileFromInboundPayload(pU as unknown as Record<string, unknown>)
   if (profileU) {
     setDocU.contactProfile = profileU
+  }
+  const relationshipsU = readPartnerRelationshipsFromMetadata(payloadMetadata)
+  if (relationshipsU) {
+    setDocU.metadata = {
+      ...(setDocU.metadata as Record<string, unknown>),
+      relationships: relationshipsU
+    }
   }
   await models.Contact.updateOne(
     {
@@ -214,9 +257,7 @@ export async function softDeleteContactFromDeletedEvent(
       $set: {
         deletedAt,
         metadata: {
-          tenantId: deletedEvent.tenantId,
-          eventType: deletedEvent.eventType,
-          occurredAt: deletedEvent.occurredAt,
+          deletedAt: deletedEvent.occurredAt,
           ...(ownerId ? { ownerId } : {}),
           ...(ownerEmail ? { ownerEmail } : {})
         }
@@ -280,7 +321,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         channel: c.channel ?? 'email',
         ownerId,
         ownerEmail,
-        contactTypeKeys
+        contactTypeKeys,
+        partnerRelationships: readPartnerRelationshipsFromMetadata(payloadMetadata)
       }
       return row
     })
@@ -301,9 +343,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         channel: r.channel,
         deletedAt: null,
         metadata: {
-          tenantId: params.tenantId,
-          eventType: 'marketing.sync.requested',
-          occurredAt: params.occurredAt,
+          ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
+          syncOccurredAt: params.occurredAt,
           ...(r.ownerId ? { ownerId: r.ownerId } : {}),
           ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
         },
