@@ -11,6 +11,8 @@ const PROPERTIES = new Set<RecipientFilterProperty>([
   'address',
   'channel',
   'company',
+  'status',
+  'stage',
   'contact_profile',
   'relationship_partner',
   'source',
@@ -28,7 +30,8 @@ const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
   'partner_email',
   'partner_external_id',
   'partner_type',
-  'partner_owner_email'
+  'partner_owner_email',
+  'partner_name'
 ])
 
 const LEGACY_PROPERTY_TO_PAIR: Record<
@@ -95,7 +98,8 @@ export function normalizeRecipientFilterPropertyFields(
       propertyType !== 'partner_email' &&
       propertyType !== 'partner_external_id' &&
       propertyType !== 'partner_type' &&
-      propertyType !== 'partner_owner_email'
+      propertyType !== 'partner_owner_email' &&
+      propertyType !== 'partner_name'
     ) {
       propertyType = 'partner_email'
     }
@@ -127,7 +131,8 @@ export function canonicalRecipientFilterFieldsFromDoc(doc: {
       propertyType !== 'partner_email' &&
       propertyType !== 'partner_external_id' &&
       propertyType !== 'partner_type' &&
-      propertyType !== 'partner_owner_email'
+      propertyType !== 'partner_owner_email' &&
+      propertyType !== 'partner_name'
     ) {
       propertyType = 'partner_email'
     }

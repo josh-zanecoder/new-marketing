@@ -8,6 +8,9 @@ const SIDEBAR_STORAGE_KEY = 'marketing-sidebar-compact'
 /** When true, sidebar shows icons only (narrow rail). */
 const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
 
+/** `null` until client mount — hide handoff “Back” until we know we are not in an iframe (embedded Retail). */
+const inIframe = ref<boolean | null>(null)
+
 /** Cancel any in-flight `/me` request so we always hit the server again (not a deduped no-op). */
 function refreshMe() {
   return refresh({ dedupe: 'cancel' })
@@ -17,6 +20,11 @@ onMounted(() => {
   if (import.meta.client) {
     const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY)
     if (saved !== null) sidebarCompact.value = saved === 'true'
+    try {
+      inIframe.value = window.self !== window.top
+    } catch {
+      inIframe.value = true
+    }
   }
   void refreshMe()
 })
@@ -53,8 +61,12 @@ const sidebarAccount = computed(() => {
   return { primary: me.value.email, secondary: roleLabel }
 })
 
-/** CRM handoff / tenant API-key browser session — use “Back to tenant” instead of Logout. */
+/** CRM handoff / tenant API-key browser session — use “Back” instead of Logout (hidden when iframed). */
 const isApiKeyBrowserSession = computed(() => me.value?.authType === 'apiKey')
+
+const showHandoffBack = computed(
+  () => isApiKeyBrowserSession.value && inIframe.value === false
+)
 
 const tenantBridgeCookie = useCookie<string | null>(
   'marketing_tenant_bridge',
@@ -247,11 +259,11 @@ function navLinkLayoutClass(compact: boolean) {
           <p v-if="sidebarAccount.secondary" class="mt-0.5 text-xs text-slate-500">{{ sidebarAccount.secondary }}</p>
         </div>
         <button
-          v-if="isApiKeyBrowserSession"
+          v-if="showHandoffBack"
           class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           :class="sidebarCompact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5 text-left'"
           type="button"
-          title="Back to CRM"
+          title="Back"
           @click="handleBackToCrm"
         >
           <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -262,10 +274,10 @@ function navLinkLayoutClass(compact: boolean) {
               d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
             />
           </svg>
-          <span :class="sidebarCompact ? 'sr-only' : ''">Back to CRM</span>
+          <span :class="sidebarCompact ? 'sr-only' : ''">Back</span>
         </button>
         <button
-          v-else
+          v-else-if="!isApiKeyBrowserSession"
           class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
           :class="sidebarCompact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'"
           type="button"

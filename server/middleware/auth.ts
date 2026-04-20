@@ -144,9 +144,11 @@ export default defineEventHandler(async (event) => {
               tenantUserLastName,
               tenantUserPhone,
               tenantUserRole,
+              handoffCrmAppUrl,
               contactOwnerEmails,
               tenantWideContacts
             } = verifyMarketingTenantBrowserSession(sessionCookie, row.clientKeyHash, dbName)
+            const resolvedCrmAppUrl = handoffCrmAppUrl || row.crmAppUrl
             const tidMismatch = Boolean(
               row.tenantId && tidFromJwt && row.tenantId !== tidFromJwt
             )
@@ -157,7 +159,7 @@ export default defineEventHandler(async (event) => {
                 tenantName: row.tenantName,
                 dbName: row.dbName,
                 ...(row.tenantId ? { tenantId: row.tenantId } : {}),
-                ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
+                ...(resolvedCrmAppUrl ? { crmAppUrl: resolvedCrmAppUrl } : {}),
                 ...(tenantUserEmail ? { tenantUserEmail } : {}),
                 ...(tenantUserFirstName ? { tenantUserFirstName } : {}),
                 ...(tenantUserLastName ? { tenantUserLastName } : {}),

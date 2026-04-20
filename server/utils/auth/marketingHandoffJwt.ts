@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
+import { normalizeHandoffCrmAppUrl } from './normalizeHandoffCrmAppUrl'
 
 const DEFAULT_HANDOFF_ISS = 'marketing-tenant'
 const DEFAULT_HANDOFF_AUD = 'new-marketing'
@@ -37,6 +38,8 @@ export type HandoffParseResult = {
   lastName?: string
   phone?: string
   role?: string
+  /** CRM / tenant app base URL from the handoff issuer (e.g. Retail origin). */
+  crmAppUrl?: string
   allowedOwnerEmails?: string[]
   tenantWideContacts?: true
 }
@@ -71,6 +74,7 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
   const lastNameRaw = typeof payload.lastName === 'string' ? payload.lastName.trim() : ''
   const phoneRaw = typeof payload.phone === 'string' ? payload.phone.trim() : ''
   const roleRaw = typeof payload.role === 'string' ? payload.role.trim() : ''
+  const crmFromJwt = normalizeHandoffCrmAppUrl(payload.crmAppUrl)
 
   const tenantWideContacts =
     payload.tenantWideContacts === true || payload.tenantWideContacts === 'true'
@@ -82,7 +86,8 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
     ...(firstNameRaw ? { firstName: firstNameRaw } : {}),
     ...(lastNameRaw ? { lastName: lastNameRaw } : {}),
     ...(phoneRaw ? { phone: phoneRaw } : {}),
-    ...(roleRaw ? { role: roleRaw } : {})
+    ...(roleRaw ? { role: roleRaw } : {}),
+    ...(crmFromJwt ? { crmAppUrl: crmFromJwt } : {})
   }
 
   if (tenantWideContacts) {

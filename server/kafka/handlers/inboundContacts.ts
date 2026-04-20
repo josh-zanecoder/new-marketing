@@ -47,6 +47,8 @@ function readPartnerRelationshipsFromMetadata(
   partnerEmails: string[]
   partnerExternalIds: string[]
   partnerOwnerEmails: string[]
+  partnerTypeKeys: string[]
+  partnerNames: string[]
 } | null {
   const relRaw = metadata.relationships
   if (!relRaw || typeof relRaw !== 'object') return null
@@ -54,10 +56,36 @@ function readPartnerRelationshipsFromMetadata(
   const partnerEmails = normalizeStringArray(rel.partnerEmails, true)
   const partnerExternalIds = normalizeStringArray(rel.partnerExternalIds, false)
   const partnerOwnerEmails = normalizeStringArray(rel.partnerOwnerEmails, true)
-  if (!partnerEmails.length && !partnerExternalIds.length && !partnerOwnerEmails.length) {
+  const partnerTypeKeys = normalizeStringArray(rel.partnerTypeKeys, true)
+  const partnerNames = normalizeStringArray(rel.partnerNames, false)
+  if (
+    !partnerEmails.length &&
+    !partnerExternalIds.length &&
+    !partnerOwnerEmails.length &&
+    !partnerTypeKeys.length &&
+    !partnerNames.length
+  ) {
     return null
   }
-  return { partnerEmails, partnerExternalIds, partnerOwnerEmails }
+  return { partnerEmails, partnerExternalIds, partnerOwnerEmails, partnerTypeKeys, partnerNames }
+}
+
+function readStatusFromPayloadAndMetadata(
+  payload: Record<string, unknown>,
+  metadata: Record<string, unknown>
+): string {
+  const fromPayload = typeof payload.status === 'string' ? payload.status.trim() : ''
+  if (fromPayload) return fromPayload
+  return typeof metadata.status === 'string' ? metadata.status.trim() : ''
+}
+
+function readStageFromPayloadAndMetadata(
+  payload: Record<string, unknown>,
+  metadata: Record<string, unknown>
+): string {
+  const fromPayload = typeof payload.stage === 'string' ? payload.stage.trim() : ''
+  if (fromPayload) return fromPayload
+  return typeof metadata.stage === 'string' ? metadata.stage.trim() : ''
 }
 
 type SyncSnapshotContact = {
@@ -87,12 +115,16 @@ type SyncSnapshotUpsertRow = {
   channel: string
   ownerId: string
   ownerEmail: string
+  status: string
+  stage: string
   /** Normalized keys written to `contactType` on the tenant contact. */
   contactTypeKeys: string[]
   partnerRelationships: {
     partnerEmails: string[]
     partnerExternalIds: string[]
     partnerOwnerEmails: string[]
+    partnerTypeKeys: string[]
+    partnerNames: string[]
   } | null
 }
 
@@ -110,6 +142,14 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+  const status = readStatusFromPayloadAndMetadata(
+    contactEvent.payload as unknown as Record<string, unknown>,
+    payloadMetadata
+  )
+  const stage = readStageFromPayloadAndMetadata(
+    contactEvent.payload as unknown as Record<string, unknown>,
+    payloadMetadata
+  )
   const { firstName, lastName } = namesFromContactPayload(contactEvent.payload)
   const p = contactEvent.payload as ContactPayload & { contactTypes?: unknown }
   const setDoc: Record<string, unknown> = {
@@ -122,6 +162,8 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     address: contactEvent.payload.address,
     company: contactEvent.payload.company || '',
     channel: contactEvent.payload.channel ?? 'email',
+    status,
+    stage,
     deletedAt: null,
     metadata: {
       ...payloadMetadata,
@@ -178,6 +220,14 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
   const ownerEmail =
     typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+  const status = readStatusFromPayloadAndMetadata(
+    contactEvent.payload as unknown as Record<string, unknown>,
+    payloadMetadata
+  )
+  const stage = readStageFromPayloadAndMetadata(
+    contactEvent.payload as unknown as Record<string, unknown>,
+    payloadMetadata
+  )
   const { firstName: fnU, lastName: lnU } = namesFromContactPayload(contactEvent.payload)
   const pU = contactEvent.payload as ContactPayload & { contactTypes?: unknown }
   const setDocU: Record<string, unknown> = {
@@ -190,6 +240,8 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     address: contactEvent.payload.address,
     company: contactEvent.payload.company || '',
     channel: contactEvent.payload.channel ?? 'email',
+    status,
+    stage,
     deletedAt: null,
     metadata: {
       ...payloadMetadata,
@@ -299,6 +351,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
       const ownerId = typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
       const ownerEmail =
         typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+      const status = readStatusFromPayloadAndMetadata(c as unknown as Record<string, unknown>, payloadMetadata)
+      const stage = readStageFromPayloadAndMetadata(c as unknown as Record<string, unknown>, payloadMetadata)
       const fn = String(c.firstName ?? '').trim()
       const ln = String(c.lastName ?? '').trim()
       const legacy = String(c.name ?? '').trim()
@@ -321,6 +375,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         channel: c.channel ?? 'email',
         ownerId,
         ownerEmail,
+        status,
+        stage,
         contactTypeKeys,
         partnerRelationships: readPartnerRelationshipsFromMetadata(payloadMetadata)
       }
@@ -341,6 +397,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         address: r.address,
         company: r.company,
         channel: r.channel,
+        status: r.status,
+        stage: r.stage,
         deletedAt: null,
         metadata: {
           ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),

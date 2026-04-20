@@ -31,22 +31,17 @@
     </div>
 
     <template v-else-if="payload">
-      <header class="mb-8 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-100/80 sm:mb-10">
-        <div class="h-1 bg-gradient-to-r from-violet-500/90 via-violet-400/70 to-zinc-300/60" aria-hidden="true" />
-        <div class="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:p-6 lg:p-8">
+      <header class="mb-8 sm:mb-10">
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
           <div class="min-w-0 flex-1 space-y-4">
             <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl lg:text-[2rem] lg:leading-tight">
               {{ payload.list.name }}
             </h1>
-            <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div
+              v-if="payload.list.audience"
+              class="flex flex-wrap items-center gap-2 sm:gap-2.5"
+            >
               <span
-                class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ring-1 ring-inset"
-                :class="listTypeBadgeClass(payload.list.listType)"
-              >
-                {{ payload.list.listType }}
-              </span>
-              <span
-                v-if="payload.list.audience"
                 class="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold capitalize text-zinc-800 ring-1 ring-zinc-200/80"
               >
                 {{ payload.list.audience }}
@@ -136,7 +131,7 @@
                 v-if="seg.kind === 'criterion'"
                 class="inline-flex max-w-full items-center gap-2 rounded-xl border border-zinc-200/90 bg-gradient-to-b from-zinc-50/80 to-white px-3 py-2 text-sm shadow-sm ring-1 ring-zinc-100/60"
               >
-                <span class="shrink-0 text-xs font-semibold tracking-wide text-zinc-500">{{ formatRegistryLabelForDisplay(seg.property) }}</span>
+                <span class="shrink-0 text-xs font-semibold tracking-wide text-zinc-500">{{ recipientCriterionPropertyLabel(seg.property) }}</span>
                 <span class="shrink-0 rounded-md bg-zinc-900/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">equals</span>
                 <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
               </span>
@@ -308,7 +303,7 @@
 
 <script setup lang="ts">
 import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
-import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
 
@@ -323,14 +318,6 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
 
 const route = useRoute()
 const listId = computed(() => String(route.params.id ?? ''))
-
-function listTypeBadgeClass(listType: string): string {
-  const t = listType.toLowerCase()
-  if (t.includes('dynamic')) return 'bg-violet-50 text-violet-800 ring-violet-200/80'
-  if (t.includes('static')) return 'bg-sky-50 text-sky-800 ring-sky-200/80'
-  if (t.includes('hybrid')) return 'bg-amber-50 text-amber-900 ring-amber-200/70'
-  return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
-}
 
 const pending = ref(true)
 const pageLoading = ref(false)

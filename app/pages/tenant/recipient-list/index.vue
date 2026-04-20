@@ -53,7 +53,7 @@
     </div>
 
     <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="relative min-w-0 flex-1">
+      <div class="relative min-w-0 w-full max-w-lg">
         <label class="sr-only" for="recipient-list-search">Search lists</label>
         <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -282,11 +282,12 @@
 <script setup lang="ts">
 import type { TenantRecipientListCriterion } from '~/types/tenantContact'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
 
 function criterionChipLabel(c: TenantRecipientListCriterion): string {
-  const p = formatRegistryLabelForDisplay(c.property)
+  const p = recipientCriterionPropertyLabel(c.property)
   const v = formatRegistryLabelForDisplay(c.value)
   return `${p} = ${v}`
 }

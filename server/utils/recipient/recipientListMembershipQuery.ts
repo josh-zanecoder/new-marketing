@@ -126,6 +126,10 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       return exactField('channel', val)
     case 'company':
       return exactField('company', val)
+    case 'status':
+      return exactField('status', val)
+    case 'stage':
+      return exactField('stage', val)
     case 'source':
       return exactField('source', val)
     case 'email':
@@ -146,6 +150,8 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       return exactField('metadata.relationships.partnerTypeKeys', val)
     case 'related_partner_owner_email':
       return exactField('metadata.relationships.partnerOwnerEmails', val)
+    case 'related_partner_name':
+      return exactField('metadata.relationships.partnerNames', val)
     case 'search':
       return {
         $or: [
@@ -209,6 +215,12 @@ function buildAndMode(
       case 'company':
         andParts.push(orExactField('company', uniq))
         break
+      case 'status':
+        andParts.push(orExactField('status', uniq))
+        break
+      case 'stage':
+        andParts.push(orExactField('stage', uniq))
+        break
       case 'source':
         andParts.push(orExactField('source', uniq))
         break
@@ -252,6 +264,9 @@ function buildAndMode(
         break
       case 'related_partner_owner_email':
         andParts.push(orExactField('metadata.relationships.partnerOwnerEmails', uniq))
+        break
+      case 'related_partner_name':
+        andParts.push(orExactField('metadata.relationships.partnerNames', uniq))
         break
       case 'search': {
         const v = uniq[0]

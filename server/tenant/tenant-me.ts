@@ -34,10 +34,15 @@ export async function buildTenantMeResponse(event: H3Event) {
     ? auth.tenantName
     : null
 
+  const crmFromAuth =
+    'crmAppUrl' in auth && typeof auth.crmAppUrl === 'string' && auth.crmAppUrl.trim()
+      ? auth.crmAppUrl.trim()
+      : null
+
   return {
     tenantId: tenantId ?? row?.tenantId ?? null,
     dbName: auth.dbName,
     tenantName: row?.tenantName ?? tenantNameFromKey ?? null,
-    crmAppUrl: row?.crmAppUrl ?? null
+    crmAppUrl: crmFromAuth ?? row?.crmAppUrl ?? null
   }
 }

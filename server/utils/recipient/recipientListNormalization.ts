@@ -145,6 +145,10 @@ export function registryDocToCriteria(doc: {
       return [{ property: 'channel', value: tokens[0] ?? '' }]
     case 'company':
       return [{ property: 'company', value: tokens[0] ?? '' }]
+    case 'status':
+      return [{ property: 'status', value: tokens[0] ?? '' }]
+    case 'stage':
+      return [{ property: 'stage', value: tokens[0] ?? '' }]
     case 'source':
       return tokens.map((value) => ({ property: 'source', value }))
     case 'email':
@@ -169,6 +173,9 @@ export function registryDocToCriteria(doc: {
       }
       if (propertyType === 'partner_owner_email') {
         return tokens.map((value) => ({ property: 'related_partner_owner_email', value }))
+      }
+      if (propertyType === 'partner_name') {
+        return tokens.map((value) => ({ property: 'related_partner_name', value }))
       }
       return []
     default:

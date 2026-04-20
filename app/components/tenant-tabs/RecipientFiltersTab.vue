@@ -5,6 +5,8 @@ export const recipientFilterPropertyFieldOptions = [
   { value: 'address', label: 'Address' },
   { value: 'channel', label: 'Channel' },
   { value: 'company', label: 'Company' },
+  { value: 'status', label: 'Status' },
+  { value: 'stage', label: 'Stage' },
   { value: 'contact_profile', label: 'Contact profile' },
   { value: 'relationship_partner', label: 'Relationship partner' }
 ] as const
@@ -26,7 +28,8 @@ export const recipientFilterContactProfilePropertyTypeOptions = [
 export const recipientFilterRelationshipPartnerPropertyTypeOptions = [
   { value: 'partner_email', label: 'Partner email' },
   { value: 'partner_external_id', label: 'Partner external ID' },
-  { value: 'partner_owner_email', label: 'Partner owner email' }
+  { value: 'partner_owner_email', label: 'Partner owner email' },
+  { value: 'partner_name', label: 'Partner name' }
 ] as const
 
 export type RecipientFilterPropertyFieldValue =

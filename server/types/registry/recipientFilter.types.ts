@@ -9,6 +9,8 @@ export type RecipientFilterProperty =
   | 'address'
   | 'channel'
   | 'company'
+  | 'status'
+  | 'stage'
   | 'contact_profile'
   | 'relationship_partner'
   | 'source'
@@ -30,6 +32,7 @@ export type RecipientFilterPropertyType =
   | 'partner_external_id'
   | 'partner_type'
   | 'partner_owner_email'
+  | 'partner_name'
 
 export interface RecipientFilterLean {
   _id: Types.ObjectId

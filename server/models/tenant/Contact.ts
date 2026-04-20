@@ -40,11 +40,10 @@ export const contactSchema = new mongoose.Schema(
     phone: { type: String, default: '', trim: true },
     address: { type: addressSchema, default: () => ({}) },
     company: { type: String, default: '', trim: true },
-    /** Outreach / attribution channel (e.g. email, sms, linkedin); free-form for CRM sync. */
     channel: { type: String, default: 'email', trim: true },
-    /** Structured segment (e.g. partner type + subtypes) when synced from CRM. */
+    status: { type: String, default: '', trim: true },
+    stage: { type: String, default: '', trim: true },
     contactProfile: { type: contactProfileSchema, default: undefined },
-    /** CRM / integration extras (tags, custom fields, raw sync payload slices). */
     metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     deletedAt: { type: Date, default: null },
   },
@@ -58,7 +57,6 @@ contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
 contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
-/** Borrower -> partner/agent relationship filters (avoid compound index across parallel array fields). */
 contactSchema.index({ 'metadata.relationships.partnerExternalIds': 1, deletedAt: 1 })
 contactSchema.index({ 'metadata.relationships.partnerTypeKeys': 1, deletedAt: 1 })
 

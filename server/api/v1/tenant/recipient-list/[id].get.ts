@@ -37,6 +37,7 @@ function rowCriterionDisplay(
     else if (propertyType === 'partner_external_id') prop = 'related_partner_external_id'
     else if (propertyType === 'partner_type') prop = 'related_partner_type'
     else if (propertyType === 'partner_owner_email') prop = 'related_partner_owner_email'
+    else if (propertyType === 'partner_name') prop = 'related_partner_name'
     else prop = 'related_partner_email'
   }
   return { property: prop, value }

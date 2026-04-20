@@ -42,7 +42,7 @@
     </div>
 
     <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 w-full max-w-lg">
         <label class="sr-only" for="contacts-search">Search contacts</label>
         <div class="relative">
           <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

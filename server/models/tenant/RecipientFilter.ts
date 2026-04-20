@@ -5,6 +5,8 @@ const propertyEnum = [
   'address',
   'channel',
   'company',
+  'status',
+  'stage',
   'contact_profile',
   'relationship_partner',
   'address.state',
@@ -23,7 +25,8 @@ const propertyTypeEnum = [
   'partner_email',
   'partner_external_id',
   'partner_type',
-  'partner_owner_email'
+  'partner_owner_email',
+  'partner_name'
 ] as const
 
 /** Audience filters for recipient lists; one physical DB per tenant (no tenantId field). */

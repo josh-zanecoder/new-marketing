@@ -1,6 +1,10 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, isRef, toValue } from 'vue'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import {
+  recipientFilterPropertyLabel,
+  recipientFilterPropertyTypeLabel
+} from '~/utils/recipientFilterDisplay'
 
 export interface RegistryFilterRow {
   id: string
@@ -95,6 +99,8 @@ const PROPERTY_FIELD_LABELS: Record<string, string> = {
   address: 'Address',
   channel: 'Channel',
   company: 'Company',
+  status: 'Status',
+  stage: 'Stage',
   source: 'Source',
   email: 'Email',
   contact_profile: 'Contact profile',
@@ -327,11 +333,11 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   function propertyFieldLabel(property: string): string {
-    return PROPERTY_FIELD_LABELS[property] ?? formatRegistryLabelForDisplay(property)
+    return PROPERTY_FIELD_LABELS[property] ?? recipientFilterPropertyLabel(property)
   }
 
   function propertyTypeLabel(propertyType: string): string {
-    return PROPERTY_TYPE_LABELS[propertyType] ?? formatRegistryLabelForDisplay(propertyType)
+    return PROPERTY_TYPE_LABELS[propertyType] ?? recipientFilterPropertyTypeLabel(propertyType)
   }
 
   function filterOptionLabel(f: RegistryFilterRow): string {

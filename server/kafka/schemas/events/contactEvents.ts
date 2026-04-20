@@ -32,6 +32,10 @@ export type ContactPayload = {
   contactTypes?: string[]
   /** Structured segment (e.g. retail partner type + subtype keys). */
   contactProfile?: { typeKey: string; subtypeKeys?: string[] }
+  /** Contact lifecycle/status from source system. */
+  status?: string
+  /** Optional stage from source system (pipeline stage, etc.). */
+  stage?: string
   channel: string | null
 }
 
@@ -121,6 +125,8 @@ export function parseContactEventEnvelope(input: unknown): ContactEventEnvelope 
     (typeof single === 'string' && single.trim()) ||
     (Array.isArray(single) && single.some((x) => String(x ?? '').trim()))
   if (!hasTypes) return null
+  if (!(typeof p.status === 'string' || typeof p.status === 'undefined')) return null
+  if (!(typeof p.stage === 'string' || typeof p.stage === 'undefined')) return null
   if (!(typeof p.channel === 'string' || p.channel === null)) return null
 
   return input as ContactEventEnvelope

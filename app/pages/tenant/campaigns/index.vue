@@ -354,7 +354,7 @@ onUnmounted(() => {
 
     <template v-else>
     <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="relative min-w-0 flex-1">
+      <div class="relative min-w-0 w-full max-w-lg">
         <label class="sr-only" for="campaigns-search">Search campaigns</label>
         <svg
           class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400"

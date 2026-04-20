@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
+import { normalizeHandoffCrmAppUrl } from './normalizeHandoffCrmAppUrl'
 
 function base64urlEncode(buf: Buffer): string {
   return buf
@@ -25,6 +26,8 @@ export function signMarketingTenantBrowserSession(params: {
   handoffLastName?: string
   handoffPhone?: string
   handoffRole?: string
+  /** From tenant handoff JWT — overrides registry `crmAppUrl` for “Back to CRM”. */
+  handoffCrmAppUrl?: string
   tenantWideContacts?: boolean
   contactOwnerEmails?: string[]
 }): string {
@@ -46,6 +49,8 @@ export function signMarketingTenantBrowserSession(params: {
   if (ph) payload.tenantPh = ph
   const rl = params.handoffRole?.trim()
   if (rl) payload.tenantRl = rl
+  const crm = params.handoffCrmAppUrl?.trim()
+  if (crm) payload.hcrm = crm
   if (params.tenantWideContacts === true) {
     payload.tw = true
   }
@@ -71,6 +76,7 @@ export function verifyMarketingTenantBrowserSession(
   tenantUserLastName?: string
   tenantUserPhone?: string
   tenantUserRole?: string
+  handoffCrmAppUrl?: string
   tenantWideContacts?: true
   contactOwnerEmails?: string[]
 } {
@@ -107,6 +113,8 @@ export function verifyMarketingTenantBrowserSession(
   const tenantUserRole =
     (typeof payload.tenantRl === 'string' ? payload.tenantRl.trim() : '') ||
     (typeof payload.crmRl === 'string' ? payload.crmRl.trim() : '')
+  const handoffCrmRaw = typeof payload.hcrm === 'string' ? payload.hcrm.trim() : ''
+  const handoffCrmAppUrl = normalizeHandoffCrmAppUrl(handoffCrmRaw)
   const tenantWideContacts =
     payload.tw === true || payload.tw === 'true' ? (true as const) : undefined
 
@@ -133,6 +141,7 @@ export function verifyMarketingTenantBrowserSession(
     ...(tenantUserLastName ? { tenantUserLastName } : {}),
     ...(tenantUserPhone ? { tenantUserPhone } : {}),
     ...(tenantUserRole ? { tenantUserRole } : {}),
+    ...(handoffCrmAppUrl ? { handoffCrmAppUrl } : {}),
     ...(tenantWideContacts ? { tenantWideContacts } : {}),
     ...(contactOwnerEmails ? { contactOwnerEmails } : {})
   }

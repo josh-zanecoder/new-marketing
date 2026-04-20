@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
     lastName: handoffLastName,
     phone: handoffPhone,
     role: handoffRole,
+    crmAppUrl: handoffCrmAppUrl,
     allowedOwnerEmails,
     tenantWideContacts
   } = parsed
@@ -68,6 +69,7 @@ export default defineEventHandler(async (event) => {
     ...(handoffLastName ? { handoffLastName } : {}),
     ...(handoffPhone ? { handoffPhone } : {}),
     ...(handoffRole ? { handoffRole } : {}),
+    ...(handoffCrmAppUrl ? { handoffCrmAppUrl } : {}),
     ...(tenantWideContacts === true
       ? { tenantWideContacts: true }
       : allowedOwnerEmails?.length
