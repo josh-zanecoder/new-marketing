@@ -11,7 +11,7 @@ This project can publish marketing events to **Apache Kafka**. For local develop
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- Ports **19092** (broker) and **8080** (Console) free on your machine
+- Ports **19092** (broker) and **8081** (Console) free on your machine
 
 ## 1. Start Redpanda and Console
 
@@ -26,7 +26,7 @@ Services:
 | Service   | Container name           | Port  |
 |----------|---------------------------|-------|
 | Redpanda | `new-marketing-redpanda`  | 19092 |
-| Console  | `new-marketing-console`   | 8080  |
+| Console  | `new-marketing-console`   | 8081  |
 
 Stop:
 
@@ -122,7 +122,7 @@ npm run dev
 
 ### Redpanda Console (browser)
 
-Open [http://localhost:8080](http://localhost:8080) → **Topics** → `marketing.events` → **Messages** (live tail).
+Open [http://localhost:8081](http://localhost:8081) → **Topics** → `marketing.events` → **Messages** (live tail).
 
 ### CLI (streams until Ctrl+C)
 
@@ -142,7 +142,7 @@ Send a draft campaign from the **campaigns** list (paper plane). When the email 
 - **Unknown topic** — Run `rpk topic create marketing.events`.
 - **Console empty** — Complete a campaign send and wait until processing finishes; confirm topic name matches `KAFKA_TOPIC_MARKETING_EVENTS`.
 - **Reset or remove topics** — See **Delete topics** (pick topics) or **Total clear** (wipe everything) under **Create the topic**.
-- **Port 8080 in use** — Change the host port in `docker-compose.kafka.yml` under `console.ports`.
+- **Port 8081 in use** — Change the host port in `docker-compose.kafka.yml` under `console.ports`.
 
 ## Production (GCP)
 

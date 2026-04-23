@@ -995,6 +995,24 @@ const wizardBootPending = ref(false)
 
 const showWizardSkeleton = computed(() => wizardBootPending.value)
 
+function readRecipientListIdFromQuery(): string {
+  const q = route.query.recipientListId
+  if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0].trim() : ''
+  return typeof q === 'string' ? q.trim() : ''
+}
+
+function applyRecipientListFromQuery(): void {
+  // Do not override existing editor-return restore behavior.
+  if (route.query.fromEditor === '1') return
+  const listId = readRecipientListIdFromQuery()
+  if (!listId) return
+  const exists = recipientLists.value.some((l) => l.id === listId)
+  if (!exists) return
+  form.value.recipientsMode = 'list'
+  form.value.recipientsListId = listId
+  recipientsOpen.value = true
+}
+
 async function loadFromEditorReturn() {
   const campaignId = route.query.campaignId as string
   const fromEditor = route.query.fromEditor
@@ -1128,12 +1146,20 @@ onMounted(async () => {
   wizardBootPending.value = true
   try {
     await Promise.all([loadRecipientLists(), loadEmailTemplates(), loadDynamicVariables()])
+    applyRecipientListFromQuery()
   } finally {
     // dynamic-variable preview merge temporarily disabled
     wizardBootPending.value = false
   }
 })
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
+watch(
+  () => route.query.recipientListId,
+  () => {
+    applyRecipientListFromQuery()
+  },
+  { immediate: false }
+)
 
 function pickQueryString(q: unknown): string {
   if (q == null || q === '') return ''

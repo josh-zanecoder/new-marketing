@@ -180,19 +180,37 @@
                 {{ formatRecipientCount(row) }}
               </p>
             </div>
-            <div class="flex shrink-0 items-center gap-4 text-sm font-semibold">
+            <div class="flex shrink-0 items-center gap-1.5 text-sm font-semibold">
+              <NuxtLink
+                :to="makeCampaignHref(row.id)"
+                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 transition-all hover:-translate-y-[1px] hover:bg-indigo-50 hover:text-indigo-700"
+                aria-label="Make campaign"
+              >
+                <Megaphone class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
+                <span class="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                  Make campaign
+                </span>
+              </NuxtLink>
               <NuxtLink
                 :to="`/tenant/recipient-list/edit/${row.id}`"
-                class="text-slate-600 transition-colors hover:text-indigo-700"
+                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition-all hover:-translate-y-[1px] hover:bg-slate-100 hover:text-indigo-700"
+                aria-label="Edit list"
               >
-                Edit
+                <Pencil class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
+                <span class="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                  Edit
+                </span>
               </NuxtLink>
               <button
                 type="button"
-                class="text-red-600 transition-colors hover:text-red-700"
+                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-all hover:-translate-y-[1px] hover:bg-red-50 hover:text-red-700"
+                aria-label="Delete list"
                 @click="listToDelete = row"
               >
-                Delete
+                <Trash2 class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
+                <span class="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                  Delete
+                </span>
               </button>
             </div>
           </div>
@@ -281,6 +299,7 @@
 
 <script setup lang="ts">
 import type { TenantRecipientListCriterion } from '~/types/tenantContact'
+import { Megaphone, Pencil, Trash2 } from 'lucide-vue-next'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
@@ -498,6 +517,10 @@ function listCardFooterLeft(row: ListRow): string {
     }
   }
   return ''
+}
+
+function makeCampaignHref(listId: string): string {
+  return `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId)}`
 }
 
 async function load(options?: { force?: boolean }) {
