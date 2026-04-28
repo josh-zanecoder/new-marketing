@@ -1,0 +1,14 @@
+{
+  "name": "kafka-producer-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HTTP bridge service that publishes to managed Kafka",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "kafkajs": "^2.2.4"
+  }
+}

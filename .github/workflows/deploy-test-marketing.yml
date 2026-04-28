@@ -9,6 +9,9 @@ env:
   PROJECT_ID: poc-1-aima-pmu
   SERVICE_NAME: marketing-test
   ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-test
+  BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge
+  BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge
+  BRIDGE_SECRET_NAME: marketing-kafka-producer-bridge
   SERVICE_ACCOUNT: 980800581325-compute@developer.gserviceaccount.com
   SECRET_NAME: marketing-test
   ARTIFACT_REGISTRY_NAME: marketing-test
@@ -239,3 +242,95 @@ jobs:
         run: |
           echo "Test failed, keeping traffic on current revision"
           # We don't need to do anything as the new revision has no traffic
+
+  deploy-kafka-bridge:
+    name: Deploy Kafka Producer Bridge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_NEW_MARKETING }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      - name: Create Artifact Registry repository if not exists
+        run: |
+          if ! gcloud artifacts repositories describe ${{ env.ARTIFACT_REGISTRY_NAME }} --location=us-west1 --project=${{ env.PROJECT_ID }} 2>/dev/null; then
+            gcloud artifacts repositories create ${{ env.ARTIFACT_REGISTRY_NAME }} --repository-format=docker --location=us-west1 --project=${{ env.PROJECT_ID }} --description="Repository for New Marketing Test"
+          fi
+
+      - name: Generate timestamp for unique version
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Build and push Kafka bridge image
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }} ./kafka-producer-bridge
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
+
+      - name: Fetch bridge env from Secret Manager
+        run: |
+          gcloud secrets versions access latest --secret="${{ env.BRIDGE_SECRET_NAME }}" --project=${{ env.PROJECT_ID }} > bridge.env
+          if [ ! -s bridge.env ]; then
+            echo "Error: bridge.env is empty from Secret Manager secret ${{ env.BRIDGE_SECRET_NAME }}"
+            exit 1
+          fi
+
+      - name: Validate bridge env keys
+        run: |
+          missing=0
+          for key in BRIDGE_TOKEN KAFKA_BROKERS KAFKA_CLIENT_ID KAFKA_USERNAME KAFKA_PASSWORD KAFKA_DEFAULT_TOPIC; do
+            if ! grep -q "^${key}=" bridge.env; then
+              echo "Missing required key in bridge secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "Please update Secret Manager secret ${{ env.BRIDGE_SECRET_NAME }} with required keys."
+            exit 1
+          fi
+
+      - name: Convert bridge.env to bridge-env.yaml
+        run: |
+          echo "---" > bridge-env.yaml
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            key="${line%%=*}"
+            value="${line#*=}"
+            value=$(printf '%s' "$value" | sed 's/^"//;s/"$//')
+            safe_value=$(printf '%s' "$value" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+            echo "$key: \"$safe_value\"" >> bridge-env.yaml
+          done < bridge.env
+
+      - name: Deploy Kafka bridge service
+        run: |
+          gcloud run deploy ${{ env.BRIDGE_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances 1 \
+            --max-instances 10 \
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --env-vars-file=bridge-env.yaml
