@@ -6,6 +6,9 @@ export default defineNuxtConfig({
     '@server': fileURLToPath(new URL('./server', import.meta.url))
   },
   srcDir: 'app',
+  devServer: {
+    port: Number(process.env.NUXT_PORT) || 3001
+  },
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
