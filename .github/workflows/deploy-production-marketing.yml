@@ -1,48 +1,38 @@
-name: New Marketing Test Deployment
+name: New Marketing Production Deployment
 
 on:
   push:
     branches:
-      - master
+      - production
   workflow_dispatch:
 
 env:
   PROJECT_ID: poc-1-aima-pmu
-  SERVICE_NAME: marketing-test
-  ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-test
-  BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge
-  BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge
-  BRIDGE_SECRET_NAME: marketing-kafka-producer-bridge
+  SERVICE_NAME: marketing-production
+  ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-production
+  BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge-production
+  BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge-production
+  BRIDGE_SECRET_NAME: marketing-kafka-producer-bridge-production
   SERVICE_ACCOUNT: 980800581325-compute@developer.gserviceaccount.com
-  SECRET_NAME: marketing-test
-  ARTIFACT_REGISTRY_NAME: marketing-test
+  SECRET_NAME: marketing-production
+  ARTIFACT_REGISTRY_NAME: marketing-production
   REGION: us-west1
   VPC_CONNECTOR: marketing-run-kafka
   VPC_EGRESS: private-ranges-only
 
 jobs:
   deploy:
-    name: New Marketing Test Deployment
+    name: New Marketing Production Deployment
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     outputs:
-      image_tag: ${{ steps.version.outputs.image_tag }}
+      image_tag: ${{ steps.timestamp.outputs.timestamp }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Resolve develop build version
-        id: version
-        run: |
-          IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-${{ github.sha }}"
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "APP_VERSION=dev-${{ github.sha }}" >> $GITHUB_ENV
-          echo "Develop deploy image tag: $IMAGE_TAG"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -91,17 +81,20 @@ jobs:
               --repository-format=docker \
               --location=us-west1 \
               --project=${{ env.PROJECT_ID }} \
-              --description="Repository for New Marketing Test"
+              --description="Repository for New Marketing Production"
           else
             echo "Repository already exists"
           fi
 
+      - name: Generate timestamp for unique version
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         run: |
           docker build \
-            --build-arg APP_VERSION=${{ env.APP_VERSION }} \
-            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.version.outputs.image_tag }} .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.version.outputs.image_tag }}
+            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
 
       - name: Get current traffic allocation
         id: get-traffic
@@ -145,7 +138,7 @@ jobs:
           if gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} 2>/dev/null; then
             echo "Updating existing service..."
             gcloud run deploy ${{ env.SERVICE_NAME }} \
-              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.version.outputs.image_tag }} \
+              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
               --region ${{ env.REGION }} \
               --platform managed \
               --allow-unauthenticated \
@@ -166,7 +159,7 @@ jobs:
           else
             echo "Creating new service..."
             gcloud run deploy ${{ env.SERVICE_NAME }} \
-              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.version.outputs.image_tag }} \
+              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
               --region ${{ env.REGION }} \
               --platform managed \
               --allow-unauthenticated \
@@ -266,7 +259,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
@@ -284,7 +276,7 @@ jobs:
       - name: Create Artifact Registry repository if not exists
         run: |
           if ! gcloud artifacts repositories describe ${{ env.ARTIFACT_REGISTRY_NAME }} --location=us-west1 --project=${{ env.PROJECT_ID }} 2>/dev/null; then
-            gcloud artifacts repositories create ${{ env.ARTIFACT_REGISTRY_NAME }} --repository-format=docker --location=us-west1 --project=${{ env.PROJECT_ID }} --description="Repository for New Marketing Test"
+            gcloud artifacts repositories create ${{ env.ARTIFACT_REGISTRY_NAME }} --repository-format=docker --location=us-west1 --project=${{ env.PROJECT_ID }} --description="Repository for New Marketing Production"
           fi
 
       - name: Build and push Kafka bridge image
