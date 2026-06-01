@@ -146,6 +146,8 @@ Send a draft campaign from the **campaigns** list (paper plane). When the email 
 
 ## Production (GCP)
 
+Browse production topics via **Kafka UI** (SSH tunnel): see [`kafka-ui/README.md`](../kafka-ui/README.md) (`connect-kafka-ui-tunnel-production.sh` → http://localhost:8083).
+
 For **Google Cloud Managed Service for Apache Kafka**, use TLS and SASL per [Google’s SASL guide](https://cloud.google.com/managed-service-for-apache-kafka/docs/authentication-kafka).
 
 ### Option A: SA vitals in .env (no JSON file)

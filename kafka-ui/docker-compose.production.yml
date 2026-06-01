@@ -1,0 +1,9 @@
+services:
+  kafka-ui-production:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui-production
+    restart: unless-stopped
+    ports:
+      - "8083:8080"
+    env_file:
+      - .env.production
