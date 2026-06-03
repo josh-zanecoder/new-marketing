@@ -9,6 +9,9 @@ export default defineEventHandler(async (event) => {
 
   const conn = await getTenantConnectionFromEvent(event)
   const snap = tenantUserFieldsFromAuth(event.context.auth)
+  const dbName = conn.db?.databaseName
+
+  console.log('[SendCampaignAPI] sendNow', { campaignId, dbName })
 
   return beginCampaignSend(conn, campaignId, {
     allowedStatuses: ['Draft'],

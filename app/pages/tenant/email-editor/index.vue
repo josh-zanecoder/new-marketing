@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
+import { deserializeEmailEditorHtml, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 definePageMeta({
@@ -472,7 +473,7 @@ watch([isMounted, htmlReady], async () => {
         try {
           const html = editor.getHtml()
           const css = editor.getCss()
-          const fullHtml = `<style>${css}</style>${html}`
+          const fullHtml = serializeEmailEditorHtml(html ?? '', css)
           let targetId = campaignId.value
           if (typeof window !== 'undefined') {
             if (campaignId.value) {
@@ -504,18 +505,7 @@ watch([isMounted, htmlReady], async () => {
         try {
           const html = editor.getHtml()
           const css = editor.getCss()
-          const fullHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Template</title>
-  <style>${css}</style>
-</head>
-<body>
-${html}
-</body>
-</html>`
+          const fullHtml = serializeEmailEditorHtml(html ?? '', css)
           const blob = new Blob([fullHtml], { type: 'text/html' })
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
@@ -584,7 +574,7 @@ ${html}
       hardenTextBlocks(editor)
       if (initialHtml.value) {
         try {
-          editor.setComponents(initialHtml.value)
+          editor.setComponents(deserializeEmailEditorHtml(initialHtml.value))
         } catch {
           editor.setComponents(DEFAULT_EMAIL_TEMPLATE)
         }
@@ -619,7 +609,7 @@ function handleSaveAndExit() {
   try {
     const html = editorRef.value.getHtml()
     const css = editorRef.value.getCss()
-    const fullHtml = `<style>${css}</style>${html}`
+    const fullHtml = serializeEmailEditorHtml(html ?? '', css)
     let targetId = campaignId.value
     if (typeof window !== 'undefined') {
       if (campaignId.value) {
