@@ -17,7 +17,10 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
-import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import {
+  mergeUserSnapshotsForEmail,
+  tenantUserFieldsFromAuth
+} from '@server/utils/emailMerge/tenantUserFromAuth'
 
 type MergeRootBody =
   | { campaignId: string }
@@ -66,7 +69,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }
     const contact = await previewContactForSavedCampaign(conn, campaignId)
-    const userSnapshot = authSnap ?? campaign.mergeUserSnapshot
+    const userSnapshot = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
     const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
     return { mergeRoot }
   }

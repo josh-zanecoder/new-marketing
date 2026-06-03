@@ -1,3 +1,5 @@
+import { formatUsPhoneNumber } from './usNumberFormatter'
+
 /** Write a string at a dotted path, creating intermediate objects (for admin-defined merge keys). */
 export function setMergePath(root: Record<string, unknown>, path: string, value: string): void {
   const parts = path
@@ -59,7 +61,7 @@ export function mergeRootWithUserSnapshot(
       firstName: u.firstName ?? '',
       lastName: u.lastName ?? '',
       email: u.email ?? '',
-      phone: u.phone ?? '',
+      phone: u.phone ? formatUsPhoneNumber(u.phone) : '',
       role: u.role ?? ''
     }
   }
@@ -90,7 +92,11 @@ export function mergeRootWithUserAndRecipient(
   const recipient: Record<string, string> = {}
   for (const k of RECIPIENT_MERGE_KEYS) {
     const v = p[k]
-    recipient[k] = v == null ? '' : String(v)
+    if (k === 'phone') {
+      recipient[k] = v == null || v === '' ? '' : formatUsPhoneNumber(String(v))
+    } else {
+      recipient[k] = v == null ? '' : String(v)
+    }
   }
   return { ...base, recipient }
 }

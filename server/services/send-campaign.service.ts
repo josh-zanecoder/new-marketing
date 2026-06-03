@@ -31,6 +31,66 @@ import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 const BATCH_SIZE = 25
 const SEND_CONCURRENCY = 5
 
+function logSend(event: string, details: Record<string, unknown>) {
+  console.log(`[SendCampaign] ${event}`, details)
+}
+
+function logSendWarn(event: string, details: Record<string, unknown>) {
+  console.warn(`[SendCampaign] ${event}`, details)
+}
+
+function logSendError(event: string, details: Record<string, unknown>) {
+  console.error(`[SendCampaign] ${event}`, details)
+}
+
+export async function finalizeCampaignSendIfComplete(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<{ finalized: boolean; status?: string; pending?: number; sent?: number; failed?: number }> {
+  const { Campaign, CampaignRecipient } = models
+  const campaign = await (Campaign as CampaignModel)
+    .findById(campaignId)
+    .select('status')
+    .lean<Pick<CampaignLean, 'status'> | null>()
+  if (!campaign || campaign.status !== 'Sending') {
+    return { finalized: false }
+  }
+
+  const [pendingCount, sentCount, failedCount] = await Promise.all([
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'pending'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'sent'
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: 'failed'
+    })
+  ])
+
+  if (pendingCount > 0) {
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
+
+  const total = sentCount + failedCount
+  const newStatus = total === 0 || failedCount === total ? 'Failed' : 'Sent'
+  await (Campaign as CampaignModel).updateOne(
+    { _id: campaignId },
+    { $set: { status: newStatus }, $unset: { scheduledAt: 1 } }
+  )
+  logSend('finalized', { campaignId, newStatus, sent: sentCount, failed: failedCount })
+  return {
+    finalized: true,
+    status: newStatus,
+    pending: pendingCount,
+    sent: sentCount,
+    failed: failedCount
+  }
+}
+
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
@@ -115,6 +175,13 @@ export async function beginCampaignSend(
     throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
   }
 
+  logSend('begin', {
+    campaignId,
+    dbName,
+    status: campaign.status,
+    allowedStatuses: [...allowedStatuses]
+  })
+
   const inFlight = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
     campaign: campaignId,
     status: { $in: ['pending', 'sent'] }
@@ -158,13 +225,16 @@ export async function beginCampaignSend(
   await (CampaignRecipient as CampaignRecipientModel).insertMany(rows)
 
   if (valid.length === 0) {
-    // Scheduled sends: without this, status stays "Scheduled" forever (no batch job).
-    if (campaign.status === 'Scheduled') {
-      await (Campaign as CampaignModel).updateOne(campaignScope, {
-        $set: { status: 'Failed' },
-        $unset: { scheduledAt: 1 }
-      })
-    }
+    await (Campaign as CampaignModel).updateOne(campaignScope, {
+      $set: { status: 'Failed' },
+      $unset: { scheduledAt: 1 }
+    })
+    logSendWarn('noValidRecipients', {
+      campaignId,
+      dbName,
+      total: emails.length,
+      invalid: invalid.length
+    })
     return {
       ok: true,
       total: emails.length,
@@ -190,9 +260,21 @@ export async function beginCampaignSend(
   } catch (e: unknown) {
     await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
     await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
-    console.error('[SendCampaign] Failed to enqueue:', e)
+    logSendError('enqueueFailed', {
+      campaignId,
+      dbName,
+      revertStatus,
+      error: e instanceof Error ? e.message : String(e)
+    })
     throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
   }
+
+  logSend('queued', {
+    campaignId,
+    dbName,
+    valid: valid.length,
+    invalid: invalid.length
+  })
 
   return {
     ok: true,
@@ -291,6 +373,7 @@ export async function processBatch(
     .lean<CampaignRecipientLean[]>()
 
   if (pending.length === 0) {
+    const finalized = await finalizeCampaignSendIfComplete(models, campaignId)
     const [pendingCount, sentCount, failedCount] = await Promise.all([
       (CampaignRecipient as CampaignRecipientModel).countDocuments({
         campaign: campaignId,
@@ -305,16 +388,19 @@ export async function processBatch(
         status: 'failed'
       })
     ])
-    if (pendingCount === 0) {
-      const total = sentCount + failedCount
-      const newStatus = failedCount === total ? 'Failed' : 'Sent'
-      await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: newStatus })
-    }
     const campaignUpdated = await (Campaign as CampaignModel)
       .findById(campaignId)
       .lean<CampaignLean | null>()
     if (!campaignUpdated) {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
+    }
+    if (finalized.finalized) {
+      logSend('batchComplete.noPending', {
+        campaignId,
+        status: campaignUpdated.status,
+        sent: sentCount,
+        failed: failedCount
+      })
     }
     return {
       campaignId,
@@ -327,6 +413,12 @@ export async function processBatch(
     }
   }
 
+  logSend('batchStart', {
+    campaignId,
+    batchSize: pending.length,
+    status: campaign.status
+  })
+
   const [contactByEmail, dynamicVariableBindings] = await Promise.all([
     contactsByEmailForAudience(
       models,
@@ -337,7 +429,7 @@ export async function processBatch(
   ])
 
   if (pending.length > 0 && (!templateHtml || !campaign.sender?.email)) {
-    console.warn('[SendCampaign] Missing template or sender:', {
+    logSendWarn('missingTemplateOrSender', {
       campaignId,
       hasTemplate: !!templateHtml,
       sender: campaign.sender?.email
@@ -445,9 +537,7 @@ export async function processBatch(
   ])
 
   if (pendingCount === 0) {
-    const total = sentCount + failedCount
-    const newStatus = failedCount === total ? 'Failed' : 'Sent'
-    await (Campaign as CampaignModel).updateOne({ _id: campaignId }, { status: newStatus })
+    await finalizeCampaignSendIfComplete(models, campaignId)
   }
 
   const campaignUpdated = await (Campaign as CampaignModel)
@@ -456,6 +546,15 @@ export async function processBatch(
   if (!campaignUpdated) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
+
+  logSend('batchDone', {
+    campaignId,
+    pending: pendingCount,
+    sent: sentCount,
+    failed: failedCount,
+    campaignStatus: campaignUpdated.status,
+    done: pendingCount === 0
+  })
 
   return {
     campaignId,
