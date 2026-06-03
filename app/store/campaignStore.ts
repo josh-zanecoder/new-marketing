@@ -206,7 +206,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...serverAuthHeaders()
       })
       removeCampaignDetailCache(c.id)
-      await fetchCampaigns()
+      campaigns.value = campaigns.value.filter((x) => x.id !== c.id)
+      await fetchCampaigns({ force: true })
       return true
     } catch (e: unknown) {
       console.error('Delete failed:', e)
@@ -224,7 +225,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...serverAuthHeaders()
       })
       if (res == null) return null
-      await fetchCampaigns()
+      await fetchCampaigns({ force: true })
       return res.id
     } catch (e: unknown) {
       console.error('Duplicate failed:', e)

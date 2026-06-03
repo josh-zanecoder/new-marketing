@@ -53,7 +53,7 @@
             v-model="searchQuery"
             type="search"
             autocomplete="off"
-            placeholder="Search name, email, company, phone…"
+            placeholder="Search name, email, company, phone, address…"
             class="w-full rounded-xl border border-slate-200/90 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
           >
         </div>
@@ -160,6 +160,12 @@
               </th>
               <th
                 scope="col"
+                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell xl:px-4"
+              >
+                Address
+              </th>
+              <th
+                scope="col"
                 class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pr-6 sm:pl-4"
               >
                 Updated
@@ -211,6 +217,12 @@
                 :title="row.phone || undefined"
               >
                 {{ row.phone ? formatUsPhoneNumber(row.phone) : '—' }}
+              </td>
+              <td
+                class="hidden max-w-[220px] truncate px-4 py-4 text-slate-600 xl:table-cell xl:px-4"
+                :title="formatAddress(row.address) || undefined"
+              >
+                {{ formatAddress(row.address) || '—' }}
               </td>
               <td class="whitespace-nowrap px-4 py-4 tabular-nums text-[0.875rem] text-slate-500 sm:pr-6 sm:pl-4">
                 {{ row.updatedAt ? formatDate(row.updatedAt) : '—' }}
@@ -347,7 +359,11 @@ const filteredContacts = computed(() => {
       row.phone,
       row.primaryTypeLabel,
       ...(row.contactType ?? []),
-      ...(row.contactTypeLabels ?? [])
+      ...(row.contactTypeLabels ?? []),
+      row.address?.street,
+      row.address?.city,
+      row.address?.state,
+      row.address?.county
     ]
       .filter(Boolean)
       .join(' ')
@@ -389,6 +405,11 @@ watch([searchQuery, contactTypeFilter], () => {
 watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
+
+function formatAddress(addr?: { street?: string; city?: string; state?: string; county?: string }): string {
+  if (!addr) return ''
+  return [addr.street, addr.city, addr.state].filter(Boolean).join(', ')
+}
 
 function formatDate(iso: string): string {
   try {
