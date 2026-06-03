@@ -607,6 +607,10 @@ import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
+import {
+  DEFAULT_CAMPAIGN_SENDER_EMAIL,
+  DEFAULT_CAMPAIGN_SENDER_NAME
+} from '~~/shared/defaultCampaignSender'
 
 const campaignStore = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
@@ -618,8 +622,8 @@ const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
 const form = ref({
   name: '',
-  senderName: 'Mortdash',
-  senderEmail: 'joshdanielsaraa@gmail.com',
+  senderName: DEFAULT_CAMPAIGN_SENDER_NAME,
+  senderEmail: DEFAULT_CAMPAIGN_SENDER_EMAIL,
   subject: '',
   recipientsMode: 'list' as 'list' | 'manual',
   recipientsListId: '',
@@ -1039,8 +1043,8 @@ async function loadFromEditorReturn() {
       manualRecipientLabels.value = labels
       form.value = {
         name: c.name,
-        senderName: c.sender?.name || 'Mortdash',
-        senderEmail: c.sender?.email || 'joshdanielsaraa@gmail.com',
+        senderName: c.sender?.name || DEFAULT_CAMPAIGN_SENDER_NAME,
+        senderEmail: c.sender?.email || DEFAULT_CAMPAIGN_SENDER_EMAIL,
         subject: c.subject || '',
         recipientsMode: c.recipientsType || 'manual',
         recipientsListId: c.recipientsListId || '',

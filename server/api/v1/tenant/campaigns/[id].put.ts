@@ -13,6 +13,10 @@ import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilt
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { tenantCreatedByFromAuth } from '@server/tenant/registry-auth'
+import {
+  DEFAULT_CAMPAIGN_SENDER_EMAIL,
+  DEFAULT_CAMPAIGN_SENDER_NAME
+} from '~~/shared/defaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -71,8 +75,8 @@ export default defineEventHandler(async (event) => {
 
   campaign.name = body.name.trim()
   campaign.sender = {
-    name: body.senderName?.trim() || 'Mortdash',
-    email: body.senderEmail?.trim() || 'joshdanielsaraa@gmail.com'
+    name: body.senderName?.trim() || DEFAULT_CAMPAIGN_SENDER_NAME,
+    email: body.senderEmail?.trim() || DEFAULT_CAMPAIGN_SENDER_EMAIL
   }
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId

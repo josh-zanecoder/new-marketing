@@ -6,6 +6,10 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
+import {
+  DEFAULT_CAMPAIGN_SENDER_EMAIL,
+  DEFAULT_CAMPAIGN_SENDER_NAME
+} from '~~/shared/defaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -68,8 +72,8 @@ export default defineEventHandler(async (event) => {
   const campaignData: Record<string, unknown> = {
     name: body.name.trim(),
     sender: {
-      name: body.senderName?.trim() || 'Mortdash',
-      email: body.senderEmail?.trim() || 'joshdanielsaraa@gmail.com'
+      name: body.senderName?.trim() || DEFAULT_CAMPAIGN_SENDER_NAME,
+      email: body.senderEmail?.trim() || DEFAULT_CAMPAIGN_SENDER_EMAIL
     },
     recipientsType,
     recipientsListId,
