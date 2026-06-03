@@ -140,7 +140,7 @@ async function confirmDuplicate() {
   try {
     const newId = await store.duplicateCampaign(c)
     campaignToDuplicate.value = null
-    if (newId) await navigateTo(`/tenant/campaigns/add?id=${newId}`)
+    if (newId) await navigateTo(`/tenant/campaigns/edit/${newId}`)
   } finally {
     duplicateConfirmLoading.value = false
   }
