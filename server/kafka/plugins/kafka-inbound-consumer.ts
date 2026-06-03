@@ -7,14 +7,35 @@ function isInboundConsumerDisabled(): boolean {
   )
 }
 
+function inboundConsumerStartRetryMs(): number {
+  const raw = Number(process.env.KAFKA_INBOUND_CONSUMER_START_RETRY_MS)
+  return Number.isFinite(raw) && raw >= 5_000 ? Math.floor(raw) : 30_000
+}
+
 export default defineNitroPlugin(() => {
   if (isInboundConsumerDisabled()) return
-  import('../kafkaProducer')
-    .then(({ startInboundEventsConsumer }) => startInboundEventsConsumer())
-    .catch((err) => {
-      logger.error(
-        'Failed to start Kafka inbound consumer',
-        err instanceof Error ? err.message : String(err)
-      )
-    })
+
+  let starting = false
+
+  async function tryStart(): Promise<void> {
+    if (starting) return
+    starting = true
+    try {
+      const { startInboundEventsConsumer } = await import('../kafkaProducer')
+      await startInboundEventsConsumer()
+    } catch (err) {
+      const retryMs = inboundConsumerStartRetryMs()
+      logger.error('Failed to start Kafka inbound consumer; will retry', {
+        err: err instanceof Error ? err.message : String(err),
+        retryMs
+      })
+      setTimeout(() => {
+        void tryStart()
+      }, retryMs)
+    } finally {
+      starting = false
+    }
+  }
+
+  void tryStart()
 })

@@ -56,6 +56,8 @@ Forge CRM external connection JSON (`TENANT_ID`, `DB_NAME`, `KAFKA_TOPIC_MARKETI
 
 Related docs:
 
+- [cloud-run-kafka-worker-split-and-consumer-hardening.md](./cloud-run-kafka-worker-split-and-consumer-hardening.md) — full change summary (split + hardening)
+- [cloud-run-service-split.md](./cloud-run-service-split.md) — web vs Kafka worker Cloud Run services
 - [kafka-local.md](./kafka-local.md) — local Kafka / topic naming
 - [tenant-handoff-authentication.md](./tenant-handoff-authentication.md) — handoff JWT and API keys
 - **mortdash-crm** [KAFKA_BRIDGE_MODE_CLOUD_RUN_SETUP.md](../../mortdash-crm/docs/KAFKA_BRIDGE_MODE_CLOUD_RUN_SETUP.md) — CRM external connection / bridge
@@ -63,7 +65,7 @@ Related docs:
 
 Code references:
 
-- Inbound consumer: `server/kafka/kafkaProducer.ts` → `startInboundEventsConsumer`
+- Consumer plugin: `server/kafka/plugins/kafka-inbound-consumer.ts` — retries startup on registry/Kafka errors
 - Topic list from registry: `listInboundSubscriptionTopics()` in same file
 - Sync handler: `server/kafka/handlers/inboundContacts.ts` → `upsertContactsFromSyncSnapshot`
 - Registry DB: `server/lib/mongoose.ts` (`MONGODB_URI`, `MONGODB_DB_NAME` default `marketing`)
@@ -87,7 +89,7 @@ If step 3 is down or busy with another tenant’s backlog, your tenant’s conta
 | Marketing UI loads but contacts empty | Consumer not processing your tenant topic |
 | Logs show Convere `chunkIndex: N, chunkCount: 606` for days | Old backlog on `marketing.events.convere` |
 | `Failed to start Kafka inbound consumer` / `This server does not host this topic-partition` | Subscribing to a **deleted** topic while row still in `marketing.clients` |
-| Consumer `topics: [ 'marketing.events' ]` only | Mongo registry read failed at startup |
+| Consumer `topics: [ 'marketing.events' ]` only | Mongo registry read failed after retries — consumer falls back to base topic only (check error log; tenant sync will not run until registry loads on restart/retry) |
 | `POST /api/v1/auth/tenant-handoff` **401** | Wrong or regenerated `MARKETING_API_KEY` in CRM |
 | Kafka message has wrong `tenantId` vs `dBname` | CRM `TENANT_ID` metadata wrong |
 | `ReplicaSetNoPrimary` / Mongo errors | Intermittent Atlas connectivity (not always IP whitelist) |
@@ -102,7 +104,10 @@ If step 3 is down or busy with another tenant’s backlog, your tenant’s conta
 | `MONGODB_DB_NAME` | Registry DB name (default **`marketing`**) |
 | `KAFKA_BROKERS` | Required for inbound consumer |
 | `KAFKA_CONSUMER_GROUP_ID` | Default `new-marketing-inbound-events`; use `-v2` after backlog |
-| `KAFKA_INBOUND_CONSUMER_DISABLED` | Set `true` to stop consumer (offset reset) |
+| `KAFKA_INBOUND_CONSUMER_DISABLED` | Set `true` on **worker** only to pause consumer (offset reset) |
+| `KAFKA_INBOUND_REGISTRY_READ_RETRIES` | Registry read attempts before consumer start (default **5**) |
+| `KAFKA_INBOUND_REGISTRY_READ_RETRY_MS` | Delay between registry read attempts (default **2000**) |
+| `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` | Retry full consumer start after failure (default **30000**) |
 | `KAFKA_TOPIC_MARKETING_EVENTS` | Base topic (default `marketing.events`) |
 
 See `nuxt.config.ts` runtimeConfig for full list.
@@ -111,14 +116,16 @@ See `nuxt.config.ts` runtimeConfig for full list.
 
 ## Cloud Run baseline (always)
 
-On **marketing-production**:
+Marketing uses **two services** (same image). See [cloud-run-service-split.md](./cloud-run-service-split.md).
 
-| Setting | Value |
-|--------|--------|
-| Min instances | `1` |
-| Max instances | `1` |
+| Service | Min | Max | Consumer |
+|---------|-----|-----|----------|
+| `marketing-production` (web) | `1` | `10` | **Off** (`KAFKA_INBOUND_CONSUMER_DISABLED=true`) |
+| `marketing-kafka-worker-production` | `1` | `1` | **On** |
 
-Multiple instances cause Kafka consumer group rebalancing and duplicate consumers.
+Sync logs (`Kafka inbound consumer running`, `marketing.sync.requested`) appear on the **worker**, not the web service.
+
+Multiple worker instances cause Kafka consumer group rebalancing — keep worker max at **1**.
 
 Recommended after a backlog incident:
 
@@ -132,10 +139,10 @@ A **new group id** starts at **latest** offset and skips old unread messages wit
 
 ## Fix path A — Easiest (no Kafka UI): new consumer group
 
-1. Cloud Run → **marketing-production** → Edit → add or update:
+1. Cloud Run → **marketing-kafka-worker-production** → Edit → add or update:
    - `KAFKA_CONSUMER_GROUP_ID=new-marketing-inbound-events-v2`
    - Min **1**, max **1**
-2. Deploy.
+2. Deploy **worker** (web deploy is safe anytime).
 3. Confirm logs:
 
    ```text
@@ -191,9 +198,9 @@ Kafka UI → topic `marketing.events.convere`:
 - **Clear messages** — drop backlog, keep topic name
 - **Remove topic** — OK if tenant is permanently unused
 
-### B3. Redeploy Marketing
+### B3. Redeploy Kafka worker
 
-1. Redeploy **marketing-production** (min/max = 1).
+1. Redeploy **marketing-kafka-worker-production** (min/max = 1).
 2. Confirm consumer topics **exclude** the removed tenant topic.
 3. Launch Marketing from CRM again.
 
@@ -219,18 +226,20 @@ Open **http://localhost:8083**
 
 Kafka rejects offset reset while the group is **Stable**.
 
-**Option 1 — Cloud Run scaling**
+**Option 1 — Cloud Run scaling (worker)**
 
-- Min instances **0**, max **1** (Cloud Run max cannot be 0).
-- Wait until no instances are running.
+- On **marketing-kafka-worker-production**: min instances **0**, max **1**.
+- Wait until no worker instances are running.
 
-**Option 2 — Disable consumer**
+**Option 2 — Disable consumer (worker)**
+
+On **marketing-kafka-worker-production** only:
 
 ```bash
 KAFKA_INBOUND_CONSUMER_DISABLED=true
 ```
 
-Deploy, wait ~1 minute.
+Deploy worker, wait ~1 minute.
 
 ### C3. Reset offset
 
@@ -244,10 +253,10 @@ For the **stuck topic only** (e.g. `marketing.events.convere`):
 
 Do **not** reset active tenant topics unless you want to skip their pending sync too.
 
-### C4. Start Marketing again
+### C4. Start worker again
 
-- Remove `KAFKA_INBOUND_CONSUMER_DISABLED` if used.
-- Min **1**, max **1** → deploy.
+- Remove `KAFKA_INBOUND_CONSUMER_DISABLED` from **worker** if used.
+- Worker min **1**, max **1** → deploy.
 - Launch from CRM.
 
 If reset fails with *"group is in Stable state"*, the consumer is still running — repeat C2.
@@ -258,7 +267,7 @@ If reset fails with *"group is in Stable state"*, the consumer is still running 
 
 Consumer group → ⋮ menu → **Delete consumer group**.
 
-Redeploy Marketing. Startup creates a fresh group (`fromBeginning: false` → new messages only).
+Redeploy **marketing-kafka-worker-production**. Startup creates a fresh group (`fromBeginning: false` → new messages only).
 
 Pair with path B if a deleted topic caused startup failure.
 
@@ -297,7 +306,9 @@ Marketing resolves the tenant DB by **`tenantId`** (registry lookup), not `dBnam
 
 ## Verify success
 
-### Cloud Run logs
+### Cloud Run logs (worker service)
+
+Filter **marketing-kafka-worker-production**:
 
 ```text
 Kafka inbound consumer running { topics: [ ..., 'marketing.events.<tenant>' ] }
@@ -335,9 +346,9 @@ Contacts not syncing?
 
 - [ ] Delete unused document from `marketing.clients`
 - [ ] Kafka UI: clear or remove that tenant’s topic (optional)
-- [ ] Cloud Run: min=1, max=1
-- [ ] Cloud Run: `KAFKA_CONSUMER_GROUP_ID=new-marketing-inbound-events-v2` (recommended)
-- [ ] Redeploy marketing-production
+- [ ] Cloud Run worker: min=1, max=1
+- [ ] Cloud Run web: consumer disabled (CI sets `KAFKA_INBOUND_CONSUMER_DISABLED=true`)
+- [ ] Redeploy marketing-kafka-worker-production
 - [ ] Confirm consumer `topics` lists only active tenants
 - [ ] CRM external connection: matching `TENANT_ID` + `MARKETING_API_KEY`
 - [ ] Launch Marketing from CRM

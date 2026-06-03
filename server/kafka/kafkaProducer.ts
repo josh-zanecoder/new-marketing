@@ -365,22 +365,76 @@ export function invalidateTenantTopicCacheForDbName(dbName: string): void {
   if (key) tenantTopicCache.delete(key)
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function inboundRegistryReadRetryCount(): number {
+  const raw = Number(process.env.KAFKA_INBOUND_REGISTRY_READ_RETRIES)
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 5
+}
+
+function inboundRegistryReadRetryDelayMs(): number {
+  const raw = Number(process.env.KAFKA_INBOUND_REGISTRY_READ_RETRY_MS)
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 2_000
+}
+
+async function loadInboundTenantTopicsFromRegistry(): Promise<string[]> {
+  const registry = await getRegistryConnection()
+  const rows = await registry.collection('clients').find({}).toArray()
+  const topics: string[] = []
+  for (const row of rows) {
+    const dbName = typeof row.dbName === 'string' ? row.dbName.trim() : ''
+    if (!dbName) continue
+    topics.push(await getTenantEventTopicByDbName(dbName))
+  }
+  return topics
+}
+
 async function listInboundSubscriptionTopics(): Promise<string[]> {
   const cfg = resolveKafkaRuntime()
-  const topics = new Set<string>()
-  topics.add(cfg.kafkaTopicEvents || 'marketing.events')
-  try {
-    const registry = await getRegistryConnection()
-    const rows = await registry.collection('clients').find({}).toArray()
-    for (const row of rows) {
-      const dbName = typeof row.dbName === 'string' ? row.dbName.trim() : ''
-      if (!dbName) continue
-      topics.add(await getTenantEventTopicByDbName(dbName))
+  const baseTopic = cfg.kafkaTopicEvents || 'marketing.events'
+  const maxAttempts = inboundRegistryReadRetryCount()
+  const retryDelayMs = inboundRegistryReadRetryDelayMs()
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const tenantTopics = await loadInboundTenantTopicsFromRegistry()
+      const topics = [...new Set([baseTopic, ...tenantTopics])]
+      if (tenantTopics.length === 0) {
+        logger.warn('Kafka inbound topic registry has no clients; subscribing to base topic only', {
+          baseTopic
+        })
+      } else {
+        logger.info('Kafka inbound topic registry loaded', {
+          baseTopic,
+          tenantTopicCount: tenantTopics.length,
+          topics
+        })
+      }
+      return topics
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (attempt < maxAttempts) {
+        logger.warn('Kafka inbound topic registry read failed; retrying', {
+          attempt,
+          maxAttempts,
+          retryDelayMs,
+          err: message
+        })
+        await sleepMs(retryDelayMs)
+        continue
+      }
+      logger.error('Kafka inbound topic registry read failed; falling back to base topic only', {
+        attempt,
+        maxAttempts,
+        baseTopic,
+        err: message
+      })
     }
-  } catch {
-    /* base topic only */
   }
-  return [...topics]
+
+  return [baseTopic]
 }
 
 // --- Producer ------------------------------------------------------------------
@@ -723,17 +777,27 @@ export async function startInboundEventsConsumer(): Promise<void> {
     process.env.KAFKA_CONSUMER_GROUP_ID?.trim() || 'new-marketing-inbound-events'
   const fromBeginning = process.env.KAFKA_CONSUMER_FROM_BEGINNING === 'true'
 
-  g.__marketingInboundKafkaConsumerStarted = true
-
-  inboundEventsConsumer = kafka.consumer({
+  const consumer = kafka.consumer({
     groupId,
     allowAutoTopicCreation: true
   })
 
-  await inboundEventsConsumer.connect()
-  await inboundEventsConsumer.subscribe({ topics, fromBeginning })
+  try {
+    await consumer.connect()
+    await consumer.subscribe({ topics, fromBeginning })
+  } catch (err) {
+    try {
+      await consumer.disconnect()
+    } catch {
+      /* ignore */
+    }
+    throw err
+  }
 
-  void inboundEventsConsumer
+  g.__marketingInboundKafkaConsumerStarted = true
+  inboundEventsConsumer = consumer
+
+  void consumer
     .run({
       eachMessage: async ({ topic: t, partition, message }) => {
         const raw = message.value?.toString()
@@ -759,6 +823,8 @@ export async function startInboundEventsConsumer(): Promise<void> {
       }
     })
     .catch((err) => {
+      g.__marketingInboundKafkaConsumerStarted = false
+      inboundEventsConsumer = null
       logger.error('Kafka inbound consumer run failed', err instanceof Error ? err.message : String(err))
     })
 

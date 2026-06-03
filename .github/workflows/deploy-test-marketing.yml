@@ -9,6 +9,7 @@ on:
 env:
   PROJECT_ID: poc-1-aima-pmu
   SERVICE_NAME: marketing-test
+  WORKER_SERVICE_NAME: marketing-kafka-worker
   ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-test
   BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge
   BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge
@@ -19,6 +20,10 @@ env:
   REGION: us-west1
   VPC_CONNECTOR: marketing-run-kafka
   VPC_EGRESS: private-ranges-only
+  WEB_MIN_INSTANCES: 1
+  WEB_MAX_INSTANCES: 10
+  WORKER_MIN_INSTANCES: 1
+  WORKER_MAX_INSTANCES: 1
 
 jobs:
   deploy:
@@ -29,6 +34,7 @@ jobs:
       id-token: write
     outputs:
       image_tag: ${{ steps.version.outputs.image_tag }}
+      test_success: ${{ steps.test-deployment.outputs.test_success }}
 
     steps:
       - name: Checkout code
@@ -126,18 +132,10 @@ jobs:
             echo "next=blue" >> $GITHUB_OUTPUT
           fi
 
-      - name: Convert .env to env.yaml
+      - name: Convert .env to env.yaml (web)
         run: |
-          echo "Converting .env to env.yaml"
-          echo "---" > env.yaml
-          while IFS= read -r line || [[ -n "$line" ]]; do
-            [[ -z "$line" || "$line" == \#* || "$line" == "PORT="* ]] && continue
-            key="${line%%=*}"
-            value="${line#*=}"
-            value=$(printf '%s' "$value" | sed 's/^"//;s/"$//')
-            safe_value=$(printf '%s' "$value" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-            echo "$key: \"$safe_value\"" >> env.yaml
-          done < .env
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh web .env env.yaml
 
       - name: Deploy new revision
         id: deploy
@@ -152,8 +150,8 @@ jobs:
               --service-account ${{ env.SERVICE_ACCOUNT }} \
               --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
               --vpc-egress=${{ env.VPC_EGRESS }} \
-              --min-instances 1 \
-              --max-instances 10 \
+              --min-instances ${{ env.WEB_MIN_INSTANCES }} \
+              --max-instances ${{ env.WEB_MAX_INSTANCES }} \
               --memory 1Gi \
               --cpu 1 \
               --timeout 3600 \
@@ -173,8 +171,8 @@ jobs:
               --service-account ${{ env.SERVICE_ACCOUNT }} \
               --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
               --vpc-egress=${{ env.VPC_EGRESS }} \
-              --min-instances 1 \
-              --max-instances 10 \
+              --min-instances ${{ env.WEB_MIN_INSTANCES }} \
+              --max-instances ${{ env.WEB_MAX_INSTANCES }} \
               --memory 1Gi \
               --cpu 1 \
               --timeout 3600 \
@@ -252,6 +250,78 @@ jobs:
         run: |
           echo "Test failed, keeping traffic on current revision"
           # We don't need to do anything as the new revision has no traffic
+
+  deploy-kafka-worker:
+    name: Deploy Kafka Inbound Worker
+    needs: deploy
+    if: needs.deploy.outputs.test_success == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_NEW_MARKETING }}
+
+      - name: Fetch environment variables from Secret Manager
+        run: |
+          gcloud secrets versions access latest --secret="${{ env.SECRET_NAME }}" --project=${{ env.PROJECT_ID }} > .env
+          if [ ! -s .env ]; then
+            echo "Error: .env file is empty"
+            exit 1
+          fi
+
+      - name: Convert .env to worker-env.yaml
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh worker .env worker-env.yaml
+
+      - name: Deploy Kafka inbound worker
+        run: |
+          gcloud run deploy ${{ env.WORKER_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ needs.deploy.outputs.image_tag }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.WORKER_MIN_INSTANCES }} \
+            --max-instances ${{ env.WORKER_MAX_INSTANCES }} \
+            --memory 1Gi \
+            --cpu 1 \
+            --timeout 3600 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --env-vars-file=worker-env.yaml
+
+      - name: Test worker health check
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.WORKER_SERVICE_NAME }} --region ${{ env.REGION }} --format="value(status.url)")
+          TOKEN=$(gcloud auth print-identity-token)
+          echo "Testing worker health check URL: $SERVICE_URL/health"
+          sleep 10
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$SERVICE_URL/health")
+          echo "HTTP Status: $HTTP_STATUS"
+          if [[ ! "$HTTP_STATUS" =~ ^(200|201|202|204)$ ]]; then
+            echo "Worker health check failed"
+            exit 1
+          fi
 
   deploy-kafka-bridge:
     name: Deploy Kafka Producer Bridge
