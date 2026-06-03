@@ -102,6 +102,21 @@ Consumer is marked started only **after** successful Kafka connect + subscribe. 
 
 If startup throws entirely, the plugin logs and retries every **30s** until it succeeds.
 
+### Topic registry refresh (no redeploy for new tenants)
+
+The worker polls `marketing.clients` every **60s** (configurable). When a new tenant topic appears (e.g. `marketing.events.15k`), the consumer **stops and resubscribes** automatically — no Cloud Run redeploy required.
+
+Log when it happens:
+
+```text
+Kafka inbound topic registry changed; resubscribing consumer {
+  previousTopics: [...],
+  topics: [ ..., 'marketing.events.new_tenant' ]
+}
+```
+
+Set `KAFKA_INBOUND_TOPIC_REFRESH_MS=0` on the worker to disable.
+
 ### Optional env vars
 
 | Variable | Default | Purpose |

@@ -1,14 +1,10 @@
 import { getRegistryConnection } from '@server/lib/mongoose'
-import {
-  generateTenantApiKey,
-  hashTenantApiKey,
-  getTenantApiKeyPrefix
-} from '@server/tenant/api-key'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import { computeDefaultMarketingOutboundTopicForTenant } from '@server/kafka/kafkaProducer'
 import { buildCrmExternalConnectionMetadata } from '@server/utils/admin/buildCrmExternalConnectionMetadata'
 
 type RegistryClientRow = {
+  dbName: string
   name?: string
   tenantId?: string | null
   kafkaOutboundTopic?: string | null
@@ -20,44 +16,33 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Admin access required' })
   }
 
-  const body = await readBody<{ dbName?: string }>(event)
-  const dbName = body?.dbName?.trim()
-
+  const dbName = getRouterParam(event, 'dbName')?.trim()
   if (!dbName) {
     throw createError({ statusCode: 400, message: 'dbName is required' })
   }
 
   const registryConn = await getRegistryConnection()
-  const doc = await registryConn
-    .collection('clients')
-    .findOne({ dbName })
-    .then((d) => d as RegistryClientRow | null)
-
+  const doc = await registryConn.collection('clients').findOne({ dbName }) as RegistryClientRow | null
   if (!doc) {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const apiKey = generateTenantApiKey()
-  await registryConn.collection('clients').updateOne(
-    { dbName },
-    {
-      $set: {
-        clientKeyHash: hashTenantApiKey(apiKey),
-        clientKeyPrefix: getTenantApiKeyPrefix(apiKey)
-      }
-    }
-  )
-
   const tenantId = String(doc.tenantId ?? '').trim()
+  if (!tenantId) {
+    throw createError({ statusCode: 400, message: 'Tenant is missing tenantId in registry' })
+  }
+
   const kafkaTopic =
     String(doc.kafkaOutboundTopic ?? '').trim() ||
     computeDefaultMarketingOutboundTopicForTenant(String(doc.name ?? ''), dbName)
 
   return {
     ok: true,
-    apiKey,
-    crmExternalConnection: tenantId
-      ? buildCrmExternalConnectionMetadata({ dbName, tenantId, apiKey, kafkaTopic })
-      : undefined
+    crmExternalConnection: buildCrmExternalConnectionMetadata({
+      dbName,
+      tenantId,
+      apiKey: '',
+      kafkaTopic
+    })
   }
 })

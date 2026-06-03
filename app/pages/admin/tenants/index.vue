@@ -142,7 +142,7 @@
                           clip-rule="evenodd"
                         />
                       </svg>
-                      <span class="truncate">{{ isRegenerating === t.dbName ? 'Regenerating…' : 'Regenerate key' }}</span>
+                      <span class="truncate">{{ isRegenerating === t.dbName ? 'Regenerating…' : 'Regenerate' }}</span>
                     </button>
                   </div>
                 </td>
@@ -173,20 +173,15 @@
       @submit="handleEditTenantSubmit"
     />
 
-    <TenantApiKeyModal
-      v-if="newlyCreatedApiKey"
-      :open="!!newlyCreatedApiKey"
-      :api-key="newlyCreatedApiKey"
-      title="Tenant created – save your API key"
-      @close="newlyCreatedApiKey = null; closeAddTenantModal()"
-    />
-
-    <TenantApiKeyModal
-      v-if="regeneratedApiKey"
-      :open="!!regeneratedApiKey"
-      :api-key="regeneratedApiKey"
-      title="API key regenerated"
-      @close="regeneratedApiKey = null"
+    <TenantCrmExternalConnectionModal
+      :open="!!crmExternalConnectionModal"
+      :metadata="crmExternalConnectionModal"
+      :title="crmModalTitle"
+      :db-name="crmModalDbName"
+      :mode="crmModalContext ?? 'create'"
+      :regenerating="!!crmModalDbName && isRegenerating === crmModalDbName"
+      @regenerate="handleCrmModalRegenerate"
+      @close="closeCrmExternalConnectionModal"
     />
   </section>
 </template>
@@ -194,15 +189,23 @@
 <script setup lang="ts">
 import { useAdminTenantsCreateDb } from '~/composables/admin/tenants/useAdminTenantsCreateDb'
 import type { AdminTenantRow } from '~/types/adminTenant'
+import type { CrmExternalConnectionMetadata } from '~~/shared/types/crmExternalConnection'
 
 definePageMeta({ layout: 'admin' })
 
 const isAddTenantOpen = ref(false)
 const isEditTenantOpen = ref(false)
 const editingTenant = ref<AdminTenantRow | null>(null)
-const newlyCreatedApiKey = ref<string | null>(null)
-const regeneratedApiKey = ref<string | null>(null)
+const crmExternalConnectionModal = ref<CrmExternalConnectionMetadata | null>(null)
+const crmModalDbName = ref<string | null>(null)
+const crmModalContext = ref<'create' | 'regenerate' | null>(null)
 const isRegenerating = ref<string | null>(null)
+
+const crmModalTitle = computed(() =>
+  crmModalContext.value === 'regenerate'
+    ? 'API key regenerated – update CRM metadata'
+    : 'Tenant created – CRM external connection'
+)
 
 const {
   serverError: tenantFormError,
@@ -218,14 +221,52 @@ const tenantsLoading = ref(true)
 
 function openAddTenantModal() {
   resetError()
-  newlyCreatedApiKey.value = null
   isAddTenantOpen.value = true
 }
 
 function closeAddTenantModal() {
   resetError()
-  newlyCreatedApiKey.value = null
   isAddTenantOpen.value = false
+}
+
+function closeCrmExternalConnectionModal() {
+  crmExternalConnectionModal.value = null
+  crmModalDbName.value = null
+  if (crmModalContext.value === 'create') closeAddTenantModal()
+  crmModalContext.value = null
+}
+
+function openCrmExternalConnectionModal(
+  metadata: CrmExternalConnectionMetadata,
+  context: 'create' | 'regenerate',
+  dbName?: string
+) {
+  crmExternalConnectionModal.value = metadata
+  crmModalDbName.value = dbName ?? metadata.DB_NAME
+  crmModalContext.value = context
+}
+
+async function regenerateAndShowCrmConnection(dbName: string) {
+  isRegenerating.value = dbName
+  const result = await regenerateTenantApiKey(dbName)
+  isRegenerating.value = null
+  if (!result.crmExternalConnection) return false
+
+  await fetchTenants()
+  openCrmExternalConnectionModal(result.crmExternalConnection, 'regenerate', dbName)
+  return true
+}
+
+async function handleRegenerateKey(dbName: string) {
+  if (!confirm('Regenerate API key for this tenant? Update CRM metadata after copying the new JSON.')) return
+  await regenerateAndShowCrmConnection(dbName)
+}
+
+async function handleCrmModalRegenerate() {
+  const dbName = crmModalDbName.value
+  if (!dbName || isRegenerating.value) return
+  if (!confirm('Regenerate API key for this tenant? The JSON below will update with the new key.')) return
+  await regenerateAndShowCrmConnection(dbName)
 }
 
 function openEditTenantModal(t: AdminTenantRow) {
@@ -278,10 +319,14 @@ async function handleAddTenantSubmit(payload: {
   const result = await createTenantDb(payload)
   if (!result.ok) return
 
-  newlyCreatedApiKey.value = result.apiKey ?? null
   await fetchTenants()
 
-  if (!result.apiKey) closeAddTenantModal()
+  if (result.crmExternalConnection) {
+    openCrmExternalConnectionModal(result.crmExternalConnection, 'create', result.crmExternalConnection.DB_NAME)
+    return
+  }
+
+  closeAddTenantModal()
 }
 
 async function handleEditTenantSubmit(payload: {
@@ -298,16 +343,6 @@ async function handleEditTenantSubmit(payload: {
 
   await fetchTenants()
   closeEditTenantModal()
-}
-
-async function handleRegenerateKey(dbName: string) {
-  isRegenerating.value = dbName
-  const key = await regenerateTenantApiKey(dbName)
-  isRegenerating.value = null
-  if (key) {
-    regeneratedApiKey.value = key
-    await fetchTenants()
-  }
 }
 
 onMounted(async () => {

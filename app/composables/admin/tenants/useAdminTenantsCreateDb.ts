@@ -1,3 +1,16 @@
+import type { CrmExternalConnectionMetadata } from '~~/shared/types/crmExternalConnection'
+
+export type CreateTenantDbResult = {
+  ok: boolean
+  apiKey?: string
+  crmExternalConnection?: CrmExternalConnectionMetadata
+}
+
+export type RegenerateTenantApiKeyResult = {
+  apiKey: string | null
+  crmExternalConnection?: CrmExternalConnectionMetadata
+}
+
 export function useAdminTenantsCreateDb() {
   const serverError = ref<string | null>(null)
 
@@ -27,11 +40,16 @@ export function useAdminTenantsCreateDb() {
     name: string
     email: string
     crmAppUrl?: string
-  }): Promise<{ ok: boolean; apiKey?: string }> {
+  }): Promise<CreateTenantDbResult> {
     resetError()
 
     try {
-      const res = await $fetch<{ ok: boolean; dbName?: string; apiKey?: string }>(
+      const res = await $fetch<{
+        ok: boolean
+        dbName?: string
+        apiKey?: string
+        crmExternalConnection?: CrmExternalConnectionMetadata
+      }>(
         '/api/v1/admin/tenants/create-db',
         {
           method: 'POST',
@@ -43,25 +61,36 @@ export function useAdminTenantsCreateDb() {
         }
       )
 
-      return { ok: true, apiKey: res?.apiKey }
+      return {
+        ok: true,
+        apiKey: res?.apiKey,
+        crmExternalConnection: res?.crmExternalConnection
+      }
     } catch (e: unknown) {
       serverError.value = normalizeError(e, 'Failed to create tenant database')
       return { ok: false }
     }
   }
 
-  async function regenerateTenantApiKey(dbName: string): Promise<string | null> {
+  async function regenerateTenantApiKey(dbName: string): Promise<RegenerateTenantApiKeyResult> {
     resetError()
 
     try {
-      const res = await $fetch<{ ok: boolean; apiKey?: string }>(
+      const res = await $fetch<{
+        ok: boolean
+        apiKey?: string
+        crmExternalConnection?: CrmExternalConnectionMetadata
+      }>(
         '/api/v1/admin/tenants/regenerate-api-key',
         { method: 'POST', body: { dbName } }
       )
-      return res?.apiKey ?? null
+      return {
+        apiKey: res?.apiKey ?? null,
+        crmExternalConnection: res?.crmExternalConnection
+      }
     } catch (e: unknown) {
       serverError.value = normalizeError(e, 'Failed to regenerate API key')
-      return null
+      return { apiKey: null }
     }
   }
 

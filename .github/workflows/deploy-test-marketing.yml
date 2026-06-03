@@ -24,6 +24,10 @@ env:
   WEB_MAX_INSTANCES: 10
   WORKER_MIN_INSTANCES: 1
   WORKER_MAX_INSTANCES: 1
+  # Set to 'true' to deploy marketing-kafka-worker on test pushes.
+  DEPLOY_KAFKA_WORKER: 'false'
+  # Set to 'true' to deploy marketing-kafka-producer-bridge on test pushes.
+  DEPLOY_KAFKA_BRIDGE: 'false'
 
 jobs:
   deploy:
@@ -35,6 +39,8 @@ jobs:
     outputs:
       image_tag: ${{ steps.version.outputs.image_tag }}
       test_success: ${{ steps.test-deployment.outputs.test_success }}
+      deploy_kafka_worker: ${{ steps.deploy_flags.outputs.deploy_kafka_worker }}
+      deploy_kafka_bridge: ${{ steps.deploy_flags.outputs.deploy_kafka_bridge }}
 
     steps:
       - name: Checkout code
@@ -49,6 +55,12 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "APP_VERSION=dev-${{ github.sha }}" >> $GITHUB_ENV
           echo "Develop deploy image tag: $IMAGE_TAG"
+
+      - name: Resolve optional deploy flags
+        id: deploy_flags
+        run: |
+          echo "deploy_kafka_worker=${{ env.DEPLOY_KAFKA_WORKER }}" >> $GITHUB_OUTPUT
+          echo "deploy_kafka_bridge=${{ env.DEPLOY_KAFKA_BRIDGE }}" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -254,7 +266,7 @@ jobs:
   deploy-kafka-worker:
     name: Deploy Kafka Inbound Worker
     needs: deploy
-    if: needs.deploy.outputs.test_success == 'true'
+    if: ${{ needs.deploy.outputs.test_success == 'true' && needs.deploy.outputs.deploy_kafka_worker == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -326,6 +338,7 @@ jobs:
   deploy-kafka-bridge:
     name: Deploy Kafka Producer Bridge
     needs: deploy
+    if: ${{ needs.deploy.outputs.test_success == 'true' && needs.deploy.outputs.deploy_kafka_bridge == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

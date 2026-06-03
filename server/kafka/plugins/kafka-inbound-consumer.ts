@@ -12,6 +12,12 @@ function inboundConsumerStartRetryMs(): number {
   return Number.isFinite(raw) && raw >= 5_000 ? Math.floor(raw) : 30_000
 }
 
+function inboundTopicRefreshMs(): number {
+  const raw = Number(process.env.KAFKA_INBOUND_TOPIC_REFRESH_MS)
+  if (raw === 0) return 0
+  return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : 60_000
+}
+
 export default defineNitroPlugin(() => {
   if (isInboundConsumerDisabled()) return
 
@@ -38,4 +44,19 @@ export default defineNitroPlugin(() => {
   }
 
   void tryStart()
+
+  const refreshMs = inboundTopicRefreshMs()
+  if (refreshMs > 0) {
+    setInterval(() => {
+      import('../kafkaProducer')
+        .then(({ refreshInboundEventsConsumerTopicsIfChanged }) =>
+          refreshInboundEventsConsumerTopicsIfChanged()
+        )
+        .catch((err) => {
+          logger.warn('Kafka inbound topic refresh tick failed', {
+            err: err instanceof Error ? err.message : String(err)
+          })
+        })
+    }, refreshMs)
+  }
 })

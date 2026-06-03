@@ -759,6 +759,68 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
 }
 
 let inboundEventsConsumer: Consumer | null = null
+let activeInboundTopics: string[] = []
+let inboundConsumerRestarting = false
+
+function topicsSignature(topics: string[]): string {
+  return [...topics].sort().join('\0')
+}
+
+export async function stopInboundEventsConsumer(): Promise<void> {
+  const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
+  const consumer = inboundEventsConsumer
+  inboundEventsConsumer = null
+  activeInboundTopics = []
+  g.__marketingInboundKafkaConsumerStarted = false
+  if (!consumer) return
+  try {
+    await consumer.stop()
+  } catch (err) {
+    logger.warn('Kafka inbound consumer stop failed', {
+      err: err instanceof Error ? err.message : String(err)
+    })
+  }
+  try {
+    await consumer.disconnect()
+  } catch (err) {
+    logger.warn('Kafka inbound consumer disconnect failed', {
+      err: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
+/** Reload `marketing.clients` topics and resubscribe when the registry changed (no redeploy). */
+export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boolean> {
+  if (inboundConsumerRestarting) return false
+  if (!isKafkaConfigured()) return false
+  const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
+  if (!g.__marketingInboundKafkaConsumerStarted && !inboundEventsConsumer) return false
+
+  let topics: string[]
+  try {
+    topics = await listInboundSubscriptionTopics()
+  } catch (err) {
+    logger.warn('Kafka inbound topic refresh skipped (registry read failed)', {
+      err: err instanceof Error ? err.message : String(err)
+    })
+    return false
+  }
+
+  if (topicsSignature(topics) === topicsSignature(activeInboundTopics)) return false
+
+  inboundConsumerRestarting = true
+  try {
+    logger.info('Kafka inbound topic registry changed; resubscribing consumer', {
+      previousTopics: activeInboundTopics,
+      topics
+    })
+    await stopInboundEventsConsumer()
+    await startInboundEventsConsumer()
+    return true
+  } finally {
+    inboundConsumerRestarting = false
+  }
+}
 
 export async function startInboundEventsConsumer(): Promise<void> {
   const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
@@ -796,6 +858,7 @@ export async function startInboundEventsConsumer(): Promise<void> {
 
   g.__marketingInboundKafkaConsumerStarted = true
   inboundEventsConsumer = consumer
+  activeInboundTopics = topics
 
   void consumer
     .run({

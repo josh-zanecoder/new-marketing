@@ -54,7 +54,30 @@ export default defineNuxtConfig({
     marketingHandoffAud:
       process.env.NUXT_MARKETING_HANDOFF_AUD ||
       process.env.MARKETING_HANDOFF_JWT_AUD ||
-      'new-marketing'
+      'new-marketing',
+    /** Public Marketing app URL shown in CRM external connection metadata. */
+    marketingAppUrl:
+      process.env.NUXT_MARKETING_APP_URL ||
+      process.env.MARKETING_APP_URL ||
+      '',
+    /** Kafka producer bridge URL for CRM bridge mode. */
+    kafkaBridgeUrl:
+      process.env.NUXT_KAFKA_BRIDGE_URL ||
+      process.env.KAFKA_BRIDGE_URL ||
+      '',
+    /** Shared secret for CRM → bridge publishes (same value as bridge BRIDGE_TOKEN). */
+    kafkaBridgeToken:
+      process.env.NUXT_KAFKA_BRIDGE_TOKEN ||
+      process.env.KAFKA_BRIDGE_TOKEN ||
+      '',
+    /**
+     * Deployment target for CRM integration defaults when URLs are unset:
+     * `develop` (test) or `production`.
+     */
+    marketingDeployEnv:
+      process.env.NUXT_MARKETING_DEPLOY_ENV ||
+      process.env.MARKETING_DEPLOY_ENV ||
+      'develop'
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {

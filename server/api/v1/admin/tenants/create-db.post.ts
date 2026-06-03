@@ -6,6 +6,7 @@ import {
   ensureTenantEventTopic,
   invalidateTenantTopicCacheForDbName
 } from '@server/kafka/kafkaProducer'
+import { buildCrmExternalConnectionMetadata } from '@server/utils/admin/buildCrmExternalConnectionMetadata'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -63,11 +64,23 @@ export default defineEventHandler(async (event) => {
     console.error('[Kafka] failed to ensure tenant topic:', err)
   }
 
+  const resolvedTopic = kafkaTopic ?? autoTopic
+  const crmExternalConnection =
+    apiKey && resolvedTenantId
+      ? buildCrmExternalConnectionMetadata({
+          dbName,
+          tenantId: resolvedTenantId,
+          apiKey,
+          kafkaTopic: resolvedTopic
+        })
+      : undefined
+
   return {
     ok: true,
     dbName,
     tenantId: resolvedTenantId,
     apiKey: apiKey ?? undefined,
-    kafkaTopic: kafkaTopic ?? undefined
+    kafkaTopic: resolvedTopic,
+    crmExternalConnection
   }
 })

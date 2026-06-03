@@ -108,6 +108,7 @@ If step 3 is down or busy with another tenant’s backlog, your tenant’s conta
 | `KAFKA_INBOUND_REGISTRY_READ_RETRIES` | Registry read attempts before consumer start (default **5**) |
 | `KAFKA_INBOUND_REGISTRY_READ_RETRY_MS` | Delay between registry read attempts (default **2000**) |
 | `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` | Retry full consumer start after failure (default **30000**) |
+| `KAFKA_INBOUND_TOPIC_REFRESH_MS` | Poll registry and resubscribe when tenant topics change (default **60000**; set **0** to disable) |
 | `KAFKA_TOPIC_MARKETING_EVENTS` | Base topic (default `marketing.events`) |
 
 See `nuxt.config.ts` runtimeConfig for full list.
