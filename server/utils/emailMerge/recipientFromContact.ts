@@ -1,5 +1,6 @@
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import { formatContactFullName } from '@server/utils/contactPersonName'
+import { formatUsPhoneNumber } from '../../../shared/utils/usNumberFormatter'
 
 /** Minimal CRM contact shape needed for `recipient.*` merge tokens. */
 export type CrmContactFieldsForMerge = {
@@ -37,7 +38,7 @@ export function recipientFieldsFromContact(
   if (firstName) out.firstName = firstName
   if (lastName) out.lastName = lastName
   if (contact.email) out.email = contact.email
-  if (contact.phone) out.phone = contact.phone
+  if (contact.phone) out.phone = formatUsPhoneNumber(contact.phone)
   if (contact.company) out.company = contact.company
   if (Array.isArray(contact.contactType) && contact.contactType.length) {
     out.contactType = contact.contactType.join(', ')

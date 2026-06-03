@@ -25,3 +25,19 @@ export function tenantUserFieldsFromAuth(auth: unknown): UserMergeSnapshot | und
   if (role) out.role = role
   return Object.keys(out).length ? out : undefined
 }
+
+/** Prefer session fields; fill gaps from campaign snapshot (e.g. phone saved at campaign create). */
+export function mergeUserSnapshotsForEmail(
+  ...sources: Array<UserMergeSnapshot | null | undefined>
+): UserMergeSnapshot | undefined {
+  const out: UserMergeSnapshot = {}
+  for (const src of sources) {
+    if (!src) continue
+    if (!out.firstName && src.firstName) out.firstName = src.firstName
+    if (!out.lastName && src.lastName) out.lastName = src.lastName
+    if (!out.email && src.email) out.email = src.email
+    if (!out.phone && src.phone) out.phone = src.phone
+    if (!out.role && src.role) out.role = src.role
+  }
+  return Object.keys(out).length ? out : undefined
+}

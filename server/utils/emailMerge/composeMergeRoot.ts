@@ -76,7 +76,16 @@ export function composeEmailMergeRoot(
     curU != null && typeof curU === 'object' && !Array.isArray(curU)
       ? { ...(curU as Record<string, unknown>) }
       : {}
-  root.user = { ...curUObj, ...baseUser }
+  const userKeys = new Set([...Object.keys(baseUser), ...Object.keys(curUObj)])
+  const mergedUser: Record<string, unknown> = {}
+  for (const k of userKeys) {
+    const b = baseUser[k]
+    const c = curUObj[k]
+    const bStr = b == null ? '' : String(b).trim()
+    const cStr = c == null ? '' : String(c).trim()
+    mergedUser[k] = bStr || cStr || ''
+  }
+  root.user = mergedUser
 
   return root
 }

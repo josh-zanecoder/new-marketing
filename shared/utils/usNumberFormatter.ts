@@ -9,8 +9,8 @@ function usPhoneDigits(input: string | number): string {
 }
 
 /**
- * Formats a value as a US phone number: (XXX) XXX-XXXX.
- * Strips non-digits; handles optional leading country code 1.
+ * Formats a value as a US phone number: (XXX)-XXX-XXXX.
+ * Strips non-digits; drops a leading +1 / 1 country code when present.
  */
 export function formatUsPhoneNumber(
   input: string | number | null | undefined
@@ -18,7 +18,7 @@ export function formatUsPhoneNumber(
   if (input == null || input === '') return ''
   const ten = usPhoneDigits(input)
   if (ten.length !== US_PHONE_DIGITS) return String(input).trim()
-  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`
+  return `(${ten.slice(0, 3)})-${ten.slice(3, 6)}-${ten.slice(6)}`
 }
 
 /**
