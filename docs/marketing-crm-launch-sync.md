@@ -51,6 +51,39 @@ Deploy **`marketing-kafka-worker`** for this fix to be live. Web redeploy alone 
 
 ---
 
+## Survive worker redeploy (Cloud Run)
+
+On **`marketing-kafka-worker`**, a rolling deploy sends **SIGTERM** to the old revision. The consumer now:
+
+| Mechanism | Effect |
+|-----------|--------|
+| **Graceful shutdown** (`SIGTERM` / Nitro `close`) | `consumer.stop()` finishes the **current chunk**, then disconnects |
+| **No auto-restart during shutdown** | Old revision does not spawn a stray consumer before exit |
+| **Kafka heartbeat during sync** | Long Mongo upserts call `heartbeat()` so the member is not evicted mid-chunk |
+| **Same consumer group** | New revision joins `KAFKA_CONSUMER_GROUP_ID` and continues from the **last committed offset** |
+
+Logs on deploy:
+
+```text
+Kafka inbound consumer shutdown starting { reason: 'SIGTERM' }
+Kafka inbound consumer shutdown completed { reason: 'SIGTERM' }
+```
+
+**Rules:**
+
+- Prefer **not** redeploying mid-sync when avoidable (large 15k imports).
+- Keep worker **min=1, max=1** so only one consumer processes a tenant topic at a time.
+- Failed chunks still **re-throw** (not committed) — redeploy during a chunk retry resumes that chunk on the new revision.
+
+Optional env:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `KAFKA_CONSUMER_SESSION_TIMEOUT_MS` | `45000` | Consumer group session |
+| `KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS` | `3000` | Heartbeat during long writes |
+
+---
+
 ## Delta sync logs (worker)
 
 Search **`marketing-kafka-worker`** logs:

@@ -56,6 +56,10 @@ function diffInboundTopics(previous: string[], next: string[]): { added: string[
   }
 }
 
+type InboundMessageContext = {
+  heartbeat: () => Promise<void>
+}
+
 type MarketingSyncRequestedEnvelope = {
   eventType: typeof SYNC_REQUESTED_EVENT_TYPE
   occurredAt: string
@@ -153,6 +157,10 @@ function inboundConsumerRunRetryMs(): number {
 }
 
 function scheduleInboundConsumerRestart(reason: string, err: unknown): void {
+  if (inboundConsumerShuttingDown) {
+    logger.info('Kafka inbound consumer restart skipped (shutdown in progress)', { reason })
+    return
+  }
   const retryMs = inboundConsumerRunRetryMs()
   logger.error('Kafka inbound consumer run failed; will restart', {
     reason,
@@ -166,7 +174,10 @@ function scheduleInboundConsumerRestart(reason: string, err: unknown): void {
   }, retryMs)
 }
 
-async function handleMarketingSyncRequested(parsed: Record<string, unknown>): Promise<void> {
+async function handleMarketingSyncRequested(
+  parsed: Record<string, unknown>,
+  ctx?: InboundMessageContext
+): Promise<void> {
   const evt = parseMarketingSyncRequestedEnvelope(parsed)
   if (!evt) {
     logger.warn('Invalid marketing.sync.requested schema', { parsed })
@@ -200,7 +211,9 @@ async function handleMarketingSyncRequested(parsed: Record<string, unknown>): Pr
   let syncedCount = 0
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      await ctx?.heartbeat()
       syncedCount = await upsertContactsFromSyncSnapshot(snapshot)
+      await ctx?.heartbeat()
       break
     } catch (err) {
       const canRetry = attempt < maxAttempts && isTransientInboundMongoError(err)
@@ -213,6 +226,7 @@ async function handleMarketingSyncRequested(parsed: Record<string, unknown>): Pr
         dBname: evt.dBname,
         err: err instanceof Error ? err.message : String(err)
       })
+      await ctx?.heartbeat()
       await new Promise((resolve) => setTimeout(resolve, inboundMongoRetryDelayMs(attempt)))
     }
   }
@@ -720,14 +734,17 @@ function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
   )
 }
 
-async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promise<void> {
+async function handleInboundKafkaMessage(
+  parsed: Record<string, unknown>,
+  ctx?: InboundMessageContext
+): Promise<void> {
   const eventType = typeof parsed.eventType === 'string' ? parsed.eventType : ''
   const contactEvent = parseContactEventEnvelope(parsed)
   const deletedEvent = parseContactDeletedEventEnvelope(parsed)
 
   switch (eventType) {
     case SYNC_REQUESTED_EVENT_TYPE:
-      await handleMarketingSyncRequested(parsed)
+      await handleMarketingSyncRequested(parsed, ctx)
       break
     case CONTACT_EVENT_TYPES.CREATED:
       if (!contactEvent) {
@@ -869,6 +886,31 @@ async function handleInboundKafkaMessage(parsed: Record<string, unknown>): Promi
 let inboundEventsConsumer: Consumer | null = null
 let activeInboundTopics: string[] = []
 let inboundConsumerRestarting = false
+let inboundConsumerShuttingDown = false
+
+function parseConsumerSessionTimeoutMs(): number {
+  const raw = Number(process.env.KAFKA_CONSUMER_SESSION_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : 45_000
+}
+
+function parseConsumerHeartbeatIntervalMs(): number {
+  const raw = Number(process.env.KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS)
+  const sessionTimeout = parseConsumerSessionTimeoutMs()
+  const interval = Number.isFinite(raw) && raw >= 1_000 ? Math.floor(raw) : 3_000
+  return Math.min(interval, Math.floor(sessionTimeout / 3))
+}
+
+export function isInboundConsumerShuttingDown(): boolean {
+  return inboundConsumerShuttingDown
+}
+
+export async function shutdownInboundEventsConsumer(reason: string): Promise<void> {
+  if (inboundConsumerShuttingDown) return
+  inboundConsumerShuttingDown = true
+  logger.info('Kafka inbound consumer shutdown starting', { reason })
+  await stopInboundEventsConsumer()
+  logger.info('Kafka inbound consumer shutdown completed', { reason })
+}
 
 function topicsSignature(topics: string[]): string {
   return [...topics].sort().join('\0')
@@ -899,6 +941,7 @@ export async function stopInboundEventsConsumer(): Promise<void> {
 
 /** Reload `marketing.clients` topics and resubscribe when the registry changed (no redeploy). */
 export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boolean> {
+  if (inboundConsumerShuttingDown) return false
   if (inboundConsumerRestarting) {
     logger.info('Kafka inbound topic resubscribe skipped (restart already in progress)')
     return false
@@ -967,6 +1010,10 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boo
 
 export async function startInboundEventsConsumer(): Promise<void> {
   const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
+  if (inboundConsumerShuttingDown) {
+    logger.info('Kafka inbound consumer start skipped (shutdown in progress)')
+    return
+  }
   if (g.__marketingInboundKafkaConsumerStarted || inboundEventsConsumer) return
   if (!isKafkaConfigured()) {
     logger.debug('Kafka inbound consumer skipped (no brokers)')
@@ -984,7 +1031,10 @@ export async function startInboundEventsConsumer(): Promise<void> {
 
   const consumer = kafka.consumer({
     groupId,
-    allowAutoTopicCreation: true
+    allowAutoTopicCreation: true,
+    sessionTimeout: parseConsumerSessionTimeoutMs(),
+    heartbeatInterval: parseConsumerHeartbeatIntervalMs(),
+    rebalanceTimeout: 60_000
   })
 
   try {
@@ -1005,7 +1055,7 @@ export async function startInboundEventsConsumer(): Promise<void> {
 
   void consumer
     .run({
-      eachMessage: async ({ topic: t, partition, message }) => {
+      eachMessage: async ({ topic: t, partition, message, heartbeat }) => {
         const raw = message.value?.toString()
         if (!raw) return
         let parsed: Record<string, unknown>
@@ -1018,8 +1068,9 @@ export async function startInboundEventsConsumer(): Promise<void> {
 
         if (!isInboundPlatformEnvelope(parsed)) return
 
+        const ctx: InboundMessageContext = { heartbeat }
         try {
-          await handleInboundKafkaMessage(parsed)
+          await handleInboundKafkaMessage(parsed, ctx)
         } catch (err) {
           logger.error('Kafka inbound handler error', {
             err: err instanceof Error ? err.message : String(err),
@@ -1042,6 +1093,12 @@ export async function startInboundEventsConsumer(): Promise<void> {
       } catch {
         /* ignore */
       }
+      if (inboundConsumerShuttingDown) {
+        logger.info('Kafka inbound consumer run exited during shutdown', {
+          err: err instanceof Error ? err.message : String(err)
+        })
+        return
+      }
       scheduleInboundConsumerRestart('consumer run exited', err)
     })
 
@@ -1049,6 +1106,8 @@ export async function startInboundEventsConsumer(): Promise<void> {
     topics,
     topicCount: topics.length,
     groupId,
-    fromBeginning
+    fromBeginning,
+    sessionTimeoutMs: parseConsumerSessionTimeoutMs(),
+    heartbeatIntervalMs: parseConsumerHeartbeatIntervalMs()
   })
 }
