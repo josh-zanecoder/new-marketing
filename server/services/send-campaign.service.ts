@@ -27,6 +27,7 @@ import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { prepareEmailHtmlForDelivery } from '@server/utils/prepareEmailHtmlForDelivery'
 
 const BATCH_SIZE = 25
 const SEND_CONCURRENCY = 5
@@ -362,8 +363,8 @@ export async function processBatch(
       const rawHtml = template.htmlTemplate ?? template.html ?? null
       templateHtml =
         rawHtml && template.css?.trim()
-          ? `<style>${template.css}</style>${rawHtml}`
-          : rawHtml
+          ? prepareEmailHtmlForDelivery(`<style>${template.css}</style>${rawHtml}`)
+          : prepareEmailHtmlForDelivery(rawHtml)
     }
   }
 
