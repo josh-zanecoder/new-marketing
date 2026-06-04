@@ -22,7 +22,7 @@ Same Docker image, two Cloud Run services:
 | Service | Role | Env overrides | Scaling |
 |---------|------|---------------|---------|
 | `marketing-production` | UI, API, email worker, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true` | min **1**, max **10** |
-| `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true` | min **1**, max **1** |
+| `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
 Test environment mirrors this with `marketing-test` and `marketing-kafka-worker`.
 
@@ -79,7 +79,7 @@ Worker deploy runs only after web health check passes.
 | Mode | Strips from secret | Appends |
 |------|-------------------|---------|
 | `web` | `KAFKA_INBOUND_CONSUMER_DISABLED`, `KAFKA_CRM_CONSUMER_DISABLED` | `KAFKA_INBOUND_CONSUMER_DISABLED=true` |
-| `worker` | above + `EMAIL_WORKER_DISABLED`, `SCHEDULE_RECONCILE_DISABLED` | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true` |
+| `worker` | above + `EMAIL_WORKER_DISABLED`, `SCHEDULE_RECONCILE_DISABLED`, `SENDING_RECONCILE_DISABLED` | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` |
 
 Same secret (`marketing-production`) feeds both services; role overrides are applied at deploy time only.
 
@@ -151,6 +151,8 @@ Kafka inbound consumer running { topics: [ 'marketing.events' ] }
 ### Healthy web (after split)
 
 Web logs should **not** show `Kafka inbound consumer running`. Email worker and API traffic only.
+
+Worker logs should **not** show `[SendingReconcile]` or `[ScheduleReconcile]` (email safety nets run on web only).
 
 ---
 

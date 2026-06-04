@@ -120,7 +120,9 @@ On **`marketing-test` web**:
 Kafka inbound consumer disabled on this instance
 ```
 
-`[ScheduleReconcile] MongoNotConnectedError` on web is **scheduled email** jobs — **not** CRM contact sync. Safe to ignore for sync troubleshooting.
+`[ScheduleReconcile]` / `[SendingReconcile]` Mongo errors on **web** are **email** safety nets — **not** CRM contact sync. Safe to ignore for sync troubleshooting if worker still shows `syncedCount: 25`.
+
+On **`marketing-kafka-worker`**, deploy sets `SENDING_RECONCILE_DISABLED=true` (with schedule/email disabled) — worker logs should **not** show `[SendingReconcile]`.
 
 ---
 

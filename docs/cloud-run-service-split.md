@@ -7,7 +7,7 @@ Marketing runs as **two Cloud Run services** from the **same Docker image**. Web
 | Service | Role | Key env overrides |
 |---------|------|-------------------|
 | `marketing-production` | UI, API, email worker, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true` | min **1**, max **10** |
-| `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true` | min **1**, max **1** |
+| `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
 Test environment uses `marketing-test` and `marketing-kafka-worker`.
 
@@ -24,7 +24,7 @@ Test environment uses `marketing-test` and `marketing-kafka-worker`.
 | `Kafka inbound consumer running` | `marketing-kafka-worker-production` |
 | `marketing.sync.requested` / `syncedCount` | `marketing-kafka-worker-production` |
 | `POST /api/v1/auth/tenant-handoff` | `marketing-production` |
-| `[EmailWorker]` / `[ScheduleReconcile]` | `marketing-production` |
+| `[EmailWorker]` / `[ScheduleReconcile]` / `[SendingReconcile]` | `marketing-production` (web only) |
 
 ## Safe redeploy during sync
 

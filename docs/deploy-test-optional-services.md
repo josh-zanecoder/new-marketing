@@ -57,9 +57,9 @@ Enable when you need to roll out worker changes, for example:
 
 - Kafka consumer startup / retry / topic refresh hardening
 - Inbound event handlers under `server/kafka/`
-- Worker env changes from the `marketing-test` secret (same secret, worker-specific overrides from `build-cloud-run-env-yaml.sh worker`)
+- Worker env changes from the `marketing-test` secret (same secret, worker-specific overrides from `build-cloud-run-env-yaml.sh worker`: disables email worker, schedule/sending reconcile, keeps Kafka consumer on)
 
-After deploy, confirm logs on **`marketing-kafka-worker`** (subscription topics, sync chunk processing).
+After deploy, confirm logs on **`marketing-kafka-worker`** (subscription topics, sync chunk processing; no `[SendingReconcile]`).
 
 ### `DEPLOY_KAFKA_BRIDGE: 'true'`
 
