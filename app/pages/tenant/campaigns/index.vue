@@ -127,6 +127,10 @@ async function confirmDelete() {
   }
 }
 
+function canDuplicateCampaign(c: Campaign): boolean {
+  return c.status === 'Sent' || c.status === 'Failed'
+}
+
 function openDuplicateModal(c: Campaign) {
   campaignToDuplicate.value = c
 }
@@ -510,7 +514,7 @@ onUnmounted(() => {
             </svg>
           </button>
           <button
-            v-if="c.status === 'Sent'"
+            v-if="canDuplicateCampaign(c)"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/25"
             title="Duplicate campaign"

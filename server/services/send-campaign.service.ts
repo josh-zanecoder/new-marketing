@@ -26,6 +26,7 @@ import {
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
+import { buildCampaignReplyTo } from '@server/utils/email/replyToFromContactMetadata'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -506,9 +507,11 @@ export async function processBatch(
       )
       const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
 
+      const replyTo = buildCampaignReplyTo({ campaign })
       const result = await sendEmail({
         sender: campaign.sender,
         to: [{ email: r.email }],
+        ...(replyTo ? { replyTo } : {}),
         subject: subjectRendered,
         htmlContent: htmlRendered,
         tags: [`campaign:${campaignId}`],
