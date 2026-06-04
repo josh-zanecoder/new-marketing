@@ -3,7 +3,7 @@ name: New Marketing Test Deployment
 on:
   push:
     branches:
-      - master
+      - develop
   workflow_dispatch:
 
 env:

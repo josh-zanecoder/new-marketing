@@ -136,7 +136,7 @@ Kafka inbound topic registry loaded {
   topics: [ 'marketing.events', 'marketing.events.forge_capital_lending' ]
 }
 Kafka inbound consumer running { topics: [...], groupId: 'new-marketing-inbound-events-v2' }
-Kafka inbound marketing.sync.requested { dBname: 'forge_capital_lending_db', syncedCount: 25, ... }
+Kafka inbound marketing.sync.requested { dBname: 'forge_capital_lending_db', syncedCount: 200, chunkIndex, chunkCount, ... }
 ```
 
 ### Degraded (fallback — Forge sync will not run on this instance)

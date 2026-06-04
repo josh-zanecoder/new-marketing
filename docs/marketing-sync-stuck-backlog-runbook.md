@@ -32,7 +32,7 @@ Forge Capital Lending was configured correctly in CRM external connection metada
    Messages on the Forge topic sometimes had `tenantId: f0604af4-...` (Convere) with `dBname: forge_capital_lending_db`. Marketing resolves the Mongo DB by **`tenantId` from the registry**, so mismatched ids would write to the wrong DB even if the consumer ran.
 
 7. **Mongo errors were intermittent, not IP whitelist**  
-   Atlas had `0.0.0.0/0` allowed. `ReplicaSetNoPrimary` and `ScheduleReconcile` failures happened under load/deploy churn; Mongo worked at other times (sync chunks with `syncedCount: 25`, admin API 200).
+   Atlas had `0.0.0.0/0` allowed. `ReplicaSetNoPrimary` and `ScheduleReconcile` failures happened under load/deploy churn; Mongo worked at other times (sync chunks with `syncedCount` up to CRM chunk size, default **200**, admin API 200).
 
 8. **UI login ≠ sync**  
    After handoff was fixed (`tenant-handoff` 200), the dashboard loaded but contacts stayed empty until the **Kafka consumer** was healthy and processing the Forge topic.
@@ -160,7 +160,7 @@ A **new group id** starts at **latest** offset and skips old unread messages wit
    Kafka inbound marketing.sync.requested {
      tenantId: '<your-marketing-tenant-id>',
      dBname: '<your-tenant-db>',
-     syncedCount: 25
+     syncedCount: 200
    }
    ```
 
@@ -313,7 +313,7 @@ Filter **marketing-kafka-worker-production**:
 
 ```text
 Kafka inbound consumer running { topics: [ ..., 'marketing.events.<tenant>' ] }
-Kafka inbound marketing.sync.requested { syncedCount: 25, ... }
+Kafka inbound marketing.sync.requested { syncedCount: 200, chunkIndex, chunkCount, ... }
 ```
 
 ### MongoDB Compass

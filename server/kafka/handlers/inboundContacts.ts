@@ -498,6 +498,7 @@ async function upsertContactSyncSlice(
     })
   )
 
+  await params.heartbeat?.()
   await models.Contact.bulkWrite(
     snapDocs.map(({ row, snapSet }) => ({
       updateOne: {
@@ -513,6 +514,7 @@ async function upsertContactSyncSlice(
     })),
     { ordered: false }
   )
+  await params.heartbeat?.()
 
   const externalIds = rows.map((r) => r.externalId)
 
@@ -524,10 +526,14 @@ async function upsertContactSyncSlice(
     { _id: 1 }
   ).lean()
 
-  await Promise.all(
-    docs.map((doc) =>
-      syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-    )
+  const listConcurrency = resolveMarketingSyncRecipientListConcurrency()
+  await runTasksWithConcurrency(
+    docs,
+    listConcurrency,
+    async (doc) => {
+      await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
+    },
+    params.heartbeat
   )
 
   return rows.length
