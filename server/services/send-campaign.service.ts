@@ -19,6 +19,7 @@ import {
   recipientEmailsForCampaign
 } from '../utils/emailMerge/campaignAudience'
 import {
+  applyDefaultUnsubscribeMergeValue,
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
@@ -27,7 +28,6 @@ import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
-import { prepareEmailHtmlForDelivery } from '@server/utils/prepareEmailHtmlForDelivery'
 
 const BATCH_SIZE = 25
 const SEND_CONCURRENCY = 5
@@ -363,8 +363,8 @@ export async function processBatch(
       const rawHtml = template.htmlTemplate ?? template.html ?? null
       templateHtml =
         rawHtml && template.css?.trim()
-          ? prepareEmailHtmlForDelivery(`<style>${template.css}</style>${rawHtml}`)
-          : prepareEmailHtmlForDelivery(rawHtml)
+          ? `<style>${template.css}</style>${rawHtml}`
+          : rawHtml
     }
   }
 
@@ -439,6 +439,7 @@ export async function processBatch(
 
   const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
   let brevoTenantTagValue: string | undefined
+  let unsubscribeSigningSecret: string | undefined
   if (tenantDbNameForTags) {
     brevoTenantTagValue = tenantDbNameForTags
     try {
@@ -446,6 +447,7 @@ export async function processBatch(
       const row = await findRegistryTenantByDbName(registry, tenantDbNameForTags)
       const tid = row?.tenantId?.trim()
       if (tid) brevoTenantTagValue = tid
+      if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
     } catch (err) {
       console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
         dbName: tenantDbNameForTags,
@@ -469,11 +471,24 @@ export async function processBatch(
     const ops = await mapWithConcurrency(pending, SEND_CONCURRENCY, async (r) => {
       const emailKey = normalizeMarketingEmail(r.email)
       const contact = emailKey ? contactByEmail.get(emailKey) : undefined
+      if (contact?.isUnsubscribe === true) {
+        return {
+          updateOne: {
+            filter: { _id: r._id },
+            update: { status: 'failed', error: 'Contact unsubscribed' }
+          }
+        }
+      }
       const mergeRoot = composeEmailMergeRoot(
         campaign.mergeUserSnapshot,
         contact ?? null,
         dynamicVariableBindings
       )
+      applyDefaultUnsubscribeMergeValue(mergeRoot, {
+        dbName: tenantDbNameForTags,
+        contactId: contact?._id ? String(contact._id) : undefined,
+        clientKeyHash: unsubscribeSigningSecret
+      })
       const toEmail = (r.email ?? '').trim()
       if (toEmail) {
         const cur = mergeRoot.recipient

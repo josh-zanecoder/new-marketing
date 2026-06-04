@@ -22,12 +22,13 @@
       <div class="overflow-x-auto">
         <table class="w-full min-w-0 table-fixed border-collapse text-left text-sm">
           <colgroup>
-            <col style="width: 15%">
-            <col style="width: 22%">
-            <col style="width: 20%">
-            <col style="width: 14%">
-            <col style="width: 11%">
+            <col style="width: 13%">
             <col style="width: 18%">
+            <col style="width: 18%">
+            <col style="width: 16%">
+            <col style="width: 12%">
+            <col style="width: 9%">
+            <col style="width: 14%">
           </colgroup>
           <thead>
             <tr class="border-b border-slate-100 bg-slate-50/90">
@@ -39,6 +40,9 @@
               </th>
               <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 CRM URL
+              </th>
+              <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Campaign sender
               </th>
               <th class="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 API key
@@ -54,7 +58,7 @@
           <tbody class="divide-y divide-slate-100">
             <template v-if="tenantsLoading">
               <tr class="bg-slate-50/50">
-                <td class="px-4 py-10 text-center text-sm text-slate-500" colspan="6">
+                <td class="px-4 py-10 text-center text-sm text-slate-500" colspan="7">
                   <span class="inline-flex items-center gap-2">
                     <span
                       class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600"
@@ -96,6 +100,12 @@
                   <template v-else>
                     <span class="text-slate-400">—</span>
                   </template>
+                </td>
+                <td
+                  class="truncate px-4 py-4 align-middle text-slate-700"
+                  :title="campaignSenderLabel(t)"
+                >
+                  {{ campaignSenderLabel(t) }}
                 </td>
                 <td class="truncate px-4 py-4 align-middle font-mono text-xs text-slate-600" :title="t.apiKeyPrefix || undefined">
                   {{ t.apiKeyPrefix || '—' }}
@@ -148,7 +158,7 @@
                 </td>
               </tr>
               <tr v-if="!tenants.length">
-                <td class="px-4 py-12 text-center text-sm text-slate-500" colspan="6">
+                <td class="px-4 py-12 text-center text-slate-500" colspan="7">
                   No tenants yet
                 </td>
               </tr>
@@ -218,6 +228,15 @@ const {
 const tenants = ref<AdminTenantRow[]>([])
 /** Avoid SSR/client tenant list mismatch (admin API often empty on server, populated in browser). */
 const tenantsLoading = ref(true)
+
+function campaignSenderLabel(t: AdminTenantRow): string {
+  const name = t.defaultCampaignSenderName?.trim()
+  const email = t.defaultCampaignSenderEmail?.trim()
+  if (name && email) return `${name} <${email}>`
+  if (email) return email
+  if (name) return name
+  return '—'
+}
 
 function openAddTenantModal() {
   resetError()
@@ -292,6 +311,8 @@ async function fetchTenants() {
         apiKeyPrefix: string | null
         crmAppUrl: string | null
         kafkaOutboundTopic: string | null
+        defaultCampaignSenderEmail: string | null
+        defaultCampaignSenderName: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -304,6 +325,8 @@ async function fetchTenants() {
       apiKeyPrefix: t.apiKeyPrefix,
       crmAppUrl: t.crmAppUrl,
       kafkaOutboundTopic: t.kafkaOutboundTopic ?? null,
+      defaultCampaignSenderEmail: t.defaultCampaignSenderEmail ?? null,
+      defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
       status: 'Ready'
     }))
   } catch {
@@ -315,6 +338,8 @@ async function handleAddTenantSubmit(payload: {
   name: string
   email: string
   crmAppUrl?: string
+  defaultCampaignSenderEmail?: string | null
+  defaultCampaignSenderName?: string | null
 }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
@@ -334,6 +359,8 @@ async function handleEditTenantSubmit(payload: {
   email: string | null
   crmAppUrl: string | null
   tenantId: string | null
+  defaultCampaignSenderEmail: string | null
+  defaultCampaignSenderName: string | null
 }) {
   const row = editingTenant.value
   if (!row) return

@@ -11,6 +11,7 @@ import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/te
 import type { RecipientListMemberModel } from '@server/types/tenant/recipientListMember.model'
 import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 /** When two tenant contacts share an email, prefer the most recently updated row (stable tie-break). */
@@ -27,10 +28,9 @@ async function loadContactsByNormalizedEmail(
 ): Promise<Map<string, ContactLean>> {
   const normalized = [...new Set(emails.map((e) => normalizeMarketingEmail(e)).filter(Boolean))]
   if (!normalized.length) return new Map()
-  const docs = await Contact.find({
-    deletedAt: null,
-    email: { $in: normalized }
-  })
+  const docs = await Contact.find(
+    withMarketableContactFilter({ email: { $in: normalized } })
+  )
     .lean<ContactLean[]>()
   const map = new Map<string, ContactLean>()
   for (const c of docs) {
@@ -87,7 +87,7 @@ export async function recipientEmailsForCampaign(
   const uniqueIds = [...new Set(idStrings)].map((s) => new mongoose.Types.ObjectId(s))
   if (!uniqueIds.length) return []
   const contacts = await (Contact as ContactModel)
-    .find({ _id: { $in: uniqueIds }, deletedAt: null })
+    .find(withMarketableContactFilter({ _id: { $in: uniqueIds } }))
     .select('email')
     .lean<ContactLean[]>()
   const emailById = new Map(
@@ -126,7 +126,7 @@ export async function recipientEmailsForDraft(
   const { Contact } = getTenantClientModels(conn)
   const objectIds = idStrings.map((id) => new mongoose.Types.ObjectId(id))
   const contacts = await (Contact as ContactModel)
-    .find({ _id: { $in: objectIds }, deletedAt: null })
+    .find(withMarketableContactFilter({ _id: { $in: objectIds } }))
     .select('email')
     .lean<ContactLean[]>()
   const emailById = new Map(
@@ -163,7 +163,7 @@ export async function contactsByEmailForAudience(
       )
       if (uniqueIds.length) {
         const listContacts = await (Contact as ContactModel)
-          .find({ _id: { $in: uniqueIds }, deletedAt: null })
+          .find(withMarketableContactFilter({ _id: { $in: uniqueIds } }))
           .lean<ContactLean[]>()
         mergeListMemberContactsIntoMap(contactByEmail, listContacts)
       }

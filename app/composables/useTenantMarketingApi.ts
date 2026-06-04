@@ -26,6 +26,8 @@ export interface TenantCampaignDetail {
   }>
   emailTemplate?: { name: string; html: string }
   templateHtml?: string | null
+  /** `upload` = raw HTML file; `editor` = GrapesJS */
+  templateHtmlSource?: 'editor' | 'upload'
   mergeUserSnapshot?: Record<string, unknown>
   createdAt: string
   updatedAt: string

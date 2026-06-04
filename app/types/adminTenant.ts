@@ -11,5 +11,9 @@ export interface AdminTenantRow {
    * Full Kafka topic for outbound marketing events, or `null` for default `{prefix}.{tenant}`.
    */
   kafkaOutboundTopic: string | null
+  /** Default campaign From email; null uses global fallback. */
+  defaultCampaignSenderEmail: string | null
+  /** Default campaign From name; null uses global fallback. */
+  defaultCampaignSenderName: string | null
   status: string
 }

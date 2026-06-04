@@ -6,6 +6,7 @@ import {
   isRegisteredTenantAuthContext,
   resolveTenantIdForTenantAuth
 } from '@server/tenant/registry-auth'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
@@ -79,7 +80,7 @@ async function buildRecipientListFormMetadata(params: {
   filterDocsRaw: unknown[]
 }) {
   const { Contact } = getTenantClientModels(params.tenantConn)
-  const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, params.auth)
+  const contactFilter = mergeTenantOwnerEmailScopeFilter(withMarketableContactFilter({}), params.auth)
 
   const contactTypes = (params.contactTypeDocs as ContactTypeLean[]).map((d) => {
     const key = String(d.key ?? '').trim().toLowerCase()
@@ -139,7 +140,7 @@ export default defineEventHandler(async (event) => {
   const { Contact, RecipientList, RecipientListMember, RecipientFilter: FilterModel, ContactType } =
     getTenantClientModels(tenantConn)
 
-  const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
+  const contactFilter = mergeTenantOwnerEmailScopeFilter(withMarketableContactFilter({}), auth)
 
   /** `scope=form` — contact types, registry filters, per-type counts only (create/edit list form). */
   const scopeParam = getQuery(event).scope

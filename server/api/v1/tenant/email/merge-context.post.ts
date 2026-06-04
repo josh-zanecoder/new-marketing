@@ -2,9 +2,11 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { EmailDynamicVariableModel } from '@server/types/tenant/emailDynamicVariable.model'
+import { getRegistryConnection } from '@server/lib/mongoose'
 import {
   isAdminAuthContext,
-  isRegisteredTenantAuthContext
+  isRegisteredTenantAuthContext,
+  findRegistryTenantByDbName
 } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
@@ -14,6 +16,7 @@ import {
   previewContactForSavedCampaign
 } from '@server/utils/emailMerge/campaignAudience'
 import {
+  applyDefaultUnsubscribeMergeValue,
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
@@ -21,6 +24,7 @@ import {
   mergeUserSnapshotsForEmail,
   tenantUserFieldsFromAuth
 } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 
 type MergeRootBody =
   | { campaignId: string }
@@ -51,9 +55,26 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
+  const dbName = conn.db?.databaseName ?? ''
   const { Campaign, EmailDynamicVariable } = getTenantClientModels(conn)
   const dynModel = EmailDynamicVariable as EmailDynamicVariableModel
   const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(dynModel)
+
+  let clientKeyHash: string | undefined
+  if (dbName) {
+    try {
+      const registry = await getRegistryConnection()
+      const row = await findRegistryTenantByDbName(registry, dbName)
+      if (row?.clientKeyHash) clientKeyHash = row.clientKeyHash
+    } catch {
+      /* preview only */
+    }
+  }
+
+  const marketingBase = getMarketingPublicBaseUrl()
+  const previewUnsubscribePlaceholder = marketingBase
+    ? `${marketingBase}/api/v1/unsubscribe?token=preview`
+    : undefined
 
   const authSnap = tenantUserFieldsFromAuth(auth)
 
@@ -71,6 +92,12 @@ export default defineEventHandler(async (event) => {
     const contact = await previewContactForSavedCampaign(conn, campaignId)
     const userSnapshot = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
     const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
+    applyDefaultUnsubscribeMergeValue(mergeRoot, {
+      dbName,
+      contactId: contact?._id ? String(contact._id) : undefined,
+      clientKeyHash,
+      previewPlaceholder: previewUnsubscribePlaceholder
+    })
     return { mergeRoot }
   }
 
@@ -95,5 +122,11 @@ export default defineEventHandler(async (event) => {
 
   const contact = await previewContactForDraft(conn, draft)
   const mergeRoot = composeEmailMergeRoot(authSnap ?? {}, contact ?? null, dynamicVariableBindings)
+  applyDefaultUnsubscribeMergeValue(mergeRoot, {
+    dbName,
+    contactId: contact?._id ? String(contact._id) : undefined,
+    clientKeyHash,
+    previewPlaceholder: previewUnsubscribePlaceholder
+  })
   return { mergeRoot }
 })

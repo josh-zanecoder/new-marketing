@@ -17,6 +17,7 @@ type ContactDoc = {
   company?: string
   channel?: string
   metadata?: Record<string, unknown>
+  isUnsubscribe?: boolean
   address?: {
     street?: string
     city?: string
@@ -109,6 +110,7 @@ export default defineEventHandler(async (event) => {
       state: c.address?.state ?? '',
       county: c.address?.county ?? ''
     },
+    is_unsubscribe: c.isUnsubscribe === true,
     createdAt: c.createdAt?.toISOString?.() ?? null,
     updatedAt: c.updatedAt?.toISOString?.() ?? null
   }

@@ -40,6 +40,8 @@ export function useAdminTenantsCreateDb() {
     name: string
     email: string
     crmAppUrl?: string
+    defaultCampaignSenderEmail?: string | null
+    defaultCampaignSenderName?: string | null
   }): Promise<CreateTenantDbResult> {
     resetError()
 
@@ -56,7 +58,9 @@ export function useAdminTenantsCreateDb() {
           body: {
             name: payload.name,
             email: payload.email,
-            crmAppUrl: payload.crmAppUrl?.trim() ? payload.crmAppUrl.trim() : null
+            crmAppUrl: payload.crmAppUrl?.trim() ? payload.crmAppUrl.trim() : null,
+            defaultCampaignSenderEmail: payload.defaultCampaignSenderEmail ?? null,
+            defaultCampaignSenderName: payload.defaultCampaignSenderName ?? null
           }
         }
       )
@@ -101,6 +105,8 @@ export function useAdminTenantsCreateDb() {
       email: string | null
       crmAppUrl: string | null
       tenantId: string | null
+      defaultCampaignSenderEmail: string | null
+      defaultCampaignSenderName: string | null
     }
   ): Promise<{ ok: boolean }> {
     resetError()

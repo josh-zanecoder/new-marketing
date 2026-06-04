@@ -9,14 +9,16 @@ import type {
   ManualRecipientModel
 } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { tenantCreatedByFromAuth } from '@server/tenant/registry-auth'
 import {
-  DEFAULT_CAMPAIGN_SENDER_EMAIL,
-  DEFAULT_CAMPAIGN_SENDER_NAME
-} from '~~/shared/defaultCampaignSender'
+  isRegisteredTenantAuthContext,
+  tenantCreatedByFromAuth
+} from '@server/tenant/registry-auth'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -31,6 +33,8 @@ export default defineEventHandler(async (event) => {
     recipientsListId?: string
     recipientsManual?: string[]
     templateHtml?: string
+    templateHtmlSource?: 'editor' | 'upload'
+    saveHtmlToLibrary?: boolean
   }>(event)
 
   if (!body?.name?.trim()) {
@@ -54,29 +58,47 @@ export default defineEventHandler(async (event) => {
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''
 
+  const saveToLibrary = body.saveHtmlToLibrary !== false
+
   if (body.templateHtml && campaign.emailTemplate) {
+    const htmlSource =
+      body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
     await (EmailTemplate as EmailTemplateModel).updateOne(
       { _id: campaign.emailTemplate },
       {
         $set: {
           htmlTemplate: body.templateHtml,
-          subject: body.subject?.trim() || campaign.subject || body.name.trim()
+          htmlSource,
+          subject: body.subject?.trim() || campaign.subject || body.name.trim(),
+          saveToLibrary
         }
       }
     )
   } else if (body.templateHtml) {
+    const htmlSource =
+      body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
       subject: body.subject?.trim() || body.name.trim(),
-      htmlTemplate: body.templateHtml
+      htmlTemplate: body.templateHtml,
+      htmlSource,
+      saveToLibrary
     }).save()
     campaign.emailTemplate = template._id
   }
 
+  const auth = event.context.auth
+  const registryConn = await getRegistryConnection()
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
+      ? auth.dbName
+      : ''
+  const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+
   campaign.name = body.name.trim()
   campaign.sender = {
-    name: body.senderName?.trim() || DEFAULT_CAMPAIGN_SENDER_NAME,
-    email: body.senderEmail?.trim() || DEFAULT_CAMPAIGN_SENDER_EMAIL
+    name: body.senderName?.trim() || senderDefaults.name,
+    email: body.senderEmail?.trim() || senderDefaults.email
   }
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
@@ -102,7 +124,7 @@ export default defineEventHandler(async (event) => {
       ? (async () => {
           const objectIds = idStrings.map((cid) => new mongoose.Types.ObjectId(cid))
           const existing = await (Contact as ContactModel)
-            .find({ _id: { $in: objectIds }, deletedAt: null })
+            .find(withMarketableContactFilter({ _id: { $in: objectIds } }))
             .select('_id')
             .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
           const allowed = new Set(existing.map((d) => String(d._id)))

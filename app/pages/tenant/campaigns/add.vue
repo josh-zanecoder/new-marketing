@@ -355,7 +355,7 @@
                     Change design
                   </button>
                   <button
-                    v-if="designEditorCampaignId"
+                    v-if="designEditorCampaignId && form.templateMode !== 'upload'"
                     type="button"
                     class="rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
                     @click="openEditorWithCurrentDesign"
@@ -366,13 +366,16 @@
               </div>
               <div class="relative min-h-[280px] max-h-[min(480px,55vh)] overflow-auto bg-[#f8f4ef]">
                 <iframe
-                  :srcdoc="previewSrcdoc(addCampaignDesignPreviewHtml || '')"
+                  :srcdoc="previewSrcdoc(designPreviewHtml || '')"
                   title="Email preview"
                   class="absolute inset-0 h-full w-full border-0"
                   sandbox="allow-same-origin"
                 />
               </div>
-              <p v-if="!designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+              <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
+              </p>
+              <p v-else-if="!designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
                 Save the campaign once to get a stable link for the editor.
               </p>
             </div>
@@ -384,8 +387,10 @@
           :templates="existingTemplates"
           :pending="emailTemplatesPending"
           :error="emailTemplatesError"
+          :merge-tag-hints="designMergeTagHints"
           @create-from-scratch="handleCreateFromScratch"
           @select-template="handleUseTemplate"
+          @upload-html="handleUploadHtml"
         />
 
         <ClientConfirmationModal
@@ -607,12 +612,12 @@ import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
-import {
-  DEFAULT_CAMPAIGN_SENDER_EMAIL,
-  DEFAULT_CAMPAIGN_SENDER_NAME
-} from '~~/shared/defaultCampaignSender'
+import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
 
 const campaignStore = useCampaignStore()
+const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
+  useDefaultCampaignSender()
+const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
@@ -622,14 +627,15 @@ const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
 const form = ref({
   name: '',
-  senderName: DEFAULT_CAMPAIGN_SENDER_NAME,
-  senderEmail: DEFAULT_CAMPAIGN_SENDER_EMAIL,
+  senderName: defaultSenderName.value,
+  senderEmail: defaultSenderEmail.value,
   subject: '',
   recipientsMode: 'list' as 'list' | 'manual',
   recipientsListId: '',
   recipientsManual: [] as string[],
-  templateMode: 'scratch' as 'scratch' | 'existing',
-  selectedTemplateId: ''
+  templateMode: 'scratch' as 'scratch' | 'existing' | 'upload',
+  selectedTemplateId: '',
+  saveHtmlToLibrary: true
 })
 
 const recipientsOpen = ref(false)
@@ -935,6 +941,21 @@ interface DynamicVariableOption {
 
 const dynamicVariables = ref<DynamicVariableOption[]>([])
 
+const designMergeTagHints = computed(() => {
+  const fromDyn = dynamicVariables.value
+    .filter((v) => v.enabled !== false && (!v.scopes?.length || v.scopes.includes('body')))
+    .map((v) => `{{${v.key}}}`)
+  const extras = ['{{aeFullName}}', '{{aeEmail}}', '{{aePhoneNumber}}', '{{recipient.email}}']
+  return [...new Set([...fromDyn, ...extras])].slice(0, 12)
+})
+
+const { designPreviewHtml } = useCampaignDesignPreview(
+  marketingApi,
+  savedTemplateHtml,
+  form,
+  returnCampaignId
+)
+
 /** Subject “Insert variable” options come only from tenant dynamic variables (API). */
 const subjectVariables = computed(() => {
   const vars = dynamicVariables.value
@@ -1018,6 +1039,7 @@ function applyRecipientListFromQuery(): void {
 }
 
 async function loadFromEditorReturn() {
+  await defaultSenderReady
   const campaignId = route.query.campaignId as string
   const fromEditor = route.query.fromEditor
   if (!campaignId || fromEditor !== '1') return
@@ -1043,17 +1065,21 @@ async function loadFromEditorReturn() {
       manualRecipientLabels.value = labels
       form.value = {
         name: c.name,
-        senderName: c.sender?.name || DEFAULT_CAMPAIGN_SENDER_NAME,
-        senderEmail: c.sender?.email || DEFAULT_CAMPAIGN_SENDER_EMAIL,
+        senderName: c.sender?.name || defaultSenderName.value,
+        senderEmail: c.sender?.email || defaultSenderEmail.value,
         subject: c.subject || '',
         recipientsMode: c.recipientsType || 'manual',
         recipientsListId: c.recipientsListId || '',
         recipientsManual: ids,
         templateMode: form.value.templateMode,
-        selectedTemplateId: form.value.selectedTemplateId
+        selectedTemplateId: form.value.selectedTemplateId,
+        saveHtmlToLibrary: form.value.saveHtmlToLibrary
       }
       if (!savedTemplateHtml.value && c.templateHtml) {
         savedTemplateHtml.value = c.templateHtml
+      }
+      if (c.templateHtmlSource === 'upload') {
+        form.value.templateMode = 'upload'
       }
     } catch {
       /* ignore prefetch errors; session path may still apply */
@@ -1128,12 +1154,6 @@ const designSectionRef = ref<HTMLElement | null>(null)
 //   }, 350)
 // }
 
-const addCampaignDesignPreviewHtml = computed(() => {
-  const raw = savedTemplateHtml.value
-  if (!raw) return ''
-  return raw
-})
-
 // watch(
 //   () =>
 //     [
@@ -1146,6 +1166,11 @@ const addCampaignDesignPreviewHtml = computed(() => {
 // )
 
 onMounted(async () => {
+  await defaultSenderReady
+  if (!returnCampaignId.value) {
+    form.value.senderName = defaultSenderName.value
+    form.value.senderEmail = defaultSenderEmail.value
+  }
   loadFromEditorReturn()
   wizardBootPending.value = true
   try {
@@ -1207,6 +1232,9 @@ const subjectComplete = computed(() => !!form.value.subject?.trim())
 const designComplete = computed(() => !!savedTemplateHtml.value || (form.value.templateMode === 'existing' && form.value.selectedTemplateId))
 
 const designSourceSummary = computed(() => {
+  if (form.value.templateMode === 'upload') {
+    return 'Uploaded HTML design (saved without GrapesJS editing).'
+  }
   if (form.value.templateMode === 'scratch') return 'Built from scratch in the email editor.'
   const t = existingTemplates.value.find((x) => x.id === form.value.selectedTemplateId)
   if (t) return `Based on saved template “${t.name}”.`
@@ -1214,12 +1242,17 @@ const designSourceSummary = computed(() => {
 })
 
 const designSectionToggleLabel = computed(() => {
-  if (savedTemplateHtml.value) return 'Browse templates'
+  if (savedTemplateHtml.value) return 'Change design'
   return 'Choose design'
 })
 
 const designStepSubtitle = computed(() => {
-  if (savedTemplateHtml.value) return 'Preview ready — change design or edit in the editor.'
+  if (savedTemplateHtml.value) {
+    return form.value.templateMode === 'upload'
+      ? 'Uploaded HTML — preview with merge tags applied.'
+      : 'Preview ready — change design or edit in the editor.'
+  }
+  if (form.value.templateMode === 'upload') return 'Upload HTML file'
   if (form.value.templateMode === 'scratch') return 'Create from scratch'
   if (form.value.templateMode === 'existing') return 'Pick a template'
   return 'Create your email content'
@@ -1277,6 +1310,23 @@ watch(subjectVariable, (val) => {
     subjectVariable.value = ''
   }
 })
+
+function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
+  designModalOpen.value = false
+  form.value.templateMode = 'upload'
+  form.value.selectedTemplateId = ''
+  form.value.saveHtmlToLibrary = payload.saveToLibrary
+  savedTemplateHtml.value = payload.html
+  const campaignId = returnCampaignId.value || `temp-${Date.now()}`
+  returnCampaignId.value = campaignId
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(`campaign-template-${campaignId}`, payload.html)
+    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
+      form: { ...form.value, templateMode: 'upload' },
+      campaignId
+    }))
+  }
+}
 
 function handleCreateFromScratch() {
   designModalOpen.value = false
@@ -1359,6 +1409,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     status: 'Draft',
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
+    templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
     createdAt: now,
     updatedAt: now
   }
@@ -1383,7 +1434,10 @@ async function persistSavedCampaign(): Promise<string> {
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     recipientsManual,
-    templateHtml: savedTemplateHtml.value!
+    templateHtml: savedTemplateHtml.value!,
+    templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
+    saveHtmlToLibrary:
+      form.value.templateMode === 'upload' ? form.value.saveHtmlToLibrary : true
   }
 
   const res = await marketingApi.createCampaign(body)

@@ -6,6 +6,7 @@ import type { ContactLean, ContactModel } from '@server/types/tenant/contact.mod
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
@@ -65,7 +66,7 @@ export default defineEventHandler(async (event) => {
     const contacts =
       uniqueIds.length > 0
         ? await (Contact as ContactModel)
-            .find({ _id: { $in: uniqueIds }, deletedAt: null })
+            .find(withMarketableContactFilter({ _id: { $in: uniqueIds } }))
             .select('email')
             .lean<ContactLean[]>()
         : []
@@ -84,6 +85,7 @@ export default defineEventHandler(async (event) => {
 
   let emailTemplate: { html: string; name: string } | null = null
   let templateHtml: string | null = null
+  let templateHtmlSource: 'editor' | 'upload' = 'editor'
   if (campaign.emailTemplate) {
     const template = await (EmailTemplate as EmailTemplateModel)
       .findById(campaign.emailTemplate)
@@ -91,7 +93,8 @@ export default defineEventHandler(async (event) => {
     if (template) {
       const rawHtml = template.htmlTemplate ?? template.html ?? ''
       emailTemplate = { name: template.name, html: rawHtml }
-      // Support legacy docs with separate css field
+      templateHtmlSource =
+        template.htmlSource === 'upload' ? 'upload' : 'editor'
       templateHtml = template.css ? `<style>${template.css}</style>${rawHtml}` : rawHtml
     }
   }
@@ -111,6 +114,7 @@ export default defineEventHandler(async (event) => {
       recipients,
       emailTemplate,
       templateHtml,
+      templateHtmlSource,
       mergeUserSnapshot: campaign.mergeUserSnapshot,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt

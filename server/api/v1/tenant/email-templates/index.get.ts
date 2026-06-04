@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const { EmailTemplate } = getTenantClientModels(conn)
 
   const docs = await (EmailTemplate as EmailTemplateModel)
-    .find({})
+    .find({ saveToLibrary: { $ne: false } })
     .sort({ updatedAt: -1 })
     .lean<EmailTemplateLean[]>()
 

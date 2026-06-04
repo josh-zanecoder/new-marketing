@@ -41,6 +41,7 @@ export interface ContactLean {
   /** CRM / Kafka idempotency; optional until integrations land. */
   /** Arbitrary key-value data from CRM/Kafka (not indexed by default). */
   metadata?: Record<string, unknown>
+  isUnsubscribe?: boolean
   createdAt?: Date
   updatedAt?: Date
   deletedAt?: Date | null

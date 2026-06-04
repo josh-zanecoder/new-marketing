@@ -66,6 +66,37 @@
           </div>
 
           <div class="space-y-2">
+            <label for="edit-tenant-campaign-sender-name" class="block text-sm font-medium text-slate-700">
+              Default campaign sender name <span class="font-normal text-slate-500">(optional)</span>
+            </label>
+            <input
+              id="edit-tenant-campaign-sender-name"
+              v-model="defaultCampaignSenderName"
+              type="text"
+              autocomplete="organization"
+              placeholder="Acme Marketing"
+              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+          </div>
+
+          <div class="space-y-2">
+            <label for="edit-tenant-campaign-sender-email" class="block text-sm font-medium text-slate-700">
+              Default campaign sender email <span class="font-normal text-slate-500">(optional)</span>
+            </label>
+            <input
+              id="edit-tenant-campaign-sender-email"
+              v-model="defaultCampaignSenderEmail"
+              type="email"
+              autocomplete="email"
+              placeholder="marketing@company.com"
+              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            >
+            <p class="text-xs text-slate-500">
+              Default From address for new campaigns. Clear to use the global fallback.
+            </p>
+          </div>
+
+          <div class="space-y-2">
             <label for="edit-tenant-crm-url" class="block text-sm font-medium text-slate-700">
               CRM app URL <span class="font-normal text-slate-500">(optional)</span>
             </label>
@@ -136,12 +167,16 @@ const emit = defineEmits<{
     email: string | null
     crmAppUrl: string | null
     tenantId: string | null
+    defaultCampaignSenderEmail: string | null
+    defaultCampaignSenderName: string | null
   }]
 }>()
 
 const name = ref('')
 const email = ref('')
 const tenantId = ref('')
+const defaultCampaignSenderName = ref('')
+const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
@@ -152,6 +187,8 @@ function loadFromTenant(t: AdminTenantRow) {
   name.value = t.name
   email.value = t.email ?? ''
   tenantId.value = t.tenantId ?? ''
+  defaultCampaignSenderName.value = t.defaultCampaignSenderName ?? ''
+  defaultCampaignSenderEmail.value = t.defaultCampaignSenderEmail ?? ''
   crmAppUrl.value = t.crmAppUrl ?? ''
 }
 
@@ -191,6 +228,8 @@ function handleSubmit() {
   const trimmedEmail = email.value.trim()
   const trimmedCrm = crmAppUrl.value.trim()
   const trimmedTid = tenantId.value.trim()
+  const trimmedSenderName = defaultCampaignSenderName.value.trim()
+  const trimmedSenderEmail = defaultCampaignSenderEmail.value.trim()
 
   if (!trimmedName) {
     errorMessage.value = 'Tenant name is required.'
@@ -199,6 +238,11 @@ function handleSubmit() {
 
   if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
     errorMessage.value = 'Please enter a valid email address.'
+    return
+  }
+
+  if (trimmedSenderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedSenderEmail)) {
+    errorMessage.value = 'Please enter a valid default campaign sender email.'
     return
   }
 
@@ -215,7 +259,11 @@ function handleSubmit() {
     name: trimmedName,
     email: trimmedEmail ? trimmedEmail.toLowerCase() : null,
     crmAppUrl: trimmedCrm || null,
-    tenantId: trimmedTid || null
+    tenantId: trimmedTid || null,
+    defaultCampaignSenderName: trimmedSenderName || null,
+    defaultCampaignSenderEmail: trimmedSenderEmail
+      ? trimmedSenderEmail.toLowerCase()
+      : null
   })
 }
 </script>

@@ -1,39 +1,7 @@
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
-import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
-
-function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
-  const name = typeof doc.name === 'string' ? doc.name : ''
-  const email = typeof doc.email === 'string' ? doc.email : null
-  const dbName = typeof doc.dbName === 'string' ? doc.dbName : ''
-  const tenantId =
-    typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : null
-  const apiKeyPrefix =
-    typeof doc.clientKeyPrefix === 'string' && doc.clientKeyPrefix
-      ? doc.clientKeyPrefix
-      : typeof doc.apiKeyPrefix === 'string' && doc.apiKeyPrefix
-        ? doc.apiKeyPrefix
-        : null
-  const createdAt =
-    doc.createdAt instanceof Date
-      ? doc.createdAt.toISOString()
-      : typeof doc.createdAt === 'string'
-        ? new Date(doc.createdAt).toISOString()
-        : null
-
-  const crmRaw = doc.crmAppUrl
-  const crmAppUrl =
-    typeof crmRaw === 'string' && crmRaw.trim()
-      ? crmRaw.trim().replace(/\/+$/, '')
-      : null
-
-  const koRaw = doc.kafkaOutboundTopic
-  const kafkaOutboundTopic =
-    typeof koRaw === 'string' && koRaw.trim() ? koRaw.trim() : null
-
-  if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl, kafkaOutboundTopic }
-}
+import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
+import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 
 /** Resolve a tenant by registry database name (for admin URLs that use `dbName` in the path). */
 export default defineEventHandler(async (event) => {
