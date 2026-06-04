@@ -5,42 +5,14 @@ import {
   ensureTenantEventTopic,
   invalidateTenantTopicCacheForDbName
 } from '@server/kafka/kafkaProducer'
-import type { RegistryTenantDoc, TenantAdminRow } from '@server/types/registry/registryTenant.types'
+import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
+import {
+  normalizeCampaignSenderEmailInput,
+  normalizeCampaignSenderNameInput,
+  toTenantAdminRow
+} from '@server/utils/registry/tenantAdminRow'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
-  const name = typeof doc.name === 'string' ? doc.name : ''
-  const email = typeof doc.email === 'string' ? doc.email : null
-  const dbName = typeof doc.dbName === 'string' ? doc.dbName : ''
-  const tenantId =
-    typeof doc.tenantId === 'string' && doc.tenantId ? doc.tenantId : null
-  const apiKeyPrefix =
-    typeof doc.clientKeyPrefix === 'string' && doc.clientKeyPrefix
-      ? doc.clientKeyPrefix
-      : typeof doc.apiKeyPrefix === 'string' && doc.apiKeyPrefix
-        ? doc.apiKeyPrefix
-        : null
-  const createdAt =
-    doc.createdAt instanceof Date
-      ? doc.createdAt.toISOString()
-      : typeof doc.createdAt === 'string'
-        ? new Date(doc.createdAt).toISOString()
-        : null
-
-  const crmRaw = doc.crmAppUrl
-  const crmAppUrl =
-    typeof crmRaw === 'string' && crmRaw.trim()
-      ? crmRaw.trim().replace(/\/+$/, '')
-      : null
-
-  const koRaw = doc.kafkaOutboundTopic
-  const kafkaOutboundTopic =
-    typeof koRaw === 'string' && koRaw.trim() ? koRaw.trim() : null
-
-  if (!name || !dbName || !createdAt) return null
-  return { name, email, dbName, tenantId, apiKeyPrefix, createdAt, crmAppUrl, kafkaOutboundTopic }
-}
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -59,6 +31,8 @@ export default defineEventHandler(async (event) => {
     email?: string | null
     crmAppUrl?: string | null
     tenantId?: string | null
+    defaultCampaignSenderEmail?: string | null
+    defaultCampaignSenderName?: string | null
   }>(event)
 
   const displayName = body?.name?.trim()
@@ -103,6 +77,26 @@ export default defineEventHandler(async (event) => {
       ? null
       : String(body.tenantId).trim()
 
+  if (body?.defaultCampaignSenderEmail === undefined) {
+    throw createError({
+      statusCode: 400,
+      message: 'defaultCampaignSenderEmail is required (string or null)'
+    })
+  }
+  if (body?.defaultCampaignSenderName === undefined) {
+    throw createError({
+      statusCode: 400,
+      message: 'defaultCampaignSenderName is required (string or null)'
+    })
+  }
+
+  const defaultCampaignSenderEmail = normalizeCampaignSenderEmailInput(
+    body.defaultCampaignSenderEmail
+  )
+  const defaultCampaignSenderName = normalizeCampaignSenderNameInput(
+    body.defaultCampaignSenderName
+  )
+
   const registryConn = await getRegistryConnection()
   const existing = (await registryConn
     .collection('clients')
@@ -132,6 +126,8 @@ export default defineEventHandler(async (event) => {
     email: contactEmail,
     crmAppUrl,
     tenantId,
+    defaultCampaignSenderEmail,
+    defaultCampaignSenderName,
     kafkaOutboundTopic: computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
   }
 

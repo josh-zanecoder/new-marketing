@@ -16,6 +16,10 @@ export interface RegistryTenantDoc {
    * `{KAFKA_TOPIC_MARKETING_EVENTS}.{tenantSuffix}`.
    */
   kafkaOutboundTopic?: unknown
+  /** Default From name for new campaigns when the user leaves sender name empty. */
+  defaultCampaignSenderName?: unknown
+  /** Default From email for new campaigns when the user leaves sender email empty. */
+  defaultCampaignSenderEmail?: unknown
 }
 
 /** Admin list row for a registered tenant (registry). */
@@ -34,4 +38,8 @@ export interface TenantAdminRow {
    * `{prefix}.{sanitized tenant name}` pattern.
    */
   kafkaOutboundTopic: string | null
+  /** Per-tenant default campaign From name; `null` uses shared fallback. */
+  defaultCampaignSenderName: string | null
+  /** Per-tenant default campaign From email; `null` uses shared fallback. */
+  defaultCampaignSenderEmail: string | null
 }

@@ -645,6 +645,8 @@ interface TenantDetail {
   createdAt: string
   crmAppUrl: string | null
   kafkaOutboundTopic: string | null
+  defaultCampaignSenderEmail: string | null
+  defaultCampaignSenderName: string | null
 }
 
 interface FilterRow {

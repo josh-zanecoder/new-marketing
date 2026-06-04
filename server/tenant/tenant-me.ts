@@ -7,6 +7,8 @@ import {
   resolveTenantIdForTenantAuth,
   findRegistryTenantByDbName
 } from './registry-auth'
+import { resolveCampaignSenderDefaultsFromDoc } from '@server/utils/campaign/resolveDefaultCampaignSender'
+import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 
 export async function buildTenantMeResponse(event: H3Event) {
   const auth = event.context.auth as unknown
@@ -28,7 +30,11 @@ export async function buildTenantMeResponse(event: H3Event) {
 
   const registryConn = await getRegistryConnection()
   const tenantId = await resolveTenantIdForTenantAuth(registryConn, auth)
+  const registryDoc = (await registryConn
+    .collection('clients')
+    .findOne({ dbName: auth.dbName })) as RegistryTenantDoc | null
   const row = await findRegistryTenantByDbName(registryConn, auth.dbName)
+  const senderDefaults = resolveCampaignSenderDefaultsFromDoc(registryDoc)
 
   const tenantNameFromKey = isTenantApiKeyAuthContext(auth)
     ? auth.tenantName
@@ -43,6 +49,8 @@ export async function buildTenantMeResponse(event: H3Event) {
     tenantId: tenantId ?? row?.tenantId ?? null,
     dbName: auth.dbName,
     tenantName: row?.tenantName ?? tenantNameFromKey ?? null,
-    crmAppUrl: crmFromAuth ?? row?.crmAppUrl ?? null
+    crmAppUrl: crmFromAuth ?? row?.crmAppUrl ?? null,
+    defaultCampaignSenderName: senderDefaults.name,
+    defaultCampaignSenderEmail: senderDefaults.email
   }
 }

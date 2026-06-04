@@ -6,11 +6,12 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
 import {
-  DEFAULT_CAMPAIGN_SENDER_EMAIL,
-  DEFAULT_CAMPAIGN_SENDER_NAME
-} from '~~/shared/defaultCampaignSender'
+  isRegisteredTenantAuthContext,
+  tenantOwnershipFieldsFromAuth
+} from '@server/tenant/registry-auth'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -77,12 +78,20 @@ export default defineEventHandler(async (event) => {
         ? resolveRecipientListContactIds(conn, recipientsListId)
         : Promise.resolve([])
 
+  const auth = event.context.auth
+  const registryConn = await getRegistryConnection()
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
+      ? auth.dbName
+      : ''
+  const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+
   const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
   const campaignData: Record<string, unknown> = {
     name: body.name.trim(),
     sender: {
-      name: body.senderName?.trim() || DEFAULT_CAMPAIGN_SENDER_NAME,
-      email: body.senderEmail?.trim() || DEFAULT_CAMPAIGN_SENDER_EMAIL
+      name: body.senderName?.trim() || senderDefaults.name,
+      email: body.senderEmail?.trim() || senderDefaults.email
     },
     recipientsType,
     recipientsListId,

@@ -610,13 +610,12 @@ import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
-import {
-  DEFAULT_CAMPAIGN_SENDER_EMAIL,
-  DEFAULT_CAMPAIGN_SENDER_NAME
-} from '~~/shared/defaultCampaignSender'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
 
 const campaignStore = useCampaignStore()
+const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
+  useDefaultCampaignSender()
+const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
@@ -626,8 +625,8 @@ const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
 const form = ref({
   name: '',
-  senderName: DEFAULT_CAMPAIGN_SENDER_NAME,
-  senderEmail: DEFAULT_CAMPAIGN_SENDER_EMAIL,
+  senderName: defaultSenderName.value,
+  senderEmail: defaultSenderEmail.value,
   subject: '',
   recipientsMode: 'list' as 'list' | 'manual',
   recipientsListId: '',
@@ -1043,6 +1042,7 @@ const loadedEditCampaignId = ref('')
 const showWizardSkeleton = computed(() => editLoadPending.value)
 
 async function loadEditCampaign() {
+  await defaultSenderReady
   if (!editId.value) {
     editLoadPending.value = false
     return
@@ -1063,8 +1063,8 @@ async function loadEditCampaign() {
     manualRecipientLabels.value = labels
     form.value = {
       name: cached.name,
-      senderName: cached.sender?.name || DEFAULT_CAMPAIGN_SENDER_NAME,
-      senderEmail: cached.sender?.email || DEFAULT_CAMPAIGN_SENDER_EMAIL,
+      senderName: cached.sender?.name || defaultSenderName.value,
+      senderEmail: cached.sender?.email || defaultSenderEmail.value,
       subject: cached.subject || '',
       recipientsMode: cached.recipientsType || 'manual',
       recipientsListId: cached.recipientsListId || '',
@@ -1102,8 +1102,8 @@ async function loadEditCampaign() {
     manualRecipientLabels.value = labels
     form.value = {
       name: c.name,
-      senderName: c.sender?.name || DEFAULT_CAMPAIGN_SENDER_NAME,
-      senderEmail: c.sender?.email || DEFAULT_CAMPAIGN_SENDER_EMAIL,
+      senderName: c.sender?.name || defaultSenderName.value,
+      senderEmail: c.sender?.email || defaultSenderEmail.value,
       subject: c.subject || '',
       recipientsMode: c.recipientsType || 'manual',
       recipientsListId: c.recipientsListId || '',
@@ -1129,6 +1129,7 @@ async function loadEditCampaign() {
 watch(editId, loadEditCampaign, { immediate: true })
 
 async function loadFromEditorReturn() {
+  await defaultSenderReady
   const campaignId = route.query.campaignId as string
   const fromEditor = route.query.fromEditor
   if (!campaignId || fromEditor !== '1') return
@@ -1163,8 +1164,8 @@ async function loadFromEditorReturn() {
       manualRecipientLabels.value = labels
       form.value = {
         name: c.name,
-        senderName: c.sender?.name || DEFAULT_CAMPAIGN_SENDER_NAME,
-        senderEmail: c.sender?.email || DEFAULT_CAMPAIGN_SENDER_EMAIL,
+        senderName: c.sender?.name || defaultSenderName.value,
+        senderEmail: c.sender?.email || defaultSenderEmail.value,
         subject: c.subject || '',
         recipientsMode: c.recipientsType || 'manual',
         recipientsListId: c.recipientsListId || '',

@@ -13,11 +13,12 @@ import { withMarketableContactFilter } from '@server/utils/contact/marketableCon
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { tenantCreatedByFromAuth } from '@server/tenant/registry-auth'
 import {
-  DEFAULT_CAMPAIGN_SENDER_EMAIL,
-  DEFAULT_CAMPAIGN_SENDER_NAME
-} from '~~/shared/defaultCampaignSender'
+  isRegisteredTenantAuthContext,
+  tenantCreatedByFromAuth
+} from '@server/tenant/registry-auth'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -86,10 +87,18 @@ export default defineEventHandler(async (event) => {
     campaign.emailTemplate = template._id
   }
 
+  const auth = event.context.auth
+  const registryConn = await getRegistryConnection()
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
+      ? auth.dbName
+      : ''
+  const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+
   campaign.name = body.name.trim()
   campaign.sender = {
-    name: body.senderName?.trim() || DEFAULT_CAMPAIGN_SENDER_NAME,
-    email: body.senderEmail?.trim() || DEFAULT_CAMPAIGN_SENDER_EMAIL
+    name: body.senderName?.trim() || senderDefaults.name,
+    email: body.senderEmail?.trim() || senderDefaults.email
   }
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId

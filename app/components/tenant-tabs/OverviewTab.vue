@@ -71,6 +71,23 @@
       </div>
 
       <div
+        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
+      >
+        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          Campaign sender
+        </dt>
+        <dd class="mt-2 break-words text-sm font-medium text-slate-900">
+          <template v-if="tenant.defaultCampaignSenderEmail || tenant.defaultCampaignSenderName">
+            <span v-if="tenant.defaultCampaignSenderName">{{ tenant.defaultCampaignSenderName }}</span>
+            <span v-if="tenant.defaultCampaignSenderEmail">
+              <span v-if="tenant.defaultCampaignSenderName"> &lt;</span>{{ tenant.defaultCampaignSenderEmail }}<span v-if="tenant.defaultCampaignSenderName">&gt;</span>
+            </span>
+          </template>
+          <span v-else class="text-slate-400">Global default</span>
+        </dd>
+      </div>
+
+      <div
         class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:col-span-2 sm:px-5 sm:py-4 xl:col-span-3"
       >
         <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -100,6 +117,8 @@ defineProps<{
     apiKeyPrefix: string | null
     createdAt: string
     kafkaOutboundTopic: string | null
+    defaultCampaignSenderEmail: string | null
+    defaultCampaignSenderName: string | null
   }
 }>()
 
