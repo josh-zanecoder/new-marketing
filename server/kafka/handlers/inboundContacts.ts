@@ -13,6 +13,10 @@ import {
   normalizeContactTypeInput
 } from '@server/utils/contact/contactTypeWrite'
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
+import {
+  resolveMarketingSyncRecipientListConcurrency,
+  runTasksWithConcurrency
+} from '@server/utils/runTasksWithConcurrency'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -333,6 +337,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
   dBname: string
   occurredAt: string
   contacts: SyncSnapshotContact[]
+  heartbeat?: () => Promise<void>
 }): Promise<number> {
   const tenantConn = await getTenantConnectionForInboundEvent(params.tenantId, {
     eventType: 'marketing.sync.requested',
@@ -405,39 +410,34 @@ export async function upsertContactsFromSyncSnapshot(params: {
 
   if (rows.length === 0) return 0
 
-  const snapDocs = await Promise.all(
-    rows.map(async (r) => {
-      const snapSet: Record<string, unknown> = {
-        externalId: r.externalId,
-        source: KAFKA_INBOUND_CONTACT_SOURCE,
-        firstName: r.firstName,
-        lastName: r.lastName,
-        email: r.email,
-        phone: r.phone,
-        address: r.address,
-        company: r.company,
-        channel: r.channel,
-        status: r.status,
-        stage: r.stage,
-        deletedAt: null,
-        metadata: {
-          ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
-          syncOccurredAt: params.occurredAt,
-          ...(r.ownerId ? { ownerId: r.ownerId } : {}),
-          ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
-        },
-        contactType: r.contactTypeKeys
-      }
+  const snapDocs: { row: SyncSnapshotUpsertRow; snapSet: Record<string, unknown> }[] = []
+  for (const r of rows) {
+    const snapSet: Record<string, unknown> = {
+      externalId: r.externalId,
+      source: KAFKA_INBOUND_CONTACT_SOURCE,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      email: r.email,
+      phone: r.phone,
+      address: r.address,
+      company: r.company,
+      channel: r.channel,
+      status: r.status,
+      stage: r.stage,
+      deletedAt: null,
+      metadata: {
+        ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
+        syncOccurredAt: params.occurredAt,
+        ...(r.ownerId ? { ownerId: r.ownerId } : {}),
+        ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+      },
+      contactType: r.contactTypeKeys
+    }
+    await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
+    snapDocs.push({ row: r, snapSet })
+  }
 
-      await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
-
-      return {
-        row: r,
-        snapSet
-      }
-    })
-  )
-
+  await params.heartbeat?.()
   await models.Contact.bulkWrite(
     snapDocs.map(({ row, snapSet }) => ({
       updateOne: {
@@ -453,6 +453,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
     })),
     { ordered: false }
   )
+  await params.heartbeat?.()
 
   const externalIds = rows.map((r) => r.externalId)
 
@@ -464,10 +465,14 @@ export async function upsertContactsFromSyncSnapshot(params: {
     { _id: 1 }
   ).lean()
 
-  await Promise.all(
-    docs.map((doc) =>
-      syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-    )
+  const listConcurrency = resolveMarketingSyncRecipientListConcurrency()
+  await runTasksWithConcurrency(
+    docs,
+    listConcurrency,
+    async (doc) => {
+      await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
+    },
+    params.heartbeat
   )
 
   return rows.length

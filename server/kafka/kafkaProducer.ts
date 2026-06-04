@@ -210,7 +210,10 @@ async function handleMarketingSyncRequested(
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         await ctx?.heartbeat()
-        syncedCount = await upsertContactsFromSyncSnapshot(snapshot)
+        syncedCount = await upsertContactsFromSyncSnapshot({
+          ...snapshot,
+          heartbeat: ctx?.heartbeat
+        })
         await ctx?.heartbeat()
         break
       } catch (err) {

@@ -35,6 +35,28 @@ Day-to-day CRM contact changes use **`contact.created`** / **`contact.updated`**
 
 ---
 
+## CRM chunk size (publish)
+
+Configured on **CRM backend** only (`crmKafkaProducer.ts` → `resolveMarketingSyncChunkSize()`).
+
+| Setting | Value |
+|---------|--------|
+| Default | **200** contacts per Kafka message |
+| Min | **100** |
+| Max | **500** (via `MARKETING_SYNC_CHUNK_SIZE` + `MARKETING_SYNC_CHUNK_SIZE_MAX`) |
+
+Marketing **`bulkWrite`** upserts every valid contact in each message (`externalId` + `source: crm-kafka`). Log field **`syncedCount`** = rows written for that chunk (≤ chunk size).
+
+**Why 200:** count cap for throughput. CRM also splits by **`MARKETING_SYNC_CHUNK_MAX_BYTES`** (default **900000**) so heavy `metadata` cannot exceed ~1 MB Kafka messages.
+
+**Worker (200 vs 25):** launch-sync upserts use **`bulkWrite`** then recipient-list sync at **`MARKETING_SYNC_RECIPIENT_LIST_CONCURRENCY`** (default **10**, with Kafka **heartbeat** between batches) so 200 contacts do not run 200 parallel list jobs or lose the consumer session.
+
+**15k example:** ~**75** chunks at 200 vs ~**600** at old default 25.
+
+See CRM doc: [MARKETING_LAUNCH_SYNC_DELTA.md](../../mortdash-crm/docs/MARKETING_LAUNCH_SYNC_DELTA.md).
+
+---
+
 ## Mongo / EPIPE hardening (worker)
 
 Previously, handler errors were logged and **swallowed** → Kafka committed the offset → **chunks skipped permanently** (stuck ~3,274 on large imports).
@@ -130,7 +152,7 @@ On **`marketing-test` web**:
 Kafka inbound consumer disabled on this instance
 ```
 
-`[ScheduleReconcile]` / `[SendingReconcile]` Mongo errors on **web** are **email** safety nets — **not** CRM contact sync. Safe to ignore for sync troubleshooting if worker still shows `syncedCount: 25`.
+`[ScheduleReconcile]` / `[SendingReconcile]` Mongo errors on **web** are **email** safety nets — **not** CRM contact sync. Safe to ignore for sync troubleshooting if the worker still shows rising `chunkIndex` and `syncedCount` (up to CRM chunk size, default **200**).
 
 On **`marketing-kafka-worker`**, deploy sets `SENDING_RECONCILE_DISABLED=true` (with schedule/email disabled) — worker logs should **not** show `[SendingReconcile]`.
 
@@ -138,7 +160,7 @@ On **`marketing-kafka-worker`**, deploy sets `SENDING_RECONCILE_DISABLED=true` (
 
 ## Stuck import (e.g. 3,274 / 15k)
 
-**Cause:** Mongo dropped mid-sync → old code committed offset anyway → gap in chunks → count stops (~131 chunks × 25).
+**Cause:** Mongo dropped mid-sync → old code committed offset anyway → gap in chunks → count stops partway (e.g. ~17 chunks × 200 ≈ 3,400 contacts).
 
 **Recovery (test):**
 
@@ -147,7 +169,7 @@ On **`marketing-kafka-worker`**, deploy sets `SENDING_RECONCILE_DISABLED=true` (
 3. Confirm External Connection `TENANT_ID` matches Marketing registry tenant id.
 4. **Launch Marketing once** from CRM.
 5. Watch worker for **new `syncId`** and `chunkIndex: 1, 2, 3…`.
-6. Optional on CRM: `MARKETING_SYNC_CHUNK_SIZE=10`.
+6. Optional on CRM: lower `MARKETING_SYNC_CHUNK_SIZE` (min `100`) if Kafka rejects large messages.
 
 Code hardening prevents **new** gaps after worker deploy; it does **not** replay chunks Kafka already skipped on an old run.
 
@@ -163,6 +185,7 @@ Code hardening prevents **new** gaps after worker deploy; it does **not** replay
 | `KAFKA_CONSUMER_GROUP_ID` | `new-marketing-inbound-events` | Consumer group |
 | `KAFKA_CONSUMER_FROM_BEGINNING` | `false` | New topics start at latest offset |
 | `MONGODB_MAX_POOL_SIZE` | **`15` in code** | Optional override; per-instance pool cap |
+| `MARKETING_SYNC_RECIPIENT_LIST_CONCURRENCY` | **`10`** | Parallel recipient-list updates per sync chunk (worker) |
 
 ---
 
@@ -170,10 +193,10 @@ Code hardening prevents **new** gaps after worker deploy; it does **not** replay
 
 | Step | Action |
 |------|--------|
-| 1 | Deploy **CRM backend** (delta launch sync) |
+| 1 | Deploy **CRM backend** (delta launch sync + chunk size default **200**) |
 | 2 | Deploy **`marketing-kafka-worker`** once (`DEPLOY_KAFKA_WORKER=true` in test CI if gated) |
 | 3 | Clear stuck Kafka topic if needed → **one** CRM launch |
-| 4 | Verify worker logs: new `syncId`, rising `chunkIndex`, `syncedCount: 25` |
+| 4 | Verify worker logs: new `syncId`, rising `chunkIndex`, `syncedCount` up to chunk size (default 200) |
 | 5 | Verify Mongo tenant `contacts` count (`source: crm-kafka`) |
 
 ---

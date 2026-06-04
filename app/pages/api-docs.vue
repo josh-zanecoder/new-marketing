@@ -365,8 +365,10 @@ MARKETING_KAFKA_SASL_MECHANISM=plain</pre>
             <code>requestedByUserId</code> / <code>requestedByEmail</code> on the first chunk for audit trails.
           </li>
           <li>
-            <strong>CRM chunk size:</strong> env <code>MARKETING_SYNC_CHUNK_SIZE</code> (default <code>25</code>, clamped
-            between <code>5</code> and <code>120</code> contacts per message) to stay under broker size limits.
+            <strong>CRM chunk size:</strong> env <code>MARKETING_SYNC_CHUNK_SIZE</code> (default <code>200</code>, clamped
+            between <code>100</code> and <code>500</code>) on the CRM backend — lowers
+            <code>RECORD_TOO_LARGE</code> risk vs very large chunks.
+            backend. Marketing upserts every valid contact in each message via <code>bulkWrite</code>.
           </li>
           <li>
             Each <code>contacts[]</code> entry mirrors contact fields (plus optional <code>metadata</code> for
