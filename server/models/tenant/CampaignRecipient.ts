@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-const statusEnum = ['pending', 'sent', 'failed'] as const
+const statusEnum = ['pending', 'sending', 'sent', 'failed'] as const
 
 export const campaignRecipientSchema = new mongoose.Schema({
   campaign: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },
@@ -8,6 +8,8 @@ export const campaignRecipientSchema = new mongoose.Schema({
   status: { type: String, enum: statusEnum, default: 'pending' },
   sentAt: { type: Date },
   error: { type: String },
+  /** Brevo transactional message id from send response (dedupe / webhook correlation). */
+  brevoMessageId: { type: String, default: '', trim: true },
   clientId: { type: String, default: '' }
 }, { timestamps: true })
 

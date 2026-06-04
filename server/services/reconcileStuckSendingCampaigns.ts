@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { getRegistryConnection } from '../lib/mongoose'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
@@ -7,11 +8,20 @@ import {
   hasActiveCampaignSendJob
 } from '../queue/emailQueue'
 import { getTenantConnectionByDbName } from '../tenant/connection'
-import { finalizeCampaignSendIfComplete } from './send-campaign.service'
+import {
+  ackStaleInFlightSendingRecipients,
+  clearStaleSendingRecipients,
+  finalizeCampaignSendIfComplete
+} from './send-campaign.service'
+import {
+  CAMPAIGN_RECIPIENT_STATUS_PENDING,
+  CAMPAIGN_RECIPIENT_STATUS_SENDING
+} from '../utils/campaignSend/constants'
 
 /**
  * Safety net for campaigns stuck in `Sending`:
- * - No pending recipients → finalize to Sent/Failed
+ * - Clear stale `sending` recipients → failed (retryable)
+ * - No pending/sending recipients → finalize to Sent/Failed
  * - Pending recipients but no queue job → re-enqueue batch processing
  */
 export async function reconcileStuckSendingCampaigns(): Promise<void> {
@@ -24,6 +34,7 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
 
   let finalized = 0
   let requeued = 0
+  let staleCleared = 0
 
   for (const row of rows) {
     const dbName = typeof row.dbName === 'string' ? row.dbName.trim() : ''
@@ -41,15 +52,24 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
 
     const stuck = await (Campaign as CampaignModel)
       .find({ status: 'Sending' })
-      .select('_id updatedAt')
-      .lean<Array<Pick<CampaignLean, '_id' | 'updatedAt'>>>()
+      .select('_id updatedAt sendRunId')
+      .lean<Array<Pick<CampaignLean, '_id' | 'updatedAt' | 'sendRunId'>>>()
 
     for (const doc of stuck) {
       const campaignId = String(doc._id)
       try {
+        const cleared = await clearStaleSendingRecipients(models, campaignId)
+        if (cleared > 0) staleCleared += cleared
+
+        const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
+        if (!activeJob) {
+          const acked = await ackStaleInFlightSendingRecipients(models, campaignId)
+          if (acked > 0) staleCleared += acked
+        }
+
         const pendingCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
           campaign: campaignId,
-          status: 'pending'
+          status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
         })
 
         if (pendingCount === 0) {
@@ -65,14 +85,33 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
           continue
         }
 
-        const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
         if (activeJob) continue
 
-        await enqueueCampaignBatch(campaignId, dbName)
+        let sendRunId = String(doc.sendRunId || '').trim()
+        if (!sendRunId) {
+          sendRunId = randomUUID()
+          await (Campaign as CampaignModel).updateOne(
+            { _id: campaignId },
+            { $set: { sendRunId, sendPage: 0 } }
+          )
+          console.log('[SendingReconcile] assigned sendRunId for legacy Sending campaign', {
+            dbName,
+            campaignId,
+            sendRunId
+          })
+        }
+
+        await enqueueCampaignBatch({
+          campaignId,
+          dbName,
+          sendRunId,
+          page: 0
+        })
         requeued++
         console.log('[SendingReconcile] re-enqueued stuck batch', {
           dbName,
           campaignId,
+          sendRunId,
           pending: pendingCount,
           updatedAt: doc.updatedAt
         })
@@ -83,7 +122,7 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
     }
   }
 
-  if (finalized || requeued) {
-    console.log('[SendingReconcile] summary', { finalized, requeued })
+  if (finalized || requeued || staleCleared) {
+    console.log('[SendingReconcile] summary', { finalized, requeued, staleCleared })
   }
 }

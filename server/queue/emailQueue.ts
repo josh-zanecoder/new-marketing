@@ -17,8 +17,15 @@ export function scheduledCampaignJobId(dbName: string, campaignId: string) {
   return `schedule|${dbName}|${campaignId}`
 }
 
-export function campaignBatchJobId(dbName: string, campaignId: string) {
-  return `${dbName}|${campaignId}`
+/** Deterministic BullMQ job id per send run + page (dedupes duplicate enqueue). */
+export function campaignBatchJobId(
+  dbName: string,
+  campaignId: string,
+  sendRunId: string,
+  page: number
+) {
+  const safeRun = sendRunId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)
+  return `batch|${dbName}|${campaignId}|${safeRun}|p${page}`
 }
 
 let emailQueue: Queue | null = null
@@ -41,11 +48,56 @@ async function removeStaleJob(job: Job | undefined, context: Record<string, unkn
   const state = await job.getState()
   if (state === 'completed' || state === 'failed') {
     logQueue('removeStaleJob', { jobId: job.id, name: job.name, state, ...context })
-    await job.remove()
+    await removeBullJobSafely(job, state, context)
   }
 }
 
-export type CampaignQueueJobData = { campaignId: string; dbName: string }
+function isBullJobRemoveLockedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes('locked') || msg.includes('could not be removed')
+}
+
+/** Best-effort remove; never throws when the worker holds the job lock. */
+async function removeBullJobSafely(
+  job: Job,
+  stateHint: string | undefined,
+  context: Record<string, unknown>
+): Promise<{ removed: boolean; state: string }> {
+  const state = stateHint ?? (await job.getState())
+  if (state === 'active') {
+    logQueue('removeJob.skipActive', { jobId: job.id, name: job.name, state, ...context })
+    return { removed: false, state }
+  }
+  try {
+    await job.remove()
+    return { removed: true, state }
+  } catch (err: unknown) {
+    if (isBullJobRemoveLockedError(err)) {
+      logQueue('removeJob.skipLocked', {
+        jobId: job.id,
+        name: job.name,
+        state,
+        error: err instanceof Error ? err.message : String(err),
+        ...context
+      })
+      return { removed: false, state }
+    }
+    throw err
+  }
+}
+
+export type RemoveScheduledCampaignJobResult = {
+  removed: boolean
+  state?: string
+  reason: 'not_found' | 'removed' | 'active' | 'locked'
+}
+
+export type CampaignQueueJobData = {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  page: number
+}
 
 function matchesCampaignJob(
   job: Job,
@@ -81,22 +133,28 @@ export async function hasActiveCampaignSendJob(
   return false
 }
 
-export async function enqueueCampaignBatch(campaignId: string, dbName: string) {
-  const jobId = campaignBatchJobId(dbName, campaignId)
+export async function enqueueCampaignBatch(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  page: number
+}) {
+  const { campaignId, dbName, sendRunId, page } = params
+  const jobId = campaignBatchJobId(dbName, campaignId, sendRunId, page)
   const queue = getEmailQueue()
   const existing = await queue.getJob(jobId)
   if (existing) {
     const state = await existing.getState()
     if (state === 'waiting' || state === 'active' || state === 'delayed') {
-      logQueue('enqueueCampaignBatch.skipActive', { campaignId, dbName, jobId, state })
+      logQueue('enqueueCampaignBatch.skipActive', { campaignId, dbName, jobId, state, page })
       return existing
     }
-    await removeStaleJob(existing, { campaignId, dbName })
+    await removeStaleJob(existing, { campaignId, dbName, page })
   }
 
   const job = await queue.add(
     EMAIL_JOB_PROCESS_BATCH,
-    { campaignId, dbName },
+    { campaignId, dbName, sendRunId, page },
     {
       jobId,
       ...BATCH_JOB_OPTS
@@ -105,26 +163,22 @@ export async function enqueueCampaignBatch(campaignId: string, dbName: string) {
   logQueue('enqueueCampaignBatch', {
     campaignId,
     dbName,
+    sendRunId,
+    page,
     jobId: job.id,
     queueJobId: jobId
   })
   return job
 }
 
-/** Chain the next batch without a fixed jobId so completed/failed head jobs do not block progress. */
-export async function enqueueCampaignBatchFollowUp(campaignId: string, dbName: string) {
-  const queue = getEmailQueue()
-  const job = await queue.add(
-    EMAIL_JOB_PROCESS_BATCH,
-    { campaignId, dbName },
-    { ...BATCH_JOB_OPTS }
-  )
-  logQueue('enqueueCampaignBatchFollowUp', {
-    campaignId,
-    dbName,
-    jobId: job.id
-  })
-  return job
+/** Chain the next batch page (new deterministic job id per page). */
+export async function enqueueCampaignBatchFollowUp(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  page: number
+}) {
+  return enqueueCampaignBatch(params)
 }
 
 export async function enqueueScheduledCampaignStart(
@@ -138,12 +192,17 @@ export async function enqueueScheduledCampaignStart(
   if (existing) {
     const state = await existing.getState()
     logQueue('replaceScheduledJob', { campaignId, dbName, jobId, state })
-    await existing.remove()
+    const removed = await removeBullJobSafely(existing, state, { campaignId, dbName })
+    if (!removed.removed && state === 'active') {
+      throw new Error(
+        `Cannot reschedule while the scheduled send job is running (${jobId})`
+      )
+    }
   }
 
   const job = await queue.add(
     EMAIL_JOB_START_SCHEDULED,
-    { campaignId, dbName },
+    { campaignId, dbName, sendRunId: '', page: 0 },
     {
       jobId,
       delay: Math.max(0, delayMs),
@@ -160,10 +219,21 @@ export async function enqueueScheduledCampaignStart(
   return job
 }
 
-export async function removeScheduledCampaignJob(dbName: string, campaignId: string) {
-  const job = await getEmailQueue().getJob(scheduledCampaignJobId(dbName, campaignId))
-  if (job) {
-    logQueue('removeScheduledCampaignJob', { campaignId, dbName, jobId: job.id })
-    await job.remove()
+export async function removeScheduledCampaignJob(
+  dbName: string,
+  campaignId: string
+): Promise<RemoveScheduledCampaignJobResult> {
+  const jobId = scheduledCampaignJobId(dbName, campaignId)
+  const job = await getEmailQueue().getJob(jobId)
+  if (!job) {
+    return { removed: true, reason: 'not_found' }
   }
+  const state = await job.getState()
+  logQueue('removeScheduledCampaignJob', { campaignId, dbName, jobId: job.id, state })
+  const result = await removeBullJobSafely(job, state, { campaignId, dbName })
+  if (result.removed) return { removed: true, state: result.state, reason: 'removed' }
+  if (result.state === 'active') {
+    return { removed: false, state: result.state, reason: 'active' }
+  }
+  return { removed: false, state: result.state, reason: 'locked' }
 }

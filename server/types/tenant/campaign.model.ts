@@ -33,6 +33,8 @@ export interface CampaignLean {
   metadata?: CampaignMetadata
   createdBy?: string
   updatedBy?: string
+  sendRunId?: string
+  sendPage?: number
 }
 
 export interface CampaignDoc {

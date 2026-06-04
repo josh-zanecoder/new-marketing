@@ -1,0 +1,23 @@
+import { beginCampaignSend } from '@server/services/send-campaign.service'
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+
+export default defineEventHandler(async (event) => {
+  const body = await readBody<{ campaignId: string }>(event)
+  const campaignId = String(body?.campaignId ?? '').trim()
+  if (!campaignId) throw createError({ statusCode: 400, message: 'campaignId is required' })
+
+  const conn = await getTenantConnectionFromEvent(event)
+  const snap = tenantUserFieldsFromAuth(event.context.auth)
+  const dbName = conn.db?.databaseName
+
+  console.log('[SendCampaignAPI] retryFailed', { campaignId, dbName })
+
+  return beginCampaignSend(conn, campaignId, {
+    allowedStatuses: ['Failed', 'Sent'],
+    mode: 'retry_failed',
+    auth: event.context.auth,
+    statusOnEnqueueFailure: 'Failed',
+    ...(snap ? { mergeUserSnapshot: snap } : {})
+  })
+})

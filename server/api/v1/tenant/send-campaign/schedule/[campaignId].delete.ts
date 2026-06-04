@@ -25,13 +25,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Only scheduled campaigns can be unscheduled' })
   }
 
-  await Promise.all([
-    removeScheduledCampaignJob(dbName, campaignId),
-    (Campaign as CampaignModel).updateOne(campaignScope, {
-      $set: { status: 'Draft' },
-      $unset: { scheduledAt: 1 }
+  const removeResult = await removeScheduledCampaignJob(dbName, campaignId)
+  if (!removeResult.removed && removeResult.reason === 'active') {
+    throw createError({
+      statusCode: 409,
+      message: 'Scheduled send is starting now; wait a moment and try again.'
     })
-  ])
+  }
+
+  await (Campaign as CampaignModel).updateOne(campaignScope, {
+    $set: { status: 'Draft' },
+    $unset: { scheduledAt: 1 }
+  })
 
   return { ok: true, campaignId }
 })

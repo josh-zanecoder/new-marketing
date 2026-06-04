@@ -8,14 +8,15 @@ import {
   EMAIL_QUEUE_NAME,
   enqueueCampaignBatch,
   enqueueCampaignBatchFollowUp,
-  getEmailQueue
+  getEmailQueue,
+  type CampaignQueueJobData
 } from '../queue/emailQueue'
 import {
   beginCampaignSend,
   finalizeCampaignSendIfComplete,
   processBatch
 } from '../services/send-campaign.service'
-import { publishCampaignSendCompleted } from '../kafka/kafkaProducer'
+import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 
 const G = globalThis as typeof globalThis & { __emailBullWorker?: Worker | null }
@@ -40,23 +41,48 @@ function errorMessage(err: unknown): string {
 }
 
 async function recoverFailedBatchJob(
-  campaignId: string,
-  dbName: string,
+  data: CampaignQueueJobData,
   reason: string
 ): Promise<void> {
+  const { campaignId, dbName, sendRunId, page } = data
   try {
     const tenantConn = await getTenantConnectionByDbName(dbName)
     const models = getTenantClientModels(tenantConn)
+    const { Campaign } = models
+    const campaign = await (Campaign as CampaignModel)
+      .findById(campaignId)
+      .lean<Pick<CampaignLean, 'sendRunId' | 'status'> | null>()
+    if (!campaign || campaign.status !== 'Sending') {
+      jobLog('recover.skip', { campaignId, dbName, reason, status: campaign?.status })
+      return
+    }
+    if (sendRunId && campaign.sendRunId && campaign.sendRunId !== sendRunId) {
+      jobLog('recover.staleRun', { campaignId, dbName, reason })
+      return
+    }
+
     const finalized = await finalizeCampaignSendIfComplete(models, campaignId)
     if (finalized.finalized) {
       jobLog('recover.finalized', { campaignId, dbName, status: finalized.status, reason })
       return
     }
     if ((finalized.pending ?? 0) > 0) {
-      await enqueueCampaignBatch(campaignId, dbName)
+      const run = campaign.sendRunId || sendRunId
+      if (!run) {
+        jobError('recover.noSendRunId', { campaignId, dbName, reason })
+        return
+      }
+      await enqueueCampaignBatch({
+        campaignId,
+        dbName,
+        sendRunId: run,
+        page: typeof page === 'number' ? page : 0
+      })
       jobLog('recover.requeued', {
         campaignId,
         dbName,
+        sendRunId: run,
+        page,
         pending: finalized.pending,
         reason
       })
@@ -77,13 +103,18 @@ export function startEmailWorker() {
   G.__emailBullWorker = new Worker(
     EMAIL_QUEUE_NAME,
     async (job) => {
-      const { campaignId, dbName } = job.data as { campaignId: string; dbName: string }
+      const data = job.data as CampaignQueueJobData
+      const { campaignId, dbName } = data
+      const sendRunId = String(data.sendRunId || '')
+      const page = Math.max(0, Number(data.page ?? 0))
       const startedAt = Date.now()
       jobLog('job.start', {
         jobId: job.id,
         name: job.name,
         campaignId,
         dbName,
+        sendRunId,
+        page,
         attempt: job.attemptsMade + 1,
         maxAttempts: job.opts.attempts ?? 1
       })
@@ -116,6 +147,7 @@ export function startEmailWorker() {
           jobLog('startScheduled.done', {
             campaignId,
             dbName,
+            sendRunId: result.sendRunId,
             queued: result.queued,
             valid: result.valid,
             invalid: result.invalid,
@@ -139,23 +171,52 @@ export function startEmailWorker() {
       if (!dbName) {
         throw new Error('Email job missing dbName (tenant database)')
       }
+      if (!sendRunId) {
+        throw new Error('Email job missing sendRunId')
+      }
       const tenantConn = await getTenantConnectionByDbName(dbName)
       const models = getTenantClientModels(tenantConn)
 
-      const result = await processBatch(models, campaignId)
+      const result = await processBatch(models, campaignId, { sendRunId, page })
+
+      if (result.skipped) {
+        jobLog('batch.skipped', { campaignId, dbName, sendRunId, page })
+        return
+      }
 
       if (!result.done) {
-        await enqueueCampaignBatchFollowUp(campaignId, dbName)
+        if (result.chainNext === false) {
+          jobLog('batch.deferChain', {
+            campaignId,
+            dbName,
+            sendRunId,
+            page,
+            pending: result.pending,
+            sent: result.sent,
+            failed: result.failed,
+            ms: Date.now() - startedAt
+          })
+          return
+        }
+        await enqueueCampaignBatchFollowUp({
+          campaignId,
+          dbName,
+          sendRunId,
+          page: page + 1
+        })
         jobLog('batch.continue', {
           campaignId,
           dbName,
+          sendRunId,
+          page,
+          nextPage: page + 1,
           pending: result.pending,
           sent: result.sent,
           failed: result.failed,
           ms: Date.now() - startedAt
         })
       } else {
-        await publishCampaignSendCompleted({
+        await notifyCampaignSendCompleted({
           tenantDbName: dbName,
           campaignId,
           campaignStatus: result.campaignStatus,
@@ -166,6 +227,8 @@ export function startEmailWorker() {
         jobLog('batch.complete', {
           campaignId,
           dbName,
+          sendRunId,
+          page,
           campaignStatus: result.campaignStatus,
           sent: result.sent,
           failed: result.failed,
@@ -200,13 +263,21 @@ export function startEmailWorker() {
     })
 
     if (!job || !isFinal) return
-    const data = job.data as { campaignId?: string; dbName?: string }
+    const data = job.data as Partial<CampaignQueueJobData>
     const campaignId = data.campaignId
     const dbName = data.dbName
     if (!campaignId || !dbName) return
 
     if (job.name === EMAIL_JOB_PROCESS_BATCH) {
-      void recoverFailedBatchJob(campaignId, dbName, 'batch job exhausted retries')
+      void recoverFailedBatchJob(
+        {
+          campaignId,
+          dbName,
+          sendRunId: String(data.sendRunId || ''),
+          page: Math.max(0, Number(data.page ?? 0))
+        },
+        'batch job exhausted retries'
+      )
     } else if (job.name === EMAIL_JOB_START_SCHEDULED) {
       jobError('startScheduled.exhausted', { campaignId, dbName })
     }

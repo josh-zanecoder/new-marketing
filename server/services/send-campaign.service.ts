@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Connection } from 'mongoose'
 import { getTenantClientModels, type TenantClientModels } from '../models/tenant/tenantClientModels'
 import type {
@@ -27,11 +28,22 @@ import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import { buildCampaignReplyTo } from '@server/utils/email/replyToFromContactMetadata'
-import { sendEmail } from './brevo.service'
+import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
+import {
+  CAMPAIGN_RECIPIENT_STATUS_FAILED,
+  CAMPAIGN_RECIPIENT_STATUS_PENDING,
+  CAMPAIGN_RECIPIENT_STATUS_SENDING,
+  CAMPAIGN_RECIPIENT_STATUS_SENT,
+  CAMPAIGN_SEND_BATCH_SIZE,
+  CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS_DEFAULT,
+  CAMPAIGN_SEND_STALE_SENDING_MS_DEFAULT
+} from '../utils/campaignSend/constants'
+import { campaignSendJobShouldSkip } from '../utils/campaignSend/campaignSendJobGuard'
 
-const BATCH_SIZE = 25
-const SEND_CONCURRENCY = 5
+const MISSING_BREVO_ID_MESSAGE =
+  'Brevo did not return a message id for this recipient (partial or empty API response).'
 
 function logSend(event: string, details: Record<string, unknown>) {
   console.log(`[SendCampaign] ${event}`, details)
@@ -43,6 +55,57 @@ function logSendWarn(event: string, details: Record<string, unknown>) {
 
 function logSendError(event: string, details: Record<string, unknown>) {
   console.error(`[SendCampaign] ${event}`, details)
+}
+
+function staleSendingCutoff(maxAgeMs?: number): Date {
+  const staleMs = Math.max(
+    60_000,
+    Number(
+      maxAgeMs ??
+        process.env.CAMPAIGN_SEND_STALE_SENDING_MS ??
+        CAMPAIGN_SEND_STALE_SENDING_MS_DEFAULT
+    )
+  )
+  return new Date(Date.now() - staleMs)
+}
+
+function reconcileAckSendingCutoff(): Date {
+  const ms = Math.max(
+    60_000,
+    Number(
+      process.env.CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS ??
+        CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS_DEFAULT
+    )
+  )
+  return new Date(Date.now() - ms)
+}
+
+/**
+ * Worker finished at Brevo but never updated Mongo (crash / concurrent tail jobs).
+ * Mark old `sending` rows as `sent` so finalize can run without re-sending.
+ */
+export async function ackStaleInFlightSendingRecipients(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<number> {
+  const { CampaignRecipient } = models
+  const cutoff = reconcileAckSendingCutoff()
+  const res = await (CampaignRecipient as CampaignRecipientModel).updateMany(
+    {
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING,
+      updatedAt: { $lt: cutoff }
+    },
+    {
+      $set: { status: CAMPAIGN_RECIPIENT_STATUS_SENT, sentAt: new Date() },
+      $unset: { error: 1 }
+    }
+  )
+  const n = res.modifiedCount ?? 0
+  if (n > 0) {
+    logSend('reconcileAckSending', { campaignId, count: n })
+  }
+  return n
 }
 
 export async function finalizeCampaignSendIfComplete(
@@ -61,15 +124,15 @@ export async function finalizeCampaignSendIfComplete(
   const [pendingCount, sentCount, failedCount] = await Promise.all([
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'pending'
+      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
     }),
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'sent'
+      status: CAMPAIGN_RECIPIENT_STATUS_SENT
     }),
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'failed'
+      status: CAMPAIGN_RECIPIENT_STATUS_FAILED
     })
   ])
 
@@ -93,23 +156,30 @@ export async function finalizeCampaignSendIfComplete(
   }
 }
 
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const out = new Array<R>(items.length)
-  let next = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const i = next
-      next += 1
-      if (i >= items.length) return
-      out[i] = await mapper(items[i] as T, i)
-    }
+export async function clearStaleSendingRecipients(
+  models: TenantClientModels,
+  campaignId: string,
+  recipientIds?: string[]
+): Promise<number> {
+  const { CampaignRecipient } = models
+  const cutoff = staleSendingCutoff()
+  const filter: Record<string, unknown> = {
+    campaign: campaignId,
+    status: CAMPAIGN_RECIPIENT_STATUS_SENDING,
+    updatedAt: { $lt: cutoff }
+  }
+  if (recipientIds?.length) {
+    filter._id = { $in: recipientIds }
+  }
+  const staleMs = Date.now() - cutoff.getTime()
+  const res = await (CampaignRecipient as CampaignRecipientModel).updateMany(filter, {
+    $set: {
+      status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
+      error: `Send stalled longer than ${staleMs}ms (cleared for retry).`
+    },
+    $unset: { brevoMessageId: 1 }
   })
-  await Promise.all(workers)
-  return out
+  return res.modifiedCount ?? 0
 }
 
 export interface ProcessBatchResult {
@@ -120,6 +190,9 @@ export interface ProcessBatchResult {
   failed: number
   total: number
   done: boolean
+  skipped?: boolean
+  /** When false, worker must not enqueue the next page (in-flight `sending` only). */
+  chainNext?: boolean
 }
 
 export interface BeginCampaignSendOptions {
@@ -131,6 +204,11 @@ export interface BeginCampaignSendOptions {
   statusOnEnqueueFailure?: string
   /** Tenant HTTP auth: restricts load/update to campaigns visible under owner-email scope. Workers omit this. */
   auth?: unknown
+  /**
+   * `new` — rebuild recipient rows from audience (default).
+   * `retry_failed` — keep delivery ledger; only resend non-`sent` rows (failed/pending).
+   */
+  mode?: 'new' | 'retry_failed'
 }
 
 export interface BeginCampaignSendResult {
@@ -142,17 +220,20 @@ export interface BeginCampaignSendResult {
   sent: number
   failed: number
   pending: number
+  sendRunId: string
+  resumed?: boolean
 }
 
 /**
  * Builds recipient rows, moves the campaign to Sending, and enqueues batch processing.
- * Used by the send-now API and (later) the scheduled-send worker.
+ * Used by the send-now API and the scheduled-send worker.
  */
 export async function beginCampaignSend(
   conn: Connection,
   campaignId: string,
   options?: BeginCampaignSendOptions
 ): Promise<BeginCampaignSendResult> {
+  const mode = options?.mode ?? 'new'
   const allowedStatuses = options?.allowedStatuses ?? ['Draft']
   const revertStatus = options?.statusOnEnqueueFailure ?? 'Draft'
 
@@ -177,18 +258,96 @@ export async function beginCampaignSend(
     throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
   }
 
+  const sendRunId = randomUUID()
+
   logSend('begin', {
     campaignId,
     dbName,
     status: campaign.status,
+    mode,
+    sendRunId,
     allowedStatuses: [...allowedStatuses]
   })
 
+  if (mode === 'retry_failed') {
+    const [retryable, sentCount, failedCount] = await Promise.all([
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_FAILED] }
+      }),
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: CAMPAIGN_RECIPIENT_STATUS_SENT
+      }),
+      (CampaignRecipient as CampaignRecipientModel).countDocuments({
+        campaign: campaignId,
+        status: CAMPAIGN_RECIPIENT_STATUS_FAILED
+      })
+    ])
+    if (retryable === 0) {
+      throw createError({
+        statusCode: 400,
+        message: 'No failed or pending recipients to retry'
+      })
+    }
+    const inFlightSending = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+    })
+    if (inFlightSending > 0) {
+      throw createError({
+        statusCode: 400,
+        message: 'Campaign send is still in progress'
+      })
+    }
+
+    const snap = options?.mergeUserSnapshot
+    await (Campaign as CampaignModel).updateOne(campaignScope, {
+      $set: {
+        status: 'Sending',
+        sendRunId,
+        sendPage: 0,
+        ...(snap ? { mergeUserSnapshot: snap } : {})
+      }
+    })
+
+    try {
+      await enqueueCampaignBatch({ campaignId, dbName, sendRunId, page: 0 })
+    } catch (e: unknown) {
+      await (Campaign as CampaignModel).updateOne(campaignScope, {
+        $set: { status: campaign.status }
+      })
+      logSendError('enqueueFailed.retry', { campaignId, dbName, error: String(e) })
+      throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
+    }
+
+    const pending = retryable
+    const total = sentCount + failedCount + pending
+    logSend('queued.retry', { campaignId, dbName, sendRunId, retryable, sentCount })
+    return {
+      ok: true,
+      total,
+      valid: pending,
+      invalid: 0,
+      queued: pending,
+      sent: sentCount,
+      failed: failedCount,
+      pending,
+      sendRunId,
+      resumed: true
+    }
+  }
+
   const inFlight = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
     campaign: campaignId,
-    status: { $in: ['pending', 'sent'] }
+    status: {
+      $in: [
+        CAMPAIGN_RECIPIENT_STATUS_PENDING,
+        CAMPAIGN_RECIPIENT_STATUS_SENDING
+      ]
+    }
   })
-  if (inFlight > 0) {
+  if (inFlight > 0 || campaign.status === 'Sending') {
     throw createError({ statusCode: 400, message: 'Campaign has already been queued for sending' })
   }
 
@@ -245,7 +404,8 @@ export async function beginCampaignSend(
       queued: 0,
       sent: 0,
       failed: invalid.length,
-      pending: 0
+      pending: 0,
+      sendRunId
     }
   }
 
@@ -253,12 +413,14 @@ export async function beginCampaignSend(
   await (Campaign as CampaignModel).updateOne(campaignScope, {
     $set: {
       status: 'Sending',
+      sendRunId,
+      sendPage: 0,
       ...(snap ? { mergeUserSnapshot: snap } : {})
     }
   })
 
   try {
-    await enqueueCampaignBatch(campaignId, dbName)
+    await enqueueCampaignBatch({ campaignId, dbName, sendRunId, page: 0 })
   } catch (e: unknown) {
     await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
     await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
@@ -274,6 +436,7 @@ export async function beginCampaignSend(
   logSend('queued', {
     campaignId,
     dbName,
+    sendRunId,
     valid: valid.length,
     invalid: invalid.length
   })
@@ -286,7 +449,8 @@ export async function beginCampaignSend(
     queued: valid.length,
     sent: 0,
     failed: invalid.length,
-    pending: valid.length
+    pending: valid.length,
+    sendRunId
   }
 }
 
@@ -308,21 +472,18 @@ export async function getCampaignSendProgress(
   const [pendingCount, sentCount, failedCount] = await Promise.all([
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'pending'
+      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
     }),
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'sent'
+      status: CAMPAIGN_RECIPIENT_STATUS_SENT
     }),
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
-      status: 'failed'
+      status: CAMPAIGN_RECIPIENT_STATUS_FAILED
     })
   ])
 
-  // When the last batch finishes, recipients hit 0 pending before the worker's
-  // campaign status flip (Sending → Sent/Failed). Re-read the campaign and only
-  // report done once status has left Sending so clients don't stop polling early.
   let campaignStatus = campaign.status
   if (pendingCount === 0) {
     const fresh = await (Campaign as CampaignModel)
@@ -342,10 +503,19 @@ export async function getCampaignSendProgress(
   }
 }
 
-/** Processes up to BATCH_SIZE pending recipients (invoked by the email worker). */
+export interface ProcessBatchOptions {
+  sendRunId: string
+  page: number
+}
+
+/**
+ * Processes up to CAMPAIGN_SEND_BATCH_SIZE pending/failed recipients (BullMQ worker).
+ * Uses Brevo messageVersions + idempotency key per batch (mortdash-crm ratesheet pattern).
+ */
 export async function processBatch(
   models: TenantClientModels,
-  campaignId: string
+  campaignId: string,
+  options: ProcessBatchOptions
 ): Promise<ProcessBatchResult> {
   const { Campaign, CampaignRecipient, EmailTemplate, EmailDynamicVariable } = models
   const campaign = await (Campaign as CampaignModel)
@@ -353,6 +523,29 @@ export async function processBatch(
     .lean<CampaignLean | null>()
   if (!campaign) {
     throw createError({ statusCode: 404, message: 'Campaign not found' })
+  }
+
+  if (campaignSendJobShouldSkip(campaign, options.sendRunId)) {
+    logSend('batch.skipped', {
+      campaignId,
+      sendRunId: options.sendRunId,
+      campaignSendRunId: campaign.sendRunId,
+      status: campaign.status
+    })
+    const counts = await countRecipientStatuses(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
+    return {
+      campaignId,
+      campaignStatus: campaign.status,
+      pending: counts.pending,
+      sent: counts.sent,
+      failed: counts.failed,
+      total: counts.pending + counts.sent + counts.failed,
+      done: counts.pending === 0,
+      skipped: true
+    }
   }
 
   let templateHtml: string | null = null
@@ -370,26 +563,26 @@ export async function processBatch(
   }
 
   const pending = await (CampaignRecipient as CampaignRecipientModel)
-    .find({ campaign: campaignId, status: 'pending' })
-    .limit(BATCH_SIZE)
+    .find({
+      campaign: campaignId,
+      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_FAILED] }
+    })
+    .sort({ _id: 1 })
+    .limit(CAMPAIGN_SEND_BATCH_SIZE)
     .lean<CampaignRecipientLean[]>()
 
   if (pending.length === 0) {
-    const finalized = await finalizeCampaignSendIfComplete(models, campaignId)
-    const [pendingCount, sentCount, failedCount] = await Promise.all([
+    const [sendingOnlyCount, finalized] = await Promise.all([
       (CampaignRecipient as CampaignRecipientModel).countDocuments({
         campaign: campaignId,
-        status: 'pending'
+        status: CAMPAIGN_RECIPIENT_STATUS_SENDING
       }),
-      (CampaignRecipient as CampaignRecipientModel).countDocuments({
-        campaign: campaignId,
-        status: 'sent'
-      }),
-      (CampaignRecipient as CampaignRecipientModel).countDocuments({
-        campaign: campaignId,
-        status: 'failed'
-      })
+      finalizeCampaignSendIfComplete(models, campaignId)
     ])
+    const counts = await countRecipientStatuses(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
     const campaignUpdated = await (Campaign as CampaignModel)
       .findById(campaignId)
       .lean<CampaignLean | null>()
@@ -400,23 +593,61 @@ export async function processBatch(
       logSend('batchComplete.noPending', {
         campaignId,
         status: campaignUpdated.status,
-        sent: sentCount,
-        failed: failedCount
+        sent: counts.sent,
+        failed: counts.failed
       })
+    }
+    let waitForInFlight = sendingOnlyCount > 0 && counts.pending > 0
+    if (waitForInFlight) {
+      const acked = await ackStaleInFlightSendingRecipients(models, campaignId)
+      if (acked > 0) {
+        const afterAck = await countRecipientStatuses(
+          CampaignRecipient as CampaignRecipientModel,
+          campaignId
+        )
+        counts.pending = afterAck.pending
+        counts.sent = afterAck.sent
+        counts.failed = afterAck.failed
+        waitForInFlight = afterAck.pending > 0
+        if (!waitForInFlight) {
+          await finalizeCampaignSendIfComplete(models, campaignId)
+          const refreshed = await (Campaign as CampaignModel)
+            .findById(campaignId)
+            .lean<CampaignLean | null>()
+          if (refreshed) campaignUpdated.status = refreshed.status
+        }
+      }
+      if (waitForInFlight) {
+        logSend('batchIdle.waitingSending', {
+          campaignId,
+          sendRunId: options.sendRunId,
+          page: options.page,
+          sendingOnlyCount
+        })
+      }
     }
     return {
       campaignId,
       campaignStatus: campaignUpdated.status,
-      pending: pendingCount,
-      sent: sentCount,
-      failed: failedCount,
-      total: pendingCount + sentCount + failedCount,
-      done: pendingCount === 0
+      pending: counts.pending,
+      sent: counts.sent,
+      failed: counts.failed,
+      total: counts.pending + counts.sent + counts.failed,
+      done: counts.pending === 0,
+      chainNext: !waitForInFlight
     }
   }
 
+  await clearStaleSendingRecipients(
+    models,
+    campaignId,
+    pending.map((r) => String(r._id))
+  )
+
   logSend('batchStart', {
     campaignId,
+    sendRunId: options.sendRunId,
+    page: options.page,
     batchSize: pending.length,
     status: campaign.status
   })
@@ -430,55 +661,63 @@ export async function processBatch(
     fetchEnabledEmailDynamicVariableBindings(EmailDynamicVariable as EmailDynamicVariableModel)
   ])
 
-  if (pending.length > 0 && (!templateHtml || !campaign.sender?.email)) {
+  if (!templateHtml || !campaign.sender?.email) {
     logSendWarn('missingTemplateOrSender', {
       campaignId,
       hasTemplate: !!templateHtml,
       sender: campaign.sender?.email
     })
-  }
-
-  const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
-  let brevoTenantTagValue: string | undefined
-  let unsubscribeSigningSecret: string | undefined
-  if (tenantDbNameForTags) {
-    brevoTenantTagValue = tenantDbNameForTags
-    try {
-      const registry = await getRegistryConnection()
-      const row = await findRegistryTenantByDbName(registry, tenantDbNameForTags)
-      const tid = row?.tenantId?.trim()
-      if (tid) brevoTenantTagValue = tid
-      if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
-    } catch (err) {
-      console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
-        dbName: tenantDbNameForTags,
-        err
-      })
-    }
-  }
-
-  if (!templateHtml || !campaign.sender?.email) {
     await (CampaignRecipient as CampaignRecipientModel).updateMany(
       { _id: { $in: pending.map((r) => r._id) } },
-      { $set: { status: 'failed', error: 'Missing email template or sender' } }
+      { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: 'Missing email template or sender' } }
     )
   } else {
+    await (CampaignRecipient as CampaignRecipientModel).updateMany(
+      { _id: { $in: pending.map((r) => r._id) } },
+      {
+        $set: { status: CAMPAIGN_RECIPIENT_STATUS_SENDING },
+        $unset: { error: 1, brevoMessageId: 1 }
+      }
+    )
+
+    const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
+    let brevoTenantTagValue: string | undefined
+    let unsubscribeSigningSecret: string | undefined
+    if (tenantDbNameForTags) {
+      brevoTenantTagValue = tenantDbNameForTags
+      try {
+        const registry = await getRegistryConnection()
+        const row = await findRegistryTenantByDbName(registry, tenantDbNameForTags)
+        const tid = row?.tenantId?.trim()
+        if (tid) brevoTenantTagValue = tid
+        if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
+      } catch (err) {
+        console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
+          dbName: tenantDbNameForTags,
+          err
+        })
+      }
+    }
+
     const snap = campaign.mergeUserSnapshot
     const userForTag =
       snap?.email?.trim() ||
       [snap?.firstName, snap?.lastName].filter(Boolean).join(' ').trim() ||
       undefined
 
-    const ops = await mapWithConcurrency(pending, SEND_CONCURRENCY, async (r) => {
+    const replyTo = buildCampaignReplyTo({ campaign })
+
+    type Prepared = {
+      row: CampaignRecipientLean
+      version: { to: { email: string; name?: string }[]; subject: string; htmlContent: string }
+      failed?: string
+    }
+
+    const prepared: Prepared[] = pending.map((r) => {
       const emailKey = normalizeMarketingEmail(r.email)
       const contact = emailKey ? contactByEmail.get(emailKey) : undefined
       if (contact?.isUnsubscribe === true) {
-        return {
-          updateOne: {
-            filter: { _id: r._id },
-            update: { status: 'failed', error: 'Contact unsubscribed' }
-          }
-        }
+        return { row: r, version: { to: [{ email: r.email }], subject: '', htmlContent: '' }, failed: 'Contact unsubscribed' }
       }
       const mergeRoot = composeEmailMergeRoot(
         campaign.mergeUserSnapshot,
@@ -501,61 +740,113 @@ export async function processBatch(
           mergeRoot.recipient = { ...curObj, email: toEmail }
         }
       }
-      const subjectRendered = mergeMustacheTemplate(
-        campaign.subject || '(No subject)',
-        mergeRoot
-      )
+      const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
       const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
-
-      const replyTo = buildCampaignReplyTo({ campaign })
-      const result = await sendEmail({
-        sender: campaign.sender,
-        to: [{ email: r.email }],
-        ...(replyTo ? { replyTo } : {}),
-        subject: subjectRendered,
-        htmlContent: htmlRendered,
-        tags: [`campaign:${campaignId}`],
-        ...(tenantDbNameForTags && brevoTenantTagValue
-          ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
-          : {}),
-        ...(userForTag ? { user: userForTag } : {})
-      })
-
-      return result.error
-        ? {
-            updateOne: {
-              filter: { _id: r._id },
-              update: { status: 'failed', error: result.error }
-            }
-          }
-        : {
-            updateOne: {
-              filter: { _id: r._id },
-              update: { status: 'sent', sentAt: new Date() }
-            }
-          }
+      const name =
+        [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
+      return {
+        row: r,
+        version: {
+          to: [{ email: r.email, ...(name ? { name } : {}) }],
+          subject: subjectRendered,
+          htmlContent: htmlRendered
+        }
+      }
     })
+
+    const toSend = prepared.filter((p) => !p.failed)
+    const idempotencyKey = campaignBatchBrevoIdempotencyKey({
+      campaignId,
+      sendRunId: options.sendRunId,
+      page: options.page,
+      recipientRowIds: toSend.map((p) => String(p.row._id))
+    })
+
+    const batchResult = await sendCampaignBatchWithMessageVersions({
+      sender: campaign.sender,
+      ...(replyTo ? { replyTo } : {}),
+      messageVersions: toSend.map((p) => p.version),
+      tags: [`campaign:${campaignId}`],
+      idempotencyKey,
+      ...(tenantDbNameForTags && brevoTenantTagValue
+        ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
+        : {}),
+      ...(userForTag ? { user: userForTag } : {})
+    })
+
+    const ops: Parameters<CampaignRecipientModel['bulkWrite']>[0] = []
+
+    for (const p of prepared) {
+      if (p.failed) {
+        ops.push({
+          updateOne: {
+            filter: { _id: p.row._id },
+            update: { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: p.failed } }
+          }
+        })
+      }
+    }
+
+    if (batchResult.error) {
+      for (const p of toSend) {
+        ops.push({
+          updateOne: {
+            filter: { _id: p.row._id },
+            update: { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: batchResult.error } }
+          }
+        })
+      }
+    } else {
+      for (let i = 0; i < toSend.length; i++) {
+        const p = toSend[i]
+        if (!p) continue
+        const raw = batchResult.messageIds[i]
+        const trimmed = raw && String(raw).trim() ? String(raw).trim() : ''
+        if (trimmed) {
+          ops.push({
+            updateOne: {
+              filter: { _id: p.row._id },
+              update: {
+                $set: {
+                  status: CAMPAIGN_RECIPIENT_STATUS_SENT,
+                  sentAt: new Date(),
+                  brevoMessageId: trimmed
+                }
+              }
+            }
+          })
+        } else {
+          ops.push({
+            updateOne: {
+              filter: { _id: p.row._id },
+              update: {
+                $set: {
+                  status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
+                  error: MISSING_BREVO_ID_MESSAGE
+                }
+              }
+            }
+          })
+        }
+      }
+    }
+
     if (ops.length) {
       await (CampaignRecipient as CampaignRecipientModel).bulkWrite(ops, { ordered: false })
     }
+
+    await (Campaign as CampaignModel).updateOne(
+      { _id: campaignId },
+      { $set: { sendPage: options.page } }
+    )
   }
 
-  const [pendingCount, sentCount, failedCount] = await Promise.all([
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: 'pending'
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: 'sent'
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: 'failed'
-    })
-  ])
+  const counts = await countRecipientStatuses(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId
+  )
 
-  if (pendingCount === 0) {
+  if (counts.pending === 0) {
     await finalizeCampaignSendIfComplete(models, campaignId)
   }
 
@@ -566,22 +857,48 @@ export async function processBatch(
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
+  const hasNext = counts.pending > 0
+
   logSend('batchDone', {
     campaignId,
-    pending: pendingCount,
-    sent: sentCount,
-    failed: failedCount,
+    sendRunId: options.sendRunId,
+    page: options.page,
+    pending: counts.pending,
+    sent: counts.sent,
+    failed: counts.failed,
     campaignStatus: campaignUpdated.status,
-    done: pendingCount === 0
+    hasNext
   })
 
   return {
     campaignId,
     campaignStatus: campaignUpdated.status,
-    pending: pendingCount,
-    sent: sentCount,
-    failed: failedCount,
-    total: pendingCount + sentCount + failedCount,
-    done: pendingCount === 0
+    pending: counts.pending,
+    sent: counts.sent,
+    failed: counts.failed,
+    total: counts.pending + counts.sent + counts.failed,
+    done: !hasNext,
+    chainNext: hasNext
   }
+}
+
+async function countRecipientStatuses(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<{ pending: number; sent: number; failed: number }> {
+  const [pending, sent, failed] = await Promise.all([
+    CampaignRecipient.countDocuments({
+      campaign: campaignId,
+      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
+    }),
+    CampaignRecipient.countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENT
+    }),
+    CampaignRecipient.countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_FAILED
+    })
+  ])
+  return { pending, sent, failed }
 }
