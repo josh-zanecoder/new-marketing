@@ -60,6 +60,7 @@ Production uses `marketing-production` and `marketing-kafka-producer-bridge-prod
 | `MARKETING_HANDOFF_JWT_ISS` | Marketing env (default `marketing-tenant`) | Must match CRM handoff JWT issuer |
 | `MARKETING_HANDOFF_JWT_AUD` | Marketing env (default `new-marketing`) | Must match Marketing handoff validator |
 | `KAFKA_TOPIC_MARKETING_EVENTS` | Per-tenant Kafka topic | e.g. `marketing.events.15k` |
+| `MARKETING_LAUNCH_SYNC_FORCE_FULL` | Optional, CRM only | Set `true` in **CRM** external connection metadata to force one **full** launch sync; CRM removes it after a successful publish. See [MARKETING_LAUNCH_SYNC_DELTA.md](../../mortdash-crm/docs/MARKETING_LAUNCH_SYNC_DELTA.md) |
 
 Implementation: `shared/types/crmExternalConnection.ts`, `server/utils/admin/buildCrmExternalConnectionMetadata.ts`.
 
