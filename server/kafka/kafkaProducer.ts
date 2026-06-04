@@ -16,6 +16,7 @@ import {
 import { logger } from '../utils/logger'
 import {
   isKafkaConsumerGroupCoordinationError,
+  isKafkaMissingTopicPartitionError,
   runInboundConsumerHeartbeatKeepalive
 } from './inboundConsumerKeepalive'
 import {
@@ -538,7 +539,7 @@ async function listInboundSubscriptionTopics(): Promise<string[]> {
           topics
         })
       }
-      return topics
+      return resolveSubscribableInboundTopics(topics)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (attempt < maxAttempts) {
@@ -561,7 +562,7 @@ async function listInboundSubscriptionTopics(): Promise<string[]> {
     }
   }
 
-  return [baseTopic]
+  return resolveSubscribableInboundTopics([baseTopic])
 }
 
 // --- Producer ------------------------------------------------------------------
@@ -582,6 +583,83 @@ async function resetProducerConnection(): Promise<void> {
 function isKafkaConnectionError(err: unknown): boolean {
   const m = err instanceof Error ? err.message : String(err)
   return /timeout|Connection|ECONNRESET|ECONNREFUSED|socket|TLS|ETIMEDOUT|disconnected/i.test(m)
+}
+
+async function listKafkaTopicNamesOnCluster(): Promise<Set<string> | null> {
+  const a = await getAdmin()
+  if (!a) return null
+  try {
+    const names = await a.listTopics()
+    return new Set(names)
+  } catch (err) {
+    logger.warn('Kafka admin listTopics failed', {
+      err: err instanceof Error ? err.message : String(err)
+    })
+    return null
+  }
+}
+
+function partitionTopicsByClusterPresence(
+  topics: string[],
+  existing: Set<string>
+): { present: string[]; missing: string[] } {
+  const present: string[] = []
+  const missing: string[] = []
+  for (const topic of topics) {
+    if (existing.has(topic)) present.push(topic)
+    else missing.push(topic)
+  }
+  return { present, missing }
+}
+
+async function createMissingInboundTopicsOnCluster(missing: string[]): Promise<void> {
+  if (missing.length === 0) return
+  const a = await getAdmin()
+  if (!a) return
+  const replicationFactor = topicReplicationFactor()
+  try {
+    await a.createTopics({
+      waitForLeaders: true,
+      topics: missing.map((topic) => ({ topic, numPartitions: 1, replicationFactor }))
+    })
+    logger.info('Kafka inbound topics created on cluster', { topics: missing, replicationFactor })
+  } catch (err) {
+    logger.warn('Kafka inbound topic auto-create failed (will skip subscribe)', {
+      topics: missing,
+      err: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
+/** Only return topics that exist on the broker (create registry topics when missing). */
+async function resolveSubscribableInboundTopics(topics: string[]): Promise<string[]> {
+  const unique = [...new Set(topics.map((t) => t.trim()).filter(Boolean))]
+  if (unique.length === 0) return []
+
+  const existing = await listKafkaTopicNamesOnCluster()
+  if (!existing) return unique
+
+  let { present, missing } = partitionTopicsByClusterPresence(unique, existing)
+  if (missing.length > 0) {
+    await createMissingInboundTopicsOnCluster(missing)
+    const afterCreate = await listKafkaTopicNamesOnCluster()
+    if (afterCreate) {
+      const partitioned = partitionTopicsByClusterPresence(unique, afterCreate)
+      present = partitioned.present
+      missing = partitioned.missing
+    }
+  }
+
+  if (missing.length > 0) {
+    logger.warn('Kafka inbound subscribe skipping topics not on cluster', {
+      missingTopics: missing,
+      presentTopics: present
+    })
+  }
+
+  const baseTopic = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
+  if (present.length === 0 && existing.has(baseTopic)) return [baseTopic]
+  return present
 }
 
 async function getProducer(): Promise<Producer | null> {
@@ -1114,23 +1192,26 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(
     return false
   }
 
+  const snapshotTopics = activeInboundTopics.length > 0 ? [...activeInboundTopics] : []
+  const subscribableTopics = await resolveSubscribableInboundTopics(topics)
+
   inboundConsumerRestarting = true
   try {
     logger.info('Kafka inbound topic resubscribe starting', {
       reason: options?.reason,
       source: options?.source,
-      previousTopicCount: activeInboundTopics.length,
-      nextTopicCount: topics.length,
-      previousTopics: activeInboundTopics,
-      nextTopics: topics,
+      previousTopicCount: snapshotTopics.length,
+      nextTopicCount: subscribableTopics.length,
+      previousTopics: snapshotTopics,
+      nextTopics: subscribableTopics,
       addedTopics: added,
       removedTopics: removed
     })
     await stopInboundEventsConsumer()
-    await startInboundEventsConsumer()
+    await startInboundEventsConsumer({ topics: subscribableTopics })
     logger.info('Kafka inbound topic resubscribe completed', {
-      topicCount: topics.length,
-      topics,
+      topicCount: subscribableTopics.length,
+      topics: subscribableTopics,
       addedTopics: added,
       removedTopics: removed
     })
@@ -1138,18 +1219,39 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(
   } catch (err) {
     logger.error('Kafka inbound topic resubscribe failed', {
       err: err instanceof Error ? err.message : String(err),
-      previousTopics: activeInboundTopics,
-      nextTopics: topics,
+      previousTopics: snapshotTopics,
+      nextTopics: subscribableTopics,
       addedTopics: added,
       removedTopics: removed
     })
-    throw err
+    const baseTopic = resolveKafkaRuntime().kafkaTopicEvents || 'marketing.events'
+    const fallbackRaw = snapshotTopics.length > 0 ? snapshotTopics : [baseTopic]
+    const fallbackTopics = await resolveSubscribableInboundTopics(fallbackRaw)
+    try {
+      await startInboundEventsConsumer({ topics: fallbackTopics })
+      logger.info('Kafka inbound consumer recovered after resubscribe failure', {
+        topicCount: fallbackTopics.length,
+        topics: fallbackTopics
+      })
+    } catch (recoveryErr) {
+      logger.error('Kafka inbound consumer recovery failed; scheduling restart', {
+        err: recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr)
+      })
+      scheduleInboundConsumerRestart('resubscribe recovery failed', recoveryErr)
+    }
+    return false
   } finally {
     inboundConsumerRestarting = false
   }
 }
 
-export async function startInboundEventsConsumer(): Promise<void> {
+type StartInboundConsumerOptions = {
+  topics?: string[]
+}
+
+export async function startInboundEventsConsumer(
+  options?: StartInboundConsumerOptions
+): Promise<void> {
   const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
   if (inboundConsumerShuttingDown) {
     logger.info('Kafka inbound consumer start skipped (shutdown in progress)')
@@ -1165,7 +1267,15 @@ export async function startInboundEventsConsumer(): Promise<void> {
   const kafka = createKafkaJsInstance(`${cfg.kafkaClientId}-inbound`, cfg)
   if (!kafka) return
 
-  const topics = await listInboundSubscriptionTopics()
+  const registryTopics = await listInboundSubscriptionTopics()
+  const topics =
+    options?.topics && options.topics.length > 0
+      ? await resolveSubscribableInboundTopics(options.topics)
+      : registryTopics
+  if (topics.length === 0) {
+    logger.error('Kafka inbound consumer start skipped (no subscribable topics)')
+    return
+  }
   const groupId =
     process.env.KAFKA_CONSUMER_GROUP_ID?.trim() || 'new-marketing-inbound-events'
   const fromBeginning = process.env.KAFKA_CONSUMER_FROM_BEGINNING === 'true'
@@ -1190,6 +1300,14 @@ export async function startInboundEventsConsumer(): Promise<void> {
       await consumer.disconnect()
     } catch {
       /* ignore */
+    }
+    g.__marketingInboundKafkaConsumerStarted = false
+    inboundEventsConsumer = null
+    if (isKafkaMissingTopicPartitionError(err)) {
+      logger.error('Kafka inbound consumer subscribe failed (missing topic on cluster)', {
+        topics,
+        err: err instanceof Error ? err.message : String(err)
+      })
     }
     throw err
   }

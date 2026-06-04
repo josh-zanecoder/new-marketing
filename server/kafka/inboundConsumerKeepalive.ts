@@ -1,5 +1,15 @@
 import { logger } from '../utils/logger'
 
+/** Subscribe/resubscribe targeted a topic that does not exist on the cluster yet. */
+export function isKafkaMissingTopicPartitionError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return (
+    /does not host this topic-partition/i.test(msg) ||
+    /unknown topic or partition/i.test(msg) ||
+    /unknown_topic_or_partition/i.test(msg)
+  )
+}
+
 /** Broker evicted this consumer or the group is rebalancing — not a handler/data bug. */
 export function isKafkaConsumerGroupCoordinationError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)

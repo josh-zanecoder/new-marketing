@@ -136,15 +136,18 @@ export default defineEventHandler(async (event) => {
 
   invalidateTenantTopicCacheForDbName(dbName)
 
+  let kafkaTopicEnsured: string | null = null
   try {
-    await ensureTenantEventTopic(dbName)
+    kafkaTopicEnsured = await ensureTenantEventTopic(dbName)
   } catch (err) {
     console.error('[Kafka] failed to ensure tenant topic after patch:', err)
   }
 
-  void requestInboundConsumerTopicsRefresh(`tenant-patch:${dbName}`).catch((err) => {
-    console.error('[Kafka] inbound topic refresh after tenant patch failed:', err)
-  })
+  if (kafkaTopicEnsured) {
+    void requestInboundConsumerTopicsRefresh(`tenant-patch:${dbName}`).catch((err) => {
+      console.error('[Kafka] inbound topic refresh after tenant patch failed:', err)
+    })
+  }
 
   const doc = await registryConn.collection('clients').findOne({ dbName })
   const tenant = doc ? toTenantAdminRow(doc as RegistryTenantDoc) : null

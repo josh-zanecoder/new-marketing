@@ -25,9 +25,9 @@ env:
   WORKER_MIN_INSTANCES: 1
   WORKER_MAX_INSTANCES: 1
   # Set to 'true' to deploy marketing-kafka-worker on test pushes.
-  DEPLOY_KAFKA_WORKER: 'false'
+  DEPLOY_KAFKA_WORKER: 'true'
   # Set to 'true' to deploy marketing-kafka-producer-bridge on test pushes.
-  DEPLOY_KAFKA_BRIDGE: 'false'
+  DEPLOY_KAFKA_BRIDGE: 'true'
 
 jobs:
   deploy:

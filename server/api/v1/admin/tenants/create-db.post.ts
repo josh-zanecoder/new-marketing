@@ -86,9 +86,11 @@ export default defineEventHandler(async (event) => {
     console.error('[Kafka] failed to ensure tenant topic:', err)
   }
 
-  void requestInboundConsumerTopicsRefresh(`tenant-create:${dbName}`).catch((err) => {
-    console.error('[Kafka] inbound topic refresh after tenant create failed:', err)
-  })
+  if (kafkaTopic) {
+    void requestInboundConsumerTopicsRefresh(`tenant-create:${dbName}`).catch((err) => {
+      console.error('[Kafka] inbound topic refresh after tenant create failed:', err)
+    })
+  }
 
   const resolvedTopic = kafkaTopic ?? autoTopic
   const crmExternalConnection =
