@@ -3,7 +3,8 @@ import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import {
   computeDefaultMarketingOutboundTopicForTenant,
   ensureTenantEventTopic,
-  invalidateTenantTopicCacheForDbName
+  invalidateTenantTopicCacheForDbName,
+  requestInboundConsumerTopicsRefresh
 } from '@server/kafka/kafkaProducer'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import {
@@ -140,6 +141,10 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     console.error('[Kafka] failed to ensure tenant topic after patch:', err)
   }
+
+  void requestInboundConsumerTopicsRefresh(`tenant-patch:${dbName}`).catch((err) => {
+    console.error('[Kafka] inbound topic refresh after tenant patch failed:', err)
+  })
 
   const doc = await registryConn.collection('clients').findOne({ dbName })
   const tenant = doc ? toTenantAdminRow(doc as RegistryTenantDoc) : null

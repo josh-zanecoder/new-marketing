@@ -15,6 +15,10 @@ import {
 } from '../lib/mongoose'
 import { logger } from '../utils/logger'
 import {
+  isKafkaConsumerGroupCoordinationError,
+  runInboundConsumerHeartbeatKeepalive
+} from './inboundConsumerKeepalive'
+import {
   CONTACT_EVENT_TYPES,
   namesFromContactPayload,
   parseContactDeletedEventEnvelope,
@@ -191,67 +195,75 @@ async function handleMarketingSyncRequested(
       requestedByEmail: evt.payload.requestedByEmail ?? ''
     })
   }
-  const startedAt = Date.now()
-  const snapshot = {
-    tenantId: evt.tenantId,
-    dBname: evt.dBname,
-    occurredAt: evt.occurredAt,
-    contacts: Array.isArray(evt.payload.contacts) ? evt.payload.contacts : []
-  }
-  const maxAttempts = 3
-  let syncedCount = 0
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      await ctx?.heartbeat()
-      syncedCount = await upsertContactsFromSyncSnapshot(snapshot)
-      await ctx?.heartbeat()
-      break
-    } catch (err) {
-      const canRetry = attempt < maxAttempts && isTransientMongoError(err)
-      if (!canRetry) throw err
-      logger.warn('Kafka inbound marketing.sync.requested retry after Mongo error', {
-        attempt,
-        maxAttempts,
-        syncId: evt.payload.syncId ?? '',
-        chunkIndex: evt.payload.chunkIndex ?? 1,
-        dBname: evt.dBname,
-        err: err instanceof Error ? err.message : String(err)
-      })
-      await ctx?.heartbeat()
-      await invalidateRegistryConnection()
-      await new Promise((resolve) => setTimeout(resolve, inboundMongoRetryDelayMs(attempt)))
-    }
-  }
-  logger.info('Kafka inbound marketing.sync.requested', {
-    occurredAt: evt.occurredAt,
-    tenantId: evt.tenantId,
-    dBname: evt.dBname,
-    syncType,
-    syncMode,
-    syncId,
-    chunkIndex,
-    chunkCount,
-    tenantWideContacts: evt.payload.tenantWideContacts,
-    ownerEmailCount: evt.payload.ownerEmails?.length ?? 0,
-    requestedByUserId: evt.payload.requestedByUserId ?? '',
-    snapshotContactCount: Array.isArray(evt.payload.contacts) ? evt.payload.contacts.length : 0,
-    syncedCount,
-    durationMs: Date.now() - startedAt
-  })
-  if (chunkCount > 0 && chunkIndex >= chunkCount) {
-    const completedLog = {
+  inboundSyncActiveCount += 1
+  try {
+    const startedAt = Date.now()
+    const snapshot = {
       tenantId: evt.tenantId,
       dBname: evt.dBname,
-      syncId,
+      occurredAt: evt.occurredAt,
+      contacts: Array.isArray(evt.payload.contacts) ? evt.payload.contacts : []
+    }
+    const maxAttempts = 3
+    let syncedCount = 0
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await ctx?.heartbeat()
+        syncedCount = await upsertContactsFromSyncSnapshot(snapshot)
+        await ctx?.heartbeat()
+        break
+      } catch (err) {
+        const canRetry = attempt < maxAttempts && isTransientMongoError(err)
+        if (!canRetry) throw err
+        logger.warn('Kafka inbound marketing.sync.requested retry after Mongo error', {
+          attempt,
+          maxAttempts,
+          syncId: evt.payload.syncId ?? '',
+          chunkIndex: evt.payload.chunkIndex ?? 1,
+          dBname: evt.dBname,
+          err: err instanceof Error ? err.message : String(err)
+        })
+        await ctx?.heartbeat()
+        await invalidateRegistryConnection()
+        await new Promise((resolve) => setTimeout(resolve, inboundMongoRetryDelayMs(attempt)))
+      }
+    }
+    logger.info('Kafka inbound marketing.sync.requested', {
+      occurredAt: evt.occurredAt,
+      tenantId: evt.tenantId,
+      dBname: evt.dBname,
       syncType,
       syncMode,
+      syncId,
+      chunkIndex,
       chunkCount,
-      syncedCount
+      tenantWideContacts: evt.payload.tenantWideContacts,
+      ownerEmailCount: evt.payload.ownerEmails?.length ?? 0,
+      requestedByUserId: evt.payload.requestedByUserId ?? '',
+      snapshotContactCount: Array.isArray(evt.payload.contacts) ? evt.payload.contacts.length : 0,
+      syncedCount,
+      durationMs: Date.now() - startedAt
+    })
+    if (chunkCount > 0 && chunkIndex >= chunkCount) {
+      const completedLog = {
+        tenantId: evt.tenantId,
+        dBname: evt.dBname,
+        syncId,
+        syncType,
+        syncMode,
+        chunkCount,
+        syncedCount
+      }
+      if (syncMode === 'delta') {
+        logger.info('Kafka inbound marketing.sync.delta completed', completedLog)
+      } else {
+        logger.info('Kafka inbound marketing.sync.completed', completedLog)
+      }
     }
-    if (syncMode === 'delta') {
-      logger.info('Kafka inbound marketing.sync.delta completed', completedLog)
-    } else {
-      logger.info('Kafka inbound marketing.sync.completed', completedLog)
+  } finally {
+    inboundSyncActiveCount = Math.max(0, inboundSyncActiveCount - 1)
+    if (inboundSyncActiveCount === 0 && pendingInboundTopicRefresh) {
+      void flushPendingInboundTopicRefresh()
     }
   }
 }
@@ -880,10 +892,100 @@ let inboundEventsConsumer: Consumer | null = null
 let activeInboundTopics: string[] = []
 let inboundConsumerRestarting = false
 let inboundConsumerShuttingDown = false
+let inboundSyncActiveCount = 0
+let pendingInboundTopicRefresh = false
+let pendingInboundTopicRefreshReason = ''
+
+function inboundSyncBusy(): boolean {
+  return inboundSyncActiveCount > 0
+}
+
+async function flushPendingInboundTopicRefresh(): Promise<void> {
+  if (!pendingInboundTopicRefresh) return
+  pendingInboundTopicRefresh = false
+  const reason = pendingInboundTopicRefreshReason || 'deferred'
+  pendingInboundTopicRefreshReason = ''
+  try {
+    await refreshInboundEventsConsumerTopicsIfChanged({ reason, source: 'deferred' })
+  } catch (err) {
+    logger.warn('Kafka deferred inbound topic refresh failed', {
+      reason,
+      err: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
+const TOPIC_REFRESH_SIGNAL_COLLECTION = 'kafka_inbound_consumer_signals'
+const TOPIC_REFRESH_SIGNAL_KEY = 'inbound_topic_refresh'
+
+function inboundConsumerRunningOnThisInstance(): boolean {
+  const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
+  return Boolean(g.__marketingInboundKafkaConsumerStarted || inboundEventsConsumer)
+}
+
+async function setTopicRefreshSignal(reason: string): Promise<void> {
+  const registry = await getRegistryConnection()
+  await registry.collection(TOPIC_REFRESH_SIGNAL_COLLECTION).updateOne(
+    { signalKey: TOPIC_REFRESH_SIGNAL_KEY },
+    { $set: { pending: true, reason, requestedAt: new Date() } },
+    { upsert: true }
+  )
+}
+
+async function clearTopicRefreshSignal(): Promise<void> {
+  const registry = await getRegistryConnection()
+  await registry.collection(TOPIC_REFRESH_SIGNAL_COLLECTION).updateOne(
+    { signalKey: TOPIC_REFRESH_SIGNAL_KEY },
+    { $set: { pending: false, clearedAt: new Date() } }
+  )
+}
+
+async function loadTopicRefreshSignal(): Promise<{
+  pending?: boolean
+  reason?: string
+} | null> {
+  const registry = await getRegistryConnection()
+  const doc = await registry
+    .collection(TOPIC_REFRESH_SIGNAL_COLLECTION)
+    .findOne({ signalKey: TOPIC_REFRESH_SIGNAL_KEY })
+  if (!doc || typeof doc !== 'object') return null
+  return doc as { pending?: boolean; reason?: string }
+}
+
+/** Worker polls registry signal written by web admin APIs (split Cloud Run services). */
+export async function processInboundTopicRefreshSignal(): Promise<void> {
+  if (inboundConsumerShuttingDown || !inboundConsumerRunningOnThisInstance()) return
+  const signal = await loadTopicRefreshSignal()
+  if (!signal?.pending) return
+  const refreshed = await refreshInboundEventsConsumerTopicsIfChanged({
+    reason: signal.reason ?? 'signal',
+    source: 'signal'
+  })
+  if (refreshed) {
+    await clearTopicRefreshSignal()
+    return
+  }
+  if (!inboundSyncBusy() && !pendingInboundTopicRefresh) {
+    await clearTopicRefreshSignal()
+  }
+}
+
+/**
+ * After admin creates/updates a tenant topic.
+ * Runs on worker when consumer is local; otherwise queues a registry signal for the worker.
+ */
+export async function requestInboundConsumerTopicsRefresh(reason: string): Promise<boolean> {
+  if (inboundConsumerRunningOnThisInstance()) {
+    return refreshInboundEventsConsumerTopicsIfChanged({ reason, source: 'event' })
+  }
+  await setTopicRefreshSignal(reason)
+  logger.info('Kafka inbound topic refresh queued for worker', { reason })
+  return false
+}
 
 function parseConsumerSessionTimeoutMs(): number {
   const raw = Number(process.env.KAFKA_CONSUMER_SESSION_TIMEOUT_MS)
-  return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : 45_000
+  return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : 180_000
 }
 
 function parseConsumerHeartbeatIntervalMs(): number {
@@ -891,6 +993,11 @@ function parseConsumerHeartbeatIntervalMs(): number {
   const sessionTimeout = parseConsumerSessionTimeoutMs()
   const interval = Number.isFinite(raw) && raw >= 1_000 ? Math.floor(raw) : 3_000
   return Math.min(interval, Math.floor(sessionTimeout / 3))
+}
+
+function parseConsumerRebalanceTimeoutMs(): number {
+  const raw = Number(process.env.KAFKA_CONSUMER_REBALANCE_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw >= 30_000 ? Math.floor(raw) : 120_000
 }
 
 export function isInboundConsumerShuttingDown(): boolean {
@@ -932,11 +1039,22 @@ export async function stopInboundEventsConsumer(): Promise<void> {
   }
 }
 
-/** Reload `marketing.clients` topics and resubscribe when the registry changed (no redeploy). */
-export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boolean> {
+type InboundTopicRefreshOptions = {
+  reason?: string
+  source?: string
+  force?: boolean
+}
+
+/** Reload `marketing.clients` topics; resubscribe only when new topics were added (or removals while idle). */
+export async function refreshInboundEventsConsumerTopicsIfChanged(
+  options?: InboundTopicRefreshOptions
+): Promise<boolean> {
   if (inboundConsumerShuttingDown) return false
   if (inboundConsumerRestarting) {
-    logger.info('Kafka inbound topic resubscribe skipped (restart already in progress)')
+    logger.info('Kafka inbound topic resubscribe skipped (restart already in progress)', {
+      reason: options?.reason,
+      source: options?.source
+    })
     return false
   }
   if (!isKafkaConfigured()) {
@@ -945,7 +1063,9 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boo
   }
   const g = globalThis as typeof globalThis & { __marketingInboundKafkaConsumerStarted?: boolean }
   if (!g.__marketingInboundKafkaConsumerStarted && !inboundEventsConsumer) {
-    logger.debug('Kafka inbound topic refresh skipped (consumer not running)')
+    logger.debug('Kafka inbound topic refresh skipped (consumer not running)', {
+      reason: options?.reason
+    })
     return false
   }
 
@@ -954,7 +1074,8 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boo
     topics = await listInboundSubscriptionTopics()
   } catch (err) {
     logger.warn('Kafka inbound topic refresh skipped (registry read failed)', {
-      err: err instanceof Error ? err.message : String(err)
+      err: err instanceof Error ? err.message : String(err),
+      reason: options?.reason
     })
     return false
   }
@@ -962,15 +1083,42 @@ export async function refreshInboundEventsConsumerTopicsIfChanged(): Promise<boo
   if (topicsSignature(topics) === topicsSignature(activeInboundTopics)) {
     logger.debug('Kafka inbound topic refresh unchanged', {
       topicCount: topics.length,
-      topics
+      topics,
+      reason: options?.reason
     })
     return false
   }
 
   const { added, removed } = diffInboundTopics(activeInboundTopics, topics)
+  const needsResubscribe =
+    options?.force === true || added.length > 0 || (removed.length > 0 && !inboundSyncBusy())
+
+  if (!needsResubscribe) {
+    logger.info('Kafka inbound topic refresh skipped (no topics added)', {
+      reason: options?.reason,
+      source: options?.source,
+      removedTopics: removed
+    })
+    return false
+  }
+
+  if (!options?.force && inboundSyncBusy()) {
+    pendingInboundTopicRefresh = true
+    pendingInboundTopicRefreshReason = options?.reason ?? 'sync-in-progress'
+    logger.info('Kafka inbound topic resubscribe deferred (sync in progress)', {
+      reason: options?.reason,
+      source: options?.source,
+      addedTopics: added,
+      removedTopics: removed
+    })
+    return false
+  }
+
   inboundConsumerRestarting = true
   try {
     logger.info('Kafka inbound topic resubscribe starting', {
+      reason: options?.reason,
+      source: options?.source,
       previousTopicCount: activeInboundTopics.length,
       nextTopicCount: topics.length,
       previousTopics: activeInboundTopics,
@@ -1022,12 +1170,16 @@ export async function startInboundEventsConsumer(): Promise<void> {
     process.env.KAFKA_CONSUMER_GROUP_ID?.trim() || 'new-marketing-inbound-events'
   const fromBeginning = process.env.KAFKA_CONSUMER_FROM_BEGINNING === 'true'
 
+  const sessionTimeoutMs = parseConsumerSessionTimeoutMs()
+  const heartbeatIntervalMs = parseConsumerHeartbeatIntervalMs()
+  const rebalanceTimeoutMs = parseConsumerRebalanceTimeoutMs()
+
   const consumer = kafka.consumer({
     groupId,
     allowAutoTopicCreation: true,
-    sessionTimeout: parseConsumerSessionTimeoutMs(),
-    heartbeatInterval: parseConsumerHeartbeatIntervalMs(),
-    rebalanceTimeout: 60_000
+    sessionTimeout: sessionTimeoutMs,
+    heartbeatInterval: heartbeatIntervalMs,
+    rebalanceTimeout: rebalanceTimeoutMs
   })
 
   try {
@@ -1048,6 +1200,7 @@ export async function startInboundEventsConsumer(): Promise<void> {
 
   void consumer
     .run({
+      partitionsConsumedConcurrently: 1,
       eachMessage: async ({ topic: t, partition, message, heartbeat }) => {
         const raw = message.value?.toString()
         if (!raw) return
@@ -1062,14 +1215,36 @@ export async function startInboundEventsConsumer(): Promise<void> {
         if (!isInboundPlatformEnvelope(parsed)) return
 
         const ctx: InboundMessageContext = { heartbeat }
+        const stopKeepalive = runInboundConsumerHeartbeatKeepalive(heartbeat)
         try {
           await handleInboundKafkaMessage(parsed, ctx)
         } catch (err) {
-          logger.error('Kafka inbound handler error', {
-            err: err instanceof Error ? err.message : String(err),
-            eventType: parsed.eventType
-          })
+          const errMsg = err instanceof Error ? err.message : String(err)
+          if (isKafkaConsumerGroupCoordinationError(err)) {
+            logger.error('Kafka inbound handler error (consumer group coordination)', {
+              err: errMsg,
+              eventType: parsed.eventType,
+              topic: t,
+              partition
+            })
+          } else {
+            logger.error('Kafka inbound handler error', {
+              err: errMsg,
+              eventType: parsed.eventType
+            })
+          }
           throw err
+        } finally {
+          stopKeepalive()
+          try {
+            await heartbeat()
+          } catch (beatErr) {
+            if (!isKafkaConsumerGroupCoordinationError(beatErr)) {
+              logger.warn('Kafka inbound post-message heartbeat failed', {
+                err: beatErr instanceof Error ? beatErr.message : String(beatErr)
+              })
+            }
+          }
         }
       }
     })
@@ -1100,7 +1275,8 @@ export async function startInboundEventsConsumer(): Promise<void> {
     topicCount: topics.length,
     groupId,
     fromBeginning,
-    sessionTimeoutMs: parseConsumerSessionTimeoutMs(),
-    heartbeatIntervalMs: parseConsumerHeartbeatIntervalMs()
+    sessionTimeoutMs,
+    heartbeatIntervalMs,
+    rebalanceTimeoutMs
   })
 }

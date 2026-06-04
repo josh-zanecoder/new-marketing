@@ -81,8 +81,9 @@ Optional env:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `KAFKA_CONSUMER_SESSION_TIMEOUT_MS` | `45000` | Consumer group session |
-| `KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS` | `3000` | Heartbeat during long writes |
+| `KAFKA_CONSUMER_SESSION_TIMEOUT_MS` | `180000` (worker deploy) | Must exceed longest chunk processing time |
+| `KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS` | `3000` | Keepalive interval; also drives in-handler heartbeat ticks |
+| `KAFKA_CONSUMER_REBALANCE_TIMEOUT_MS` | `120000` | Max wait for group rebalance |
 
 ---
 
@@ -103,7 +104,14 @@ Search **`marketing-kafka-worker`** logs:
 
 ## Topic resubscribe logs (worker)
 
-When registry tenants gain new Kafka topics (new tenant DB), the worker resubscribes without redeploy (`KAFKA_INBOUND_TOPIC_REFRESH_MS`, default 60s):
+When a new tenant is created/updated in Marketing admin, the worker picks up the new Kafka topic without redeploy:
+
+- **Event:** `requestInboundConsumerTopicsRefresh` after `ensureTenantEventTopic` (web writes a registry signal; worker applies it within ~30s).
+- **No blind poll during sync:** worker sets `KAFKA_INBOUND_TOPIC_REFRESH_MS=0` (no 60s resubscribe loop).
+- **Signal poll:** `KAFKA_INBOUND_TOPIC_SIGNAL_MS=30000` on worker only — checks `kafka_inbound_consumer_signals` in registry.
+- Resubscribe runs only when **topics were added** and **no launch sync chunk** is in progress (otherwise deferred until sync idle).
+
+Optional legacy full registry poll (`KAFKA_INBOUND_TOPIC_REFRESH_MS`, default 60s on non-worker):
 
 | Log | When |
 |-----|------|

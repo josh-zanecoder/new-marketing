@@ -18,6 +18,12 @@ function inboundTopicRefreshMs(): number {
   return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : 60_000
 }
 
+function inboundTopicSignalMs(): number {
+  const raw = Number(process.env.KAFKA_INBOUND_TOPIC_SIGNAL_MS)
+  if (raw === 0) return 0
+  return Number.isFinite(raw) && raw >= 10_000 ? Math.floor(raw) : 30_000
+}
+
 export default defineNitroPlugin((nitroApp) => {
   if (isInboundConsumerDisabled()) {
     logger.info('Kafka inbound consumer disabled on this instance', {
@@ -89,7 +95,10 @@ export default defineNitroPlugin((nitroApp) => {
       import('../kafkaProducer')
         .then(({ refreshInboundEventsConsumerTopicsIfChanged, isInboundConsumerShuttingDown }) => {
           if (isInboundConsumerShuttingDown()) return false
-          return refreshInboundEventsConsumerTopicsIfChanged()
+          return refreshInboundEventsConsumerTopicsIfChanged({
+            reason: 'scheduled-poll',
+            source: 'poll'
+          })
         })
         .catch((err) => {
           logger.warn('Kafka inbound topic refresh tick failed', {
@@ -101,5 +110,22 @@ export default defineNitroPlugin((nitroApp) => {
     logger.info('Kafka inbound topic refresh scheduler disabled', {
       KAFKA_INBOUND_TOPIC_REFRESH_MS: process.env.KAFKA_INBOUND_TOPIC_REFRESH_MS ?? ''
     })
+  }
+
+  const signalMs = inboundTopicSignalMs()
+  if (signalMs > 0) {
+    logger.info('Kafka inbound topic refresh signal checker enabled', { signalMs })
+    setInterval(() => {
+      import('../kafkaProducer')
+        .then(({ processInboundTopicRefreshSignal, isInboundConsumerShuttingDown }) => {
+          if (isInboundConsumerShuttingDown()) return
+          return processInboundTopicRefreshSignal()
+        })
+        .catch((err) => {
+          logger.warn('Kafka inbound topic refresh signal tick failed', {
+            err: err instanceof Error ? err.message : String(err)
+          })
+        })
+    }, signalMs)
   }
 })

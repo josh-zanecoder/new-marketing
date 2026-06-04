@@ -8,7 +8,8 @@ import {
 import {
   computeDefaultMarketingOutboundTopicForTenant,
   ensureTenantEventTopic,
-  invalidateTenantTopicCacheForDbName
+  invalidateTenantTopicCacheForDbName,
+  requestInboundConsumerTopicsRefresh
 } from '@server/kafka/kafkaProducer'
 import { buildCrmExternalConnectionMetadata } from '@server/utils/admin/buildCrmExternalConnectionMetadata'
 
@@ -84,6 +85,10 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     console.error('[Kafka] failed to ensure tenant topic:', err)
   }
+
+  void requestInboundConsumerTopicsRefresh(`tenant-create:${dbName}`).catch((err) => {
+    console.error('[Kafka] inbound topic refresh after tenant create failed:', err)
+  })
 
   const resolvedTopic = kafkaTopic ?? autoTopic
   const crmExternalConnection =
