@@ -4,6 +4,7 @@ import {
   isRegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeDefaultEmailDynamicVariables } from '~~/shared/defaultEmailDynamicVariables'
 
 function serialize(v: {
   _id: unknown
@@ -59,9 +60,9 @@ export default defineEventHandler(async (event) => {
     .lean()
     .exec()
 
-  return {
-    variables: docs.map((d) =>
-      serialize(d as unknown as Parameters<typeof serialize>[0])
-    )
-  }
+  const variables = mergeDefaultEmailDynamicVariables(
+    docs.map((d) => serialize(d as unknown as Parameters<typeof serialize>[0]))
+  )
+
+  return { variables }
 })

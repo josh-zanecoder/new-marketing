@@ -45,6 +45,7 @@ export const contactSchema = new mongoose.Schema(
     stage: { type: String, default: '', trim: true },
     contactProfile: { type: contactProfileSchema, default: undefined },
     metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+    isUnsubscribe: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
@@ -55,6 +56,7 @@ contactSchema.index({ contactType: 1 })
 contactSchema.index({ externalId: 1, source: 1 }, { sparse: true })
 contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
+contactSchema.index({ isUnsubscribe: 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
 contactSchema.index({ 'metadata.relationships.partnerExternalIds': 1, deletedAt: 1 })

@@ -22,6 +22,8 @@ export default defineNuxtConfig({
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
     public: {
+      marketingBaseUrl:
+        process.env.NUXT_PUBLIC_MARKETING_BASE_URL || process.env.MARKETING_PUBLIC_BASE_URL || '',
       firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',

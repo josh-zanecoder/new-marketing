@@ -24,7 +24,6 @@
     "grapesjs": "^0.22.13",
     "grapesjs-preset-newsletter": "^1.0.2",
     "grapesjs-preset-webpage": "^1.0.3",
-    "juice": "^11.1.1",
     "kafkajs": "^2.2.4",
     "lucide-vue-next": "^1.0.0",
     "mongoose": "^8.0.0",

@@ -1,4 +1,5 @@
 import type { UserMergeSnapshot } from '../../../shared/utils/emailTemplateMerge'
+import { DEFAULT_UNSUBSCRIBE_MERGE_KEY } from '~~/shared/defaultEmailDynamicVariables'
 import {
   getMergeValue,
   mergeRootWithUserAndRecipient,
@@ -6,6 +7,7 @@ import {
 } from '../../../shared/utils/emailTemplateMerge'
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import type { EmailDynamicVariableDoc, EmailDynamicVariableModel } from '@server/types/tenant/emailDynamicVariable.model'
+import { buildUnsubscribeUrl } from '@server/utils/unsubscribeUrl'
 import {
   contactLookupRecordForDynamicVariables,
   recipientFieldsFromContact
@@ -35,7 +37,14 @@ export function composeEmailMergeRoot(
   const contactLookup = contactLookupRecordForDynamicVariables(crmContact ?? null)
 
   for (const v of dynamicVariableBindings) {
-    if (!v.enabled || !v.key?.trim() || !v.contactPath?.trim()) continue
+    if (
+      !v.enabled ||
+      !v.key?.trim() ||
+      !v.contactPath?.trim() ||
+      v.key.trim().toLowerCase() === DEFAULT_UNSUBSCRIBE_MERGE_KEY
+    ) {
+      continue
+    }
     let raw: unknown = ''
     if (v.sourceType === 'user') {
       const userObj = (root.user as Record<string, unknown>) || {}
@@ -90,6 +99,26 @@ export function composeEmailMergeRoot(
   return root
 }
 
+/** Fills default `{{unsubscribe}}` with a signed per-recipient URL (or preview placeholder). */
+export function applyDefaultUnsubscribeMergeValue(
+  root: Record<string, unknown>,
+  options: {
+    dbName?: string
+    contactId?: string
+    clientKeyHash?: string
+    previewPlaceholder?: string
+  }
+): void {
+  let url = ''
+  if (options.dbName && options.contactId && options.clientKeyHash) {
+    url = buildUnsubscribeUrl(options.dbName, options.contactId, options.clientKeyHash)
+  }
+  if (!url && options.previewPlaceholder) {
+    url = options.previewPlaceholder
+  }
+  if (url) setMergePath(root, DEFAULT_UNSUBSCRIBE_MERGE_KEY, url)
+}
+
 /** Loads enabled tenant catalog rows for merge (admin-managed `email_dynamic_variables`). */
 export async function fetchEnabledEmailDynamicVariableBindings(
   Model: EmailDynamicVariableModel
@@ -97,7 +126,9 @@ export async function fetchEnabledEmailDynamicVariableBindings(
   const docs = await Model.find({ enabled: true })
     .sort({ sortOrder: 1, label: 1, key: 1 })
     .lean<EmailDynamicVariableDoc[]>()
-  return docs.map((d) => ({
+  return docs
+    .filter((d) => d.key.trim().toLowerCase() !== DEFAULT_UNSUBSCRIBE_MERGE_KEY)
+    .map((d) => ({
     key: d.key,
     contactPath: d.contactPath,
     sourceType: d.sourceType === 'user' ? 'user' : 'recipient',

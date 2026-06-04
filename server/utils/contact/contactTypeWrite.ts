@@ -3,6 +3,7 @@ import {
   LAST_RESORT_CONTACT_TYPE_KEY,
   resolveDefaultContactTypeKey
 } from '@server/utils/contact/resolveDefaultContactTypeKey'
+import { MARKETABLE_CONTACT_BASE } from './marketableContact'
 
 /** Normalize inbound values to unique lowercase keys (order preserved). */
 export function normalizeContactTypeInput(raw: unknown): string[] {
@@ -53,7 +54,7 @@ export async function applyContactTypeFieldsToSetDoc(
 /** Recipient list audience: `contactType` array must include the audience key. */
 export function audienceBaseQuery(audience: string): FilterQuery<Record<string, unknown>> {
   return {
-    deletedAt: null,
+    ...MARKETABLE_CONTACT_BASE,
     contactType: audience
   }
 }

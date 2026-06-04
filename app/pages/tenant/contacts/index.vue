@@ -148,6 +148,12 @@
               </th>
               <th
                 scope="col"
+                class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:px-4"
+              >
+                Unsubscribed
+              </th>
+              <th
+                scope="col"
                 class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell lg:px-4"
               >
                 Company
@@ -186,6 +192,16 @@
                 :title="row.email || undefined"
               >
                 {{ row.email || '—' }}
+              </td>
+              <td class="whitespace-nowrap px-4 py-4 sm:px-4">
+                <span
+                  class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset"
+                  :class="row.is_unsubscribe
+                    ? 'bg-amber-50 text-amber-800 ring-amber-200/80'
+                    : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'"
+                >
+                  {{ row.is_unsubscribe ? 'Yes' : 'No' }}
+                </span>
               </td>
               <td class="max-w-[14rem] px-4 py-4 sm:px-4">
                 <div v-if="row.contactType?.length" class="flex flex-wrap gap-1.5">
@@ -434,7 +450,8 @@ async function load() {
       ...row,
       contactType: Array.isArray(row.contactType) ? row.contactType : [],
       contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
-      primaryTypeLabel: row.primaryTypeLabel ?? '—'
+      primaryTypeLabel: row.primaryTypeLabel ?? '—',
+      is_unsubscribe: row.is_unsubscribe === true
     }))
     data.value = {
       contacts,

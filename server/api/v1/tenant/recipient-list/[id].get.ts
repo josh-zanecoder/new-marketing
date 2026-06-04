@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
@@ -196,7 +197,7 @@ export default defineEventHandler(async (event) => {
       ? 0
       : await Contact.countDocuments(
           mergeTenantOwnerEmailScopeFilter(
-            { _id: { $in: memberObjectIds }, deletedAt: null },
+            withMarketableContactFilter({ _id: { $in: memberObjectIds } }),
             auth
           )
         )
@@ -212,10 +213,7 @@ export default defineEventHandler(async (event) => {
   const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
 
   const contactByIdsFilter = mergeTenantOwnerEmailScopeFilter(
-    {
-      _id: { $in: contactIds },
-      deletedAt: null
-    },
+    withMarketableContactFilter({ _id: { $in: contactIds } }),
     auth
   )
 

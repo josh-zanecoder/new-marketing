@@ -1,9 +1,17 @@
 import mongoose from 'mongoose'
 import type { Connection, Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 
 /** Member order, deduped by `contactId`, for persisting list campaigns as `ManualRecipient` rows. */
 export async function resolveRecipientListContactIds(
+  conn: Connection,
+  listIdRaw: string
+): Promise<Types.ObjectId[]> {
+  return resolveRecipientListMarketableContactIds(conn, listIdRaw)
+}
+
+export async function resolveRecipientListMarketableContactIds(
   conn: Connection,
   listIdRaw: string
 ): Promise<Types.ObjectId[]> {
@@ -13,7 +21,7 @@ export async function resolveRecipientListContactIds(
   }
 
   const listId = new mongoose.Types.ObjectId(trimmed)
-  const { RecipientListMember } = getTenantClientModels(conn)
+  const { RecipientListMember, Contact } = getTenantClientModels(conn)
 
   type MemberLean = { contactId?: mongoose.Types.ObjectId }
   const members = await RecipientListMember.find({ recipientListId: listId })
@@ -21,12 +29,21 @@ export async function resolveRecipientListContactIds(
     .lean<MemberLean[]>()
     .exec()
 
+  const contactIds = members.map((m) => m.contactId).filter(Boolean)
+  if (!contactIds.length) return []
+
+  const docs = await Contact.find(withMarketableContactFilter({ _id: { $in: contactIds } }))
+    .select('_id')
+    .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
+    .exec()
+
+  const allowed = new Set(docs.map((d) => String(d._id)))
   const seen = new Set<string>()
   const out: mongoose.Types.ObjectId[] = []
   for (const m of members) {
     if (!m.contactId) continue
     const s = String(m.contactId)
-    if (seen.has(s)) continue
+    if (!allowed.has(s) || seen.has(s)) continue
     seen.add(s)
     out.push(m.contactId)
   }
@@ -54,10 +71,12 @@ export async function resolveRecipientListEmails(
   const contactIds = members.map((m) => m.contactId).filter(Boolean)
   if (!contactIds.length) return []
 
-  const contacts = await Contact.find({
-    _id: { $in: contactIds },
-    deletedAt: null
-  }).select('email').lean().exec()
+  const contacts = await Contact.find(
+    withMarketableContactFilter({ _id: { $in: contactIds } })
+  )
+    .select('email')
+    .lean()
+    .exec()
 
   const raw = contacts
     .map((c) => String((c as { email?: string }).email ?? '').trim().toLowerCase())

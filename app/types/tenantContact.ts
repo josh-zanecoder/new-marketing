@@ -31,6 +31,7 @@ export interface TenantContactListRow {
   company: string
   channel: string
   ownerEmail?: string
+  is_unsubscribe: boolean
   address: {
     street: string
     city: string

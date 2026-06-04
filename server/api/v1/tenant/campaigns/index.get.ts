@@ -4,6 +4,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
@@ -32,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const contacts =
     allContactIds.length > 0
       ? await (Contact as ContactModel)
-          .find({ _id: { $in: allContactIds }, deletedAt: null })
+          .find(withMarketableContactFilter({ _id: { $in: allContactIds } }))
           .select('email')
           .lean<ContactLean[]>()
       : []
