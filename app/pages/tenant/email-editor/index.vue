@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
-import { deserializeEmailEditorHtml, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
+import { deserializeEmailEditorHtml, serializeEmailEditorFragment, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 definePageMeta({
@@ -161,6 +161,12 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
+}
+
+function getEditorExportHtml(editor: Editor): string {
+  const html = editor.getHtml({ cleanId: false }) ?? ''
+  const css = editor.getCss({ keepUnusedStyles: true }) ?? ''
+  return serializeEmailEditorHtml(html, css)
 }
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
@@ -347,9 +353,12 @@ async function openMergePreview() {
       root = {}
     }
   }
-  const html = editor.getHtml()
-  const css = editor.getCss()
-  const merged = mergeMustacheTemplate(`<style>${css}</style>${html}`, root)
+  const html = editor.getHtml({ cleanId: false })
+  const css = editor.getCss({ keepUnusedStyles: true })
+  const merged = mergeMustacheTemplate(
+    serializeEmailEditorFragment(html ?? '', css),
+    root
+  )
   mergePreviewSrcdoc.value = mergePreviewSrcdocHtml(merged)
   mergePreviewOpen.value = true
 }
@@ -451,7 +460,7 @@ watch([isMounted, htmlReady], async () => {
               margin: '0',
               padding: '0'
             },
-            inlineCss: true,
+            inlineCss: false,
             updateStyleManager: true,
             showStylesOnChange: true,
             showBlocksOnLoad: true,
@@ -471,9 +480,7 @@ watch([isMounted, htmlReady], async () => {
     editor.Commands.add('save-and-exit', {
       run: () => {
         try {
-          const html = editor.getHtml()
-          const css = editor.getCss()
-          const fullHtml = serializeEmailEditorHtml(html ?? '', css)
+          const fullHtml = getEditorExportHtml(editor)
           let targetId = campaignId.value
           if (typeof window !== 'undefined') {
             if (campaignId.value) {
@@ -503,9 +510,7 @@ watch([isMounted, htmlReady], async () => {
     editor.Commands.add('save-to-device', {
       run: () => {
         try {
-          const html = editor.getHtml()
-          const css = editor.getCss()
-          const fullHtml = serializeEmailEditorHtml(html ?? '', css)
+          const fullHtml = getEditorExportHtml(editor)
           const blob = new Blob([fullHtml], { type: 'text/html' })
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
@@ -607,9 +612,7 @@ onBeforeUnmount(() => {
 function handleSaveAndExit() {
   if (!editorRef.value) return
   try {
-    const html = editorRef.value.getHtml()
-    const css = editorRef.value.getCss()
-    const fullHtml = serializeEmailEditorHtml(html ?? '', css)
+    const fullHtml = getEditorExportHtml(editorRef.value)
     let targetId = campaignId.value
     if (typeof window !== 'undefined') {
       if (campaignId.value) {

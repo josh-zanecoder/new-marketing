@@ -27,31 +27,41 @@ function hoistHeadTagsFromBody(bodyInner: string): { body: string; headTags: str
   return { body, headTags }
 }
 
-/** Serialize GrapesJS editor output into a full HTML document. */
-export function serializeEmailEditorHtml(componentHtml: string, css?: string | null): string {
+/** Fragment for previews: `<style>` + body HTML (no document wrapper). */
+export function serializeEmailEditorFragment(
+  componentHtml: string,
+  css?: string | null
+): string {
+  let bodyInner = componentHtml.trim()
+  const bodyWrap = bodyInner.match(BODY_WRAP_RE)
+  if (bodyWrap?.[1]) bodyInner = bodyWrap[1].trim()
+
+  const cssText = css ?? ''
+  if (!cssText.trim()) return bodyInner
+  return `<style>${cssText}</style>${bodyInner}`
+}
+
+/** Serialize GrapesJS editor output into a full HTML document (no reformatting). */
+export function serializeEmailEditorHtml(
+  componentHtml: string,
+  css?: string | null
+): string {
   let bodyInner = componentHtml.trim()
   const bodyWrap = bodyInner.match(BODY_WRAP_RE)
   if (bodyWrap?.[1]) bodyInner = bodyWrap[1].trim()
 
   const { body, headTags } = hoistHeadTagsFromBody(bodyInner)
   const hasTitle = headTags.some((tag) => /^<title\b/i.test(tag))
+  const cssText = css ?? ''
   const headBlock = [
     '<meta charset="UTF-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
     ...(hasTitle ? [] : ['<title>Email Template</title>']),
     ...headTags,
-    `<style>${css ?? ''}</style>`
-  ].join('\n  ')
+    ...(cssText.trim() ? [`<style>${cssText}</style>`] : [])
+  ].join('')
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${headBlock}
-</head>
-<body>
-${body.trim()}
-</body>
-</html>`
+  return `<!DOCTYPE html><html lang="en"><head>${headBlock}</head><body>${body.trim()}</body></html>`
 }
 
 /** Prepare stored HTML for GrapesJS `setComponents`. */
