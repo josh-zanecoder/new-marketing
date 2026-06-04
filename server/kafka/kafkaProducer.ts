@@ -8,7 +8,11 @@ import {
   type SASLOptions
 } from 'kafkajs'
 import type { MarketingKafkaEnvelope } from './marketingKafkaEvent'
-import { getRegistryConnection } from '../lib/mongoose'
+import {
+  getRegistryConnection,
+  invalidateRegistryConnection,
+  isTransientMongoError
+} from '../lib/mongoose'
 import { logger } from '../utils/logger'
 import {
   CONTACT_EVENT_TYPES,
@@ -134,19 +138,6 @@ function parseMarketingSyncRequestedEnvelope(
   }
 }
 
-function isTransientInboundMongoError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false
-  const msg = err.message.toLowerCase()
-  return (
-    err.name === 'MongoNetworkError' ||
-    err.name === 'MongoNotConnectedError' ||
-    msg.includes('epipe') ||
-    msg.includes('econnreset') ||
-    msg.includes('connection') ||
-    msg.includes('timed out')
-  )
-}
-
 function inboundMongoRetryDelayMs(attempt: number): number {
   return Math.min(30_000, 2_000 * attempt)
 }
@@ -216,7 +207,7 @@ async function handleMarketingSyncRequested(
       await ctx?.heartbeat()
       break
     } catch (err) {
-      const canRetry = attempt < maxAttempts && isTransientInboundMongoError(err)
+      const canRetry = attempt < maxAttempts && isTransientMongoError(err)
       if (!canRetry) throw err
       logger.warn('Kafka inbound marketing.sync.requested retry after Mongo error', {
         attempt,
@@ -227,6 +218,7 @@ async function handleMarketingSyncRequested(
         err: err instanceof Error ? err.message : String(err)
       })
       await ctx?.heartbeat()
+      await invalidateRegistryConnection()
       await new Promise((resolve) => setTimeout(resolve, inboundMongoRetryDelayMs(attempt)))
     }
   }
@@ -544,6 +536,7 @@ async function listInboundSubscriptionTopics(): Promise<string[]> {
           retryDelayMs,
           err: message
         })
+        await invalidateRegistryConnection()
         await sleepMs(retryDelayMs)
         continue
       }

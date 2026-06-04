@@ -44,7 +44,9 @@ Previously, handler errors were logged and **swallowed** → Kafka committed the
 | Mechanism | Effect |
 |-----------|--------|
 | **Re-throw** on inbound handler failure | Failed chunk offset is **not** committed |
-| **3× retry** on sync upsert for transient Mongo errors | Covers `EPIPE`, `ECONNRESET`, `MongoNetworkError`, `MongoNotConnectedError` |
+| **3× retry** on sync upsert for transient Mongo errors | Covers `EPIPE`, `ECONNRESET`, `MongoNetworkError`, `MongoNotConnectedError`, `MongooseServerSelectionError`, `ReplicaSetNoPrimary` |
+| **Registry connect** (`server/lib/mongoose.ts`) | Single-flight connect, 3× retry, `invalidateRegistryConnection` on failure, `maxPoolSize` default **15** |
+| **Sync upsert concurrency** | Default **3** parallel writes per chunk (max 25 via env) — lowers Mongo burst vs 25 at once |
 | **Consumer restart** after run loop exit | Restarts after `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` (default 30s) |
 
 Deploy **`marketing-kafka-worker`** for this fix to be live. Web redeploy alone does not update sync consumption.
@@ -152,6 +154,8 @@ Code hardening prevents **new** gaps after worker deploy; it does **not** replay
 | `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` | `30000` | Consumer start/restart backoff |
 | `KAFKA_CONSUMER_GROUP_ID` | `new-marketing-inbound-events` | Consumer group |
 | `KAFKA_CONSUMER_FROM_BEGINNING` | `false` | New topics start at latest offset |
+| `MONGODB_MAX_POOL_SIZE` | **`15` in code** | Optional override; per-instance pool cap |
+| `KAFKA_SYNC_UPSERT_CONCURRENCY` | **`3` in code** | Optional override; parallel upserts per sync chunk (1–25) |
 
 ---
 

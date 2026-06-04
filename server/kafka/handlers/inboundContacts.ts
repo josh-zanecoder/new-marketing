@@ -385,43 +385,54 @@ export async function upsertContactsFromSyncSnapshot(params: {
     .filter((x): x is SyncSnapshotUpsertRow => Boolean(x))
 
   if (rows.length === 0) return 0
-  await Promise.all(
-    rows.map(async (r) => {
-      const snapSet: Record<string, unknown> = {
-        externalId: r.externalId,
-        source: KAFKA_INBOUND_CONTACT_SOURCE,
-        firstName: r.firstName,
-        lastName: r.lastName,
-        email: r.email,
-        phone: r.phone,
-        address: r.address,
-        company: r.company,
-        channel: r.channel,
-        status: r.status,
-        stage: r.stage,
-        deletedAt: null,
-        metadata: {
-          ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
-          syncOccurredAt: params.occurredAt,
-          ...(r.ownerId ? { ownerId: r.ownerId } : {}),
-          ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
-        },
-        contactType: r.contactTypeKeys
-      }
-      await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
-      await models.Contact.updateOne(
-        { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
-        { $set: snapSet },
-        { upsert: true }
-      )
-      const doc = await models.Contact.findOne(
-        { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
-        { _id: 1 }
-      ).lean()
-      if (doc?._id) {
-        await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-      }
-    })
-  )
+  const concurrency = resolveSyncUpsertConcurrency()
+  for (let i = 0; i < rows.length; i += concurrency) {
+    const batch = rows.slice(i, i + concurrency)
+    await Promise.all(
+      batch.map(async (r) => {
+        const snapSet: Record<string, unknown> = {
+          externalId: r.externalId,
+          source: KAFKA_INBOUND_CONTACT_SOURCE,
+          firstName: r.firstName,
+          lastName: r.lastName,
+          email: r.email,
+          phone: r.phone,
+          address: r.address,
+          company: r.company,
+          channel: r.channel,
+          status: r.status,
+          stage: r.stage,
+          deletedAt: null,
+          metadata: {
+            ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
+            syncOccurredAt: params.occurredAt,
+            ...(r.ownerId ? { ownerId: r.ownerId } : {}),
+            ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+          },
+          contactType: r.contactTypeKeys
+        }
+        await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
+        await models.Contact.updateOne(
+          { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
+          { $set: snapSet },
+          { upsert: true }
+        )
+        const doc = await models.Contact.findOne(
+          { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
+          { _id: 1 }
+        ).lean()
+        if (doc?._id) {
+          await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
+        }
+      })
+    )
+  }
   return rows.length
+}
+
+const DEFAULT_SYNC_UPSERT_CONCURRENCY = 3
+
+function resolveSyncUpsertConcurrency(): number {
+  const raw = Number(process.env.KAFKA_SYNC_UPSERT_CONCURRENCY)
+  return Number.isFinite(raw) && raw >= 1 && raw <= 25 ? Math.floor(raw) : DEFAULT_SYNC_UPSERT_CONCURRENCY
 }
