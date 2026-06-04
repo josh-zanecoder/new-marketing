@@ -19,7 +19,13 @@ function inboundTopicRefreshMs(): number {
 }
 
 export default defineNitroPlugin(() => {
-  if (isInboundConsumerDisabled()) return
+  if (isInboundConsumerDisabled()) {
+    logger.info('Kafka inbound consumer disabled on this instance', {
+      KAFKA_INBOUND_CONSUMER_DISABLED: process.env.KAFKA_INBOUND_CONSUMER_DISABLED ?? '',
+      KAFKA_CRM_CONSUMER_DISABLED: process.env.KAFKA_CRM_CONSUMER_DISABLED ?? ''
+    })
+    return
+  }
 
   let starting = false
 
@@ -47,6 +53,7 @@ export default defineNitroPlugin(() => {
 
   const refreshMs = inboundTopicRefreshMs()
   if (refreshMs > 0) {
+    logger.info('Kafka inbound topic refresh scheduler enabled', { refreshMs })
     setInterval(() => {
       import('../kafkaProducer')
         .then(({ refreshInboundEventsConsumerTopicsIfChanged }) =>
@@ -58,5 +65,9 @@ export default defineNitroPlugin(() => {
           })
         })
     }, refreshMs)
+  } else {
+    logger.info('Kafka inbound topic refresh scheduler disabled', {
+      KAFKA_INBOUND_TOPIC_REFRESH_MS: process.env.KAFKA_INBOUND_TOPIC_REFRESH_MS ?? ''
+    })
   }
 })

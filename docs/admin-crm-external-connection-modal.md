@@ -4,6 +4,8 @@ Guide for the **CRM external connection** modal in Marketing admin (`/admin/tena
 
 **CRM setup (mortdash-crm):** [MARKETING_EXTERNAL_CONNECTION_SETUP.md](../../mortdash-crm/docs/MARKETING_EXTERNAL_CONNECTION_SETUP.md)
 
+**Launch sync (CRM + worker):** [marketing-crm-launch-sync.md](./marketing-crm-launch-sync.md) · CRM side: [MARKETING_LAUNCH_SYNC_DELTA.md](../../mortdash-crm/docs/MARKETING_LAUNCH_SYNC_DELTA.md)
+
 ---
 
 ## Where it appears
