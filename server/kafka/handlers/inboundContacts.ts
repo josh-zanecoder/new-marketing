@@ -338,7 +338,9 @@ export async function upsertContactsFromSyncSnapshot(params: {
     eventType: 'marketing.sync.requested',
     dBname: params.dBname
   })
+
   if (!tenantConn || !Array.isArray(params.contacts) || params.contacts.length === 0) return 0
+
   const models = getTenantClientModels(tenantConn)
   const defaultTypeKey = await resolveDefaultContactTypeKey(tenantConn)
 
@@ -346,24 +348,40 @@ export async function upsertContactsFromSyncSnapshot(params: {
     .map((c) => {
       const externalId = String(c.externalId || '').trim()
       const email = String(c.email || '').trim().toLowerCase()
+
       if (!externalId || !email) return null
+
       const payloadMetadata = c.metadata ?? {}
       const ownerId = typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
-      const ownerEmail =
-        typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
-      const status = readStatusFromPayloadAndMetadata(c as unknown as Record<string, unknown>, payloadMetadata)
-      const stage = readStageFromPayloadAndMetadata(c as unknown as Record<string, unknown>, payloadMetadata)
+      const ownerEmail = typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+
+      const status = readStatusFromPayloadAndMetadata(
+        c as unknown as Record<string, unknown>,
+        payloadMetadata
+      )
+
+      const stage = readStageFromPayloadAndMetadata(
+        c as unknown as Record<string, unknown>,
+        payloadMetadata
+      )
+
       const fn = String(c.firstName ?? '').trim()
       const ln = String(c.lastName ?? '').trim()
       const legacy = String(c.name ?? '').trim()
+
       const firstName = fn || legacy
       const lastName = ln
+
       let contactTypeKeys = normalizeContactTypeInput(
-        Array.isArray(c.contactTypes) && c.contactTypes.length ? c.contactTypes : c.contactType
+        Array.isArray(c.contactTypes) && c.contactTypes.length
+          ? c.contactTypes
+          : c.contactType
       )
+
       if (!contactTypeKeys.length) {
         contactTypeKeys = [defaultTypeKey]
       }
+
       const row: SyncSnapshotUpsertRow = {
         externalId,
         email,
@@ -380,59 +398,77 @@ export async function upsertContactsFromSyncSnapshot(params: {
         contactTypeKeys,
         partnerRelationships: readPartnerRelationshipsFromMetadata(payloadMetadata)
       }
+
       return row
     })
     .filter((x): x is SyncSnapshotUpsertRow => Boolean(x))
 
   if (rows.length === 0) return 0
-  const concurrency = resolveSyncUpsertConcurrency()
-  for (let i = 0; i < rows.length; i += concurrency) {
-    const batch = rows.slice(i, i + concurrency)
-    await Promise.all(
-      batch.map(async (r) => {
-        const snapSet: Record<string, unknown> = {
-          externalId: r.externalId,
-          source: KAFKA_INBOUND_CONTACT_SOURCE,
-          firstName: r.firstName,
-          lastName: r.lastName,
-          email: r.email,
-          phone: r.phone,
-          address: r.address,
-          company: r.company,
-          channel: r.channel,
-          status: r.status,
-          stage: r.stage,
-          deletedAt: null,
-          metadata: {
-            ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
-            syncOccurredAt: params.occurredAt,
-            ...(r.ownerId ? { ownerId: r.ownerId } : {}),
-            ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
-          },
-          contactType: r.contactTypeKeys
-        }
-        await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
-        await models.Contact.updateOne(
-          { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
-          { $set: snapSet },
-          { upsert: true }
-        )
-        const doc = await models.Contact.findOne(
-          { externalId: r.externalId, source: KAFKA_INBOUND_CONTACT_SOURCE },
-          { _id: 1 }
-        ).lean()
-        if (doc?._id) {
-          await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-        }
-      })
+
+  const snapDocs = await Promise.all(
+    rows.map(async (r) => {
+      const snapSet: Record<string, unknown> = {
+        externalId: r.externalId,
+        source: KAFKA_INBOUND_CONTACT_SOURCE,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        phone: r.phone,
+        address: r.address,
+        company: r.company,
+        channel: r.channel,
+        status: r.status,
+        stage: r.stage,
+        deletedAt: null,
+        metadata: {
+          ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
+          syncOccurredAt: params.occurredAt,
+          ...(r.ownerId ? { ownerId: r.ownerId } : {}),
+          ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+        },
+        contactType: r.contactTypeKeys
+      }
+
+      await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
+
+      return {
+        row: r,
+        snapSet
+      }
+    })
+  )
+
+  await models.Contact.bulkWrite(
+    snapDocs.map(({ row, snapSet }) => ({
+      updateOne: {
+        filter: {
+          externalId: row.externalId,
+          source: KAFKA_INBOUND_CONTACT_SOURCE
+        },
+        update: {
+          $set: snapSet
+        },
+        upsert: true
+      }
+    })),
+    { ordered: false }
+  )
+
+  const externalIds = rows.map((r) => r.externalId)
+
+  const docs = await models.Contact.find(
+    {
+      externalId: { $in: externalIds },
+      source: KAFKA_INBOUND_CONTACT_SOURCE
+    },
+    { _id: 1 }
+  ).lean()
+
+  await Promise.all(
+    docs.map((doc) =>
+      syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
     )
-  }
+  )
+
   return rows.length
-}
-
-const DEFAULT_SYNC_UPSERT_CONCURRENCY = 3
-
-function resolveSyncUpsertConcurrency(): number {
-  const raw = Number(process.env.KAFKA_SYNC_UPSERT_CONCURRENCY)
-  return Number.isFinite(raw) && raw >= 1 && raw <= 25 ? Math.floor(raw) : DEFAULT_SYNC_UPSERT_CONCURRENCY
 }
