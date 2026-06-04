@@ -14,6 +14,8 @@ function getBrevoApiKey(): string {
 export interface SendEmailParams {
   sender: { name: string; email: string }
   to: { email: string; name?: string }[]
+  /** When set, recipients reply to this address (Brevo requires `name`). */
+  replyTo?: { email: string; name: string }
   subject: string
   htmlContent: string
   tags?: string[]
@@ -80,6 +82,14 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
     const result = await client.transactionalEmails.sendTransacEmail({
       sender: { email: params.sender.email, name: params.sender.name },
       to: params.to.map((r) => ({ email: r.email, name: r.name })),
+      ...(params.replyTo?.email?.includes('@') && params.replyTo.name?.trim()
+        ? {
+            replyTo: {
+              email: params.replyTo.email.trim().toLowerCase(),
+              name: params.replyTo.name.trim().slice(0, 70)
+            }
+          }
+        : {}),
       subject: params.subject,
       htmlContent: params.htmlContent,
       ...(tags.length ? { tags } : {})
