@@ -18,7 +18,9 @@ const {
   resumeSendStatusPolling,
   stopSendPolling,
   isSendPolling,
-  closeSendModal
+  closeSendModal,
+  dismissSendModal,
+  openSendModal
 } = useCampaignSendFlow()
 const id = route.params.id as string
 
@@ -37,7 +39,7 @@ const mergeAsync = useAsyncData(`email-merge-root-${id}`, async () => ({
 }))
 
 const { data, error, pending, refresh } = detailAsync
-const { data: mergeRootPayload, pending: mergeRootPending } = mergeAsync
+const { data: mergeRootPayload } = mergeAsync
 
 const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
 
@@ -89,14 +91,25 @@ async function handleSend() {
 
 const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
 
-/** Inline banner for scheduled/background sends; modal covers send-now from this page. */
+const sendProgressModalOpen = computed(() => sendingCampaignId.value === id)
+
+/** Inline live progress when modal is dismissed (send-now or scheduled background send). */
 const showDetailSendProgress = computed(() => {
-  if (sendingCampaignId.value === id) return false
+  if (sendProgressModalOpen.value) return false
   return (
     campaign.value?.status === 'Sending' ||
     (!!detailSendProgress.value && !detailSendProgress.value.done)
   )
 })
+
+const detailSendProgressLabel = computed(() => {
+  if (isSendPolling(id) || campaign.value?.status === 'Sending') return 'Send in progress'
+  return 'Scheduled send in progress'
+})
+
+function openDetailSendReport() {
+  openSendModal(id)
+}
 
 function tryResumeSendPolling() {
   if (!import.meta.client) return
@@ -466,7 +479,9 @@ const campaignViewTab = ref<CampaignViewTab>('details')
             <ClientCampaignSendProgressBanner
               v-else-if="showDetailSendProgress && detailSendProgress"
               :progress="detailSendProgress"
-              label="Scheduled send in progress"
+              :label="detailSendProgressLabel"
+              clickable
+              @open="openDetailSendReport"
             />
             <div
               v-else-if="showDetailSendProgress && campaign.status === 'Sending' && !detailSendProgress"
@@ -803,11 +818,12 @@ const campaignViewTab = ref<CampaignViewTab>('details')
     </Teleport>
 
     <ClientSendProgressModal
-      :open="!!sendingCampaignId"
+      :open="sendProgressModalOpen"
+      :campaign-id="id"
       :campaign-name="sendModalCampaignName"
       :send-error="sendError"
-      :send-progress="sendProgress"
-      @close="closeSendModal"
+      :send-progress="detailSendProgress ?? sendProgress"
+      @close="dismissSendModal"
     />
 
     <ClientSendSuccessModal

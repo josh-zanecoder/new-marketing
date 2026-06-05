@@ -283,7 +283,8 @@
                     v-if="!manualRecipientsListed.length"
                     class="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center text-sm text-slate-500"
                   >
-                    No recipients yet — tap <span class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogPending && !contactsCatalog.length"
+                    No recipients yet — tap <span
+class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogPending && !contactsCatalog.length"
                     @click="openAddContactsModal">Add contacts</span> to open the picker.
                   </p>
                   <ul
@@ -533,6 +534,7 @@
 
     <ClientSendProgressModal
       :open="!!sendingCampaignId"
+      :campaign-id="sendingCampaignId"
       :campaign-name="campaignNameForSendModal"
       :send-error="sendError"
       :send-progress="sendProgress"

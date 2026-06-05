@@ -3,7 +3,7 @@
  * Criteria → query: `buildContactFilterQuery` (and row/flat helpers). Writes: `rebuildRecipientListMembers`.
  */
 import type { Connection, FilterQuery } from 'mongoose'
-import mongoose from 'mongoose'
+import type mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
   RecipientListCriterion,

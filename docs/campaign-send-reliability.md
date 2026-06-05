@@ -17,8 +17,8 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 ## Flow
 
 1. **`beginCampaignSend`** — builds `CampaignRecipient` rows (frozen audience), sets `status: Sending`, assigns `sendRunId`, enqueues batch page `0`.
-2. **`processBatch`** (worker) — loads up to **99** pending/failed recipients, marks `sending`, sends one Brevo `messageVersions` request with **`Idempotency-Key`**, marks `sent` / `failed`.
-3. **Next page** — if more pending, enqueues `page + 1` with the same `sendRunId` (deterministic BullMQ `jobId` per page).
+2. **`processBatch`** (worker) — atomically **claims** up to **500** pending/failed rows as `sending`, sends one Brevo `messageVersions` request with **`Idempotency-Key`**, marks `sent` / `failed`. When every recipient in the chunk shares the same rendered subject/HTML, Brevo gets a **ratesheet-style** compact payload (root content + per-recipient `to` / optional `params`); otherwise each version carries its own merged HTML.
+3. **Next page** — worker runs with **concurrency 1** by default (serial chain like ratesheet Cloud Tasks). After a chunk that actually processed recipients, enqueues `page + 1`; if nothing was claimed but work remains, re-enqueues the same page. Does not chain while only stale `sending` rows are in flight (`chainNext: false`).
 4. **`finalizeCampaignSendIfComplete`** — when no `pending` or `sending` rows remain → `Sent` or `Failed`.
 
 ## Duplicate prevention
@@ -43,6 +43,8 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
 | `CAMPAIGN_SEND_STALE_SENDING_MS` | `7200000` (2h) | Stale `sending` → `failed` |
+| `CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS` | `180000` (3m) | Stale `sending` → `sent` when Brevo likely delivered |
+| `CAMPAIGN_EMAIL_WORKER_CONCURRENCY` | `1` | BullMQ worker parallelism for batch jobs (keep at 1 in prod) |
 | `CAMPAIGN_SEND_KAFKA_NOTIFY` | (enabled) | Set `false` to skip optional `campaign.send.completed` Kafka publish |
 | `EMAIL_WORKER_DISABLED` | — | `true` on kafka-only Cloud Run worker |
 | `SCHEDULE_RECONCILE_DISABLED` / `SENDING_RECONCILE_DISABLED` | — | Disable Mongo safety-net ticks |
@@ -55,6 +57,7 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | Queue | `server/queue/emailQueue.ts` |
 | Worker | `server/workers/emailWorker.ts` |
 | Brevo batch | `server/services/brevo.service.ts` |
-| Constants / idempotency | `server/utils/campaignSend/` |
+| Constants / idempotency / Brevo batch shape | `server/utils/campaignSend/` |
+| Recipient claim | `server/utils/campaignSend/claimCampaignRecipientBatch.ts` |
 | Reconcile | `server/services/reconcileStuckSendingCampaigns.ts` |
 | Optional CRM notify | `server/campaign-delivery/notifyCampaignSendCompleted.ts` |

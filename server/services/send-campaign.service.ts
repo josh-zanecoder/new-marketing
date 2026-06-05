@@ -31,6 +31,7 @@ import { buildCampaignReplyTo } from '@server/utils/email/replyToFromContactMeta
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
+import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import {
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
   CAMPAIGN_RECIPIENT_STATUS_PENDING,
@@ -41,6 +42,7 @@ import {
   CAMPAIGN_SEND_STALE_SENDING_MS_DEFAULT
 } from '../utils/campaignSend/constants'
 import { campaignSendJobShouldSkip } from '../utils/campaignSend/campaignSendJobGuard'
+import type { CampaignBatchMessageVersion } from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
 
 const MISSING_BREVO_ID_MESSAGE =
   'Brevo did not return a message id for this recipient (partial or empty API response).'
@@ -193,6 +195,18 @@ export interface ProcessBatchResult {
   skipped?: boolean
   /** When false, worker must not enqueue the next page (in-flight `sending` only). */
   chainNext?: boolean
+  /** Recipients claimed and processed in this job (drives page chaining). */
+  processedInBatch?: number
+}
+
+function recipientBrevoParams(contact: {
+  firstName?: string | null
+  lastName?: string | null
+} | null | undefined): Record<string, string> | undefined {
+  const firstName = String(contact?.firstName ?? '').trim()
+  const lastName = String(contact?.lastName ?? '').trim()
+  if (!firstName && !lastName) return undefined
+  return { firstName, lastName }
 }
 
 export interface BeginCampaignSendOptions {
@@ -562,14 +576,11 @@ export async function processBatch(
     }
   }
 
-  const pending = await (CampaignRecipient as CampaignRecipientModel)
-    .find({
-      campaign: campaignId,
-      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_FAILED] }
-    })
-    .sort({ _id: 1 })
-    .limit(CAMPAIGN_SEND_BATCH_SIZE)
-    .lean<CampaignRecipientLean[]>()
+  const pending = await claimCampaignRecipientBatch(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId,
+    CAMPAIGN_SEND_BATCH_SIZE
+  )
 
   if (pending.length === 0) {
     const [sendingOnlyCount, finalized] = await Promise.all([
@@ -626,6 +637,7 @@ export async function processBatch(
         })
       }
     }
+    const stillQueued = counts.pending > 0
     return {
       campaignId,
       campaignStatus: campaignUpdated.status,
@@ -634,7 +646,8 @@ export async function processBatch(
       failed: counts.failed,
       total: counts.pending + counts.sent + counts.failed,
       done: counts.pending === 0,
-      chainNext: !waitForInFlight
+      chainNext: stillQueued && !waitForInFlight,
+      processedInBatch: 0
     }
   }
 
@@ -643,6 +656,8 @@ export async function processBatch(
     campaignId,
     pending.map((r) => String(r._id))
   )
+
+  let processedInBatch = 0
 
   logSend('batchStart', {
     campaignId,
@@ -671,15 +686,8 @@ export async function processBatch(
       { _id: { $in: pending.map((r) => r._id) } },
       { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: 'Missing email template or sender' } }
     )
+    processedInBatch = pending.length
   } else {
-    await (CampaignRecipient as CampaignRecipientModel).updateMany(
-      { _id: { $in: pending.map((r) => r._id) } },
-      {
-        $set: { status: CAMPAIGN_RECIPIENT_STATUS_SENDING },
-        $unset: { error: 1, brevoMessageId: 1 }
-      }
-    )
-
     const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
     let brevoTenantTagValue: string | undefined
     let unsubscribeSigningSecret: string | undefined
@@ -709,7 +717,7 @@ export async function processBatch(
 
     type Prepared = {
       row: CampaignRecipientLean
-      version: { to: { email: string; name?: string }[]; subject: string; htmlContent: string }
+      version: CampaignBatchMessageVersion
       failed?: string
     }
 
@@ -744,15 +752,19 @@ export async function processBatch(
       const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
+      const params = recipientBrevoParams(contact)
       return {
         row: r,
         version: {
           to: [{ email: r.email, ...(name ? { name } : {}) }],
           subject: subjectRendered,
-          htmlContent: htmlRendered
+          htmlContent: htmlRendered,
+          ...(params ? { params } : {})
         }
       }
     })
+
+    processedInBatch = pending.length
 
     const toSend = prepared.filter((p) => !p.failed)
     const idempotencyKey = campaignBatchBrevoIdempotencyKey({
@@ -878,7 +890,8 @@ export async function processBatch(
     failed: counts.failed,
     total: counts.pending + counts.sent + counts.failed,
     done: !hasNext,
-    chainNext: hasNext
+    chainNext: hasNext,
+    processedInBatch
   }
 }
 

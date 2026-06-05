@@ -18,6 +18,13 @@ import {
 } from '../services/send-campaign.service'
 import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
+import { CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT } from '../utils/campaignSend/constants'
+
+function campaignEmailWorkerConcurrency(): number {
+  const raw = Number(process.env.CAMPAIGN_EMAIL_WORKER_CONCURRENCY)
+  if (Number.isFinite(raw) && raw >= 1 && raw <= 8) return Math.floor(raw)
+  return CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT
+}
 
 const G = globalThis as typeof globalThis & { __emailBullWorker?: Worker | null }
 
@@ -194,22 +201,26 @@ export function startEmailWorker() {
             pending: result.pending,
             sent: result.sent,
             failed: result.failed,
+            processedInBatch: result.processedInBatch,
             ms: Date.now() - startedAt
           })
           return
         }
+        const processed = result.processedInBatch ?? 0
+        const nextPage = processed > 0 ? page + 1 : page
         await enqueueCampaignBatchFollowUp({
           campaignId,
           dbName,
           sendRunId,
-          page: page + 1
+          page: nextPage
         })
         jobLog('batch.continue', {
           campaignId,
           dbName,
           sendRunId,
           page,
-          nextPage: page + 1,
+          nextPage,
+          processedInBatch: processed,
           pending: result.pending,
           sent: result.sent,
           failed: result.failed,
@@ -239,7 +250,7 @@ export function startEmailWorker() {
     },
     {
       connection: getBullMqConnectionOptions(),
-      concurrency: 3
+      concurrency: campaignEmailWorkerConcurrency()
     }
   )
 

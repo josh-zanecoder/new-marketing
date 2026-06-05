@@ -1,5 +1,8 @@
-/** Recipients per BullMQ batch job (Brevo allows up to 99 per message version in one request). */
-export const CAMPAIGN_SEND_BATCH_SIZE = 99
+/** Recipients per BullMQ batch job (Brevo messageVersions limit; aligned with mortdash ratesheet max chunk). */
+export const CAMPAIGN_SEND_BATCH_SIZE = 500
+
+/** Serial batch processing per worker (ratesheet-style); override for local experiments only. */
+export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 1
 
 export const CAMPAIGN_SEND_MAX_RETRY_ATTEMPTS = 3
 export const CAMPAIGN_SEND_RETRY_BASE_DELAY_MS = 5000

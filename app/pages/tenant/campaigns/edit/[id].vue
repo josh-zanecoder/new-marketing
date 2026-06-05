@@ -531,6 +531,7 @@
 
     <ClientSendProgressModal
       :open="!!sendingCampaignId"
+      :campaign-id="sendingCampaignId"
       :campaign-name="campaignNameForSendModal"
       :send-error="sendError"
       :send-progress="sendProgress"

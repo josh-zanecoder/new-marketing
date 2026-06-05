@@ -407,6 +407,15 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendError.value = null
   }
 
+  /** Close modal UI only; keep polling and live progress for inline banner. */
+  function dismissSendModal() {
+    sendingCampaignId.value = null
+  }
+
+  function openSendModal(campaignId: string) {
+    sendingCampaignId.value = campaignId
+  }
+
   return {
     campaigns,
     sendingCampaignId,
@@ -424,6 +433,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
     stopSendStatusPolling,
     isSendPolling,
     clearSendModal,
+    dismissSendModal,
+    openSendModal,
     getCampaignDetailCache,
     setCampaignDetailCache,
     patchCampaignDetailCache,

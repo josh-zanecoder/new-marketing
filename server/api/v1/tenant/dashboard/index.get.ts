@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import type mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'

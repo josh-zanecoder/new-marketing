@@ -40,3 +40,29 @@ export interface SendStatus {
   done: boolean
 }
 
+export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed'
+
+export interface CampaignSendRecipientReportItem {
+  email: string
+  status?: string
+  sentAt?: string
+  error?: string
+}
+
+export interface CampaignSendRecipientReport {
+  campaignId: string
+  campaignStatus: string
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  counts: {
+    sent: number
+    pending: number
+    failed: number
+    sending: number
+    total: number
+  }
+  items: CampaignSendRecipientReportItem[]
+}
+
