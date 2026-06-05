@@ -7,7 +7,10 @@ import {
 } from '../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
-import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import {
+  syncContactRecipientListMembership,
+  syncContactRecipientListMembershipBatch
+} from '@server/utils/recipient/syncContactRecipientListMembership'
 import {
   applyContactTypeFieldsToSetDoc,
   normalizeContactTypeInput
@@ -526,13 +529,9 @@ async function upsertContactSyncSlice(
     { _id: 1 }
   ).lean()
 
-  const listConcurrency = resolveMarketingSyncRecipientListConcurrency()
-  await runTasksWithConcurrency(
-    docs,
-    listConcurrency,
-    async (doc) => {
-      await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-    },
+  await syncContactRecipientListMembershipBatch(
+    tenantConn,
+    docs.map((doc) => doc._id as Types.ObjectId),
     params.heartbeat
   )
 
