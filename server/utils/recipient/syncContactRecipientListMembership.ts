@@ -16,6 +16,68 @@ import {
 
 type RecipientListDoc = Record<string, unknown> & { _id: mongoose.Types.ObjectId }
 
+type RecipientListSyncConfig = {
+  listId: mongoose.Types.ObjectId
+  scopedQuery: Record<string, unknown>
+}
+
+async function buildRecipientListScopedQueryForSync(
+  tenantConn: Connection,
+  listDoc: RecipientListDoc
+): Promise<Record<string, unknown>> {
+  const normalized = normalizeRecipientListDoc(listDoc)
+  const { audience, filters, filterMode } = normalized
+  const criterionGroups = await criterionGroupsFromFilterRows(
+    tenantConn,
+    audience,
+    listDoc.filterRows
+  )
+  const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
+  const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
+  const joinsForQuery = pickJoinsForQuery(
+    criterionGroups,
+    null,
+    listDoc as { criterionJoins?: unknown }
+  )
+  const baseQuery = buildContactFilterQuery(
+    audience,
+    filters,
+    filterMode,
+    groupsForQuery,
+    joinsForQuery
+  )
+  const scopeRaw = (listDoc as { membershipScope?: unknown }).membershipScope
+  const membershipScope =
+    scopeRaw === 'tenant' || scopeRaw === 'owner_emails' ? scopeRaw : 'owner_emails'
+  const storedEmails = recipientListStoredMembershipEmails(
+    listDoc as { membershipOwnerEmails?: unknown }
+  )
+  const listOE = recipientListOwnerEmailForContactScope(
+    listDoc as { metadata?: { ownerEmail?: unknown } | null }
+  )
+  const ownerScopeForSync =
+    storedEmails.length > 0 ? storedEmails : listOE ? [listOE] : undefined
+  return membershipScope === 'tenant'
+    ? (baseQuery as Record<string, unknown>)
+    : mergeContactOwnerScopeFilter(baseQuery as Record<string, unknown>, ownerScopeForSync)
+}
+
+async function loadDynamicRecipientListSyncConfigs(
+  tenantConn: Connection
+): Promise<RecipientListSyncConfig[]> {
+  const { RecipientList } = getTenantClientModels(tenantConn)
+  const lists = await RecipientList.find({ listType: { $nin: ['static'] } })
+    .lean<RecipientListDoc[]>()
+  const configs: RecipientListSyncConfig[] = []
+  for (const listDoc of lists) {
+    configs.push({
+      listId: listDoc._id,
+      scopedQuery: await buildRecipientListScopedQueryForSync(tenantConn, listDoc)
+    })
+  }
+  return configs
+}
+
 /**
  * Rebuilds criterion groups from persisted `filterRows` (same semantics as list create/patch).
  * When rows are missing or filters are gone, falls back to flat `filters` only via `buildContactFilterQuery`.
@@ -83,60 +145,13 @@ export async function syncContactRecipientListMembership(
     return
   }
 
-  const lists = await RecipientList.find({ listType: { $nin: ['static'] } })
-    .lean<RecipientListDoc[]>()
-
-  for (const listDoc of lists) {
-    const listId = listDoc._id
-    const normalized = normalizeRecipientListDoc(listDoc)
-    const { audience, filters, filterMode } = normalized
-
-    const criterionGroups = await criterionGroupsFromFilterRows(
-      tenantConn,
-      audience,
-      listDoc.filterRows
-    )
-    const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
-    const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
-    const joinsForQuery = pickJoinsForQuery(
-      criterionGroups,
-      null,
-      listDoc as { criterionJoins?: unknown }
-    )
-
-    const baseQuery = buildContactFilterQuery(
-      audience,
-      filters,
-      filterMode,
-      groupsForQuery,
-      joinsForQuery
-    )
-    const scopeRaw = (listDoc as { membershipScope?: unknown }).membershipScope
-    const membershipScope =
-      scopeRaw === 'tenant' || scopeRaw === 'owner_emails' ? scopeRaw : 'owner_emails'
-
-    const storedEmails = recipientListStoredMembershipEmails(
-      listDoc as { membershipOwnerEmails?: unknown }
-    )
-    const listOE = recipientListOwnerEmailForContactScope(
-      listDoc as { metadata?: { ownerEmail?: unknown } | null }
-    )
-    const ownerScopeForSync =
-      storedEmails.length > 0 ? storedEmails : listOE ? [listOE] : undefined
-    const scopedQuery =
-      membershipScope === 'tenant'
-        ? baseQuery
-        : mergeContactOwnerScopeFilter(
-            baseQuery as Record<string, unknown>,
-            ownerScopeForSync
-          )
-
+  const listConfigs = await loadDynamicRecipientListSyncConfigs(tenantConn)
+  for (const { listId, scopedQuery } of listConfigs) {
     const match = await Contact.findOne({
-      $and: [{ _id: contactId }, scopedQuery as Record<string, unknown>]
+      $and: [{ _id: contactId }, scopedQuery]
     })
       .select('_id')
       .lean()
-
     if (match) {
       await RecipientListMember.updateOne(
         { recipientListId: listId, contactId },
@@ -146,5 +161,56 @@ export async function syncContactRecipientListMembership(
     } else {
       await RecipientListMember.deleteOne({ recipientListId: listId, contactId })
     }
+  }
+}
+
+/** Launch-sync path: one list query per dynamic list instead of per contact. */
+export async function syncContactRecipientListMembershipBatch(
+  tenantConn: Connection,
+  contactIds: mongoose.Types.ObjectId[],
+  heartbeat?: () => Promise<void>
+): Promise<void> {
+  if (!contactIds.length) return
+  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
+  const listConfigs = await loadDynamicRecipientListSyncConfigs(tenantConn)
+  await heartbeat?.()
+  for (const { listId, scopedQuery } of listConfigs) {
+    const matching = await Contact.find({
+      $and: [{ _id: { $in: contactIds } }, scopedQuery]
+    })
+      .select('_id')
+      .lean()
+    const matchingIds = new Set(matching.map((doc) => String(doc._id)))
+    const memberUpserts: {
+      updateOne: {
+        filter: { recipientListId: mongoose.Types.ObjectId; contactId: mongoose.Types.ObjectId }
+        update: { $setOnInsert: { recipientListId: mongoose.Types.ObjectId; contactId: mongoose.Types.ObjectId } }
+        upsert: true
+      }
+    }[] = []
+    const removeContactIds: mongoose.Types.ObjectId[] = []
+    for (const contactId of contactIds) {
+      if (matchingIds.has(String(contactId))) {
+        memberUpserts.push({
+          updateOne: {
+            filter: { recipientListId: listId, contactId },
+            update: { $setOnInsert: { recipientListId: listId, contactId } },
+            upsert: true
+          }
+        })
+      } else {
+        removeContactIds.push(contactId)
+      }
+    }
+    if (memberUpserts.length) {
+      await RecipientListMember.bulkWrite(memberUpserts, { ordered: false })
+    }
+    if (removeContactIds.length) {
+      await RecipientListMember.deleteMany({
+        recipientListId: listId,
+        contactId: { $in: removeContactIds }
+      })
+    }
+    await heartbeat?.()
   }
 }

@@ -7,16 +7,15 @@ import {
 } from '../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
-import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import {
+  syncContactRecipientListMembership,
+  syncContactRecipientListMembershipBatch
+} from '@server/utils/recipient/syncContactRecipientListMembership'
 import {
   applyContactTypeFieldsToSetDoc,
   normalizeContactTypeInput
 } from '@server/utils/contact/contactTypeWrite'
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
-import {
-  resolveMarketingSyncRecipientListConcurrency,
-  runTasksWithConcurrency
-} from '@server/utils/runTasksWithConcurrency'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -410,9 +409,9 @@ export async function upsertContactsFromSyncSnapshot(params: {
 
   if (rows.length === 0) return 0
 
-  const snapDocs: { row: SyncSnapshotUpsertRow; snapSet: Record<string, unknown> }[] = []
-  for (const r of rows) {
-    const snapSet: Record<string, unknown> = {
+  const snapDocs = rows.map((r) => ({
+    row: r,
+    snapSet: {
       externalId: r.externalId,
       source: KAFKA_INBOUND_CONTACT_SOURCE,
       firstName: r.firstName,
@@ -432,10 +431,8 @@ export async function upsertContactsFromSyncSnapshot(params: {
         ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
       },
       contactType: r.contactTypeKeys
-    }
-    await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
-    snapDocs.push({ row: r, snapSet })
-  }
+    } satisfies Record<string, unknown>
+  }))
 
   await params.heartbeat?.()
   await models.Contact.bulkWrite(
@@ -465,13 +462,9 @@ export async function upsertContactsFromSyncSnapshot(params: {
     { _id: 1 }
   ).lean()
 
-  const listConcurrency = resolveMarketingSyncRecipientListConcurrency()
-  await runTasksWithConcurrency(
-    docs,
-    listConcurrency,
-    async (doc) => {
-      await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-    },
+  await syncContactRecipientListMembershipBatch(
+    tenantConn,
+    docs.map((doc) => doc._id as Types.ObjectId),
     params.heartbeat
   )
 
