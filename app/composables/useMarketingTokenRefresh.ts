@@ -1,4 +1,9 @@
 import type { Auth, User } from 'firebase/auth'
+import {
+  isCrmEmbedSession,
+  notifyParentMarketingSessionExpired,
+  redirectToMarketingEmbedAuthFallback
+} from '~/composables/useMarketingEmbed'
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 let sessionLogoutPromise: Promise<void> | null = null
@@ -69,6 +74,7 @@ export function logoutMarketingSession(): Promise<void> {
       'marketing_tenant_bridge',
       marketingTenantHandoffCookieBase()
     )
+    const wasTenantHandoff = tenantBridge.value === '1'
     tenantBridge.value = null
 
     await clearNuxtData('marketing-me')
@@ -79,6 +85,12 @@ export function logoutMarketingSession(): Promise<void> {
       await signOut(getAuth(auth.app))
     } catch {
       /* ignore */
+    }
+
+    if (wasTenantHandoff || isCrmEmbedSession()) {
+      notifyParentMarketingSessionExpired()
+      redirectToMarketingEmbedAuthFallback()
+      return
     }
 
     await navigateTo('/auth/login')

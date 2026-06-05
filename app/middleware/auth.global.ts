@@ -1,6 +1,12 @@
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+import { marketingEmbedAuthFallbackPath, isCrmEmbedSession } from '~/composables/useMarketingEmbed'
 
-const PUBLIC_PATHS = ['/auth/login', '/auth/tenant-callback', '/api-docs']
+const PUBLIC_PATHS = [
+  '/auth/login',
+  '/auth/tenant-callback',
+  '/auth/tenant-session-expired',
+  '/api-docs'
+]
 
 function cookieHeaderAllowsTenantSession(cookieHeader: string | undefined): boolean {
   if (!cookieHeader) return false
@@ -9,6 +15,10 @@ function cookieHeaderAllowsTenantSession(cookieHeader: string | undefined): bool
 }
 
 export default defineNuxtRouteMiddleware((to) => {
+  if (to.path.startsWith('/auth/login') && isCrmEmbedSession()) {
+    return navigateTo('/auth/tenant-session-expired')
+  }
+
   if (PUBLIC_PATHS.some((path) => to.path.startsWith(path))) return
 
   const token = useCookie<string | null>('marketing_token')
@@ -29,5 +39,5 @@ export default defineNuxtRouteMiddleware((to) => {
     }
   }
 
-  return navigateTo('/auth/login')
+  return navigateTo(marketingEmbedAuthFallbackPath())
 })

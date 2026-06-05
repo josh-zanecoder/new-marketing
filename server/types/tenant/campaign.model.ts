@@ -15,6 +15,12 @@ export interface CampaignMetadata {
   ownerEmail?: string
 }
 
+/** Reply-To header snapshot from the user who created the campaign. */
+export interface CampaignReplyTo {
+  email: string
+  name: string
+}
+
 export interface CampaignLean {
   _id: Types.ObjectId
   name: string
@@ -30,6 +36,8 @@ export interface CampaignLean {
   updatedAt?: Date
   clientId?: string
   mergeUserSnapshot?: CampaignMergeUserSnapshot
+  /** Set at create from creator session; not updated on edit. */
+  replyTo?: CampaignReplyTo
   metadata?: CampaignMetadata
   createdBy?: string
   updatedBy?: string

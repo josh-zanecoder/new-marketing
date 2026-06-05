@@ -1,6 +1,10 @@
 import type { CampaignLean, CampaignMergeUserSnapshot } from '@server/types/tenant/campaign.model'
 import { formatContactFullName } from '@server/utils/contactPersonName'
 import { mergeUserSnapshotsForEmail } from '@server/utils/emailMerge/tenantUserFromAuth'
+import {
+  isTenantApiKeyAuthContext,
+  tenantUserEmailFromAuth
+} from '@server/tenant/registry-auth'
 import type { UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
 
 const BREVO_REPLY_TO_NAME_MAX = 70
@@ -29,14 +33,44 @@ export function replyToNameFromUserSnapshot(
 }
 
 /**
- * Reply-To email from campaign `metadata.ownerEmail` (campaign owner, not recipient contact).
- * Name from `mergeUserSnapshot`, with logged-in user fields filling gaps when provided.
+ * Build Reply-To from the current auth session (campaign creator / duplicator).
+ * Email from tenant user; name from first/last, display name, or email.
+ */
+export function campaignReplyToFromAuth(auth: unknown): { email: string; name: string } | undefined {
+  const email = tenantUserEmailFromAuth(auth)
+  if (!email.includes('@')) return undefined
+
+  if (isTenantApiKeyAuthContext(auth)) {
+    const name = replyToNameFromUserSnapshot({
+      firstName: auth.tenantUserFirstName,
+      lastName: auth.tenantUserLastName,
+      email: auth.tenantUserEmail
+    })
+    if (name) return { email, name }
+    const display = auth.tenantUserName?.trim()
+    if (display) return { email, name: display.slice(0, BREVO_REPLY_TO_NAME_MAX) }
+  }
+
+  return { email, name: email }
+}
+
+/**
+ * Reply-To for Brevo send. Prefers persisted `campaign.replyTo`; falls back to legacy
+ * `metadata.ownerEmail` + `mergeUserSnapshot` for campaigns created before the field existed.
  */
 export function buildCampaignReplyTo(params: {
-  campaign: Pick<CampaignLean, 'metadata' | 'mergeUserSnapshot'>
+  campaign: Pick<CampaignLean, 'replyTo' | 'metadata' | 'mergeUserSnapshot'>
   /** Current tenant session — fallback for display name when snapshot is incomplete. */
   sessionUser?: UserMergeSnapshot | null
 }): { email: string; name: string } | undefined {
+  const stored = params.campaign.replyTo
+  if (stored?.email?.includes('@') && stored.name?.trim()) {
+    return {
+      email: stored.email.trim().toLowerCase(),
+      name: stored.name.trim().slice(0, BREVO_REPLY_TO_NAME_MAX)
+    }
+  }
+
   const email = replyToEmailFromCampaign(params.campaign)
   if (!email) return undefined
   const name =

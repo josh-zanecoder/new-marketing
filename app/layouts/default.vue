@@ -72,6 +72,10 @@ const tenantBridgeCookie = useCookie<string | null>(
   'marketing_tenant_bridge',
   marketingTenantHandoffCookieBase()
 )
+const crmEmbedCookie = useCookie<string | null>(
+  'marketing_crm_embed',
+  marketingTenantHandoffCookieBase()
+)
 
 async function handleBackToCrm() {
   const u = me.value?.authType === 'apiKey' ? me.value.crmAppUrl : undefined
@@ -82,6 +86,7 @@ async function handleBackToCrm() {
   }
   await clearNuxtData('marketing-me')
   tenantBridgeCookie.value = null
+  crmEmbedCookie.value = null
   if (import.meta.client && u) {
     window.location.assign(u)
     return

@@ -33,6 +33,7 @@ export interface TenantCampaignDetail {
   /** `upload` = raw HTML file; `editor` = GrapesJS */
   templateHtmlSource?: 'editor' | 'upload'
   mergeUserSnapshot?: Record<string, unknown>
+  replyTo?: { email: string; name: string }
   createdAt: string
   updatedAt: string
 }

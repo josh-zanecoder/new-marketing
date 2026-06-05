@@ -14,6 +14,14 @@ const mergeUserSnapshotSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const replyToSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, trim: true, lowercase: true },
+    name: { type: String, required: true, trim: true }
+  },
+  { _id: false }
+)
+
 const campaignMetadataSchema = new mongoose.Schema(
   {
     /** Tenant user id of the owner (ACL / filtering). */
@@ -40,6 +48,8 @@ export const campaignSchema = new mongoose.Schema({
   clientId: { type: String, default: '' },
   /** CRM user profile at last save; used at send time for {{ user.* }} when worker has no session. */
   mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false },
+  /** Reply-To header from the user who created the campaign (frozen at create). */
+  replyTo: { type: replyToSchema, required: false },
   metadata: { type: campaignMetadataSchema, default: () => ({}) },
   /** Tenant user id who created the campaign. */
   createdBy: { type: String, default: '', trim: true },
