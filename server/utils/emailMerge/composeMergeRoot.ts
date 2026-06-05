@@ -3,6 +3,7 @@ import { DEFAULT_UNSUBSCRIBE_MERGE_KEY } from '~~/shared/defaultEmailDynamicVari
 import {
   getMergeValue,
   mergeRootWithUserAndRecipient,
+  resolveUserSourceDynamicVariable,
   setMergePath
 } from '../../../shared/utils/emailTemplateMerge'
 import type { ContactLean } from '@server/types/tenant/contact.model'
@@ -12,6 +13,10 @@ import {
   contactLookupRecordForDynamicVariables,
   recipientFieldsFromContact
 } from './recipientFromContact'
+import {
+  mergeUserSnapshotsForEmail,
+  userMergeSnapshotFromContactOwner
+} from './tenantUserFromAuth'
 
 /** One enabled admin-defined token binding (DB row → merge path). */
 export type EmailDynamicVariableBinding = {
@@ -25,6 +30,8 @@ export type EmailDynamicVariableBinding = {
 /**
  * Builds the full object passed to `mergeMustacheTemplate`: `user`, `recipient`, plus custom keys
  * from tenant email dynamic variables.
+ * `tenantUserFields` should come from `mergeUserSnapshotForContact` so `user.*` reflects the
+ * contact's CRM account owner, not the logged-in marketing user.
  */
 export function composeEmailMergeRoot(
   tenantUserFields: UserMergeSnapshot | null | undefined,
@@ -32,7 +39,11 @@ export function composeEmailMergeRoot(
   dynamicVariableBindings: EmailDynamicVariableBinding[]
 ): Record<string, unknown> {
   const recipientSnap = recipientFieldsFromContact(crmContact) ?? {}
-  const base = mergeRootWithUserAndRecipient(tenantUserFields, recipientSnap)
+  const effectiveUserFields = mergeUserSnapshotsForEmail(
+    userMergeSnapshotFromContactOwner(crmContact),
+    tenantUserFields
+  )
+  const base = mergeRootWithUserAndRecipient(effectiveUserFields, recipientSnap)
   const root = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
   const contactLookup = contactLookupRecordForDynamicVariables(crmContact ?? null)
 
@@ -48,7 +59,7 @@ export function composeEmailMergeRoot(
     let raw: unknown = ''
     if (v.sourceType === 'user') {
       const userObj = (root.user as Record<string, unknown>) || {}
-      raw = getMergeValue(userObj, v.contactPath.trim())
+      raw = resolveUserSourceDynamicVariable(v.contactPath.trim(), crmContact ?? null, userObj)
     } else if (contactLookup) {
       raw = getMergeValue(contactLookup, v.contactPath.trim())
     }

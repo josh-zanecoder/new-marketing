@@ -104,16 +104,29 @@ export async function sendCampaignBatchWithMessageVersions(params: {
   const { subject: rootSubject, htmlContent: rootHtml, messageVersions, uniform } =
     buildCampaignBrevoBatchRequest(params.messageVersions)
 
+  const replyToKey = (rt?: { email: string; name: string }) => {
+    if (!rt?.email?.includes('@') || !rt.name?.trim()) return ''
+    return `${rt.email.trim().toLowerCase()}|${rt.name.trim()}`
+  }
+  const versionReplyKeys = messageVersions.map((v) => replyToKey(v.replyTo))
+  const sharedVersionReplyTo =
+    versionReplyKeys.length > 0 &&
+    versionReplyKeys[0] &&
+    versionReplyKeys.every((k) => k === versionReplyKeys[0])
+      ? messageVersions[0]?.replyTo
+      : undefined
+  const rootReplyTo = params.replyTo ?? sharedVersionReplyTo
+
   try {
     const result = await client.transactionalEmails.sendTransacEmail({
       sender: { email: params.sender.email, name: params.sender.name },
       subject: rootSubject,
       htmlContent: rootHtml,
-      ...(params.replyTo?.email?.includes('@') && params.replyTo.name?.trim()
+      ...(rootReplyTo?.email?.includes('@') && rootReplyTo.name?.trim()
         ? {
             replyTo: {
-              email: params.replyTo.email.trim().toLowerCase(),
-              name: params.replyTo.name.trim().slice(0, 70)
+              email: rootReplyTo.email.trim().toLowerCase(),
+              name: rootReplyTo.name.trim().slice(0, 70)
             }
           }
         : {}),

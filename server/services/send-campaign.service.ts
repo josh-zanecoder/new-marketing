@@ -27,7 +27,11 @@ import {
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
-import { buildCampaignReplyTo } from '@server/utils/email/replyToFromContactMetadata'
+import {
+  buildCampaignCreatorReplyTo,
+  buildReplyToFromContactOwner
+} from '@server/utils/email/replyToFromContactMetadata'
+import { mergeUserSnapshotForContact } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
@@ -713,7 +717,7 @@ export async function processBatch(
       [snap?.firstName, snap?.lastName].filter(Boolean).join(' ').trim() ||
       undefined
 
-    const replyTo = buildCampaignReplyTo({ campaign })
+    const creatorReplyTo = buildCampaignCreatorReplyTo(campaign)
 
     type Prepared = {
       row: CampaignRecipientLean
@@ -728,7 +732,7 @@ export async function processBatch(
         return { row: r, version: { to: [{ email: r.email }], subject: '', htmlContent: '' }, failed: 'Contact unsubscribed' }
       }
       const mergeRoot = composeEmailMergeRoot(
-        campaign.mergeUserSnapshot,
+        mergeUserSnapshotForContact(contact, campaign.mergeUserSnapshot),
         contact ?? null,
         dynamicVariableBindings
       )
@@ -753,13 +757,15 @@ export async function processBatch(
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)
+      const replyTo = buildReplyToFromContactOwner(contact, creatorReplyTo)
       return {
         row: r,
         version: {
           to: [{ email: r.email, ...(name ? { name } : {}) }],
           subject: subjectRendered,
           htmlContent: htmlRendered,
-          ...(params ? { params } : {})
+          ...(params ? { params } : {}),
+          ...(replyTo ? { replyTo } : {})
         }
       }
     })
@@ -776,7 +782,6 @@ export async function processBatch(
 
     const batchResult = await sendCampaignBatchWithMessageVersions({
       sender: campaign.sender,
-      ...(replyTo ? { replyTo } : {}),
       messageVersions: toSend.map((p) => p.version),
       tags: [`campaign:${campaignId}`],
       idempotencyKey,

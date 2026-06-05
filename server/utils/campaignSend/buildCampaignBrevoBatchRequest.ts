@@ -4,6 +4,8 @@ export interface CampaignBatchMessageVersion {
   htmlContent: string
   /** Optional Brevo template params (ratesheet-style); used when batch content is uniform. */
   params?: Record<string, string>
+  /** Per-recipient Reply-To (contact account owner); overrides batch-level when owners differ. */
+  replyTo?: { email: string; name: string }
 }
 
 export type BrevoBatchMessageVersionPayload = {
@@ -11,6 +13,7 @@ export type BrevoBatchMessageVersionPayload = {
   subject?: string
   htmlContent?: string
   params?: Record<string, string>
+  replyTo?: { email: string; name: string }
 }
 
 export function campaignBatchVersionsAreUniform(versions: CampaignBatchMessageVersion[]): boolean {
@@ -48,6 +51,12 @@ export function buildCampaignBrevoBatchRequest(versions: CampaignBatchMessageVer
     if (!uniform) {
       inner.subject = String(v.subject ?? '').trim() || subject
       inner.htmlContent = String(v.htmlContent ?? '').trim() || htmlContent
+    }
+    if (v.replyTo?.email?.includes('@') && v.replyTo.name?.trim()) {
+      inner.replyTo = {
+        email: v.replyTo.email.trim().toLowerCase(),
+        name: v.replyTo.name.trim().slice(0, 70)
+      }
     }
     return inner
   })

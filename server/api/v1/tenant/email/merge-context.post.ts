@@ -21,7 +21,7 @@ import {
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
 import {
-  mergeUserSnapshotsForEmail,
+  mergeUserSnapshotForContact,
   tenantUserFieldsFromAuth
 } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
@@ -90,7 +90,11 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }
     const contact = await previewContactForSavedCampaign(conn, campaignId)
-    const userSnapshot = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
+    const userSnapshot = mergeUserSnapshotForContact(
+      contact,
+      campaign.mergeUserSnapshot,
+      authSnap
+    )
     const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
@@ -121,7 +125,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const contact = await previewContactForDraft(conn, draft)
-  const mergeRoot = composeEmailMergeRoot(authSnap ?? {}, contact ?? null, dynamicVariableBindings)
+  const userSnapshot = mergeUserSnapshotForContact(contact, authSnap)
+  const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
   applyDefaultUnsubscribeMergeValue(mergeRoot, {
     dbName,
     contactId: contact?._id ? String(contact._id) : undefined,
