@@ -1,5 +1,6 @@
 /**
- * Safety net: campaigns left in `Sending` when BullMQ jobs fail, Redis evicts jobs,
+ * Sending campaign safety net (Mongo + BullMQ only — not Kafka).
+ * Campaigns left in `Sending` when BullMQ jobs fail, Redis evicts jobs,
  * or the worker was down during enqueue.
  */
 export default defineNitroPlugin(() => {

@@ -1,4 +1,8 @@
-import type { SendStatus } from '~/types/campaign'
+import type {
+  CampaignSendRecipientReport,
+  CampaignSendRecipientReportStatus,
+  SendStatus
+} from '~/types/campaign'
 import type {
   TenantRecipientListDetailPayload,
   TenantRecipientListMemberRow,
@@ -29,6 +33,7 @@ export interface TenantCampaignDetail {
   /** `upload` = raw HTML file; `editor` = GrapesJS */
   templateHtmlSource?: 'editor' | 'upload'
   mergeUserSnapshot?: Record<string, unknown>
+  replyTo?: { email: string; name: string }
   createdAt: string
   updatedAt: string
 }
@@ -180,6 +185,31 @@ export function useTenantMarketingApi() {
     })
   }
 
+  async function fetchCampaignSendRecipients(
+    campaignId: string,
+    opts?: {
+      status?: CampaignSendRecipientReportStatus
+      page?: number
+      limit?: number
+      search?: string
+    }
+  ) {
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 50))
+    const page = Math.max(1, opts?.page ?? 1)
+    return $fetch<CampaignSendRecipientReport>(
+      `/api/v1/tenant/send-campaign/recipients/${encodeURIComponent(campaignId)}`,
+      tenantFetchInit({
+        query: {
+          status: opts?.status ?? 'all',
+          page,
+          limit,
+          ...(opts?.search?.trim() ? { search: opts.search.trim() } : {})
+        },
+        timeout: 60000
+      })
+    )
+  }
+
   async function createCampaign(body: Record<string, unknown>) {
     return $fetch<{ id: string }>('/api/v1/tenant/campaigns', tenantFetchInit({ method: 'POST', body }))
   }
@@ -219,6 +249,7 @@ export function useTenantMarketingApi() {
     fetchTenantMe,
     fetchDashboard,
     fetchSendCampaignStatus,
+    fetchCampaignSendRecipients,
     createCampaign,
     updateCampaign,
     scheduleCampaignSend,

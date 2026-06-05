@@ -6,8 +6,14 @@ import { useCampaignStore } from '~/store/campaignStore'
 const store = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
-const { canSendDraft, canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
-  useCampaignSendFlow()
+const {
+  canSendDraft,
+  canScheduleDraft,
+  sendProgress,
+  startSendStatusPolling,
+  dismissSendModal,
+  closeSendModal
+} = useCampaignSendFlow()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
@@ -596,10 +602,11 @@ onUnmounted(() => {
 
     <ClientSendProgressModal
       :open="!!sendingCampaignId"
+      :campaign-id="sendingCampaignId"
       :campaign-name="campaigns.find((x) => x.id === sendingCampaignId)?.name || 'campaign'"
       :send-error="sendError"
       :send-progress="sendProgress"
-      @close="closeSendModal"
+      @close="dismissSendModal"
     />
 
     <ClientSendSuccessModal

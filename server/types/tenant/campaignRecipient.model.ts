@@ -7,6 +7,7 @@ export interface CampaignRecipientLean {
   status?: string
   sentAt?: Date
   error?: string
+  brevoMessageId?: string
   clientId?: string
 }
 

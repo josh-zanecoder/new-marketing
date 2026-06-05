@@ -1,7 +1,7 @@
 import { getRegistryConnection } from '../lib/mongoose'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
-import { removeScheduledCampaignJob } from '../queue/emailQueue'
+import { hasActiveCampaignSendJob, removeScheduledCampaignJob } from '../queue/emailQueue'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { beginCampaignSend } from './send-campaign.service'
 
@@ -43,7 +43,25 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
     for (const doc of overdue) {
       const campaignId = String(doc._id)
       try {
-        await removeScheduledCampaignJob(dbName, campaignId)
+        if (await hasActiveCampaignSendJob(campaignId, dbName)) {
+          console.log('[ScheduleReconcile] skip (queue job already active)', {
+            dbName,
+            campaignId
+          })
+          continue
+        }
+
+        const removed = await removeScheduledCampaignJob(dbName, campaignId)
+        if (!removed.removed && (removed.reason === 'active' || removed.reason === 'locked')) {
+          console.log('[ScheduleReconcile] skip (scheduled job in flight)', {
+            dbName,
+            campaignId,
+            reason: removed.reason,
+            state: removed.state
+          })
+          continue
+        }
+
         await beginCampaignSend(tenantConn, campaignId, {
           allowedStatuses: ['Scheduled'],
           statusOnEnqueueFailure: 'Scheduled'

@@ -1,6 +1,6 @@
 /**
- * Safety net: if BullMQ delayed jobs are lost (Redis eviction, etc.), still send on time
- * by scanning Mongo for overdue Scheduled campaigns every minute.
+ * Scheduled campaign safety net (Mongo + BullMQ only — not Kafka).
+ * If delayed BullMQ jobs are lost (Redis eviction, etc.), scans for overdue `Scheduled` campaigns.
  */
 export default defineNitroPlugin(() => {
   if (process.env.SCHEDULE_RECONCILE_DISABLED === 'true') return

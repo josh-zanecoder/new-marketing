@@ -12,6 +12,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
+import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 export default defineEventHandler(async (event) => {
@@ -52,6 +53,7 @@ export default defineEventHandler(async (event) => {
     tenantUserFieldsFromAuth(event.context.auth) ?? source.mergeUserSnapshot
 
   const ownership = tenantOwnershipFieldsFromAuth(event.context.auth)
+  const replyTo = campaignReplyToFromAuth(event.context.auth)
 
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
@@ -63,6 +65,7 @@ export default defineEventHandler(async (event) => {
     status: 'Draft',
     clientId: '',
     ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {}),
+    ...(replyTo ? { replyTo } : {}),
     ...ownership
   }).save()
 

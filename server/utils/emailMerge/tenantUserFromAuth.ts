@@ -1,4 +1,7 @@
-import type { UserMergeSnapshot } from '../../../shared/utils/emailTemplateMerge'
+import {
+  type UserMergeSnapshot,
+  userMergeSnapshotFromContactOwnerMetadata
+} from '../../../shared/utils/emailTemplateMerge'
 import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
 
 /**
@@ -40,4 +43,22 @@ export function mergeUserSnapshotsForEmail(
     if (!out.role && src.role) out.role = src.role
   }
   return Object.keys(out).length ? out : undefined
+}
+
+/** CRM account owner fields synced on the contact (`metadata.ownerFirstName`, etc.). */
+export function userMergeSnapshotFromContactOwner(
+  contact: { metadata?: Record<string, unknown> } | null | undefined
+): UserMergeSnapshot | undefined {
+  return userMergeSnapshotFromContactOwnerMetadata(contact?.metadata)
+}
+
+/**
+ * `user.*` template tokens at send/preview: account owner on the recipient contact first,
+ * then campaign snapshot / session for any missing fields (e.g. phone, role).
+ */
+export function mergeUserSnapshotForContact(
+  contact: { metadata?: Record<string, unknown> } | null | undefined,
+  ...fallbacks: Array<UserMergeSnapshot | null | undefined>
+): UserMergeSnapshot | undefined {
+  return mergeUserSnapshotsForEmail(userMergeSnapshotFromContactOwner(contact), ...fallbacks)
 }

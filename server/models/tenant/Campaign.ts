@@ -14,6 +14,14 @@ const mergeUserSnapshotSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const replyToSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, trim: true, lowercase: true },
+    name: { type: String, required: true, trim: true }
+  },
+  { _id: false }
+)
+
 const campaignMetadataSchema = new mongoose.Schema(
   {
     /** Tenant user id of the owner (ACL / filtering). */
@@ -40,11 +48,20 @@ export const campaignSchema = new mongoose.Schema({
   clientId: { type: String, default: '' },
   /** CRM user profile at last save; used at send time for {{ user.* }} when worker has no session. */
   mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false },
+  /** Reply-To header from the user who created the campaign (frozen at create). */
+  replyTo: { type: replyToSchema, required: false },
   metadata: { type: campaignMetadataSchema, default: () => ({}) },
   /** Tenant user id who created the campaign. */
   createdBy: { type: String, default: '', trim: true },
   /** Tenant user id who last edited the campaign (owner fields above are not changed on edit). */
-  updatedBy: { type: String, default: '', trim: true }
+  updatedBy: { type: String, default: '', trim: true },
+  /**
+   * UUID for the active async send run. New value on each send/retry invalidates in-flight BullMQ jobs
+   * (same pattern as mortdash-crm ratesheet `queueRunId`).
+   */
+  sendRunId: { type: String, default: '', trim: true },
+  /** Last completed chunk page index (observability). */
+  sendPage: { type: Number, default: 0 }
 }, { timestamps: true })
 
 campaignSchema.index({ 'metadata.owner': 1 })

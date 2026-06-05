@@ -770,40 +770,6 @@ export async function publishMarketingEnvelope(envelope: MarketingKafkaEnvelope)
   }
 }
 
-export async function publishCampaignSendCompleted(params: {
-  tenantDbName: string
-  tenantId?: string
-  campaignId: string
-  campaignStatus: string
-  sent: number
-  failed: number
-  total: number
-}): Promise<void> {
-  const envelope: MarketingKafkaEnvelope = {
-    eventType: 'campaign.send.completed',
-    occurredAt: new Date().toISOString(),
-    tenantDbName: params.tenantDbName,
-    tenantId: params.tenantId,
-    payload: {
-      campaignId: params.campaignId,
-      campaignStatus: params.campaignStatus,
-      sent: params.sent,
-      failed: params.failed,
-      total: params.total
-    }
-  }
-  try {
-    await publishMarketingEnvelope(envelope)
-    logger.info('campaign.send.completed published', {
-      campaignId: params.campaignId,
-      tenantDbName: params.tenantDbName
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('publish campaign.send.completed failed', msg)
-  }
-}
-
 // --- Inbound consumer + routing (handlers: kafka/handlers/*) -------------------
 
 function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {

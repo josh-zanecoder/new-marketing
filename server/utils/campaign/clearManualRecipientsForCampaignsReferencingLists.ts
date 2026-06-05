@@ -1,5 +1,4 @@
-import type { Connection } from 'mongoose'
-import type { Types } from 'mongoose'
+import type { Connection, Types  } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'

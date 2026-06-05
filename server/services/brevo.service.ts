@@ -1,5 +1,11 @@
 import { BrevoClient } from '@getbrevo/brevo'
 import type { GetEmailEventReportRequest } from '@getbrevo/brevo/transactionalEmails'
+import {
+  buildCampaignBrevoBatchRequest,
+  type CampaignBatchMessageVersion
+} from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
+
+export type { CampaignBatchMessageVersion }
 
 function getBrevoApiKey(): string {
   try {
@@ -63,6 +69,117 @@ function extractBrevoError(e: unknown): string {
   if (data && typeof data === 'object') return JSON.stringify(data)
   if (typeof o.message === 'string') return o.message
   return 'Unknown Brevo error'
+}
+
+export async function sendCampaignBatchWithMessageVersions(params: {
+  sender: SendEmailParams['sender']
+  replyTo?: SendEmailParams['replyTo']
+  messageVersions: CampaignBatchMessageVersion[]
+  tags?: string[]
+  tenantId?: string
+  dbName?: string
+  user?: string
+  /** Brevo `Idempotency-Key` header — stable per logical batch retry. */
+  idempotencyKey?: string
+}): Promise<{ messageIds: (string | null)[]; error?: string }> {
+  const client = getBrevoClient()
+  if (!client) {
+    console.error('[Brevo] API key is not configured')
+    return { messageIds: [], error: 'Brevo API key is not configured' }
+  }
+  if (params.messageVersions.length === 0) {
+    return { messageIds: [] }
+  }
+
+  const tags: string[] = []
+  if (params.tenantId?.trim()) tags.push(`tenant:${params.tenantId.trim()}`)
+  if (params.dbName?.trim()) tags.push(`db:${params.dbName.trim()}`)
+  if (params.user?.trim()) tags.push(`user:${params.user.trim()}`)
+  if (params.tags?.length) tags.push(...params.tags)
+
+  const headers: Record<string, unknown> = {}
+  const idem = String(params.idempotencyKey || '').trim()
+  if (idem) headers['Idempotency-Key'] = idem
+
+  const { subject: rootSubject, htmlContent: rootHtml, messageVersions, uniform } =
+    buildCampaignBrevoBatchRequest(params.messageVersions)
+
+  const replyToKey = (rt?: { email: string; name: string }) => {
+    if (!rt?.email?.includes('@') || !rt.name?.trim()) return ''
+    return `${rt.email.trim().toLowerCase()}|${rt.name.trim()}`
+  }
+  const versionReplyKeys = messageVersions.map((v) => replyToKey(v.replyTo))
+  const sharedVersionReplyTo =
+    versionReplyKeys.length > 0 &&
+    versionReplyKeys[0] &&
+    versionReplyKeys.every((k) => k === versionReplyKeys[0])
+      ? messageVersions[0]?.replyTo
+      : undefined
+  const rootReplyTo = params.replyTo ?? sharedVersionReplyTo
+
+  try {
+    const result = await client.transactionalEmails.sendTransacEmail({
+      sender: { email: params.sender.email, name: params.sender.name },
+      subject: rootSubject,
+      htmlContent: rootHtml,
+      ...(rootReplyTo?.email?.includes('@') && rootReplyTo.name?.trim()
+        ? {
+            replyTo: {
+              email: rootReplyTo.email.trim().toLowerCase(),
+              name: rootReplyTo.name.trim().slice(0, 70)
+            }
+          }
+        : {}),
+      messageVersions,
+      ...(tags.length ? { tags } : {}),
+      ...(Object.keys(headers).length ? { headers } : {})
+    })
+
+    const body = result as { messageId?: string; messageIds?: string[] }
+    const fromArray = (body.messageIds ?? []).filter(
+      (id): id is string => typeof id === 'string' && id.trim().length > 0
+    )
+    const singular =
+      typeof body.messageId === 'string' && body.messageId.trim().length > 0
+        ? body.messageId.trim()
+        : ''
+    const n = params.messageVersions.length
+    const messageIds = alignBrevoMessageIdsToRecipients(n, fromArray, singular)
+    const missing = messageIds.filter((id) => id == null || String(id).trim().length === 0).length
+    if (missing > 0) {
+      console.warn('[Brevo] Campaign batch messageIds partially missing', {
+        recipientCount: n,
+        messageIdCount: fromArray.length,
+        missingCount: missing
+      })
+    }
+    if (uniform && n > 1) {
+      console.log('[Brevo] Campaign batch sent uniform messageVersions', { recipientCount: n })
+    }
+    return { messageIds }
+  } catch (e: unknown) {
+    const err = extractBrevoError(e)
+    console.error('[Brevo] Campaign batch send failed:', err)
+    return { messageIds: [], error: err }
+  }
+}
+
+function alignBrevoMessageIdsToRecipients(
+  n: number,
+  fromArray: string[],
+  singular: string
+): (string | null)[] {
+  if (n <= 0) return []
+  if (fromArray.length === n) return fromArray.map((id) => id ?? null)
+  if (n === 1 && fromArray.length >= 1) return [fromArray[0] ?? null]
+  if (n === 1 && singular) return [singular]
+  const out: (string | null)[] = Array.from({ length: n }, () => null)
+  if (fromArray.length > n) {
+    for (let i = 0; i < n; i++) out[i] = fromArray[i] ?? null
+    return out
+  }
+  for (let i = 0; i < fromArray.length; i++) out[i] = fromArray[i] ?? null
+  return out
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: string; error?: string }> {

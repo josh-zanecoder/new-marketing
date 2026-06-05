@@ -13,7 +13,9 @@ export interface EmailDynamicVariableDoc {
   description?: string
   /**
    * For `recipient`: dot path on Contact at send time (e.g. `firstName`, `address.state`).
-   * For `user`: logical path under `user` in merge data (often matches key after `user.`, e.g. `firstName`); templates use `{{user.firstName}}` filled from the campaign `mergeUserSnapshot` / CRM handoff session.
+   * For `user`: logical path under `user` in merge data (often matches key after `user.`, e.g. `firstName`, `phone`);
+   * resolved from the recipient contact's CRM account owner (`metadata.ownerFirstName`, `metadata.ownerPhone`, etc.)
+   * before campaign snapshot / session fallback — not the logged-in marketing user at send time.
    */
   contactPath: string
   sourceType?: EmailDynamicVariableSourceType

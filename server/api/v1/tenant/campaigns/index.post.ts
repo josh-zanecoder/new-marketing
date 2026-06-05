@@ -12,6 +12,7 @@ import {
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
+import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -101,6 +102,9 @@ export default defineEventHandler(async (event) => {
   }
   if (emailTemplateId) campaignData.emailTemplate = emailTemplateId
   if (mergeSnap) campaignData.mergeUserSnapshot = mergeSnap
+
+  const replyTo = campaignReplyToFromAuth(event.context.auth)
+  if (replyTo) campaignData.replyTo = replyTo
 
   Object.assign(campaignData, tenantOwnershipFieldsFromAuth(event.context.auth))
 

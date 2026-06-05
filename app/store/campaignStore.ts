@@ -1,8 +1,20 @@
 import { defineStore } from 'pinia'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { Campaign, SendStatus } from '~/types/campaign'
+import {
+  CAMPAIGN_SEND_POLL_INITIAL_MS,
+  CAMPAIGN_SEND_POLL_INTERVAL_MS,
+  CAMPAIGN_SEND_POLL_MAX_MS
+} from '~/constants/campaignSendPolling'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
+
+/** One global poll loop for the whole app (avoids duplicate timers per page). */
+let sendPollTimeout: ReturnType<typeof setTimeout> | null = null
+let sendPollGeneration = 0
+
+/** Campaign id currently polled (modal send or detail-page resume). */
+const sendPollCampaignId = ref<string | null>(null)
 
 /** SSR: internal API calls must forward the browser cookie or auth middleware returns 401. */
 function serverAuthHeaders(): { headers?: HeadersInit } {
@@ -198,6 +210,49 @@ export const useCampaignStore = defineStore('campaigns', () => {
     }
   }
 
+  async function retryFailedCampaign(c: Campaign): Promise<{ poll: boolean }> {
+    if (c.status !== 'Failed' && c.status !== 'Sent') {
+      sendError.value = 'Only completed campaigns with failures can be retried.'
+      return { poll: false }
+    }
+    sendError.value = null
+    sendingCampaignId.value = c.id
+    sendStatus.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/tenant/send-campaign/retry-failed', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (!res?.queued) {
+        sendError.value = 'No failed or pending recipients to retry.'
+        return { poll: false }
+      }
+      sendStatus.value = {
+        campaignId: c.id,
+        campaignStatus: 'Sending',
+        pending: res.pending,
+        sent: res.sent,
+        failed: res.failed,
+        total: res.total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to retry send')
+      return { poll: false }
+    }
+  }
+
   async function deleteCampaign(c: Campaign) {
     try {
       await $fetch(`/api/v1/tenant/campaigns/${c.id}`, {
@@ -241,10 +296,124 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendingCampaignId.value = id
   }
 
+  function stopSendStatusPolling() {
+    sendPollGeneration += 1
+    sendPollCampaignId.value = null
+    if (sendPollTimeout) {
+      clearTimeout(sendPollTimeout)
+      sendPollTimeout = null
+    }
+  }
+
+  function isSendPolling(campaignId: string): boolean {
+    return sendPollCampaignId.value === campaignId
+  }
+
+  async function fetchSendCampaignStatus(campaignId: string): Promise<SendStatus> {
+    return $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
+      timeout: 60000,
+      ...apiFetchOptions(),
+      ...serverAuthHeaders()
+    })
+  }
+
+  /**
+   * Poll send progress until `done`. Uses send POST counts for the modal until the first poll;
+   * only one timer runs app-wide.
+   */
+  function startSendStatusPolling(
+    campaignId: string,
+    onComplete: (res: SendStatus) => void | Promise<void>
+  ) {
+    stopSendStatusPolling()
+    sendPollCampaignId.value = campaignId
+    const generation = sendPollGeneration
+    let nextDelayMs = CAMPAIGN_SEND_POLL_INITIAL_MS
+
+    const schedule = () => {
+      sendPollTimeout = setTimeout(() => {
+        void tick()
+      }, nextDelayMs)
+    }
+
+    async function tick() {
+      if (generation !== sendPollGeneration) return
+      if (sendPollCampaignId.value !== campaignId) return
+
+      try {
+        const res = await fetchSendCampaignStatus(campaignId)
+        if (generation !== sendPollGeneration) return
+        sendStatus.value = { ...res, campaignId }
+
+        if (res.done) {
+          stopSendStatusPolling()
+          if (sendingCampaignId.value === campaignId) {
+            sendingCampaignId.value = null
+          }
+          sendStatus.value = null
+          await fetchCampaigns({ force: true })
+          await onComplete(res)
+          return
+        }
+
+        nextDelayMs = Math.min(
+          Math.round(nextDelayMs * 1.25),
+          CAMPAIGN_SEND_POLL_MAX_MS
+        )
+        if (nextDelayMs < CAMPAIGN_SEND_POLL_INTERVAL_MS) {
+          nextDelayMs = CAMPAIGN_SEND_POLL_INTERVAL_MS
+        }
+        schedule()
+      } catch {
+        if (sendingCampaignId.value === campaignId) {
+          clearSendModal()
+        } else {
+          stopSendStatusPolling()
+        }
+      }
+    }
+
+    schedule()
+  }
+
+  /**
+   * Poll progress for a campaign already sending (e.g. scheduled send started in background).
+   * Does not open the send modal — use with inline progress on the detail page.
+   */
+  async function resumeSendStatusPolling(
+    campaignId: string,
+    onComplete: (res: SendStatus) => void | Promise<void>
+  ): Promise<void> {
+    if (sendPollCampaignId.value === campaignId) return
+    try {
+      const res = await fetchSendCampaignStatus(campaignId)
+      const status: SendStatus = { ...res, campaignId }
+      if (res.done) {
+        await fetchCampaigns({ force: true })
+        await onComplete(status)
+        return
+      }
+      sendStatus.value = status
+      startSendStatusPolling(campaignId, onComplete)
+    } catch {
+      // Status API unavailable; detail page still shows Sending badge from campaign fetch.
+    }
+  }
+
   function clearSendModal() {
+    stopSendStatusPolling()
     sendingCampaignId.value = null
     sendStatus.value = null
     sendError.value = null
+  }
+
+  /** Close modal UI only; keep polling and live progress for inline banner. */
+  function dismissSendModal() {
+    sendingCampaignId.value = null
+  }
+
+  function openSendModal(campaignId: string) {
+    sendingCampaignId.value = campaignId
   }
 
   return {
@@ -254,11 +423,18 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendError,
     fetchCampaigns,
     sendCampaign,
+    retryFailedCampaign,
     deleteCampaign,
     duplicateCampaign,
     setSendStatus,
     setSendingCampaignId,
+    startSendStatusPolling,
+    resumeSendStatusPolling,
+    stopSendStatusPolling,
+    isSendPolling,
     clearSendModal,
+    dismissSendModal,
+    openSendModal,
     getCampaignDetailCache,
     setCampaignDetailCache,
     patchCampaignDetailCache,

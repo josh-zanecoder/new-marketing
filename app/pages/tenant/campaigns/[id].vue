@@ -7,10 +7,21 @@ import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
-const { sendingCampaignId, sendError } = storeToRefs(campaignStore)
+const { sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const marketingApi = useTenantMarketingApi()
-const { canSendDraft, canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
-  useCampaignSendFlow()
+const {
+  canSendDraft,
+  canScheduleDraft,
+  sendProgress,
+  buildCampaignSendProgress,
+  startSendStatusPolling,
+  resumeSendStatusPolling,
+  stopSendPolling,
+  isSendPolling,
+  closeSendModal,
+  dismissSendModal,
+  openSendModal
+} = useCampaignSendFlow()
 const id = route.params.id as string
 
 const cachedDetail = campaignStore.getCampaignDetailCache(id)
@@ -28,7 +39,7 @@ const mergeAsync = useAsyncData(`email-merge-root-${id}`, async () => ({
 }))
 
 const { data, error, pending, refresh } = detailAsync
-const { data: mergeRootPayload, pending: mergeRootPending } = mergeAsync
+const { data: mergeRootPayload } = mergeAsync
 
 const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
 
@@ -57,24 +68,74 @@ const sendSuccessSummary = ref<{
   campaignStatus: string
 } | null>(null)
 
+async function onSendPollingComplete(res: { sent: number; failed: number; campaignStatus: string }) {
+  const name = campaign.value?.name || 'campaign'
+  await refresh()
+  await campaignStore.fetchCampaigns()
+  await nextTick()
+  sendSuccessSummary.value = {
+    campaignName: name,
+    sent: res.sent,
+    failed: res.failed,
+    campaignStatus: res.campaignStatus
+  }
+}
+
 async function handleSend() {
   const c = campaignForSend.value
   if (!c || !canSendDraft(c)) return
   const { poll } = await campaignStore.sendCampaign(c)
   if (!poll) return
-  const campaignId = c.id
-  startSendStatusPolling(campaignId, async (res) => {
-    const name = campaign.value?.name || 'campaign'
-    await refresh()
-    await nextTick()
-    sendSuccessSummary.value = {
-      campaignName: name,
-      sent: res.sent,
-      failed: res.failed,
-      campaignStatus: res.campaignStatus
-    }
-  })
+  startSendStatusPolling(c.id, onSendPollingComplete)
 }
+
+const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
+
+const sendProgressModalOpen = computed(() => sendingCampaignId.value === id)
+
+/** Inline live progress when modal is dismissed (send-now or scheduled background send). */
+const showDetailSendProgress = computed(() => {
+  if (sendProgressModalOpen.value) return false
+  return (
+    campaign.value?.status === 'Sending' ||
+    (!!detailSendProgress.value && !detailSendProgress.value.done)
+  )
+})
+
+const detailSendProgressLabel = computed(() => {
+  if (isSendPolling(id) || campaign.value?.status === 'Sending') return 'Send in progress'
+  return 'Scheduled send in progress'
+})
+
+function openDetailSendReport() {
+  openSendModal(id)
+}
+
+function tryResumeSendPolling() {
+  if (!import.meta.client) return
+  if (campaign.value?.status !== 'Sending') return
+  if (isSendPolling(id)) return
+  if (sendingCampaignId.value === id) return
+  void resumeSendStatusPolling(id, onSendPollingComplete)
+}
+
+watch(
+  () => campaign.value?.status,
+  (status) => {
+    if (status === 'Sending') tryResumeSendPolling()
+  }
+)
+
+watch(
+  () => data.value?.campaign?.status,
+  () => {
+    if (!pending.value) tryResumeSendPolling()
+  }
+)
+
+onMounted(() => {
+  tryResumeSendPolling()
+})
 
 function closeSendSuccessModal() {
   sendSuccessSummary.value = null
@@ -156,6 +217,9 @@ onBeforeUnmount(() => {
   if (countdownInterval) {
     clearInterval(countdownInterval)
     countdownInterval = null
+  }
+  if (isSendPolling(id) && sendingCampaignId.value !== id) {
+    stopSendPolling()
   }
 })
 
@@ -411,6 +475,25 @@ const campaignViewTab = ref<CampaignViewTab>('details')
               <span class="shrink-0 text-sm font-semibold tabular-nums text-sky-800 sm:ml-auto">
                 {{ scheduleRemainingUntil(campaign.scheduledAt, countdownNow) }}
               </span>
+            </div>
+            <ClientCampaignSendProgressBanner
+              v-else-if="showDetailSendProgress && detailSendProgress"
+              :progress="detailSendProgress"
+              :label="detailSendProgressLabel"
+              clickable
+              @open="openDetailSendReport"
+            />
+            <div
+              v-else-if="showDetailSendProgress && campaign.status === 'Sending' && !detailSendProgress"
+              class="mt-3 flex items-center gap-2 rounded-xl border border-indigo-200/80 bg-indigo-50/90 px-4 py-3 text-sm font-medium text-indigo-950 shadow-sm ring-1 ring-indigo-100/80"
+              role="status"
+              aria-live="polite"
+            >
+              <svg class="h-4 w-4 shrink-0 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Sending in progress — loading delivery stats…
             </div>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
@@ -735,11 +818,12 @@ const campaignViewTab = ref<CampaignViewTab>('details')
     </Teleport>
 
     <ClientSendProgressModal
-      :open="!!sendingCampaignId"
+      :open="sendProgressModalOpen"
+      :campaign-id="id"
       :campaign-name="sendModalCampaignName"
       :send-error="sendError"
-      :send-progress="sendProgress"
-      @close="closeSendModal"
+      :send-progress="detailSendProgress ?? sendProgress"
+      @close="dismissSendModal"
     />
 
     <ClientSendSuccessModal

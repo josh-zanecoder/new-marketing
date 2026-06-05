@@ -91,6 +91,40 @@ function readStageFromPayloadAndMetadata(
   return typeof metadata.stage === 'string' ? metadata.stage.trim() : ''
 }
 
+function readOwnerFieldsFromMetadata(metadata: Record<string, unknown>): {
+  ownerId: string
+  ownerEmail: string
+  ownerFirstName: string
+  ownerLastName: string
+  ownerAvatarUrl: string
+  ownerPhone: string
+} {
+  return {
+    ownerId: typeof metadata.ownerId === 'string' ? metadata.ownerId : '',
+    ownerEmail: typeof metadata.ownerEmail === 'string' ? metadata.ownerEmail : '',
+    ownerFirstName:
+      typeof metadata.ownerFirstName === 'string' ? metadata.ownerFirstName.trim() : '',
+    ownerLastName: typeof metadata.ownerLastName === 'string' ? metadata.ownerLastName.trim() : '',
+    ownerAvatarUrl:
+      typeof metadata.ownerAvatarUrl === 'string' ? metadata.ownerAvatarUrl.trim() : '',
+    ownerPhone: typeof metadata.ownerPhone === 'string' ? metadata.ownerPhone.trim() : ''
+  }
+}
+
+function ownerFieldsForContactMetadata(
+  metadata: Record<string, unknown>
+): Record<string, string> {
+  const owner = readOwnerFieldsFromMetadata(metadata)
+  return {
+    ...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
+    ...(owner.ownerEmail ? { ownerEmail: owner.ownerEmail } : {}),
+    ...(owner.ownerFirstName ? { ownerFirstName: owner.ownerFirstName } : {}),
+    ...(owner.ownerLastName ? { ownerLastName: owner.ownerLastName } : {}),
+    ...(owner.ownerAvatarUrl ? { ownerAvatarUrl: owner.ownerAvatarUrl } : {}),
+    ...(owner.ownerPhone ? { ownerPhone: owner.ownerPhone } : {})
+  }
+}
+
 type SyncSnapshotContact = {
   externalId: string
   firstName?: string
@@ -118,6 +152,10 @@ type SyncSnapshotUpsertRow = {
   channel: string
   ownerId: string
   ownerEmail: string
+  ownerFirstName: string
+  ownerLastName: string
+  ownerAvatarUrl: string
+  ownerPhone: string
   status: string
   stage: string
   /** Normalized keys written to `contactType` on the tenant contact. */
@@ -141,10 +179,6 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
   const email = String(contactEvent.payload.email || '').toLowerCase()
   const payloadMetadata =
     (contactEvent.payload as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}
-  const ownerId =
-    typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
-  const ownerEmail =
-    typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
   const status = readStatusFromPayloadAndMetadata(
     contactEvent.payload as unknown as Record<string, unknown>,
     payloadMetadata
@@ -170,8 +204,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     deletedAt: null,
     metadata: {
       ...payloadMetadata,
-      ...(ownerId ? { ownerId } : {}),
-      ...(ownerEmail ? { ownerEmail } : {})
+      ...ownerFieldsForContactMetadata(payloadMetadata)
     }
   }
   const fromMulti = normalizeContactTypeInput(p.contactTypes)
@@ -219,10 +252,6 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
   const email = String(contactEvent.payload.email || '').toLowerCase()
   const payloadMetadata =
     (contactEvent.payload as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}
-  const ownerId =
-    typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
-  const ownerEmail =
-    typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
   const status = readStatusFromPayloadAndMetadata(
     contactEvent.payload as unknown as Record<string, unknown>,
     payloadMetadata
@@ -248,8 +277,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     deletedAt: null,
     metadata: {
       ...payloadMetadata,
-      ...(ownerId ? { ownerId } : {}),
-      ...(ownerEmail ? { ownerEmail } : {})
+      ...ownerFieldsForContactMetadata(payloadMetadata)
     }
   }
   const fromMultiU = normalizeContactTypeInput(pU.contactTypes)
@@ -299,10 +327,6 @@ export async function softDeleteContactFromDeletedEvent(
   const deletedAt = new Date()
   const payloadMetadata =
     (deletedEvent.payload as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}
-  const ownerId =
-    typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
-  const ownerEmail =
-    typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
   await models.Contact.updateOne(
     {
       externalId: deletedEvent.payload.externalId,
@@ -313,8 +337,7 @@ export async function softDeleteContactFromDeletedEvent(
         deletedAt,
         metadata: {
           deletedAt: deletedEvent.occurredAt,
-          ...(ownerId ? { ownerId } : {}),
-          ...(ownerEmail ? { ownerEmail } : {})
+          ...ownerFieldsForContactMetadata(payloadMetadata)
         }
       }
     }
@@ -356,8 +379,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
       if (!externalId || !email) return null
 
       const payloadMetadata = c.metadata ?? {}
-      const ownerId = typeof payloadMetadata.ownerId === 'string' ? payloadMetadata.ownerId : ''
-      const ownerEmail = typeof payloadMetadata.ownerEmail === 'string' ? payloadMetadata.ownerEmail : ''
+      const ownerFields = readOwnerFieldsFromMetadata(payloadMetadata)
 
       const status = readStatusFromPayloadAndMetadata(
         c as unknown as Record<string, unknown>,
@@ -395,8 +417,12 @@ export async function upsertContactsFromSyncSnapshot(params: {
         address: c.address ?? {},
         company: c.company ?? '',
         channel: c.channel ?? 'email',
-        ownerId,
-        ownerEmail,
+        ownerId: ownerFields.ownerId,
+        ownerEmail: ownerFields.ownerEmail,
+        ownerFirstName: ownerFields.ownerFirstName,
+        ownerLastName: ownerFields.ownerLastName,
+        ownerAvatarUrl: ownerFields.ownerAvatarUrl,
+        ownerPhone: ownerFields.ownerPhone,
         status,
         stage,
         contactTypeKeys,
@@ -425,10 +451,16 @@ export async function upsertContactsFromSyncSnapshot(params: {
       stage: r.stage,
       deletedAt: null,
       metadata: {
+        ...ownerFieldsForContactMetadata({
+          ownerId: r.ownerId,
+          ownerEmail: r.ownerEmail,
+          ownerFirstName: r.ownerFirstName,
+          ownerLastName: r.ownerLastName,
+          ownerAvatarUrl: r.ownerAvatarUrl,
+          ownerPhone: r.ownerPhone
+        }),
         ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
-        syncOccurredAt: params.occurredAt,
-        ...(r.ownerId ? { ownerId: r.ownerId } : {}),
-        ...(r.ownerEmail ? { ownerEmail: r.ownerEmail } : {})
+        syncOccurredAt: params.occurredAt
       },
       contactType: r.contactTypeKeys
     } satisfies Record<string, unknown>

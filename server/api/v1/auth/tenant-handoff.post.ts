@@ -4,6 +4,7 @@ import { findRegistryTenantByApiKey } from '../../../tenant/registry-auth'
 import { parseMarketingHandoffToken } from '../../../utils/auth/marketingHandoffJwt'
 import { signMarketingTenantBrowserSession } from '../../../utils/auth/marketingTenantBrowserSession'
 import {
+  MARKETING_CRM_EMBED_COOKIE,
   MARKETING_TENANT_BRIDGE_COOKIE,
   MARKETING_TENANT_SESSION_COOKIE,
   TENANT_AUTH_COOKIE_MAX_AGE
@@ -83,6 +84,7 @@ export default defineEventHandler(async (event) => {
 
   setCookie(event, MARKETING_TENANT_SESSION_COOKIE, sessionJwt, { ...base, httpOnly: true })
   setCookie(event, MARKETING_TENANT_BRIDGE_COOKIE, '1', { ...base, httpOnly: false })
+  setCookie(event, MARKETING_CRM_EMBED_COOKIE, '1', { ...base, httpOnly: false })
 
   return { ok: true as const, tenantName: row.tenantName }
 })

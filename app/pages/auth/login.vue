@@ -1,6 +1,18 @@
 <script setup lang="ts">
+import { isCrmEmbedSession, redirectToMarketingEmbedAuthFallback } from '~/composables/useMarketingEmbed'
+
 definePageMeta({
   layout: false
+})
+
+if (import.meta.server && isCrmEmbedSession()) {
+  await navigateTo('/auth/tenant-session-expired')
+}
+
+onMounted(() => {
+  if (isCrmEmbedSession()) {
+    redirectToMarketingEmbedAuthFallback()
+  }
 })
 
 const email = ref('')

@@ -52,9 +52,12 @@ onMounted(async () => {
 
     await clearNuxtData('marketing-me')
 
-    /** Mirror server cookie attrs so middleware sees the bridge flag if Set-Cookie was delayed. */
-    const bridge = useCookie<string | null>('marketing_tenant_bridge', marketingTenantHandoffCookieBase())
+    /** Mirror server cookie attrs if Set-Cookie was delayed (common in cross-origin CRM iframe). */
+    const cookieBase = marketingTenantHandoffCookieBase()
+    const bridge = useCookie<string | null>('marketing_tenant_bridge', cookieBase)
     bridge.value = '1'
+    const embed = useCookie<string | null>('marketing_crm_embed', cookieBase)
+    embed.value = '1'
 
     window.location.replace(`${window.location.origin}/tenant/dashboard`)
   } catch (e: unknown) {
