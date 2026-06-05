@@ -276,7 +276,7 @@ onUnmounted(() => {
                           class="sr-only"
                           :disabled="uploadPending"
                           @change="onFileChange"
-                        />
+                        >
                         <div class="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"

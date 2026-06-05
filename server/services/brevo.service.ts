@@ -1,5 +1,11 @@
 import { BrevoClient } from '@getbrevo/brevo'
 import type { GetEmailEventReportRequest } from '@getbrevo/brevo/transactionalEmails'
+import {
+  buildCampaignBrevoBatchRequest,
+  type CampaignBatchMessageVersion
+} from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
+
+export type { CampaignBatchMessageVersion }
 
 function getBrevoApiKey(): string {
   try {
@@ -65,12 +71,6 @@ function extractBrevoError(e: unknown): string {
   return 'Unknown Brevo error'
 }
 
-export interface CampaignBatchMessageVersion {
-  to: { email: string; name?: string }[]
-  subject: string
-  htmlContent: string
-}
-
 export async function sendCampaignBatchWithMessageVersions(params: {
   sender: SendEmailParams['sender']
   replyTo?: SendEmailParams['replyTo']
@@ -101,9 +101,8 @@ export async function sendCampaignBatchWithMessageVersions(params: {
   const idem = String(params.idempotencyKey || '').trim()
   if (idem) headers['Idempotency-Key'] = idem
 
-  const first = params.messageVersions[0]
-  const rootSubject = String(first?.subject ?? '').trim() || '(No subject)'
-  const rootHtml = String(first?.htmlContent ?? '').trim() || '<p></p>'
+  const { subject: rootSubject, htmlContent: rootHtml, messageVersions, uniform } =
+    buildCampaignBrevoBatchRequest(params.messageVersions)
 
   try {
     const result = await client.transactionalEmails.sendTransacEmail({
@@ -118,11 +117,7 @@ export async function sendCampaignBatchWithMessageVersions(params: {
             }
           }
         : {}),
-      messageVersions: params.messageVersions.map((v) => ({
-        to: v.to.map((r) => ({ email: r.email, ...(r.name ? { name: r.name } : {}) })),
-        subject: String(v.subject ?? '').trim() || rootSubject,
-        htmlContent: String(v.htmlContent ?? '').trim() || rootHtml
-      })),
+      messageVersions,
       ...(tags.length ? { tags } : {}),
       ...(Object.keys(headers).length ? { headers } : {})
     })
@@ -144,6 +139,9 @@ export async function sendCampaignBatchWithMessageVersions(params: {
         messageIdCount: fromArray.length,
         missingCount: missing
       })
+    }
+    if (uniform && n > 1) {
+      console.log('[Brevo] Campaign batch sent uniform messageVersions', { recipientCount: n })
     }
     return { messageIds }
   } catch (e: unknown) {

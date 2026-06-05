@@ -42,7 +42,7 @@ export function buildCampaignSendProgress(
  */
 export function useCampaignSendFlow() {
   const campaignStore = useCampaignStore()
-  const { sendingCampaignId, sendStatus } = storeToRefs(campaignStore)
+  const { sendStatus } = storeToRefs(campaignStore)
 
   const sendProgress = computed((): CampaignSendProgress | null =>
     buildCampaignSendProgress(sendStatus.value)
@@ -50,6 +50,14 @@ export function useCampaignSendFlow() {
 
   function closeSendModal() {
     campaignStore.clearSendModal()
+  }
+
+  function dismissSendModal() {
+    campaignStore.dismissSendModal()
+  }
+
+  function openSendModal(campaignId: string) {
+    campaignStore.openSendModal(campaignId)
   }
 
   function startSendStatusPolling(
@@ -83,6 +91,8 @@ export function useCampaignSendFlow() {
     resumeSendStatusPolling,
     stopSendPolling,
     isSendPolling,
-    closeSendModal
+    closeSendModal,
+    dismissSendModal,
+    openSendModal
   }
 }

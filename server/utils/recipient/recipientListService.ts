@@ -3,7 +3,7 @@
  * See `README.md` in this folder for other modules (normalization, membership query, filter parsing).
  */
 import type { Types } from 'mongoose'
-import mongoose from 'mongoose'
+import type mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
