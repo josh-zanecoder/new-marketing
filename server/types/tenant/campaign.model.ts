@@ -31,6 +31,8 @@ export interface CampaignLean {
   status: string
   /** Fire time for scheduled send (stored in Mongo as UTC). */
   scheduledAt?: Date
+  /** How the scheduled job should start: fresh audience vs resume unsent only. */
+  scheduledSendMode?: 'new' | 'resume' | 'resend_all'
   emailTemplate?: Types.ObjectId
   createdAt?: Date
   updatedAt?: Date

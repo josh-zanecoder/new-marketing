@@ -1,6 +1,8 @@
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { removeScheduledCampaignJob } from '@server/queue/emailQueue'
+import { resolveCampaignStatusAfterScheduleCancel } from '@server/services/send-campaign.service'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
+import type { CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
@@ -14,12 +16,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
   }
 
-  const { Campaign } = getTenantClientModels(conn)
+  const { Campaign, CampaignRecipient } = getTenantClientModels(conn)
   const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
   const campaign = await (Campaign as CampaignModel)
     .findOne(campaignScope)
-    .select('_id status')
-    .lean<CampaignLean | null>()
+    .select('_id status scheduledSendMode')
+    .lean<Pick<CampaignLean, 'status' | 'scheduledSendMode'> | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (campaign.status !== 'Scheduled') {
     throw createError({ statusCode: 400, message: 'Only scheduled campaigns can be unscheduled' })
@@ -33,9 +35,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const revertStatus = await resolveCampaignStatusAfterScheduleCancel(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId,
+    campaign.scheduledSendMode
+  )
+
   await (Campaign as CampaignModel).updateOne(campaignScope, {
-    $set: { status: 'Draft' },
-    $unset: { scheduledAt: 1 }
+    $set: { status: revertStatus },
+    $unset: { scheduledAt: 1, scheduledSendMode: 1 }
   })
 
   return { ok: true, campaignId }

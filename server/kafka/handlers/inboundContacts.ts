@@ -16,9 +16,11 @@ import {
   normalizeContactTypeInput
 } from '@server/utils/contact/contactTypeWrite'
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
-
-/** Stable id for Mongo upserts; do not rename without a migration. */
-const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
+import {
+  ownerFieldsForContactMetadata,
+  readOwnerFieldsFromMetadata
+} from '@server/utils/contact/contactOwnerMetadata'
+import { KAFKA_INBOUND_CONTACT_SOURCE } from '../constants'
 
 function readContactProfileFromInboundPayload(
   payload: Record<string, unknown>
@@ -89,40 +91,6 @@ function readStageFromPayloadAndMetadata(
   const fromPayload = typeof payload.stage === 'string' ? payload.stage.trim() : ''
   if (fromPayload) return fromPayload
   return typeof metadata.stage === 'string' ? metadata.stage.trim() : ''
-}
-
-function readOwnerFieldsFromMetadata(metadata: Record<string, unknown>): {
-  ownerId: string
-  ownerEmail: string
-  ownerFirstName: string
-  ownerLastName: string
-  ownerAvatarUrl: string
-  ownerPhone: string
-} {
-  return {
-    ownerId: typeof metadata.ownerId === 'string' ? metadata.ownerId : '',
-    ownerEmail: typeof metadata.ownerEmail === 'string' ? metadata.ownerEmail : '',
-    ownerFirstName:
-      typeof metadata.ownerFirstName === 'string' ? metadata.ownerFirstName.trim() : '',
-    ownerLastName: typeof metadata.ownerLastName === 'string' ? metadata.ownerLastName.trim() : '',
-    ownerAvatarUrl:
-      typeof metadata.ownerAvatarUrl === 'string' ? metadata.ownerAvatarUrl.trim() : '',
-    ownerPhone: typeof metadata.ownerPhone === 'string' ? metadata.ownerPhone.trim() : ''
-  }
-}
-
-function ownerFieldsForContactMetadata(
-  metadata: Record<string, unknown>
-): Record<string, string> {
-  const owner = readOwnerFieldsFromMetadata(metadata)
-  return {
-    ...(owner.ownerId ? { ownerId: owner.ownerId } : {}),
-    ...(owner.ownerEmail ? { ownerEmail: owner.ownerEmail } : {}),
-    ...(owner.ownerFirstName ? { ownerFirstName: owner.ownerFirstName } : {}),
-    ...(owner.ownerLastName ? { ownerLastName: owner.ownerLastName } : {}),
-    ...(owner.ownerAvatarUrl ? { ownerAvatarUrl: owner.ownerAvatarUrl } : {}),
-    ...(owner.ownerPhone ? { ownerPhone: owner.ownerPhone } : {})
-  }
 }
 
 type SyncSnapshotContact = {

@@ -2,6 +2,7 @@ import { Worker } from 'bullmq'
 import { getBullMqConnectionOptions } from '../lib/bullmq'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
+import type { CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
 import {
   EMAIL_JOB_PROCESS_BATCH,
   EMAIL_JOB_START_SCHEDULED,
@@ -11,11 +12,7 @@ import {
   getEmailQueue,
   type CampaignQueueJobData
 } from '../queue/emailQueue'
-import {
-  beginCampaignSend,
-  finalizeCampaignSendIfComplete,
-  processBatch
-} from '../services/send-campaign.service'
+import { beginCampaignSend, finalizeCampaignSendIfComplete, processBatch, resolveScheduledCampaignBeginMode } from '../services/send-campaign.service'
 import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT } from '../utils/campaignSend/constants'
@@ -147,9 +144,16 @@ export function startEmailWorker() {
           return
         }
         try {
+          const { CampaignRecipient } = models
+          const mode = await resolveScheduledCampaignBeginMode(
+            c,
+            CampaignRecipient as CampaignRecipientModel,
+            campaignId
+          )
           const result = await beginCampaignSend(tenantConn, campaignId, {
             allowedStatuses: ['Scheduled'],
-            statusOnEnqueueFailure: 'Scheduled'
+            statusOnEnqueueFailure: 'Scheduled',
+            mode
           })
           jobLog('startScheduled.done', {
             campaignId,

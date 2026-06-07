@@ -1,5 +1,8 @@
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { beginCampaignSend } from '@server/services/send-campaign.service'
+import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 export default defineEventHandler(async (event) => {
@@ -11,13 +14,29 @@ export default defineEventHandler(async (event) => {
   const snap = tenantUserFieldsFromAuth(event.context.auth)
   const dbName = conn.db?.databaseName
 
-  console.log('[SendCampaignAPI] retryFailed', { campaignId, dbName })
+  const { Campaign } = getTenantClientModels(conn)
+  const campaign = await (Campaign as CampaignModel)
+    .findOne(mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth))
+    .select('status')
+    .lean<Pick<CampaignLean, 'status'> | null>()
+  if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
+
+  const revertStatus =
+    campaign.status === 'Paused'
+      ? 'Paused'
+      : campaign.status === 'Cancelled'
+        ? 'Cancelled'
+        : campaign.status === 'Sent'
+          ? 'Sent'
+          : 'Failed'
+
+  console.log('[SendCampaignAPI] retryFailed', { campaignId, dbName, revertStatus })
 
   return beginCampaignSend(conn, campaignId, {
-    allowedStatuses: ['Failed', 'Sent'],
+    allowedStatuses: ['Paused', 'Failed', 'Sent', 'Cancelled'],
     mode: 'retry_failed',
     auth: event.context.auth,
-    statusOnEnqueueFailure: 'Failed',
+    statusOnEnqueueFailure: revertStatus,
     ...(snap ? { mergeUserSnapshot: snap } : {})
   })
 })

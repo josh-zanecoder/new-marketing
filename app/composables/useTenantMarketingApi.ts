@@ -218,12 +218,16 @@ export function useTenantMarketingApi() {
     return $fetch(`/api/v1/tenant/campaigns/${campaignId}`, tenantFetchInit({ method: 'PUT', body }))
   }
 
-  async function scheduleCampaignSend(campaignId: string, scheduledAt: string) {
-    return $fetch<{ ok: boolean; campaignId: string; scheduledAt: string }>(
+  async function scheduleCampaignSend(
+    campaignId: string,
+    scheduledAt: string,
+    mode: 'new' | 'resume' | 'resend_all' = 'new'
+  ) {
+    return $fetch<{ ok: boolean; campaignId: string; scheduledAt: string; mode: string }>(
       '/api/v1/tenant/send-campaign/schedule',
       tenantFetchInit({
         method: 'POST',
-        body: { campaignId, scheduledAt },
+        body: { campaignId, scheduledAt, mode },
         timeout: 30000
       })
     )

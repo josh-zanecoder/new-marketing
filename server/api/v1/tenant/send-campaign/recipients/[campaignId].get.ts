@@ -2,6 +2,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { CampaignRecipientLean, CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
 import {
+  CAMPAIGN_RECIPIENT_STATUS_CANCELLED,
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
   CAMPAIGN_RECIPIENT_STATUS_PENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENDING,
@@ -10,11 +11,11 @@ import {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
-type RecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed'
+type RecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed' | 'cancelled'
 
 function parseReportStatus(raw: string | undefined): RecipientReportStatus {
   const s = String(raw ?? 'all').trim().toLowerCase()
-  if (s === 'sent' || s === 'pending' || s === 'failed') return s
+  if (s === 'sent' || s === 'pending' || s === 'failed' || s === 'cancelled') return s
   return 'all'
 }
 
@@ -44,12 +45,14 @@ export default defineEventHandler(async (event) => {
     baseFilter.status = CAMPAIGN_RECIPIENT_STATUS_FAILED
   } else if (status === 'pending') {
     baseFilter.status = { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
+  } else if (status === 'cancelled') {
+    baseFilter.status = CAMPAIGN_RECIPIENT_STATUS_CANCELLED
   }
   if (search) {
     baseFilter.email = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
   }
 
-  const [items, total, sent, pending, failed, sending] = await Promise.all([
+  const [items, total, sent, pending, failed, sending, cancelled] = await Promise.all([
     (CampaignRecipient as CampaignRecipientModel)
       .find(baseFilter)
       .sort({ status: 1, email: 1 })
@@ -73,6 +76,10 @@ export default defineEventHandler(async (event) => {
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
       campaign: campaignId,
       status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+    }),
+    (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_CANCELLED
     })
   ])
 
@@ -88,7 +95,8 @@ export default defineEventHandler(async (event) => {
       pending,
       failed,
       sending,
-      total: sent + pending + failed
+      cancelled,
+      total: sent + pending + failed + cancelled
     },
     items: items.map((r) => ({
       email: r.email,

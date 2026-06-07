@@ -37,14 +37,19 @@ import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import {
+  CAMPAIGN_RECIPIENT_STATUS_CANCELLED,
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
   CAMPAIGN_RECIPIENT_STATUS_PENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENT,
-  CAMPAIGN_SEND_BATCH_SIZE,
   CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS_DEFAULT,
   CAMPAIGN_SEND_STALE_SENDING_MS_DEFAULT
 } from '../utils/campaignSend/constants'
+import {
+  resolveCampaignSendBatchSize,
+  resolveCampaignSendRecipientDelayMs,
+  sleepCampaignSendRecipientDelayIfConfigured
+} from '../utils/campaignSend/batchTiming'
 import { campaignSendJobShouldSkip } from '../utils/campaignSend/campaignSendJobGuard'
 import type { CampaignBatchMessageVersion } from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
 
@@ -224,9 +229,10 @@ export interface BeginCampaignSendOptions {
   auth?: unknown
   /**
    * `new` — rebuild recipient rows from audience (default).
-   * `retry_failed` — keep delivery ledger; only resend non-`sent` rows (failed/pending).
+   * `retry_failed` — keep delivery ledger; only resend non-`sent` rows (failed/pending/cancelled).
+   * `resend_all` — rebuild recipient rows from audience and send to everyone again.
    */
-  mode?: 'new' | 'retry_failed'
+  mode?: 'new' | 'retry_failed' | 'resend_all'
 }
 
 export interface BeginCampaignSendResult {
@@ -240,6 +246,79 @@ export interface BeginCampaignSendResult {
   pending: number
   sendRunId: string
   resumed?: boolean
+}
+
+/** When a scheduled send is unscheduled, return the correct pre-schedule status. */
+export async function resolveCampaignStatusAfterScheduleCancel(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string,
+  scheduledSendMode?: 'new' | 'resume' | 'resend_all'
+): Promise<'Draft' | 'Paused' | 'Cancelled'> {
+  if (scheduledSendMode === 'resend_all') return 'Cancelled'
+  const hasPriorSendAttempt = await CampaignRecipient.countDocuments({
+    campaign: campaignId,
+    status: { $in: [CAMPAIGN_RECIPIENT_STATUS_SENT, CAMPAIGN_RECIPIENT_STATUS_CANCELLED] }
+  })
+  if (hasPriorSendAttempt === 0) return 'Draft'
+  if (scheduledSendMode === 'resume') return 'Paused'
+  const sent = await CampaignRecipient.countDocuments({
+    campaign: campaignId,
+    status: CAMPAIGN_RECIPIENT_STATUS_SENT
+  })
+  return sent > 0 ? 'Paused' : 'Cancelled'
+}
+
+/** Scheduled sends from a draft start fresh; cancelled/failed sends resume the delivery ledger. */
+export async function resolveCampaignSendMode(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<'new' | 'retry_failed'> {
+  const hasDeliveryLedger = await CampaignRecipient.countDocuments({ campaign: campaignId })
+  return hasDeliveryLedger > 0 ? 'retry_failed' : 'new'
+}
+
+export async function countUnsentRecipientsForResume(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<number> {
+  return CampaignRecipient.countDocuments({
+    campaign: campaignId,
+    status: {
+      $in: [
+        CAMPAIGN_RECIPIENT_STATUS_PENDING,
+        CAMPAIGN_RECIPIENT_STATUS_FAILED,
+        CAMPAIGN_RECIPIENT_STATUS_CANCELLED
+      ]
+    }
+  })
+}
+
+/** Maps persisted schedule intent to beginCampaignSend mode when the job fires. */
+export async function resolveScheduledCampaignBeginMode(
+  campaign: Pick<CampaignLean, 'scheduledSendMode'>,
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<'new' | 'retry_failed' | 'resend_all'> {
+  if (campaign.scheduledSendMode === 'resend_all') return 'resend_all'
+  if (campaign.scheduledSendMode === 'resume') return 'retry_failed'
+  if (campaign.scheduledSendMode === 'new') return 'new'
+  return resolveCampaignSendMode(CampaignRecipient, campaignId)
+}
+
+async function prepareCancelledRecipientsForRetry(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<void> {
+  await CampaignRecipient.updateMany(
+    {
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_CANCELLED
+    },
+    {
+      $set: { status: CAMPAIGN_RECIPIENT_STATUS_PENDING },
+      $unset: { error: 1, brevoMessageId: 1 }
+    }
+  )
 }
 
 /**
@@ -288,6 +367,11 @@ export async function beginCampaignSend(
   })
 
   if (mode === 'retry_failed') {
+    await prepareCancelledRecipientsForRetry(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
+
     const [retryable, sentCount, failedCount] = await Promise.all([
       (CampaignRecipient as CampaignRecipientModel).countDocuments({
         campaign: campaignId,
@@ -305,7 +389,7 @@ export async function beginCampaignSend(
     if (retryable === 0) {
       throw createError({
         statusCode: 400,
-        message: 'No failed or pending recipients to retry'
+        message: 'No unsent recipients to resume'
       })
     }
     const inFlightSending = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
@@ -356,120 +440,140 @@ export async function beginCampaignSend(
     }
   }
 
-  const inFlight = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
-    campaign: campaignId,
-    status: {
-      $in: [
-        CAMPAIGN_RECIPIENT_STATUS_PENDING,
-        CAMPAIGN_RECIPIENT_STATUS_SENDING
-      ]
-    }
-  })
-  if (inFlight > 0 || campaign.status === 'Sending') {
-    throw createError({ statusCode: 400, message: 'Campaign has already been queued for sending' })
-  }
-
-  await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
-
-  const emails = await recipientEmailsForCampaign(conn, campaign)
-  if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
-
-  const valid: string[] = []
-  const invalid: string[] = []
-  for (const email of emails) {
-    if (isValidMarketingEmail(email)) valid.push(email)
-    else invalid.push(email)
-  }
-
-  const rows: CampaignRecipientInsertRow[] = [
-    ...valid.map(
-      (email): CampaignRecipientInsertRow => ({
-        campaign: campaignId,
-        email,
-        status: 'pending',
-        clientId: ''
-      })
-    ),
-    ...invalid.map(
-      (email): CampaignRecipientInsertRow => ({
-        campaign: campaignId,
-        email,
-        status: 'failed',
-        clientId: '',
-        error: 'Invalid email address'
-      })
-    )
-  ]
-
-  await (CampaignRecipient as CampaignRecipientModel).insertMany(rows)
-
-  if (valid.length === 0) {
-    await (Campaign as CampaignModel).updateOne(campaignScope, {
-      $set: { status: 'Failed' },
-      $unset: { scheduledAt: 1 }
+  if (mode === 'resend_all') {
+    const inFlightSending = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
     })
-    logSendWarn('noValidRecipients', {
+    if (inFlightSending > 0) {
+      throw createError({
+        statusCode: 400,
+        message: 'Campaign send is still in progress'
+      })
+    }
+  }
+
+  if (mode === 'new') {
+    const inFlight = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: {
+        $in: [
+          CAMPAIGN_RECIPIENT_STATUS_PENDING,
+          CAMPAIGN_RECIPIENT_STATUS_SENDING
+        ]
+      }
+    })
+    if (inFlight > 0 || campaign.status === 'Sending') {
+      throw createError({ statusCode: 400, message: 'Campaign has already been queued for sending' })
+    }
+  }
+
+  if (mode === 'new' || mode === 'resend_all') {
+    await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+
+    const emails = await recipientEmailsForCampaign(conn, campaign)
+    if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
+
+    const valid: string[] = []
+    const invalid: string[] = []
+    for (const email of emails) {
+      if (isValidMarketingEmail(email)) valid.push(email)
+      else invalid.push(email)
+    }
+
+    const rows: CampaignRecipientInsertRow[] = [
+      ...valid.map(
+        (email): CampaignRecipientInsertRow => ({
+          campaign: campaignId,
+          email,
+          status: 'pending',
+          clientId: ''
+        })
+      ),
+      ...invalid.map(
+        (email): CampaignRecipientInsertRow => ({
+          campaign: campaignId,
+          email,
+          status: 'failed',
+          clientId: '',
+          error: 'Invalid email address'
+        })
+      )
+    ]
+
+    await (CampaignRecipient as CampaignRecipientModel).insertMany(rows)
+
+    if (valid.length === 0) {
+      await (Campaign as CampaignModel).updateOne(campaignScope, {
+        $set: { status: 'Failed' },
+        $unset: { scheduledAt: 1 }
+      })
+      logSendWarn('noValidRecipients', {
+        campaignId,
+        dbName,
+        total: emails.length,
+        invalid: invalid.length
+      })
+      return {
+        ok: true,
+        total: emails.length,
+        valid: 0,
+        invalid: invalid.length,
+        queued: 0,
+        sent: 0,
+        failed: invalid.length,
+        pending: 0,
+        sendRunId
+      }
+    }
+
+    const snap = options?.mergeUserSnapshot
+    await (Campaign as CampaignModel).updateOne(campaignScope, {
+      $set: {
+        status: 'Sending',
+        sendRunId,
+        sendPage: 0,
+        ...(snap ? { mergeUserSnapshot: snap } : {})
+      }
+    })
+
+    try {
+      await enqueueCampaignBatch({ campaignId, dbName, sendRunId, page: 0 })
+    } catch (e: unknown) {
+      await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+      await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
+      logSendError('enqueueFailed', {
+        campaignId,
+        dbName,
+        revertStatus,
+        error: e instanceof Error ? e.message : String(e)
+      })
+      throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
+    }
+
+    logSend(mode === 'resend_all' ? 'queued.resendAll' : 'queued', {
       campaignId,
       dbName,
-      total: emails.length,
+      sendRunId,
+      valid: valid.length,
       invalid: invalid.length
     })
+
     return {
       ok: true,
       total: emails.length,
-      valid: 0,
+      valid: valid.length,
       invalid: invalid.length,
-      queued: 0,
+      queued: valid.length,
       sent: 0,
       failed: invalid.length,
-      pending: 0,
-      sendRunId
-    }
-  }
-
-  const snap = options?.mergeUserSnapshot
-  await (Campaign as CampaignModel).updateOne(campaignScope, {
-    $set: {
-      status: 'Sending',
+      pending: valid.length,
       sendRunId,
-      sendPage: 0,
-      ...(snap ? { mergeUserSnapshot: snap } : {})
+      ...(mode === 'resend_all' ? { resentAll: true } : {})
     }
-  })
-
-  try {
-    await enqueueCampaignBatch({ campaignId, dbName, sendRunId, page: 0 })
-  } catch (e: unknown) {
-    await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
-    await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
-    logSendError('enqueueFailed', {
-      campaignId,
-      dbName,
-      revertStatus,
-      error: e instanceof Error ? e.message : String(e)
-    })
-    throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
   }
 
-  logSend('queued', {
-    campaignId,
-    dbName,
-    sendRunId,
-    valid: valid.length,
-    invalid: invalid.length
-  })
-
-  return {
-    ok: true,
-    total: emails.length,
-    valid: valid.length,
-    invalid: invalid.length,
-    queued: valid.length,
-    sent: 0,
-    failed: invalid.length,
-    pending: valid.length,
-    sendRunId
-  }
+  throw createError({ statusCode: 400, message: 'Invalid send mode' })
 }
 
 /** Read-only progress for API polling (sending happens in the BullMQ worker). */
@@ -583,7 +687,7 @@ export async function processBatch(
   const pending = await claimCampaignRecipientBatch(
     CampaignRecipient as CampaignRecipientModel,
     campaignId,
-    CAMPAIGN_SEND_BATCH_SIZE
+    resolveCampaignSendBatchSize()
   )
 
   if (pending.length === 0) {
@@ -773,23 +877,9 @@ export async function processBatch(
     processedInBatch = pending.length
 
     const toSend = prepared.filter((p) => !p.failed)
-    const idempotencyKey = campaignBatchBrevoIdempotencyKey({
-      campaignId,
-      sendRunId: options.sendRunId,
-      page: options.page,
-      recipientRowIds: toSend.map((p) => String(p.row._id))
-    })
-
-    const batchResult = await sendCampaignBatchWithMessageVersions({
-      sender: campaign.sender,
-      messageVersions: toSend.map((p) => p.version),
-      tags: [`campaign:${campaignId}`],
-      idempotencyKey,
-      ...(tenantDbNameForTags && brevoTenantTagValue
-        ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
-        : {}),
-      ...(userForTag ? { user: userForTag } : {})
-    })
+    const recipientDelayMs = resolveCampaignSendRecipientDelayMs()
+    const sendGroups: Prepared[][] =
+      recipientDelayMs > 0 ? toSend.map((p) => [p]) : toSend.length ? [toSend] : []
 
     const ops: Parameters<CampaignRecipientModel['bulkWrite']>[0] = []
 
@@ -804,47 +894,98 @@ export async function processBatch(
       }
     }
 
-    if (batchResult.error) {
-      for (const p of toSend) {
-        ops.push({
-          updateOne: {
-            filter: { _id: p.row._id },
-            update: { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: batchResult.error } }
-          }
+    for (let groupIndex = 0; groupIndex < sendGroups.length; groupIndex++) {
+      if (recipientDelayMs > 0 && groupIndex > 0) {
+        await sleepCampaignSendRecipientDelayIfConfigured((message, details) => {
+          logSend(message, { campaignId, sendRunId: options.sendRunId, page: options.page, ...details })
         })
-      }
-    } else {
-      for (let i = 0; i < toSend.length; i++) {
-        const p = toSend[i]
-        if (!p) continue
-        const raw = batchResult.messageIds[i]
-        const trimmed = raw && String(raw).trim() ? String(raw).trim() : ''
-        if (trimmed) {
-          ops.push({
-            updateOne: {
-              filter: { _id: p.row._id },
-              update: {
-                $set: {
-                  status: CAMPAIGN_RECIPIENT_STATUS_SENT,
-                  sentAt: new Date(),
-                  brevoMessageId: trimmed
-                }
-              }
-            }
+        const freshCampaign = await (Campaign as CampaignModel)
+          .findById(campaignId)
+          .lean<Pick<CampaignLean, 'status' | 'sendRunId'> | null>()
+        if (campaignSendJobShouldSkip(freshCampaign, options.sendRunId)) {
+          logSend('batch.aborted.cancelled', {
+            campaignId,
+            sendRunId: options.sendRunId,
+            page: options.page,
+            groupIndex
           })
-        } else {
+          break
+        }
+      }
+
+      const group = sendGroups[groupIndex]
+      if (!group?.length) continue
+
+      const groupOpsStart = recipientDelayMs > 0 ? ops.length : 0
+
+      const idempotencyKey = campaignBatchBrevoIdempotencyKey({
+        campaignId,
+        sendRunId: options.sendRunId,
+        page: options.page,
+        recipientRowIds: group.map((p) => String(p.row._id))
+      })
+
+      const batchResult = await sendCampaignBatchWithMessageVersions({
+        sender: campaign.sender,
+        messageVersions: group.map((p) => p.version),
+        tags: [`campaign:${campaignId}`],
+        idempotencyKey,
+        ...(tenantDbNameForTags && brevoTenantTagValue
+          ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
+          : {}),
+        ...(userForTag ? { user: userForTag } : {})
+      })
+
+      if (batchResult.error) {
+        for (const p of group) {
           ops.push({
             updateOne: {
               filter: { _id: p.row._id },
-              update: {
-                $set: {
-                  status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
-                  error: MISSING_BREVO_ID_MESSAGE
-                }
-              }
+              update: { $set: { status: CAMPAIGN_RECIPIENT_STATUS_FAILED, error: batchResult.error } }
             }
           })
         }
+      } else {
+        for (let i = 0; i < group.length; i++) {
+          const p = group[i]
+          if (!p) continue
+          const raw = batchResult.messageIds[i]
+          const trimmed = raw && String(raw).trim() ? String(raw).trim() : ''
+          if (trimmed) {
+            ops.push({
+              updateOne: {
+                filter: { _id: p.row._id },
+                update: {
+                  $set: {
+                    status: CAMPAIGN_RECIPIENT_STATUS_SENT,
+                    sentAt: new Date(),
+                    brevoMessageId: trimmed
+                  }
+                }
+              }
+            })
+          } else {
+            ops.push({
+              updateOne: {
+                filter: { _id: p.row._id },
+                update: {
+                  $set: {
+                    status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
+                    error: MISSING_BREVO_ID_MESSAGE
+                  }
+                }
+              }
+            })
+          }
+        }
+      }
+
+      if (recipientDelayMs > 0 && ops.length > groupOpsStart) {
+        await (CampaignRecipient as CampaignRecipientModel).bulkWrite(
+          ops.slice(groupOpsStart),
+          { ordered: false }
+        )
+        ops.splice(groupOpsStart)
       }
     }
 

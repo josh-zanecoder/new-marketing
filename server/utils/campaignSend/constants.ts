@@ -17,3 +17,16 @@ export const CAMPAIGN_RECIPIENT_STATUS_PENDING = 'pending'
 export const CAMPAIGN_RECIPIENT_STATUS_SENDING = 'sending'
 export const CAMPAIGN_RECIPIENT_STATUS_SENT = 'sent'
 export const CAMPAIGN_RECIPIENT_STATUS_FAILED = 'failed'
+export const CAMPAIGN_RECIPIENT_STATUS_CANCELLED = 'cancelled'
+
+export const CAMPAIGN_STATUS_SENDING = 'Sending'
+export const CAMPAIGN_STATUS_PAUSED = 'Paused'
+export const CAMPAIGN_STATUS_CANCELLED = 'Cancelled'
+
+/** Recipient rows that did not receive the marketing piece (for cancel reports). */
+export const CAMPAIGN_RECIPIENT_NOT_SENT_STATUSES = [
+  CAMPAIGN_RECIPIENT_STATUS_PENDING,
+  CAMPAIGN_RECIPIENT_STATUS_SENDING,
+  CAMPAIGN_RECIPIENT_STATUS_FAILED,
+  CAMPAIGN_RECIPIENT_STATUS_CANCELLED
+] as const

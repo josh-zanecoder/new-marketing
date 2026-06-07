@@ -14,7 +14,7 @@ export interface CampaignRecipient {
 }
 
 export type CampaignRecipientsType = 'manual' | 'list'
-export type CampaignStatus = 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Failed'
+export type CampaignStatus = 'Draft' | 'Scheduled' | 'Sending' | 'Paused' | 'Sent' | 'Failed' | 'Cancelled'
 
 export interface Campaign {
   id: string
@@ -40,7 +40,7 @@ export interface SendStatus {
   done: boolean
 }
 
-export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed'
+export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed' | 'cancelled'
 
 export interface CampaignSendRecipientReportItem {
   email: string
@@ -61,8 +61,36 @@ export interface CampaignSendRecipientReport {
     pending: number
     failed: number
     sending: number
+    cancelled: number
     total: number
   }
   items: CampaignSendRecipientReportItem[]
+}
+
+export type CampaignSendCancelReportRecipient = {
+  email: string
+  status: string
+  sentAt?: string
+  error?: string
+}
+
+export type CampaignSendCancelReport = {
+  tenantDbName: string
+  tenantName: string
+  campaignId: string
+  campaignName: string
+  campaignStatus: string
+  cancelledAt: string
+  counts: {
+    sent: number
+    notSent: number
+    cancelled: number
+    pending: number
+    failed: number
+    sending: number
+    total: number
+  }
+  sentRecipients: CampaignSendCancelReportRecipient[]
+  notSentRecipients: CampaignSendCancelReportRecipient[]
 }
 

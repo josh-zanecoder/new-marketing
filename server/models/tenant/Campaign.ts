@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-const campaignStatusEnum = ['Draft', 'Scheduled', 'Sending', 'Sent', 'Failed'] as const
+const campaignStatusEnum = ['Draft', 'Scheduled', 'Sending', 'Paused', 'Sent', 'Failed', 'Cancelled'] as const
 const recipientsTypeEnum = ['manual', 'list'] as const
 
 const mergeUserSnapshotSchema = new mongoose.Schema(
@@ -45,6 +45,8 @@ export const campaignSchema = new mongoose.Schema({
   status: { type: String, enum: campaignStatusEnum, default: 'Draft' },
   /** When set, campaign is intended to start sending at this instant (UTC). Typically used with status `Scheduled`. */
   scheduledAt: { type: Date, required: false },
+  /** `new` = full audience; `resume` = unsent only; `resend_all` = rebuild audience and send to everyone again. */
+  scheduledSendMode: { type: String, enum: ['new', 'resume', 'resend_all'], required: false },
   clientId: { type: String, default: '' },
   /** CRM user profile at last save; used at send time for {{ user.* }} when worker has no session. */
   mergeUserSnapshot: { type: mergeUserSnapshotSchema, required: false },

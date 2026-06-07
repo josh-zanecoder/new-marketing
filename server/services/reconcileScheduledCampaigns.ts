@@ -3,7 +3,7 @@ import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
 import { hasActiveCampaignSendJob, removeScheduledCampaignJob } from '../queue/emailQueue'
 import { getTenantConnectionByDbName } from '../tenant/connection'
-import { beginCampaignSend } from './send-campaign.service'
+import { beginCampaignSend, resolveScheduledCampaignBeginMode } from './send-campaign.service'
 
 /**
  * Picks up Scheduled campaigns whose time has passed but never left Mongo
@@ -31,7 +31,7 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
       continue
     }
 
-    const { Campaign } = getTenantClientModels(tenantConn)
+    const { Campaign, CampaignRecipient } = getTenantClientModels(tenantConn)
     const overdue = await (Campaign as CampaignModel)
       .find({
         status: 'Scheduled',
@@ -62,9 +62,19 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
           continue
         }
 
+        const campaignDoc = await (Campaign as CampaignModel)
+          .findById(campaignId)
+          .select('scheduledSendMode')
+          .lean<Pick<CampaignLean, 'scheduledSendMode'> | null>()
+        const mode = await resolveScheduledCampaignBeginMode(
+          campaignDoc ?? {},
+          CampaignRecipient,
+          campaignId
+        )
         await beginCampaignSend(tenantConn, campaignId, {
           allowedStatuses: ['Scheduled'],
-          statusOnEnqueueFailure: 'Scheduled'
+          statusOnEnqueueFailure: 'Scheduled',
+          mode
         })
         started++
         console.log('[ScheduleReconcile] started overdue send', { dbName, campaignId })
