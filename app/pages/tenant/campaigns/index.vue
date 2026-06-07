@@ -2,39 +2,71 @@
 import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
+import {
+  canOpenSendAgainModal,
+  discardPausedModalMessage,
+  duplicateModalMessage,
+  sendAgainModalMessage,
+  sendAgainModalTitle
+} from '~/utils/campaignActionRules'
+import {
+  canDiscardPaused,
+  canResumeSend,
+  canResumeUnsentOnly,
+  canSendDraft
+} from '~/utils/campaignSendRules'
+import { campaignSubtitle } from '~/utils/campaignDisplay'
+import type { CampaignScheduleMode } from '~/utils/campaignScheduleCopy'
 
 const store = useCampaignStore()
-const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
+const { sendProgress, closeSendModal } = useCampaignSendFlow()
+const { countdownNow } = useCampaignCountdown()
+
 const {
-  canSendDraft,
-  canScheduleDraft,
-  sendProgress,
-  startSendStatusPolling,
-  dismissSendModal,
-  closeSendModal
-} = useCampaignSendFlow()
+  sendSuccessSummary,
+  sendDraft,
+  resumeSend,
+  resumeUnsentOnly,
+  sendAgain,
+  openStopSendModal,
+  closeSendSuccessModal
+} = useTenantCampaignSendActions({
+  getCampaignName: (id) => campaigns.value.find((x) => x.id === id)?.name || 'campaign'
+})
+
+const { handleSendModalClose } = useTenantSendModalClose(() => {
+  void store.fetchCampaigns()
+})
+
+const {
+  open: scheduleOpen,
+  scheduleLocal,
+  scheduleError,
+  scheduleBusy,
+  title: scheduleTitle,
+  description: scheduleDescription,
+  displayCampaign: scheduleCampaign,
+  openFor: openScheduleForCampaign,
+  close: closeScheduleModal,
+  confirm: confirmSchedule,
+  unschedule: unscheduleCampaign
+} = useTenantCampaignSchedule({
+  onScheduled: () => {
+    void store.fetchCampaigns()
+  }
+})
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
-const campaignToSchedule = ref<Campaign | null>(null)
-const scheduleLocal = ref('')
-const scheduleError = ref('')
-const scheduleBusy = ref(false)
 const currentPage = ref(1)
 const PAGE_SIZE = 10
 
 const deleteModalMessage = computed(() =>
   campaignToDelete.value
     ? `Are you sure you want to delete "${campaignToDelete.value.name || 'Untitled'}"? This cannot be undone.`
-    : ''
-)
-
-const duplicateModalMessage = computed(() =>
-  campaignToDuplicate.value
-    ? `Create a copy of "${campaignToDuplicate.value.name || 'Untitled'}"? The duplicate will be created as a draft.`
     : ''
 )
 
@@ -81,28 +113,68 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
-const sendSuccessSummary = ref<{
-  campaignName: string
-  sent: number
-  failed: number
-  campaignStatus: string
-} | null>(null)
-
 async function handleSend(c: Campaign) {
   if (!canSendDraft(c)) return
-  const { poll } = await store.sendCampaign(c)
-  if (!poll) return
-  const campaignId = c.id
-  startSendStatusPolling(campaignId, async (res) => {
-    const name = campaigns.value.find((x) => x.id === campaignId)?.name || 'campaign'
-    await nextTick()
-    sendSuccessSummary.value = {
-      campaignName: name,
-      sent: res.sent,
-      failed: res.failed,
-      campaignStatus: res.campaignStatus
-    }
-  })
+  await sendDraft(c)
+}
+
+async function handleResumeSend(c: Campaign) {
+  if (!canResumeSend(c)) return
+  await resumeSend(c)
+}
+
+async function handleResumeUnsentOnly(c: Campaign) {
+  if (!canResumeUnsentOnly(c)) return
+  await resumeUnsentOnly(c)
+}
+
+const campaignToSendAgain = ref<Campaign | null>(null)
+const sendAgainConfirmLoading = ref(false)
+
+function openSendAgainModal(c: Campaign) {
+  if (!canOpenSendAgainModal(c)) return
+  campaignToSendAgain.value = c
+}
+
+function cancelSendAgainModal() {
+  campaignToSendAgain.value = null
+}
+
+async function confirmSendAgain() {
+  const c = campaignToSendAgain.value
+  if (!c || !canOpenSendAgainModal(c)) return
+  sendAgainConfirmLoading.value = true
+  try {
+    await sendAgain(c)
+    campaignToSendAgain.value = null
+  } finally {
+    sendAgainConfirmLoading.value = false
+  }
+}
+
+const campaignToDiscard = ref<Campaign | null>(null)
+const discardConfirmLoading = ref(false)
+
+function openDiscardModal(c: Campaign) {
+  campaignToDiscard.value = c
+}
+
+function cancelDiscardModal() {
+  if (discardConfirmLoading.value) return
+  campaignToDiscard.value = null
+}
+
+async function confirmDiscardPaused() {
+  const c = campaignToDiscard.value
+  if (!c || !canDiscardPaused(c) || discardConfirmLoading.value) return
+  discardConfirmLoading.value = true
+  try {
+    await store.discardPausedCampaign(c.id)
+    campaignToDiscard.value = null
+    await store.fetchCampaigns()
+  } finally {
+    discardConfirmLoading.value = false
+  }
 }
 
 function openDeleteModal(c: Campaign) {
@@ -133,10 +205,6 @@ async function confirmDelete() {
   }
 }
 
-function canDuplicateCampaign(c: Campaign): boolean {
-  return c.status === 'Sent' || c.status === 'Failed'
-}
-
 function openDuplicateModal(c: Campaign) {
   campaignToDuplicate.value = c
 }
@@ -156,128 +224,9 @@ async function confirmDuplicate() {
   }
 }
 
-function closeSendSuccessModal() {
-  sendSuccessSummary.value = null
+function openScheduleModal(c: Campaign, mode: CampaignScheduleMode = 'new') {
+  openScheduleForCampaign(c, mode)
 }
-
-function toDatetimeLocalValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function openScheduleModal(c: Campaign) {
-  campaignToSchedule.value = c
-  scheduleError.value = ''
-  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
-}
-
-function closeScheduleModal() {
-  campaignToSchedule.value = null
-  scheduleError.value = ''
-}
-
-async function confirmScheduleFromList() {
-  const c = campaignToSchedule.value
-  if (!c) return
-  scheduleError.value = ''
-  const parsed = new Date(scheduleLocal.value)
-  if (Number.isNaN(parsed.getTime())) {
-    scheduleError.value = 'Pick a valid date and time.'
-    return
-  }
-  scheduleBusy.value = true
-  try {
-    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
-    campaignToSchedule.value = null
-    await store.fetchCampaigns()
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? (e as { data?: { message?: string } }).data?.message
-        : e instanceof Error
-          ? e.message
-          : 'Could not schedule send.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
-  } finally {
-    scheduleBusy.value = false
-  }
-}
-
-async function handleUnschedule(c: Campaign) {
-  if (c.status !== 'Scheduled') return
-  scheduleBusy.value = true
-  try {
-    await marketingApi.unscheduleCampaignSend(c.id)
-    await store.fetchCampaigns()
-  } finally {
-    scheduleBusy.value = false
-  }
-}
-
-/** Human-readable time until scheduled send (updates with `countdownNow`). */
-function scheduleRemainingUntil(iso: string, nowMs: number): string {
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return ''
-  const diff = t - nowMs
-  if (diff <= 0) return 'Send time reached'
-  const minTotal = Math.floor(diff / 60000)
-  const day = Math.floor(minTotal / 1440)
-  const hr = Math.floor((minTotal % 1440) / 60)
-  const min = minTotal % 60
-  if (day >= 1) return `in ${day} day${day === 1 ? '' : 's'}`
-  if (hr >= 1) return `in ${hr} hour${hr === 1 ? '' : 's'}${min > 0 ? ` ${min} min` : ''}`
-  if (min >= 1) return `in ${min} min`
-  return 'in less than a minute'
-}
-
-/** Subtitle under campaign title: "Sending Apr 7 • 2:16 AM", "Sent Apr 6", etc. */
-function campaignSubtitle(c: Campaign, nowMs: number): string {
-  if (c.status === 'Scheduled' && c.scheduledAt) {
-    const d = new Date(c.scheduledAt)
-    if (Number.isNaN(d.getTime())) return 'Scheduled'
-    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    const t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    const when = `Sending ${md} • ${t}`
-    const rem = scheduleRemainingUntil(c.scheduledAt, nowMs)
-    return rem && rem !== 'Send time reached' ? `${when} • ${rem}` : when
-  }
-  if (c.status === 'Sent') {
-    const raw = c.updatedAt || c.createdAt
-    if (!raw) return 'Sent'
-    const d = new Date(raw)
-    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    return `Sent ${md}`
-  }
-  if (c.status === 'Sending') {
-    return 'Sending in progress'
-  }
-  if (c.status === 'Failed') {
-    const raw = c.updatedAt || c.createdAt
-    if (!raw) return 'Failed'
-    const d = new Date(raw)
-    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    return `Failed ${md}`
-  }
-  if (c.createdAt) {
-    const d = new Date(c.createdAt)
-    const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    return `Created ${md}`
-  }
-  return 'Draft'
-}
-
-const countdownNow = ref(Date.now())
-let countdownInterval: ReturnType<typeof setInterval> | null = null
-
-onMounted(() => {
-  countdownInterval = setInterval(() => {
-    countdownNow.value = Date.now()
-  }, 30000)
-})
-
-onUnmounted(() => {
-  if (countdownInterval) clearInterval(countdownInterval)
-})
 </script>
 
 <template>
@@ -408,6 +357,12 @@ onUnmounted(() => {
         <option value="Failed">
           Failed
         </option>
+        <option value="Paused">
+          Paused
+        </option>
+        <option value="Cancelled">
+          Cancelled
+        </option>
         </select>
         <svg
           class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -470,9 +425,11 @@ onUnmounted(() => {
                 :class="{
                   'bg-amber-50 text-amber-700 ring-amber-200/80': c.status === 'Draft',
                   'bg-sky-50 text-sky-700 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
+                  'bg-amber-50 text-amber-800 ring-amber-200/80': c.status === 'Paused',
                   'bg-emerald-50 text-emerald-700 ring-emerald-200/80': c.status === 'Sent',
                   'bg-red-50 text-red-700 ring-red-200/80': c.status === 'Failed',
-                  'bg-slate-100 text-slate-600 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
+                  'bg-rose-50 text-rose-700 ring-rose-200/80': c.status === 'Cancelled',
+                  'bg-slate-100 text-slate-600 ring-slate-200/80': !['Draft','Scheduled','Sending','Paused','Sent','Failed','Cancelled'].includes(c.status),
                 }"
               >
                 {{ c.status }}
@@ -482,65 +439,22 @@ onUnmounted(() => {
               {{ campaignSubtitle(c, countdownNow) }}
             </p>
           </NuxtLink>
-        <div class="flex shrink-0 items-center justify-end gap-0.5">
-          <button
-            v-if="canSendDraft(c)"
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="!!sendingCampaignId || scheduleBusy"
-            title="Send campaign"
-            @click.stop="handleSend(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
-          <button
-            v-if="canScheduleDraft(c)"
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="!!sendingCampaignId || scheduleBusy"
-            title="Schedule send"
-            @click.stop="openScheduleModal(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-          <button
-            v-if="c.status === 'Scheduled'"
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="scheduleBusy"
-            title="Cancel schedule"
-            @click.stop="handleUnschedule(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <button
-            v-if="canDuplicateCampaign(c)"
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/25"
-            title="Duplicate campaign"
-            @click.stop="openDuplicateModal(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/30"
-            title="Delete campaign"
-            @click.stop="openDeleteModal(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
+          <TenantCampaignRowActions
+            :campaign="c"
+            :sending-campaign-id="sendingCampaignId"
+            :schedule-busy="scheduleBusy"
+            :discard-confirm-loading="discardConfirmLoading"
+            @send="handleSend"
+            @resume-send="handleResumeSend"
+            @resume-unsent="handleResumeUnsentOnly"
+            @schedule="openScheduleModal"
+            @send-again="openSendAgainModal"
+            @discard="openDiscardModal"
+            @stop-send="(campaign) => openStopSendModal(campaign.id)"
+            @unschedule="unscheduleCampaign"
+            @duplicate="openDuplicateModal"
+            @delete="openDeleteModal"
+          />
         </div>
       </article>
 
@@ -577,7 +491,6 @@ onUnmounted(() => {
     </div>
     </template>
 
-    <!-- Delete confirmation modal -->
     <ClientConfirmationModal
       :open="!!campaignToDelete"
       title="Delete campaign"
@@ -589,15 +502,36 @@ onUnmounted(() => {
       @cancel="cancelDeleteModal"
     />
 
-    <!-- Duplicate confirmation modal -->
     <ClientConfirmationModal
       :open="!!campaignToDuplicate"
       title="Duplicate campaign"
-      :message="duplicateModalMessage"
+      :message="duplicateModalMessage(campaignToDuplicate)"
       confirm-text="Duplicate"
       :confirm-loading="duplicateConfirmLoading"
       @confirm="confirmDuplicate"
       @cancel="cancelDuplicateModal"
+    />
+
+    <ClientConfirmationModal
+      :open="!!campaignToSendAgain"
+      :title="sendAgainModalTitle(campaignToSendAgain)"
+      :message="sendAgainModalMessage(campaignToSendAgain)"
+      confirm-text="Send again"
+      variant="danger"
+      :confirm-loading="sendAgainConfirmLoading"
+      @confirm="confirmSendAgain"
+      @cancel="cancelSendAgainModal"
+    />
+
+    <ClientConfirmationModal
+      :open="!!campaignToDiscard"
+      title="Cancel this paused send?"
+      :message="discardPausedModalMessage(campaignToDiscard)"
+      confirm-text="Cancel permanently"
+      variant="danger"
+      :confirm-loading="discardConfirmLoading"
+      @confirm="confirmDiscardPaused"
+      @cancel="cancelDiscardModal"
     />
 
     <ClientSendProgressModal
@@ -606,7 +540,7 @@ onUnmounted(() => {
       :campaign-name="campaigns.find((x) => x.id === sendingCampaignId)?.name || 'campaign'"
       :send-error="sendError"
       :send-progress="sendProgress"
-      @close="dismissSendModal"
+      @close="handleSendModalClose"
     />
 
     <ClientSendSuccessModal
@@ -618,60 +552,19 @@ onUnmounted(() => {
       @close="closeSendSuccessModal"
     />
 
-    <Teleport to="body">
-      <div
-        v-if="campaignToSchedule"
-        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="schedule-campaign-list-title"
-      >
-        <div
-          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-          aria-hidden="true"
-          @click="closeScheduleModal"
-        />
-        <div
-          class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6"
-        >
-          <h2 id="schedule-campaign-list-title" class="text-lg font-semibold text-slate-900">
-            Schedule send
-          </h2>
-          <p class="mt-1 truncate text-sm text-slate-600" :title="campaignToSchedule.name">
-            {{ campaignToSchedule.name || 'Untitled' }}
-          </p>
-          <label class="mt-4 block text-sm font-medium text-slate-700" for="schedule-list-datetime">
-            Date &amp; time
-          </label>
-          <input
-            id="schedule-list-datetime"
-            v-model="scheduleLocal"
-            type="datetime-local"
-            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
-          >
-          <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
-            {{ scheduleError }}
-          </p>
-          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-            <button
-              type="button"
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
-              :disabled="scheduleBusy"
-              @click="closeScheduleModal"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
-              :disabled="scheduleBusy"
-              @click="confirmScheduleFromList"
-            >
-              {{ scheduleBusy ? 'Saving…' : 'Schedule' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <TenantCampaignScheduleModal
+      :open="scheduleOpen"
+      :title="scheduleTitle"
+      :description="scheduleDescription"
+      :campaign-name="scheduleCampaign?.name"
+      :schedule-local="scheduleLocal"
+      :schedule-error="scheduleError"
+      :schedule-busy="scheduleBusy"
+      title-id="schedule-campaign-list-title"
+      input-id="schedule-list-datetime"
+      @update:schedule-local="scheduleLocal = $event"
+      @close="closeScheduleModal"
+      @confirm="confirmSchedule"
+    />
   </div>
 </template>

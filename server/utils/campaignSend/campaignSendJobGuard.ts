@@ -2,7 +2,7 @@ import type { CampaignLean } from '../../types/tenant/campaign.model'
 
 export function campaignSendJobStoppingStates(campaign: Pick<CampaignLean, 'status'>): boolean {
   const s = String(campaign.status || '')
-  return s === 'Sent' || s === 'Failed' || s === 'Draft' || s === 'Scheduled'
+  return s === 'Sent' || s === 'Failed' || s === 'Draft' || s === 'Scheduled' || s === 'Cancelled'
 }
 
 export function campaignSendJobStaleRun(

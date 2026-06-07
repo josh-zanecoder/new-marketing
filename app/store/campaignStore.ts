@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
-import type { Campaign, SendStatus } from '~/types/campaign'
+import type { Campaign, CampaignSendCancelReport, SendStatus } from '~/types/campaign'
+import { fetchErrorMessage } from '~/utils/fetchErrorMessage'
 import {
   CAMPAIGN_SEND_POLL_INITIAL_MS,
   CAMPAIGN_SEND_POLL_INTERVAL_MS,
@@ -31,15 +32,6 @@ function apiFetchOptions(): { credentials: RequestCredentials } {
   return { credentials: 'include' as RequestCredentials }
 }
 
-function fetchErrorMessage(e: unknown, fallback: string): string {
-  if (e && typeof e === 'object' && 'data' in e) {
-    const data = (e as { data?: { message?: string } }).data
-    if (typeof data?.message === 'string' && data.message) return data.message
-  }
-  if (e instanceof Error && e.message) return e.message
-  return fallback
-}
-
 export const useCampaignStore = defineStore('campaigns', () => {
   const campaigns = ref<Campaign[]>([])
   const campaignsFetchedAt = ref(0)
@@ -49,6 +41,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
   const sendingCampaignId = ref<string | null>(null)
   const sendStatus = ref<SendStatus | null>(null)
   const sendError = ref<string | null>(null)
+  const sendCancelReport = ref<CampaignSendCancelReport | null>(null)
 
   function getCampaignDetailCache(id: string): TenantCampaignDetail | null {
     return campaignDetailCache.value.get(id) ?? null
@@ -139,6 +132,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       return { poll: false }
     }
     sendError.value = null
+    sendCancelReport.value = null
     sendingCampaignId.value = c.id
     sendStatus.value = null
     try {
@@ -211,11 +205,17 @@ export const useCampaignStore = defineStore('campaigns', () => {
   }
 
   async function retryFailedCampaign(c: Campaign): Promise<{ poll: boolean }> {
-    if (c.status !== 'Failed' && c.status !== 'Sent') {
-      sendError.value = 'Only completed campaigns with failures can be retried.'
+    if (
+      c.status !== 'Paused' &&
+      c.status !== 'Failed' &&
+      c.status !== 'Sent' &&
+      c.status !== 'Cancelled'
+    ) {
+      sendError.value = 'This campaign cannot be resumed.'
       return { poll: false }
     }
     sendError.value = null
+    sendCancelReport.value = null
     sendingCampaignId.value = c.id
     sendStatus.value = null
     try {
@@ -234,7 +234,10 @@ export const useCampaignStore = defineStore('campaigns', () => {
         ...serverAuthHeaders()
       })
       if (!res?.queued) {
-        sendError.value = 'No failed or pending recipients to retry.'
+        sendError.value =
+          c.status === 'Paused' || c.status === 'Cancelled'
+            ? 'No unsent recipients to resume.'
+            : 'No failed or pending recipients to retry.'
         return { poll: false }
       }
       sendStatus.value = {
@@ -249,6 +252,50 @@ export const useCampaignStore = defineStore('campaigns', () => {
       return { poll: true }
     } catch (e: unknown) {
       sendError.value = fetchErrorMessage(e, 'Failed to retry send')
+      return { poll: false }
+    }
+  }
+
+  async function sendAgainCampaign(c: Campaign): Promise<{ poll: boolean }> {
+    if (c.status !== 'Paused' && c.status !== 'Failed' && c.status !== 'Cancelled') {
+      sendError.value = 'This campaign cannot be sent again.'
+      return { poll: false }
+    }
+    sendError.value = null
+    sendCancelReport.value = null
+    sendingCampaignId.value = c.id
+    sendStatus.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/tenant/send-campaign/send-again', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (!res?.queued) {
+        sendError.value = 'No recipients to send to.'
+        return { poll: false }
+      }
+      sendStatus.value = {
+        campaignId: c.id,
+        campaignStatus: 'Sending',
+        pending: res.pending,
+        sent: 0,
+        failed: res.failed,
+        total: res.total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to send again')
       return { poll: false }
     }
   }
@@ -400,11 +447,77 @@ export const useCampaignStore = defineStore('campaigns', () => {
     }
   }
 
+  async function pauseSendingCampaign(campaignId: string): Promise<CampaignSendCancelReport> {
+    const res = await $fetch<{ report: CampaignSendCancelReport }>(
+      '/api/v1/tenant/send-campaign/pause',
+      {
+        method: 'POST',
+        body: { campaignId, confirm: true },
+        timeout: 60000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      }
+    )
+    stopSendStatusPolling()
+    const report = res.report
+    sendCancelReport.value = report
+    sendStatus.value = {
+      campaignId,
+      campaignStatus: report.campaignStatus || 'Paused',
+      pending: 0,
+      sent: report.counts.sent,
+      failed: report.counts.failed,
+      total: report.counts.total,
+      done: true
+    }
+    await fetchCampaigns({ force: true })
+    return report
+  }
+
+  async function cancelSendingCampaign(campaignId: string): Promise<CampaignSendCancelReport> {
+    const res = await $fetch<{ report: CampaignSendCancelReport }>(
+      '/api/v1/tenant/send-campaign/cancel',
+      {
+        method: 'POST',
+        body: { campaignId, confirm: true },
+        timeout: 60000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      }
+    )
+    stopSendStatusPolling()
+    const report = res.report
+    sendCancelReport.value = report
+    sendStatus.value = {
+      campaignId,
+      campaignStatus: report.campaignStatus || 'Cancelled',
+      pending: 0,
+      sent: report.counts.sent,
+      failed: report.counts.failed,
+      total: report.counts.total,
+      done: true
+    }
+    await fetchCampaigns({ force: true })
+    return report
+  }
+
+  async function discardPausedCampaign(campaignId: string): Promise<void> {
+    await $fetch('/api/v1/tenant/send-campaign/discard', {
+      method: 'POST',
+      body: { campaignId, confirm: true },
+      timeout: 30000,
+      ...apiFetchOptions(),
+      ...serverAuthHeaders()
+    })
+    await fetchCampaigns({ force: true })
+  }
+
   function clearSendModal() {
     stopSendStatusPolling()
     sendingCampaignId.value = null
     sendStatus.value = null
     sendError.value = null
+    sendCancelReport.value = null
   }
 
   /** Close modal UI only; keep polling and live progress for inline banner. */
@@ -421,9 +534,14 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendingCampaignId,
     sendStatus,
     sendError,
+    sendCancelReport,
     fetchCampaigns,
     sendCampaign,
     retryFailedCampaign,
+    sendAgainCampaign,
+    pauseSendingCampaign,
+    cancelSendingCampaign,
+    discardPausedCampaign,
     deleteCampaign,
     duplicateCampaign,
     setSendStatus,

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-const statusEnum = ['pending', 'sending', 'sent', 'failed'] as const
+const statusEnum = ['pending', 'sending', 'sent', 'failed', 'cancelled'] as const
 
 export const campaignRecipientSchema = new mongoose.Schema({
   campaign: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },

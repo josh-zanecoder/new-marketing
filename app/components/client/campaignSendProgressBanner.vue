@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CampaignSendProgress } from '~/composables/useCampaignSendFlow'
+import type { CampaignSendProgress } from '~/utils/campaignSendRules'
 
 const props = defineProps<{
   progress: CampaignSendProgress

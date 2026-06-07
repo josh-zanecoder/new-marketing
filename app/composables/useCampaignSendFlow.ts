@@ -1,45 +1,26 @@
 import { storeToRefs } from 'pinia'
-import type { Campaign, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
+import { fetchErrorMessage } from '~/utils/fetchErrorMessage'
+import {
+  buildCampaignSendProgress,
+  canCancelSending,
+  canDiscardPaused,
+  canResendCancelled,
+  canResumeSchedule,
+  canResumeSend,
+  canResumeUnsentOnly,
+  canScheduleAgainCampaign,
+  canScheduleCampaign,
+  canScheduleDraft,
+  canSendAgainCampaign,
+  canSendAgainWhilePaused,
+  canSendDraft,
+  canStopSending,
+  type CampaignSendProgress
+} from '~/utils/campaignSendRules'
 
-export function canSendDraft(c: Campaign): boolean {
-  if (c.status !== 'Draft') return false
-  if (c.recipientsType === 'manual') return (c.recipients?.length ?? 0) > 0
-  if (c.recipientsType === 'list') {
-    return (c.recipients?.length ?? 0) > 0 || !!c.recipientsListId?.trim()
-  }
-  return false
-}
+export type { CampaignSendProgress } from '~/utils/campaignSendRules'
 
-/** Same rules as send-now; only draft campaigns can be scheduled. */
-export const canScheduleDraft = canSendDraft
-
-export type CampaignSendProgress = SendStatus & {
-  processed: number
-  pct: number
-  remaining: number
-}
-
-export function buildCampaignSendProgress(
-  status: SendStatus | null,
-  campaignId?: string
-): CampaignSendProgress | null {
-  if (!status) return null
-  if (campaignId && status.campaignId && status.campaignId !== campaignId) return null
-  const processed = status.sent + status.failed
-  const pct = status.total > 0 ? (processed / status.total) * 100 : 0
-  return {
-    ...status,
-    processed,
-    pct,
-    remaining: status.pending
-  }
-}
-
-/**
- * Shared send progress UI for campaign list, detail, and wizard.
- * Status polling lives in the Pinia store (single timer for the whole app).
- */
 export function useCampaignSendFlow() {
   const campaignStore = useCampaignStore()
   const { sendStatus } = storeToRefs(campaignStore)
@@ -62,20 +43,50 @@ export function useCampaignSendFlow() {
 
   function startSendStatusPolling(
     campaignId: string,
-    onComplete: (res: SendStatus) => void | Promise<void>
+    onComplete: (res: import('~/types/campaign').SendStatus) => void | Promise<void>
   ) {
     campaignStore.startSendStatusPolling(campaignId, onComplete)
   }
 
   function resumeSendStatusPolling(
     campaignId: string,
-    onComplete: (res: SendStatus) => void | Promise<void>
+    onComplete: (res: import('~/types/campaign').SendStatus) => void | Promise<void>
   ) {
     return campaignStore.resumeSendStatusPolling(campaignId, onComplete)
   }
 
   function stopSendPolling() {
     campaignStore.stopSendStatusPolling()
+  }
+
+  async function pauseSendingCampaign(campaignId: string) {
+    campaignStore.sendError = null
+    try {
+      return await campaignStore.pauseSendingCampaign(campaignId)
+    } catch (e: unknown) {
+      campaignStore.sendError = fetchErrorMessage(e, 'Failed to pause send')
+      throw e
+    }
+  }
+
+  async function cancelSendingCampaign(campaignId: string) {
+    campaignStore.sendError = null
+    try {
+      return await campaignStore.cancelSendingCampaign(campaignId)
+    } catch (e: unknown) {
+      campaignStore.sendError = fetchErrorMessage(e, 'Failed to cancel send')
+      throw e
+    }
+  }
+
+  async function discardPausedCampaign(campaignId: string) {
+    campaignStore.sendError = null
+    try {
+      return await campaignStore.discardPausedCampaign(campaignId)
+    } catch (e: unknown) {
+      campaignStore.sendError = fetchErrorMessage(e, 'Failed to cancel paused send')
+      throw e
+    }
   }
 
   function isSendPolling(campaignId: string) {
@@ -85,11 +96,25 @@ export function useCampaignSendFlow() {
   return {
     canSendDraft,
     canScheduleDraft,
+    canResumeSend,
+    canResumeUnsentOnly,
+    canResendCancelled,
+    canSendAgainCampaign,
+    canSendAgainWhilePaused,
+    canResumeSchedule,
+    canScheduleAgainCampaign,
+    canDiscardPaused,
+    canScheduleCampaign,
+    canStopSending,
+    canCancelSending,
     sendProgress,
     buildCampaignSendProgress,
     startSendStatusPolling,
     resumeSendStatusPolling,
     stopSendPolling,
+    pauseSendingCampaign,
+    cancelSendingCampaign,
+    discardPausedCampaign,
     isSendPolling,
     closeSendModal,
     dismissSendModal,

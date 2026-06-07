@@ -87,11 +87,10 @@ export default defineNuxtConfig({
       include: [
         '@vue/devtools-core',
         '@vue/devtools-kit',
-        'xlsx',
-        'grapesjs',
-        'grapesjs-preset-newsletter',
         'firebase/app',
-        'firebase/auth'
+        'firebase/auth',
+        'grapesjs',
+        'grapesjs-preset-newsletter'
       ]
     }
   },

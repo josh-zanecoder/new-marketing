@@ -219,6 +219,27 @@ export async function enqueueScheduledCampaignStart(
   return job
 }
 
+/** Remove waiting/delayed batch jobs for a campaign (active jobs no-op via sendRunId guard). */
+export async function removeCampaignBatchJobs(
+  campaignId: string,
+  dbName: string
+): Promise<number> {
+  const queue = getEmailQueue()
+  let removed = 0
+  for (const state of ['waiting', 'delayed'] as const) {
+    const jobs = await queue.getJobs([state], 0, 500)
+    for (const job of jobs) {
+      if (!matchesCampaignJob(job, campaignId, dbName, [EMAIL_JOB_PROCESS_BATCH])) continue
+      const result = await removeBullJobSafely(job, state, { campaignId, dbName })
+      if (result.removed) removed += 1
+    }
+  }
+  if (removed > 0) {
+    logQueue('removeCampaignBatchJobs', { campaignId, dbName, removed })
+  }
+  return removed
+}
+
 export async function removeScheduledCampaignJob(
   dbName: string,
   campaignId: string

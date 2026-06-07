@@ -51,6 +51,14 @@
         >
           Dynamic variables
         </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'sendingCampaigns' }"
+          @click="tab = 'sendingCampaigns'"
+        >
+          Sending campaigns
+        </button>
       </div>
 
       <TenantTabsOverviewTab
@@ -585,6 +593,19 @@
           </div>
         </div>
       </TenantTabsDynamicFieldsTab>
+
+      <TenantTabsSendingCampaignsTab
+        v-if="tenant.tenantId"
+        v-show="tab === 'sendingCampaigns'"
+        :tenant-id="tenant.tenantId"
+        :tenant-name="tenant.name"
+      />
+      <div
+        v-else-if="tab === 'sendingCampaigns'"
+        class="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        This tenant has no <strong>tenant ID</strong> in the registry. Set one on the client record before managing in-flight sends.
+      </div>
     </template>
   </section>
 </template>
@@ -621,7 +642,7 @@ const dbName = computed(() =>
   decodeURIComponent(String(route.params.dbName || ''))
 )
 
-const tab = ref<'overview' | 'filters' | 'dynamicVariables'>('overview')
+const tab = ref<'overview' | 'filters' | 'dynamicVariables' | 'sendingCampaigns'>('overview')
 
 interface ContactTypeRow {
   id: string

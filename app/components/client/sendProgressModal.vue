@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import type {
   CampaignSendRecipientReport,
   CampaignSendRecipientReportStatus
 } from '~/types/campaign'
+import { canStopSending } from '~/utils/campaignSendRules'
+import { useCampaignStore } from '~/store/campaignStore'
 
 const props = defineProps<{
   open: boolean
@@ -26,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const marketingApi = useTenantMarketingApi()
+const campaignStore = useCampaignStore()
+const { sendCancelReport } = storeToRefs(campaignStore)
+const { pauseSendingCampaign, cancelSendingCampaign } = useCampaignSendFlow()
 
 const reportTab = ref<CampaignSendRecipientReportStatus>('all')
 const reportPage = ref(1)
@@ -33,8 +39,25 @@ const reportSearch = ref('')
 const report = ref<CampaignSendRecipientReport | null>(null)
 const reportLoading = ref(false)
 const reportError = ref('')
+const stopBusy = ref(false)
+const cancelReport = sendCancelReport
 
 const REPORT_LIMIT = 50
+
+const canShowStop = computed(
+  () => !!props.campaignId && canStopSending(props.sendProgress, props.sendProgress?.campaignStatus)
+)
+
+const modalTitle = computed(() => {
+  if (cancelReport.value?.campaignStatus === 'Paused') return 'Send paused'
+  if (cancelReport.value) return 'Send cancelled'
+  if (props.sendProgress?.done && props.sendProgress.campaignStatus === 'Paused') return 'Send paused'
+  if (props.sendProgress?.done && props.sendProgress.campaignStatus === 'Cancelled') {
+    return 'Send cancelled'
+  }
+  if (props.sendProgress?.done) return 'Send finished'
+  return `Sending ${props.campaignName || 'campaign'}`
+})
 
 const tabs: { id: CampaignSendRecipientReportStatus; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -47,7 +70,34 @@ function statusBadgeClass(status?: string) {
   if (status === 'sent') return 'bg-emerald-50 text-emerald-800 ring-emerald-200/70'
   if (status === 'failed') return 'bg-red-50 text-red-800 ring-red-200/70'
   if (status === 'sending') return 'bg-sky-50 text-sky-800 ring-sky-200/70'
+  if (status === 'cancelled') return 'bg-slate-100 text-slate-700 ring-slate-200/70'
   return 'bg-amber-50 text-amber-800 ring-amber-200/70'
+}
+
+async function executePause() {
+  const id = props.campaignId
+  if (!id || stopBusy.value) return
+  stopBusy.value = true
+  try {
+    cancelReport.value = await pauseSendingCampaign(id)
+  } finally {
+    stopBusy.value = false
+  }
+}
+
+async function executeCancel() {
+  const id = props.campaignId
+  if (!id || stopBusy.value) return
+  stopBusy.value = true
+  try {
+    cancelReport.value = await cancelSendingCampaign(id)
+  } finally {
+    stopBusy.value = false
+  }
+}
+
+function resetStopState() {
+  stopBusy.value = false
 }
 
 async function loadReport() {
@@ -119,6 +169,7 @@ watch(
       reportSearch.value = ''
       reportTab.value = 'all'
       reportPage.value = 1
+      resetStopState()
     }
   },
   { immediate: true }
@@ -165,8 +216,7 @@ watch(reportPage, () => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <h3 id="send-progress-modal-title" class="truncate text-lg font-semibold text-slate-900">
-              <template v-if="props.sendProgress?.done">Send finished</template>
-              <template v-else>Sending {{ props.campaignName || 'campaign' }}</template>
+              {{ modalTitle }}
             </h3>
           </div>
           <button
@@ -186,6 +236,66 @@ watch(reportPage, () => {
             {{ props.sendError }}
           </div>
           <div v-else-if="props.sendProgress" class="space-y-5">
+            <div
+              v-if="cancelReport"
+              class="rounded-xl border px-4 py-3 text-sm"
+              :class="
+                cancelReport.campaignStatus === 'Paused'
+                  ? 'border-amber-200 bg-amber-50 text-amber-950'
+                  : 'border-rose-200 bg-rose-50 text-rose-950'
+              "
+            >
+              <p class="font-medium">
+                {{
+                  cancelReport.campaignStatus === 'Paused'
+                    ? 'Campaign send paused.'
+                    : 'Campaign send stopped.'
+                }}
+              </p>
+              <p class="mt-1" :class="cancelReport.campaignStatus === 'Paused' ? 'text-amber-900/90' : 'text-rose-900/90'">
+                {{ cancelReport.counts.sent }} sent · {{ cancelReport.counts.notSent }} not sent.
+                Messages already submitted to the email provider may still deliver.
+              </p>
+            </div>
+
+            <div v-if="cancelReport" class="grid gap-4 md:grid-cols-2">
+              <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                <h4 class="text-sm font-semibold text-slate-900">
+                  Sent ({{ cancelReport.counts.sent }})
+                </h4>
+                <ul class="mt-2 max-h-40 overflow-y-auto text-sm">
+                  <li
+                    v-for="r in cancelReport.sentRecipients"
+                    :key="`sent-${r.email}`"
+                    class="border-b border-slate-100 py-1.5 last:border-0"
+                  >
+                    {{ r.email }}
+                  </li>
+                  <li v-if="cancelReport.sentRecipients.length === 0" class="py-2 text-slate-500">
+                    No recipients were sent before cancellation.
+                  </li>
+                </ul>
+              </section>
+              <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                <h4 class="text-sm font-semibold text-slate-900">
+                  Not sent ({{ cancelReport.counts.notSent }})
+                </h4>
+                <ul class="mt-2 max-h-40 overflow-y-auto text-sm">
+                  <li
+                    v-for="r in cancelReport.notSentRecipients"
+                    :key="`not-${r.email}-${r.status}`"
+                    class="border-b border-slate-100 py-1.5 last:border-0"
+                  >
+                    {{ r.email }}
+                    <span class="ml-2 text-xs uppercase text-slate-500">{{ r.status }}</span>
+                  </li>
+                  <li v-if="cancelReport.notSentRecipients.length === 0" class="py-2 text-slate-500">
+                    All recipients were sent before cancellation.
+                  </li>
+                </ul>
+              </section>
+            </div>
+
             <div>
               <p class="text-base font-medium text-slate-900">
                 <template v-if="props.sendProgress.done">
@@ -330,6 +440,28 @@ watch(reportPage, () => {
             </svg>
             Starting…
           </div>
+        </div>
+
+        <div
+          v-if="canShowStop && !cancelReport"
+          class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 sm:px-6"
+        >
+          <button
+            type="button"
+            class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:opacity-50"
+            :disabled="stopBusy"
+            @click="executePause"
+          >
+            {{ stopBusy ? 'Stopping…' : 'Pause' }}
+          </button>
+          <button
+            type="button"
+            class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 transition hover:bg-rose-100 disabled:opacity-50"
+            :disabled="stopBusy"
+            @click="executeCancel"
+          >
+            {{ stopBusy ? 'Stopping…' : 'Cancel send' }}
+          </button>
         </div>
       </div>
     </div>
