@@ -28,7 +28,7 @@
     "kafkajs": "^2.2.4",
     "lucide-vue-next": "^1.0.0",
     "mongoose": "^8.0.0",
-    "nuxt": "^4.4.2",
+    "nuxt": "^4.4.6",
     "pinia": "^3.0.4",
     "vue": "^3.5.30",
     "vue-router": "^5.0.3"
@@ -42,6 +42,8 @@
     "vitest": "4.1.0"
   },
   "overrides": {
+    "@nuxt/nitro-server": "4.4.6",
+    "@nuxt/vite-builder": "4.4.6",
     "serialize-javascript": "7.0.5",
     "underscore": "1.13.8",
     "uuid": "11.1.1"
