@@ -19,8 +19,6 @@ import {
   type CampaignSendProgress
 } from '~/utils/campaignSendRules'
 
-export type { CampaignSendProgress } from '~/utils/campaignSendRules'
-
 export function useCampaignSendFlow() {
   const campaignStore = useCampaignStore()
   const { sendStatus } = storeToRefs(campaignStore)
