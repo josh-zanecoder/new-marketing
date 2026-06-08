@@ -138,9 +138,9 @@ export async function syncContactRecipientListMembership(
   const { Contact, RecipientList, RecipientListMember } = getTenantClientModels(tenantConn)
 
   const contact = await Contact.findById(contactId)
-    .select('_id deletedAt')
-    .lean<Pick<ContactLean, '_id' | 'deletedAt'>>()
-  if (!contact || contact.deletedAt) {
+    .select('_id deletedAt isUnsubscribe')
+    .lean<Pick<ContactLean, '_id' | 'deletedAt' | 'isUnsubscribe'>>()
+  if (!contact || contact.deletedAt || contact.isUnsubscribe === true) {
     await RecipientListMember.deleteMany({ contactId })
     return
   }

@@ -1,9 +1,28 @@
 import mongoose from 'mongoose'
+import type { H3Event } from 'h3'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { findRegistryTenantByDbName } from '@server/tenant/registry-auth'
 import { getTenantConnectionByDbName } from '@server/tenant/connection'
+import { onContactUnsubscribed } from '@server/utils/contact/contactSubscriptionEffects'
 import { verifyUnsubscribeToken } from '@server/utils/unsubscribeToken'
+
+type UnsubscribePayload = { ok: boolean; title: string; message: string }
+
+function wantsJsonResponse(event: H3Event): boolean {
+  const accept = String(getHeader(event, 'accept') ?? '').toLowerCase()
+  const format = String(getQuery(event).format ?? '').toLowerCase()
+  return accept.includes('application/json') || format === 'json'
+}
+
+function respondUnsubscribe(event: H3Event, payload: UnsubscribePayload): UnsubscribePayload | string {
+  if (wantsJsonResponse(event)) {
+    setResponseHeader(event, 'content-type', 'application/json; charset=utf-8')
+    return payload
+  }
+  setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+  return unsubscribeHtml(payload.title, payload.message, payload.ok)
+}
 
 function unsubscribeHtml(title: string, message: string, ok: boolean): string {
   const accent = ok ? '#059669' : '#b45309'
@@ -32,12 +51,11 @@ function unsubscribeHtml(title: string, message: string, ok: boolean): string {
 export default defineEventHandler(async (event) => {
   const token = String(getQuery(event).token ?? '').trim()
   if (!token) {
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeHtml(
-      'Invalid link',
-      'This unsubscribe link is missing required parameters.',
-      false
-    )
+    return respondUnsubscribe(event, {
+      ok: false,
+      title: 'Invalid link',
+      message: 'This unsubscribe link is missing required parameters.'
+    })
   }
 
   let payload: ReturnType<typeof verifyUnsubscribeToken> = null
@@ -73,26 +91,32 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!payload) {
-      setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-      return unsubscribeHtml(
-        'Invalid or expired link',
-        'This unsubscribe link is not valid. You may already be unsubscribed, or the link may have expired.',
-        false
-      )
+      return respondUnsubscribe(event, {
+        ok: false,
+        title: 'Invalid or expired link',
+        message:
+          'This unsubscribe link is not valid. You may already be unsubscribed, or the link may have expired.'
+      })
     }
   } catch {
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeHtml('Something went wrong', 'Please try again later.', false)
+    return respondUnsubscribe(event, {
+      ok: false,
+      title: 'Something went wrong',
+      message: 'Please try again later.'
+    })
   }
 
   if (!mongoose.isValidObjectId(contactId)) {
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeHtml('Invalid link', 'This unsubscribe link is not valid.', false)
+    return respondUnsubscribe(event, {
+      ok: false,
+      title: 'Invalid link',
+      message: 'This unsubscribe link is not valid.'
+    })
   }
 
   try {
     const tenantConn = await getTenantConnectionByDbName(dbName)
-    const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
+    const { Contact } = getTenantClientModels(tenantConn)
     const oid = new mongoose.Types.ObjectId(contactId)
 
     const updated = await Contact.updateOne(
@@ -101,24 +125,25 @@ export default defineEventHandler(async (event) => {
     )
 
     if (updated.matchedCount === 0) {
-      setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-      return unsubscribeHtml(
-        'Not found',
-        'We could not find this contact. You may already be unsubscribed.',
-        false
-      )
+      return respondUnsubscribe(event, {
+        ok: false,
+        title: 'Not found',
+        message: 'We could not find this contact. You may already be unsubscribed.'
+      })
     }
 
-    await RecipientListMember.deleteMany({ contactId: oid })
+    await onContactUnsubscribed(tenantConn, oid)
 
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeHtml(
-      'You are unsubscribed',
-      'You will no longer receive marketing emails from us at this address.',
-      true
-    )
+    return respondUnsubscribe(event, {
+      ok: true,
+      title: 'You are unsubscribed',
+      message: 'You will no longer receive marketing emails from us at this address.'
+    })
   } catch {
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeHtml('Something went wrong', 'Please try again later.', false)
+    return respondUnsubscribe(event, {
+      ok: false,
+      title: 'Something went wrong',
+      message: 'Please try again later.'
+    })
   }
 })
