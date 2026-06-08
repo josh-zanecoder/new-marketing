@@ -2,9 +2,7 @@
  * Tenant recipient list **create** and **patch** (single entry point).
  * See `README.md` in this folder for other modules (normalization, membership query, filter parsing).
  */
-import type { Types } from 'mongoose'
-import type mongoose from 'mongoose'
-import type { Connection } from 'mongoose'
+import type { Connection, Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
   RecipientListCriterion,
@@ -114,7 +112,7 @@ function listRowFromCreated(
 }
 
 function listRowFromPatch(
-  listId: mongoose.Types.ObjectId,
+  listId: Types.ObjectId,
   name: string,
   updated: Record<string, unknown> | null,
   normalized: ReturnType<typeof normalizeRecipientListDoc>,
@@ -242,7 +240,7 @@ export async function createRecipientList(params: {
 export async function updateRecipientList(params: {
   tenantConn: Connection
   auth: unknown
-  listId: mongoose.Types.ObjectId
+  listId: Types.ObjectId
   body: Record<string, unknown>
 }): Promise<{ list: RecipientListApiRow }> {
   const { tenantConn, auth, listId, body } = params

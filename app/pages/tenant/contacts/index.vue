@@ -636,11 +636,6 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
-function formatAddress(addr?: { street?: string; city?: string; state?: string; county?: string }): string {
-  if (!addr) return ''
-  return [addr.street, addr.city, addr.state].filter(Boolean).join(', ')
-}
-
 function formatDate(iso: string): string {
   try {
     return new Intl.DateTimeFormat(undefined, {

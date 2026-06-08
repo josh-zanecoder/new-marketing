@@ -75,6 +75,10 @@ app.post("/publish", async (req, res) => {
 app.listen(PORT, () => console.log(`bridge listening on ${PORT}`));
 
 process.on("SIGTERM", async () => {
-  try { await producer.disconnect(); } catch (_error) {}
+  try {
+    await producer.disconnect();
+  } catch {
+    /* ignore disconnect errors on shutdown */
+  }
   process.exit(0);
 });

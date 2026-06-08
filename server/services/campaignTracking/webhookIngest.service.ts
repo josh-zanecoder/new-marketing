@@ -1,6 +1,5 @@
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignEmailEventModel } from '@server/types/tenant/campaignEmailEvent.model'
-import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import type { CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
 import type { ParsedBrevoTransactionalWebhook } from '@server/utils/brevo/parseBrevoTransactionalWebhookPayload'
 import { brevoMessageIdVariants } from '@server/utils/brevo/brevoMessageIdVariants'
