@@ -302,30 +302,53 @@
 </template>
 
 <script setup lang="ts">
-import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
 import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
 
-function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
-  try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
-  } catch {
-    return {}
-  }
-}
-
+const marketingApi = useTenantMarketingApi()
 const route = useRoute()
 const listId = computed(() => String(route.params.id ?? ''))
+const PAGE_SIZE = 50
 
-const pending = ref(true)
-const pageLoading = ref(false)
-const loadError = ref('')
-const payload = ref<TenantRecipientListDetailPayload | null>(null)
 const page = ref(1)
+const pageLoading = ref(false)
 const deleteConfirmOpen = ref(false)
 const deleteDetailPending = ref(false)
+const deleteActionError = ref('')
+
+const {
+  data: payload,
+  pending,
+  error: loadErrorRef
+} = await useAsyncData(
+  () => `tenant-recipient-list-detail-${listId.value}`,
+  async () => {
+    const id = listId.value
+    if (!id) return null
+    return marketingApi.fetchRecipientListById(id, { page: 1, limit: PAGE_SIZE })
+  },
+  { watch: [listId] }
+)
+
+watch(payload, (res) => {
+  if (res?.members?.page) page.value = res.members.page
+})
+
+const loadError = computed(() => {
+  if (deleteActionError.value) return deleteActionError.value
+  const e = loadErrorRef.value
+  if (!e) return ''
+  if (typeof e === 'object' && e !== null && 'data' in e) {
+    return String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
+  }
+  return 'Failed to load'
+})
+
+const mediumDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+})
 
 const deleteDetailMessage = computed(() => {
   const name = payload.value?.list?.name?.trim()
@@ -379,10 +402,7 @@ const criteriaRuleCount = computed(
 
 function formatDate(iso: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(iso))
+    return mediumDateTimeFormatter.format(new Date(iso))
   } catch {
     return iso
   }
@@ -397,42 +417,26 @@ function formatAddress(addr: Record<string, unknown>): string {
   return parts.length ? parts.join(', ') : '—'
 }
 
-async function load(p: number) {
+async function goPage(p: number) {
   const id = listId.value
-  if (!id) {
-    loadError.value = 'Missing list id'
-    pending.value = false
-    return
-  }
-  const isInitial = !payload.value
-  if (!isInitial) pageLoading.value = true
-  loadError.value = ''
+  if (!id || p < 1 || !payload.value || pageLoading.value) return
+  pageLoading.value = true
+  deleteActionError.value = ''
   try {
-    const res = await $fetch<TenantRecipientListDetailPayload>(
-      `/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`,
-      {
-        credentials: 'include',
-        ...serverAuthHeaders(),
-        query: { page: p, limit: 50 }
-      }
-    )
-    payload.value = res
+    const res = await marketingApi.fetchRecipientListMembers(id, { page: p, limit: PAGE_SIZE })
+    payload.value = {
+      ...payload.value,
+      members: res.members
+    }
     page.value = res.members.page
   } catch (e: unknown) {
-    loadError.value =
+    deleteActionError.value =
       e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
-        : 'Failed to load'
-    payload.value = null
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load page')
+        : 'Failed to load page'
   } finally {
-    pending.value = false
     pageLoading.value = false
   }
-}
-
-async function goPage(p: number) {
-  if (p < 1) return
-  await load(p)
 }
 
 async function confirmDeleteDetail() {
@@ -443,12 +447,12 @@ async function confirmDeleteDetail() {
     await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       credentials: 'include',
-      ...serverAuthHeaders()
+      ...marketingApi.serverAuthHeaders()
     })
     deleteConfirmOpen.value = false
     await navigateTo('/tenant/recipient-list')
   } catch (e: unknown) {
-    loadError.value =
+    deleteActionError.value =
       e && typeof e === 'object' && 'data' in e
         ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to delete list')
         : 'Failed to delete list'
@@ -458,13 +462,4 @@ async function confirmDeleteDetail() {
   }
 }
 
-watch(
-  listId,
-  () => {
-    pending.value = true
-    page.value = 1
-    load(1)
-  },
-  { immediate: true }
-)
 </script>

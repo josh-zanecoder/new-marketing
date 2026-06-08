@@ -1,6 +1,7 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, isRef, toValue } from 'vue'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import { buildRecipientListAudienceOptions } from '~/utils/recipientListAudienceOptions'
 import {
   recipientFilterPropertyLabel,
   recipientFilterPropertyTypeLabel
@@ -84,13 +85,11 @@ export type RecipientListFormSharedReturn = {
 }
 
 export type RecipientListFormCreateReturn = RecipientListFormSharedReturn & {
-  load: () => Promise<void>
   submitCreate: () => Promise<void>
 }
 
 export type RecipientListFormEditReturn = RecipientListFormSharedReturn & {
   listId: Ref<string>
-  loadAll: (listId: string) => Promise<void>
   submitUpdate: () => Promise<void>
 }
 
@@ -123,9 +122,8 @@ export function useRecipientListForm(options: {
   listId: MaybeRefOrGetter<string>
 }): RecipientListFormEditReturn
 export function useRecipientListForm(options: UseRecipientListFormOptions): RecipientListFormCreateReturn | RecipientListFormEditReturn {
-  const { serverAuthHeaders } = useTenantMarketingApi()
+  const marketingApi = useTenantMarketingApi()
 
-  const loadPending = ref(true)
   const loadError = ref('')
   const saveError = ref('')
   const saving = ref(false)
@@ -142,48 +140,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     criterionJoins: [] as ('and' | 'or')[]
   })
 
-  const audienceOptions = computed((): { value: string; label: string }[] => {
-    const d = data.value
-    if (!d) return []
-    const seen = new Set<string>()
-    for (const f of d.recipientFilters ?? []) {
-      if (f.enabled && typeof f.contactType === 'string' && f.contactType.trim()) {
-        seen.add(f.contactType.trim().toLowerCase())
-      }
-    }
-    for (const t of d.contactTypes ?? []) {
-      if (t.enabled === false) continue
-      const k = t.key.trim().toLowerCase()
-      if (k) seen.add(k)
-    }
-    const labelByKey = new Map<string, string>()
-    const orderByKey = new Map<string, number>()
-    for (const t of d.contactTypes ?? []) {
-      const k = t.key.trim().toLowerCase()
-      if (!k) continue
-      labelByKey.set(k, t.label.trim() || k)
-      orderByKey.set(k, t.sortOrder ?? 0)
-    }
-    const keys = [...seen]
-    keys.sort((a, b) => {
-      const oa = orderByKey.has(a) ? orderByKey.get(a)! : 9999
-      const ob = orderByKey.has(b) ? orderByKey.get(b)! : 9999
-      if (oa !== ob) return oa - ob
-      return a.localeCompare(b)
-    })
-    const counts = d.contactCounts
-    return keys.map((value) => {
-      const baseLabel =
-        labelByKey.get(value) ??
-        value.charAt(0).toUpperCase() + value.slice(1)
-      const n = counts[value as keyof typeof counts]
-      const label =
-        typeof n === 'number' && Number.isFinite(n)
-          ? `${baseLabel} (${n.toLocaleString()})`
-          : baseLabel
-      return { value, label }
-    })
-  })
+  const audienceOptions = computed(() => buildRecipientListAudienceOptions(data.value))
 
   watch(
     audienceOptions,
@@ -427,28 +384,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     }
   }
 
-  async function loadFormPayload(): Promise<void> {
-    const res = await $fetch<RecipientListFormPayload>('/api/v1/tenant/recipient-list', {
-      credentials: 'include',
-      ...serverAuthHeaders(),
-      query: { scope: 'form' }
-    })
-    data.value = normalizePayload(res)
-  }
-
-  async function load(): Promise<void> {
-    loadPending.value = true
-    loadError.value = ''
-    try {
-      await loadFormPayload()
-    } catch (e: unknown) {
-      loadError.value = fetchErrorMessage(e, 'Failed to load')
-      data.value = null
-    } finally {
-      loadPending.value = false
-    }
-  }
-
   async function submitCreate(): Promise<void> {
     saveError.value = ''
     saving.value = true
@@ -456,7 +391,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       await $fetch('/api/v1/tenant/recipient-list', {
         method: 'POST',
         credentials: 'include',
-        ...serverAuthHeaders(),
+        ...marketingApi.serverAuthHeaders(),
         body: buildSaveBody()
       })
       await navigateTo('/tenant/recipient-list')
@@ -464,40 +399,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       saveError.value = fetchErrorMessage(e, 'Save failed')
     } finally {
       saving.value = false
-    }
-  }
-
-  async function loadAll(listId: string): Promise<void> {
-    loadPending.value = true
-    loadError.value = ''
-    if (skipAudienceClear) skipAudienceClear.value = true
-    try {
-      if (!listId) {
-        loadError.value = 'Missing list id'
-        data.value = null
-        return
-      }
-      const [res, detail] = await Promise.all([
-        $fetch<RecipientListFormPayload>('/api/v1/tenant/recipient-list', {
-          credentials: 'include',
-          ...serverAuthHeaders(),
-          query: { scope: 'form' }
-        }),
-        $fetch<ListDetailForEdit>(`/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`, {
-          credentials: 'include',
-          ...serverAuthHeaders(),
-          query: { page: 1, limit: 1 }
-        })
-      ])
-      data.value = normalizePayload(res)
-      hydrateFromList(detail.list)
-      await nextTick()
-      if (skipAudienceClear) skipAudienceClear.value = false
-    } catch (e: unknown) {
-      loadError.value = fetchErrorMessage(e, 'Failed to load')
-      data.value = null
-    } finally {
-      loadPending.value = false
     }
   }
 
@@ -509,7 +410,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`, {
         method: 'PATCH',
         credentials: 'include',
-        ...serverAuthHeaders(),
+        ...marketingApi.serverAuthHeaders(),
         body: buildSaveBody()
       })
       await navigateTo(`/tenant/recipient-list/${encodeURIComponent(listId)}`)
@@ -521,7 +422,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   const shared = {
-    loadPending,
     loadError,
     saveError,
     saving,
@@ -546,12 +446,25 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   if (options.mode === 'create') {
-    onMounted(() => {
-      void load()
+    const { data: asyncData, pending: loadPending, error: asyncError } = useAsyncData(
+      'recipient-list-form-create',
+      async () => normalizePayload(await marketingApi.fetchRecipientListFormMetadata())
+    )
+
+    watch(
+      asyncData,
+      (value) => {
+        data.value = value ?? null
+      },
+      { immediate: true }
+    )
+    watch(asyncError, (e) => {
+      loadError.value = e ? fetchErrorMessage(e, 'Failed to load') : ''
     })
+
     return {
       ...shared,
-      load,
+      loadPending,
       submitCreate
     }
   }
@@ -560,13 +473,41 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     ? options.listId
     : computed(() => String(toValue(options.listId) ?? ''))
 
+  const { data: asyncEditBundle, pending: loadPending, error: asyncError } = useAsyncData(
+    () => `recipient-list-form-edit-${listIdRef.value}`,
+    async () => {
+      const id = listIdRef.value
+      if (!id) return null
+      const [formRes, detail] = await Promise.all([
+        marketingApi.fetchRecipientListFormMetadata(),
+        marketingApi.fetchRecipientListForEdit(id)
+      ])
+      return {
+        formPayload: normalizePayload(formRes),
+        list: detail.list as ListDetailForEdit['list']
+      }
+    },
+    { watch: [listIdRef] }
+  )
+
   watch(
-    listIdRef,
-    (id) => {
-      void loadAll(id)
+    asyncEditBundle,
+    async (bundle) => {
+      if (!bundle) {
+        data.value = null
+        return
+      }
+      if (skipAudienceClear) skipAudienceClear.value = true
+      data.value = bundle.formPayload
+      hydrateFromList(bundle.list)
+      await nextTick()
+      if (skipAudienceClear) skipAudienceClear.value = false
     },
     { immediate: true }
   )
+  watch(asyncError, (e) => {
+    loadError.value = e ? fetchErrorMessage(e, 'Failed to load') : ''
+  })
 
   async function submitUpdateBound(): Promise<void> {
     await submitUpdate(listIdRef.value)
@@ -575,7 +516,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   return {
     ...shared,
     listId: listIdRef,
-    loadAll,
+    loadPending,
     submitUpdate: submitUpdateBound
   }
 }

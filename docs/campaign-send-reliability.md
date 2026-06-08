@@ -72,4 +72,4 @@ If logs show `[EmailWorker] worker.error` with `could not renew lock for job bat
 | Constants / idempotency / Brevo batch shape | `server/utils/campaignSend/` |
 | Recipient claim | `server/utils/campaignSend/claimCampaignRecipientBatch.ts` |
 | Reconcile | `server/services/reconcileStuckSendingCampaigns.ts` |
-| Optional CRM notify | `server/campaign-delivery/notifyCampaignSendCompleted.ts` |
+| Optional CRM notify | `server/kafka/notifyCampaignSendCompleted.ts` |
