@@ -47,6 +47,8 @@ export interface CampaignSendRecipientReportItem {
   status?: string
   sentAt?: string
   error?: string
+  brevoLastEvent?: string
+  brevoLastEventAt?: string
 }
 
 export interface CampaignSendRecipientReport {

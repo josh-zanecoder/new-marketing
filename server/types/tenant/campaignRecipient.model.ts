@@ -8,6 +8,9 @@ export interface CampaignRecipientLean {
   sentAt?: Date
   error?: string
   brevoMessageId?: string
+  /** Latest Brevo webhook event label (delivered, opened, click, …). */
+  brevoLastEvent?: string
+  brevoLastEventAt?: Date
   clientId?: string
 }
 

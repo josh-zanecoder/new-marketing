@@ -6,10 +6,10 @@
           Tracking
         </h1>
         <p class="max-w-xl text-sm text-zinc-500 sm:text-[15px]">
-          Delivery, opens, and clicks from your sends—filtered to this workspace. Data comes from Brevo and is grouped by message.
+          Delivery, opens, and clicks from webhooks across this workspace, grouped by message.
         </p>
       </div>
     </header>
-    <TenantBrevoTrackingEventsPanel />
+    <TenantTrackingEventsPanel />
   </div>
 </template>

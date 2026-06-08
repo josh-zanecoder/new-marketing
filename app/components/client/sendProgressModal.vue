@@ -392,6 +392,12 @@ watch(reportPage, () => {
                     >
                       {{ row.error }}
                     </p>
+                    <p v-else-if="row.brevoLastEvent" class="mt-0.5 text-xs text-sky-700">
+                      {{ row.brevoLastEvent }}
+                      <span v-if="row.brevoLastEventAt" class="text-slate-400">
+                        · {{ new Date(row.brevoLastEventAt).toLocaleString() }}
+                      </span>
+                    </p>
                     <p v-else-if="row.sentAt" class="mt-0.5 text-xs text-slate-500">
                       {{ new Date(row.sentAt).toLocaleString() }}
                     </p>

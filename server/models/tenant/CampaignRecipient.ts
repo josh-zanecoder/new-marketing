@@ -10,6 +10,8 @@ export const campaignRecipientSchema = new mongoose.Schema({
   error: { type: String },
   /** Brevo transactional message id from send response (dedupe / webhook correlation). */
   brevoMessageId: { type: String, default: '', trim: true },
+  brevoLastEvent: { type: String, default: '', trim: true },
+  brevoLastEventAt: { type: Date },
   clientId: { type: String, default: '' }
 }, { timestamps: true })
 

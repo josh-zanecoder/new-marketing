@@ -18,7 +18,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/sso',
   '/api/v1/auth/logout',
   '/api/v1/auth/tenant-handoff',
-  '/api/v1/unsubscribe'
+  '/api/v1/unsubscribe',
+  '/api/v1/webhooks/brevo'
 ]
 
 const ADMIN_API_PREFIX = '/api/v1/admin'

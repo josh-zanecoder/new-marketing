@@ -26,6 +26,8 @@ import {
 } from '../utils/emailMerge/composeMergeRoot'
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
+import { registerCampaignBrevoMessageRouting } from './campaignBrevoMessageRouting.service'
+import { logCampaignSendBatchVisibility } from './campaignSendVisibilityLog.service'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
   buildCampaignCreatorReplyTo,
@@ -882,6 +884,13 @@ export async function processBatch(
       recipientDelayMs > 0 ? toSend.map((p) => [p]) : toSend.length ? [toSend] : []
 
     const ops: Parameters<CampaignRecipientModel['bulkWrite']>[0] = []
+    const routingRows: Array<{
+      brevoMessageId: string
+      dbName: string
+      campaignId: string
+      recipientId: string
+      email: string
+    }> = []
 
     for (const p of prepared) {
       if (p.failed) {
@@ -964,6 +973,15 @@ export async function processBatch(
                 }
               }
             })
+            if (tenantDbNameForTags) {
+              routingRows.push({
+                brevoMessageId: trimmed,
+                dbName: tenantDbNameForTags,
+                campaignId,
+                recipientId: String(p.row._id),
+                email: p.row.email
+              })
+            }
           } else {
             ops.push({
               updateOne: {
@@ -991,6 +1009,19 @@ export async function processBatch(
 
     if (ops.length) {
       await (CampaignRecipient as CampaignRecipientModel).bulkWrite(ops, { ordered: false })
+    }
+
+    if (routingRows.length) {
+      try {
+        const registry = await getRegistryConnection()
+        await registerCampaignBrevoMessageRouting(registry, routingRows)
+      } catch (err) {
+        logSendWarn('brevoRouting.registerFailed', {
+          campaignId,
+          count: routingRows.length,
+          error: err instanceof Error ? err.message : String(err)
+        })
+      }
     }
 
     await (Campaign as CampaignModel).updateOne(
@@ -1027,6 +1058,17 @@ export async function processBatch(
     campaignStatus: campaignUpdated.status,
     hasNext
   })
+
+  await logCampaignSendBatchVisibility(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId,
+    logSend,
+    {
+      sendRunId: options.sendRunId,
+      page: options.page,
+      batchEmails: processedInBatch > 0 ? pending.map((r) => r.email) : undefined
+    }
+  )
 
   return {
     campaignId,
