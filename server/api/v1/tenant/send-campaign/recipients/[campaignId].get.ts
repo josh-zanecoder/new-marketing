@@ -9,6 +9,7 @@ import {
   CAMPAIGN_RECIPIENT_STATUS_SENT
 } from '@server/utils/campaignSend/constants'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { countCampaignRecipientStatuses } from '@server/utils/campaignSend/recipientStatusCounts'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type RecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed' | 'cancelled'
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
     baseFilter.email = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
   }
 
-  const [items, total, sent, pending, failed, sending, cancelled] = await Promise.all([
+  const [items, total, statusCounts] = await Promise.all([
     (CampaignRecipient as CampaignRecipientModel)
       .find(baseFilter)
       .sort({ status: 1, email: 1 })
@@ -61,27 +62,10 @@ export default defineEventHandler(async (event) => {
       .select('email status sentAt error brevoLastEvent brevoLastEventAt')
       .lean<CampaignRecipientLean[]>(),
     (CampaignRecipient as CampaignRecipientModel).countDocuments(baseFilter),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_SENT
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_FAILED
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_CANCELLED
-    })
+    countCampaignRecipientStatuses(CampaignRecipient as CampaignRecipientModel, campaignId)
   ])
+
+  const pending = statusCounts.pending + statusCounts.sending
 
   return {
     campaignId,
@@ -91,12 +75,12 @@ export default defineEventHandler(async (event) => {
     total,
     totalPages: Math.max(1, Math.ceil(total / limit)),
     counts: {
-      sent,
+      sent: statusCounts.sent,
       pending,
-      failed,
-      sending,
-      cancelled,
-      total: sent + pending + failed + cancelled
+      failed: statusCounts.failed,
+      sending: statusCounts.sending,
+      cancelled: statusCounts.cancelled,
+      total: statusCounts.sent + pending + statusCounts.failed + statusCounts.cancelled
     },
     items: items.map((r) => ({
       email: r.email,

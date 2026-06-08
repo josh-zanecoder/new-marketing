@@ -611,7 +611,7 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
-import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/tenantContact'
+import type { CampaignContactPickerRow } from '~/types/tenantContact'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
@@ -664,14 +664,19 @@ const savedTemplateHtml = ref<string | null>(null)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
-interface RecipientListOption {
-  id: string
-  name: string
-}
-
-const recipientLists = ref<RecipientListOption[]>([])
-const recipientListsPending = ref(false)
-const recipientListsError = ref('')
+const {
+  recipientLists,
+  recipientListsPending,
+  recipientListsError,
+  contactPickerTypeCounts,
+  contactPickerTypeOptions,
+  contactsCatalog,
+  contactsCatalogPending,
+  contactsCatalogError,
+  contactsCatalogTruncated,
+  loadRecipientLists,
+  loadContactsCatalog: loadContactsCatalogResource
+} = useCampaignRecipientResources()
 
 const listPreviewPending = ref(false)
 const listPreviewError = ref('')
@@ -679,23 +684,6 @@ const listPreviewContacts = ref<Array<{ id: string; name: string; email: string 
 const listPreviewTotal = ref(0)
 
 const addContactsModalOpen = ref(false)
-const contactPickerTypeCounts = ref<Record<string, number> | null>(null)
-const contactPickerTypeOptions = ref<TenantContactTypeOption[]>([])
-const contactsCatalog = ref<CampaignContactPickerRow[]>([])
-const contactsCatalogPending = ref(false)
-const contactsCatalogError = ref('')
-const contactsCatalogTruncated = ref(false)
-let recipientListResourcePromise: Promise<Awaited<ReturnType<typeof marketingApi.fetchRecipientListResource>>> | null = null
-
-function fetchRecipientListResourceOnce() {
-  if (!recipientListResourcePromise) {
-    recipientListResourcePromise = marketingApi.fetchRecipientListResource().catch((e) => {
-      recipientListResourcePromise = null
-      throw e
-    })
-  }
-  return recipientListResourcePromise
-}
 
 /** Display names/emails for manual recipient contact ids. */
 const manualRecipientLabels = ref<Record<string, { email: string; name: string }>>({})
@@ -727,66 +715,11 @@ function addContactFromPicker(row: CampaignContactPickerRow) {
 }
 
 async function loadContactsCatalog() {
-  contactsCatalogPending.value = true
-  contactsCatalogError.value = ''
-  try {
-    const res = await fetchRecipientListResourceOnce()
-    const rows = Array.isArray(res.contacts) ? res.contacts : []
-    const cc = res.contactCounts
-    contactPickerTypeCounts.value =
-      cc && typeof cc === 'object'
-        ? Object.fromEntries(
-            Object.entries(cc as Record<string, unknown>).map(([k, v]) => [
-              String(k).trim().toLowerCase(),
-              Number(v) || 0
-            ])
-          )
-        : null
-    contactPickerTypeOptions.value = Array.isArray(res.contactTypes)
-      ? (res.contactTypes as TenantContactTypeOption[])
-      : []
-    contactsCatalog.value = rows
-      .map((c) => {
-        const rawTypes = Array.isArray(c.contactType) ? c.contactType : []
-        const typeKeys = [
-          ...new Set(rawTypes.map((k) => String(k).trim().toLowerCase()).filter(Boolean))
-        ]
-        const opts = contactPickerTypeOptions.value
-        const fallbackKey =
-          Array.isArray(opts) && opts.length
-            ? String(
-                opts.find((t) => t.enabled !== false)?.key ??
-                  opts[0]?.key ??
-                  ''
-              )
-                .trim()
-                .toLowerCase()
-            : ''
-        const keys = typeKeys.length ? typeKeys : fallbackKey ? [fallbackKey] : []
-        return {
-          id: c.id,
-          name: (c.name ?? '').trim(),
-          email: (c.email ?? '').trim(),
-          company: (c.company ?? '').trim() || undefined,
-          contactType: keys
-        }
-      })
-      .filter((c) => c.email.includes('@'))
-    contactsCatalogTruncated.value = Boolean(res.contactsTruncated)
-    for (const row of contactsCatalog.value) {
-      if (form.value.recipientsManual.includes(row.id)) {
-        setManualRecipientLabel(row.id, row.email, row.name)
-      }
+  await loadContactsCatalogResource((row) => {
+    if (form.value.recipientsManual.includes(row.id)) {
+      setManualRecipientLabel(row.id, row.email, row.name)
     }
-  } catch {
-    contactsCatalogError.value = 'Could not load contacts.'
-    contactsCatalog.value = []
-    contactsCatalogTruncated.value = false
-    contactPickerTypeCounts.value = null
-    contactPickerTypeOptions.value = []
-  } finally {
-    contactsCatalogPending.value = false
-  }
+  })
 }
 
 function openAddContactsModal() {
@@ -885,20 +818,6 @@ function buildCampaignForSend(savedId: string): Campaign {
   }
 }
 
-async function loadRecipientLists() {
-  recipientListsPending.value = true
-  recipientListsError.value = ''
-  try {
-    const res = await fetchRecipientListResourceOnce()
-    recipientLists.value = Array.isArray(res.lists) ? res.lists : []
-  } catch {
-    recipientListsError.value = 'Could not load recipient lists.'
-    recipientLists.value = []
-  } finally {
-    recipientListsPending.value = false
-  }
-}
-
 async function loadListContactsPreview() {
   const id = form.value.recipientsListId?.trim()
   if (!id || form.value.recipientsMode !== 'list') {
@@ -910,7 +829,7 @@ async function loadListContactsPreview() {
   listPreviewPending.value = true
   listPreviewError.value = ''
   try {
-    const res = await marketingApi.fetchRecipientListById(id, { limit: 50, page: 1 })
+    const res = await marketingApi.fetchRecipientListMembers(id, { limit: 50, page: 1 })
     listPreviewContacts.value = (res.members?.items ?? []).map((c) => ({
       id: c.id,
       name: c.name || '',

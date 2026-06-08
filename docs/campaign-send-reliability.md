@@ -60,4 +60,4 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | Constants / idempotency / Brevo batch shape | `server/utils/campaignSend/` |
 | Recipient claim | `server/utils/campaignSend/claimCampaignRecipientBatch.ts` |
 | Reconcile | `server/services/reconcileStuckSendingCampaigns.ts` |
-| Optional CRM notify | `server/campaign-delivery/notifyCampaignSendCompleted.ts` |
+| Optional CRM notify | `server/kafka/notifyCampaignSendCompleted.ts` |

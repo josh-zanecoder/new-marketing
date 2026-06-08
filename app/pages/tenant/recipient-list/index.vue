@@ -52,6 +52,14 @@
       {{ loadError }}
     </div>
 
+    <div
+      v-if="deleteActionError"
+      class="flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50 px-5 py-4 text-sm leading-snug text-red-900 shadow-sm sm:text-[0.9375rem]"
+      role="alert"
+    >
+      {{ deleteActionError }}
+    </div>
+
     <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
       <div class="relative min-w-0 w-full max-w-lg">
         <label class="sr-only" for="recipient-list-search">Search lists</label>
@@ -298,12 +306,19 @@
 </template>
 
 <script setup lang="ts">
-import type { TenantRecipientListCriterion } from '~/types/tenantContact'
+import type {
+  TenantRecipientListCriterion,
+  TenantRecipientListIndexPayload
+} from '~/types/tenantContact'
 import { Megaphone, Pencil, Trash2 } from 'lucide-vue-next'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
+import { buildRecipientListAudienceOptions } from '~/utils/recipientListAudienceOptions'
 
 definePageMeta({ layout: 'default' })
+
+const marketingApi = useTenantMarketingApi()
+const mediumDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
 
 function criterionChipLabel(c: TenantRecipientListCriterion): string {
   const p = recipientCriterionPropertyLabel(c.property)
@@ -313,100 +328,27 @@ function criterionChipLabel(c: TenantRecipientListCriterion): string {
 
 const PAGE_SIZE = 10
 
-interface ListRow {
-  id: string
-  name: string
-  audience: string
-  filters: TenantRecipientListCriterion[]
-  filterMode?: 'and' | 'or'
-  updatedAt: string | null
-  /** Resolved members visible to the current user (from API). */
-  memberCount?: number | null
-}
+type ListRow = TenantRecipientListIndexPayload['lists'][number]
 
-interface RegistryFilterRow {
-  id: string
-  name: string
-  contactType: string
-  property: string
-  propertyType: string
-  propertyValue: string
-  enabled: boolean
-}
+const { data, pending, error: loadErrorRef, refresh } = await useAsyncData(
+  'tenant-recipient-list-index',
+  () => marketingApi.fetchRecipientListIndex()
+)
 
-interface ContactTypeRow {
-  key: string
-  label: string
-  sortOrder: number
-  enabled?: boolean
-}
-
-interface RecipientListIndexPayload {
-  tenantIdConfigured: boolean
-  lists: ListRow[]
-  recipientFilters: RegistryFilterRow[]
-  contactTypes?: ContactTypeRow[]
-}
-
-function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
-  try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
-  } catch {
-    return {}
+const loadError = computed(() => {
+  const e = loadErrorRef.value
+  if (!e) return ''
+  if (typeof e === 'object' && e !== null && 'data' in e) {
+    return String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
   }
-}
+  return 'Failed to load'
+})
 
-const pending = ref(true)
-const loadError = ref('')
-const data = ref<RecipientListIndexPayload | null>(null)
-const loadedAt = ref(0)
-let loadInFlight: Promise<void> | null = null
 const searchQuery = ref('')
 const audienceFilter = ref<string>('all')
 const currentPage = ref(1)
 
-const audienceOptions = computed((): { value: string; label: string }[] => {
-  const d = data.value
-  if (!d) return []
-  const seen = new Set<string>()
-  for (const f of d.recipientFilters ?? []) {
-    if (f.enabled && typeof f.contactType === 'string' && f.contactType.trim()) {
-      seen.add(f.contactType.trim().toLowerCase())
-    }
-  }
-  for (const t of d.contactTypes ?? []) {
-    if (t.enabled === false) continue
-    const k = String(t.key ?? '')
-      .trim()
-      .toLowerCase()
-    if (k) seen.add(k)
-  }
-  if (!seen.size) return []
-  const labelByKey = new Map<string, string>()
-  const orderByKey = new Map<string, number>()
-  for (const t of d.contactTypes ?? []) {
-    const k = String(t.key ?? '')
-      .trim()
-      .toLowerCase()
-    if (!k) continue
-    labelByKey.set(k, String(t.label ?? '').trim() || k)
-    orderByKey.set(k, Number(t.sortOrder ?? 0))
-  }
-  const keys = [...seen]
-  keys.sort((a, b) => {
-    const oa = orderByKey.has(a) ? orderByKey.get(a)! : 9999
-    const ob = orderByKey.has(b) ? orderByKey.get(b)! : 9999
-    if (oa !== ob) return oa - ob
-    return a.localeCompare(b)
-  })
-  return keys.map((value) => ({
-    value,
-    label:
-      labelByKey.get(value) ??
-      value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
-  }))
-})
+const audienceOptions = computed(() => buildRecipientListAudienceOptions(data.value))
 
 const filteredLists = computed(() => {
   const lists = data.value?.lists ?? []
@@ -456,6 +398,7 @@ watch(totalPages, (pages) => {
 
 const listToDelete = ref<ListRow | null>(null)
 const deleteListPending = ref(false)
+const deleteActionError = ref('')
 
 const deleteListMessage = computed(() => {
   const row = listToDelete.value
@@ -471,12 +414,13 @@ async function confirmDeleteList() {
     await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(row.id)}`, {
       method: 'DELETE',
       credentials: 'include',
-      ...serverAuthHeaders()
+      ...marketingApi.serverAuthHeaders()
     })
     listToDelete.value = null
-    await load({ force: true })
+    deleteActionError.value = ''
+    await refresh()
   } catch (e: unknown) {
-    loadError.value =
+    deleteActionError.value =
       e && typeof e === 'object' && 'data' in e
         ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to delete list')
         : 'Failed to delete list'
@@ -493,7 +437,7 @@ function listCardSubtitle(row: ListRow): string {
   }
   if (row.updatedAt) {
     try {
-      return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(row.updatedAt))
+      return mediumDateFormatter.format(new Date(row.updatedAt))
     } catch {
       return 'Recipient list'
     }
@@ -511,7 +455,7 @@ function formatRecipientCount(row: ListRow): string {
 function listCardFooterLeft(row: ListRow): string {
   if (row.updatedAt) {
     try {
-      return `Updated ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(row.updatedAt))}`
+      return `Updated ${mediumDateFormatter.format(new Date(row.updatedAt))}`
     } catch {
       return ''
     }
@@ -523,43 +467,4 @@ function makeCampaignHref(listId: string): string {
   return `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId)}`
 }
 
-async function load(options?: { force?: boolean }) {
-  const force = options?.force === true
-  const hasFreshData = !!data.value && Date.now() - loadedAt.value < 15000
-  if (!force && hasFreshData) return
-  if (loadInFlight) return loadInFlight
-
-  loadInFlight = (async () => {
-    pending.value = true
-    loadError.value = ''
-    try {
-      const res = await $fetch<RecipientListIndexPayload>('/api/v1/tenant/recipient-list', {
-        credentials: 'include',
-        ...serverAuthHeaders()
-      })
-      data.value = {
-        tenantIdConfigured: res.tenantIdConfigured,
-        lists: res.lists ?? [],
-        recipientFilters: res.recipientFilters ?? [],
-        contactTypes: res.contactTypes ?? []
-      }
-      loadedAt.value = Date.now()
-    } catch (e: unknown) {
-      loadError.value =
-        e && typeof e === 'object' && 'data' in e
-          ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load')
-          : 'Failed to load'
-      data.value = null
-    } finally {
-      pending.value = false
-      loadInFlight = null
-    }
-  })()
-
-  return loadInFlight
-}
-
-onMounted(() => {
-  load()
-})
 </script>

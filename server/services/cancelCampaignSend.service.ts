@@ -16,16 +16,13 @@ import {
   CAMPAIGN_STATUS_PAUSED,
   CAMPAIGN_STATUS_SENDING
 } from '../utils/campaignSend/constants'
+import {
+  countCampaignRecipientStatuses,
+  countCampaignRecipientStatusesBatch,
+  type CampaignRecipientStatusCounts
+} from '../utils/campaignSend/recipientStatusCounts'
 
-export type CampaignSendCancelReportCounts = {
-  sent: number
-  notSent: number
-  cancelled: number
-  pending: number
-  failed: number
-  sending: number
-  total: number
-}
+export type CampaignSendCancelReportCounts = CampaignRecipientStatusCounts
 
 export type CampaignSendCancelReportRecipient = {
   email: string
@@ -87,29 +84,6 @@ const REPORT_PREVIEW_LIMIT = 100
 
 type StopCampaignSendOutcome = 'cancel' | 'pause'
 
-async function countRecipientStatuses(
-  CampaignRecipient: CampaignRecipientModel,
-  campaignId: string
-): Promise<CampaignSendCancelReportCounts> {
-  const [sent, pending, sending, failed, cancelled] = await Promise.all([
-    CampaignRecipient.countDocuments({ campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_SENT }),
-    CampaignRecipient.countDocuments({ campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_PENDING }),
-    CampaignRecipient.countDocuments({ campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_SENDING }),
-    CampaignRecipient.countDocuments({ campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_FAILED }),
-    CampaignRecipient.countDocuments({ campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_CANCELLED })
-  ])
-  const notSent = pending + sending + failed + cancelled
-  return {
-    sent,
-    notSent,
-    cancelled,
-    pending,
-    failed,
-    sending,
-    total: sent + notSent
-  }
-}
-
 function mapRecipientRow(r: CampaignRecipientLean): CampaignSendCancelReportRecipient {
   return {
     email: r.email,
@@ -168,7 +142,10 @@ export async function buildCampaignSendCancelReport(
   const { Campaign, CampaignRecipient } = models
   const campaign = await loadCampaignForReport(Campaign as CampaignModel, params.campaignId)
 
-  const counts = await countRecipientStatuses(CampaignRecipient as CampaignRecipientModel, params.campaignId)
+  const counts = await countCampaignRecipientStatuses(
+    CampaignRecipient as CampaignRecipientModel,
+    params.campaignId
+  )
   const [sentRecipients, notSentRecipients] = await Promise.all([
     (CampaignRecipient as CampaignRecipientModel)
       .find({ campaign: params.campaignId, status: CAMPAIGN_RECIPIENT_STATUS_SENT })
@@ -359,14 +336,14 @@ export async function listSendingCampaignsForTenant(
       >
     >()
 
-  const out: SendingCampaignRow[] = []
-  for (const doc of sending) {
+  const countsByCampaign = await countCampaignRecipientStatusesBatch(
+    CampaignRecipient as CampaignRecipientModel,
+    sending.map((doc) => String(doc._id))
+  )
+
+  return sending.map((doc) => {
     const campaignId = String(doc._id)
-    const counts = await countRecipientStatuses(
-      CampaignRecipient as CampaignRecipientModel,
-      campaignId
-    )
-    out.push({
+    return {
       tenantDbName: dbName,
       tenantName: name,
       campaignId,
@@ -375,11 +352,17 @@ export async function listSendingCampaignsForTenant(
       senderEmail: String(doc.sender?.email ?? ''),
       startedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
       updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
-      counts
-    })
-  }
-
-  return out
+      counts: countsByCampaign.get(campaignId) ?? {
+        sent: 0,
+        notSent: 0,
+        cancelled: 0,
+        pending: 0,
+        failed: 0,
+        sending: 0,
+        total: 0
+      }
+    }
+  })
 }
 
 const STOPPED_LIST_LIMIT = 100
@@ -423,14 +406,16 @@ export async function listStoppedCampaignsForTenant(
       >
     >()
 
+  const countsByCampaign = await countCampaignRecipientStatusesBatch(
+    CampaignRecipient as CampaignRecipientModel,
+    stopped.map((doc) => String(doc._id))
+  )
+
   const out: StoppedCampaignRow[] = []
   for (const doc of stopped) {
     const campaignId = String(doc._id)
-    const counts = await countRecipientStatuses(
-      CampaignRecipient as CampaignRecipientModel,
-      campaignId
-    )
-    if (counts.total === 0) continue
+    const counts = countsByCampaign.get(campaignId)
+    if (!counts || counts.total === 0) continue
     const details = mapCampaignReportDetails(doc)
     out.push({
       tenantDbName: dbName,
@@ -521,14 +506,14 @@ export async function listSendingCampaignsForTenantPaginated(
       >()
   ])
 
-  const items: SendingCampaignRow[] = []
-  for (const doc of sending) {
+  const countsByCampaign = await countCampaignRecipientStatusesBatch(
+    CampaignRecipient as CampaignRecipientModel,
+    sending.map((doc) => String(doc._id))
+  )
+
+  const items: SendingCampaignRow[] = sending.map((doc) => {
     const campaignId = String(doc._id)
-    const counts = await countRecipientStatuses(
-      CampaignRecipient as CampaignRecipientModel,
-      campaignId
-    )
-    items.push({
+    return {
       tenantDbName: ctx.dbName,
       tenantName: ctx.name,
       campaignId,
@@ -537,9 +522,17 @@ export async function listSendingCampaignsForTenantPaginated(
       senderEmail: String(doc.sender?.email ?? ''),
       startedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
       updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
-      counts
-    })
-  }
+      counts: countsByCampaign.get(campaignId) ?? {
+        sent: 0,
+        notSent: 0,
+        cancelled: 0,
+        pending: 0,
+        failed: 0,
+        sending: 0,
+        total: 0
+      }
+    }
+  })
 
   return {
     items,
@@ -596,15 +589,15 @@ export async function listStoppedCampaignsForTenantPaginated(
       >()
   ])
 
-  const items: StoppedCampaignRow[] = []
-  for (const doc of stopped) {
+  const countsByCampaign = await countCampaignRecipientStatusesBatch(
+    CampaignRecipient as CampaignRecipientModel,
+    stopped.map((doc) => String(doc._id))
+  )
+
+  const items: StoppedCampaignRow[] = stopped.map((doc) => {
     const campaignId = String(doc._id)
-    const counts = await countRecipientStatuses(
-      CampaignRecipient as CampaignRecipientModel,
-      campaignId
-    )
     const details = mapCampaignReportDetails(doc)
-    items.push({
+    return {
       tenantDbName: ctx.dbName,
       tenantName: ctx.name,
       campaignId,
@@ -617,9 +610,17 @@ export async function listStoppedCampaignsForTenantPaginated(
       ownerId: details.ownerId,
       startedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
       updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
-      counts
-    })
-  }
+      counts: countsByCampaign.get(campaignId) ?? {
+        sent: 0,
+        notSent: 0,
+        cancelled: 0,
+        pending: 0,
+        failed: 0,
+        sending: 0,
+        total: 0
+      }
+    }
+  })
 
   return {
     items,
@@ -777,7 +778,7 @@ export async function getCampaignSendReportRecipients(
       .select('email status sentAt error')
       .lean<CampaignRecipientLean[]>(),
     (CampaignRecipient as CampaignRecipientModel).countDocuments(baseFilter),
-    countRecipientStatuses(CampaignRecipient as CampaignRecipientModel, params.campaignId)
+    countCampaignRecipientStatuses(CampaignRecipient as CampaignRecipientModel, params.campaignId)
   ])
 
   return {

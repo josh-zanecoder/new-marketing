@@ -5,7 +5,12 @@ import type {
 } from '~/types/campaign'
 import type {
   TenantRecipientListDetailPayload,
+  TenantRecipientListEditPayload,
+  TenantRecipientListIndexPayload,
   TenantRecipientListMemberRow,
+  TenantRecipientListMembersPage,
+  TenantRecipientListOptionsPayload,
+  TenantRecipientListPickerPayload,
   TenantRecipientListResourcePayload
 } from '~/types/tenantContact'
 
@@ -147,6 +152,27 @@ export function useTenantMarketingApi() {
     return $fetch<TenantRecipientListResponse>('/api/v1/tenant/recipient-list', tenantFetchInit())
   }
 
+  async function fetchRecipientListOptions() {
+    return $fetch<TenantRecipientListOptionsPayload>(
+      '/api/v1/tenant/recipient-list',
+      tenantFetchInit({ query: { scope: 'lists' } })
+    )
+  }
+
+  async function fetchRecipientListPickerCatalog() {
+    return $fetch<TenantRecipientListPickerPayload>(
+      '/api/v1/tenant/recipient-list',
+      tenantFetchInit({ query: { scope: 'picker' } })
+    )
+  }
+
+  async function fetchRecipientListIndex() {
+    return $fetch<TenantRecipientListIndexPayload>(
+      '/api/v1/tenant/recipient-list',
+      tenantFetchInit({ query: { scope: 'index' } })
+    )
+  }
+
   async function fetchRecipientListById(listId: string, opts?: { page?: number; limit?: number }) {
     const limit = Math.min(100, Math.max(1, opts?.limit ?? 50))
     const page = Math.max(1, opts?.page ?? 1)
@@ -154,6 +180,34 @@ export function useTenantMarketingApi() {
       `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`,
       tenantFetchInit({ query: { page, limit } })
     )
+  }
+
+  async function fetchRecipientListMembers(
+    listId: string,
+    opts?: { page?: number; limit?: number }
+  ) {
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 50))
+    const page = Math.max(1, opts?.page ?? 1)
+    return $fetch<{ members: TenantRecipientListMembersPage }>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`,
+      tenantFetchInit({ query: { page, limit, scope: 'members' } })
+    )
+  }
+
+  async function fetchRecipientListForEdit(listId: string) {
+    return $fetch<TenantRecipientListEditPayload>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`,
+      tenantFetchInit({ query: { scope: 'edit' } })
+    )
+  }
+
+  async function fetchRecipientListFormMetadata() {
+    return $fetch<{
+      tenantIdConfigured: boolean
+      contactCounts: Record<string, number>
+      contactTypes?: TenantRecipientListIndexPayload['contactTypes']
+      recipientFilters: TenantRecipientListIndexPayload['recipientFilters']
+    }>('/api/v1/tenant/recipient-list', tenantFetchInit({ query: { scope: 'form' } }))
   }
 
   async function fetchDynamicVariables() {
@@ -247,7 +301,13 @@ export function useTenantMarketingApi() {
     fetchEmailMergeContext,
     fetchEmailMergeContextOrEmpty,
     fetchRecipientListResource,
+    fetchRecipientListOptions,
+    fetchRecipientListPickerCatalog,
+    fetchRecipientListIndex,
     fetchRecipientListById,
+    fetchRecipientListMembers,
+    fetchRecipientListForEdit,
+    fetchRecipientListFormMetadata,
     fetchDynamicVariables,
     fetchEmailTemplates,
     fetchTenantMe,

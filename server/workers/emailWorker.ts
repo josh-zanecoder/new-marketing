@@ -13,7 +13,7 @@ import {
   type CampaignQueueJobData
 } from '../queue/emailQueue'
 import { beginCampaignSend, finalizeCampaignSendIfComplete, processBatch, resolveScheduledCampaignBeginMode } from '../services/send-campaign.service'
-import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
+import { notifyCampaignSendCompleted } from '../kafka/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT } from '../utils/campaignSend/constants'
 

@@ -6,7 +6,7 @@ import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/te
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { batchResolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
@@ -50,40 +50,41 @@ export default defineEventHandler(async (event) => {
       contactId: String(r.contact)
     })
   }
-  const listEmailCache = new Map<string, string[]>()
+  const listIds = [
+    ...new Set(
+      campaigns
+        .filter((c) => c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim())
+        .map((c) => String(c.recipientsListId))
+    )
+  ]
+  const listEmailsById = await batchResolveRecipientListEmails(conn, listIds)
 
-  const campaignsWithRecipients = await Promise.all(
-    campaigns.map(async (c) => {
-      const id = String(c._id)
-      let recipients: { email: string; contactId?: string }[] = []
+  const campaignsWithRecipients = campaigns.map((c) => {
+    const id = String(c._id)
+    let recipients: { email: string; contactId?: string }[] = []
 
-      if (c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim()) {
-        const listId = String(c.recipientsListId)
-        let emails = listEmailCache.get(listId)
-        if (!emails) {
-          emails = await resolveRecipientListEmails(conn, listId)
-          listEmailCache.set(listId, emails)
-        }
-        recipients = emails.map((email) => ({ email }))
-      } else if (c.recipientsType === 'manual' || c.recipientsType === 'list') {
-        recipients = recipientsByCampaign.get(id) || []
-      }
+    if (c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim()) {
+      const listId = String(c.recipientsListId)
+      const emails = listEmailsById.get(String(new mongoose.Types.ObjectId(listId))) ?? []
+      recipients = emails.map((email) => ({ email }))
+    } else if (c.recipientsType === 'manual' || c.recipientsType === 'list') {
+      recipients = recipientsByCampaign.get(id) || []
+    }
 
-      return {
-        id,
-        name: c.name,
-        sender: c.sender,
-        recipientsType: c.recipientsType,
-        recipientsListId: c.recipientsListId,
-        subject: c.subject,
-        status: c.status,
-        scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
-        recipients,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt
-      }
-    })
-  )
+    return {
+      id,
+      name: c.name,
+      sender: c.sender,
+      recipientsType: c.recipientsType,
+      recipientsListId: c.recipientsListId,
+      subject: c.subject,
+      status: c.status,
+      scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
+      recipients,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    }
+  })
 
   return { campaigns: campaignsWithRecipients }
 })

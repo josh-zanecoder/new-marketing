@@ -101,6 +101,30 @@ export interface TenantRecipientListResourcePayload {
   contactTypes?: TenantContactTypeOption[]
 }
 
+/** GET `/api/v1/tenant/recipient-list?scope=index` — list index page only. */
+export interface TenantRecipientListIndexPayload {
+  tenantIdConfigured: boolean
+  lists: Array<{
+    id: string
+    name: string
+    audience: string
+    filters: TenantRecipientListCriterion[]
+    filterMode?: 'and' | 'or'
+    updatedAt: string | null
+    memberCount?: number | null
+  }>
+  recipientFilters: Array<{
+    id: string
+    name: string
+    contactType: string
+    property: string
+    propertyType: string
+    propertyValue: string
+    enabled: boolean
+  }>
+  contactTypes?: TenantContactTypeOption[]
+}
+
 export interface TenantRecipientListCriterion {
   property: string
   value: string
@@ -134,13 +158,39 @@ export interface TenantRecipientListDetailList {
 /** GET `/api/v1/tenant/recipient-list/:id` — full response. */
 export interface TenantRecipientListDetailPayload {
   list: TenantRecipientListDetailList
-  members: {
-    items: TenantRecipientListMemberRow[]
-    total: number
-    page: number
-    pageSize: number
-    totalPages: number
+  members: TenantRecipientListMembersPage
+}
+
+export interface TenantRecipientListMembersPage {
+  items: TenantRecipientListMemberRow[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+/** GET `/api/v1/tenant/recipient-list/:id?scope=edit` — edit form hydration only. */
+export interface TenantRecipientListEditPayload {
+  list: {
+    name: string
+    audience: string
+    filterMode?: 'and' | 'or'
+    criterionJoins?: ('and' | 'or')[]
+    filterRows?: TenantRecipientListFilterRow[]
   }
+}
+
+/** GET `/api/v1/tenant/recipient-list?scope=lists` — dropdown options only. */
+export interface TenantRecipientListOptionsPayload {
+  lists: Array<{ id: string; name: string }>
+}
+
+/** GET `/api/v1/tenant/recipient-list?scope=picker` — manual campaign contact picker. */
+export interface TenantRecipientListPickerPayload {
+  contacts: TenantRecipientListCatalogContact[]
+  contactsTruncated?: boolean
+  contactCounts?: Record<string, number>
+  contactTypes?: TenantContactTypeOption[]
 }
 
 /** Manual campaign contact picker (subset of catalog with required name/email). */
