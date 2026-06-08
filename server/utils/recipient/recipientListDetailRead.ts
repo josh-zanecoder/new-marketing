@@ -71,7 +71,7 @@ export async function resolveFilterRowsForList(
   filters: { property: string; value: string }[],
   RecipientFilter: RecipientListDetailModels['RecipientFilter']
 ) {
-  let filterRows = filterRowsFromDoc(doc)
+  const filterRows = filterRowsFromDoc(doc)
   if (filterRows.length || !filters.length) return filterRows
 
   const registryDocs = await RecipientFilter.find({

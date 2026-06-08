@@ -280,7 +280,7 @@ export async function cancelCampaignSend(
 export async function discardPausedCampaignSend(
   models: TenantClientModels,
   campaignId: string,
-  params: {
+  _params: {
     tenantDbName: string
     tenantName: string
   }

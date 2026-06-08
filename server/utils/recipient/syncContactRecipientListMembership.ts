@@ -135,7 +135,7 @@ export async function syncContactRecipientListMembership(
   tenantConn: Connection,
   contactId: mongoose.Types.ObjectId
 ): Promise<void> {
-  const { Contact, RecipientList, RecipientListMember } = getTenantClientModels(tenantConn)
+  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
 
   const contact = await Contact.findById(contactId)
     .select('_id deletedAt isUnsubscribe')
