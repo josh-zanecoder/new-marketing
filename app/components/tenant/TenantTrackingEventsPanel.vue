@@ -1,25 +1,9 @@
 <script setup lang="ts">
-interface BrevoEmailEvent {
-  email?: string
-  date?: string
-  messageId?: string
-  event?: string
-  subject?: string
-  tag?: string
-  from?: string
-  ip?: string
-  link?: string
-  reason?: string
-  templateId?: number
-}
-
-interface BrevoEventReport {
-  events?: BrevoEmailEvent[]
-}
+import type { TrackingEmailEvent, TrackingEventReport } from '~/types/campaignTracking'
 
 interface MessageEventGroup {
   messageId: string
-  events: BrevoEmailEvent[]
+  events: TrackingEmailEvent[]
 }
 
 interface TrackingTableRow {
@@ -30,7 +14,7 @@ interface TrackingTableRow {
   recipientEmail: string
   tagSample: string
   eventTypesOrdered: string[]
-  events: BrevoEmailEvent[]
+  events: TrackingEmailEvent[]
 }
 
 const props = withDefaults(
@@ -51,7 +35,7 @@ const query = computed(() => {
   return c ? { campaignId: c } : {}
 })
 
-const fetchKey = computed(() => `tenant-tracking-brevo-${props.campaignId?.trim() || 'all'}`)
+const fetchKey = computed(() => `tenant-tracking-events-${props.campaignId?.trim() || 'all'}`)
 
 const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking', {
   query,
@@ -60,7 +44,7 @@ const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking
 
 const { data: campaignsListData } = useFetch<{ campaigns: Array<{ id: string; name: string }> }>(
   '/api/v1/tenant/campaigns',
-  { key: 'tenant-brevo-tracking-campaign-names' }
+  { key: 'tenant-tracking-campaign-names' }
 )
 
 const campaignNameById = computed(() => {
@@ -78,10 +62,10 @@ function campaignDisplayLabel(campaignId: string | null): string {
   return campaignNameById.value.get(id) ?? id
 }
 
-const report = computed((): BrevoEventReport | null => {
+const report = computed((): TrackingEventReport | null => {
   const r = data.value?.report
   if (r && typeof r === 'object' && r !== null && 'events' in r) {
-    return r as BrevoEventReport
+    return r as TrackingEventReport
   }
   return null
 })
@@ -110,7 +94,7 @@ function isMongoId(s: string): boolean {
 }
 
 const messageGroups = computed((): MessageEventGroup[] => {
-  const map = new Map<string, BrevoEmailEvent[]>()
+  const map = new Map<string, TrackingEmailEvent[]>()
   for (const ev of events.value) {
     const key = ev.messageId?.trim() || '(no message id)'
     if (!map.has(key)) map.set(key, [])
@@ -451,12 +435,12 @@ const hasActiveFilters = computed(
         </p>
         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
           <div class="relative min-w-0 w-full sm:w-80 md:w-96">
-            <label class="sr-only" for="brevo-tracking-search">Search events</label>
+            <label class="sr-only" for="tracking-events-search">Search events</label>
             <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
-              id="brevo-tracking-search"
+              id="tracking-events-search"
               v-model="searchQuery"
               type="search"
               autocomplete="off"
@@ -465,9 +449,9 @@ const hasActiveFilters = computed(
             >
           </div>
           <div class="shrink-0">
-            <label class="sr-only" for="brevo-tracking-date">Date range</label>
+            <label class="sr-only" for="tracking-events-date">Date range</label>
             <select
-              id="brevo-tracking-date"
+              id="tracking-events-date"
               v-model="datePreset"
               aria-label="Date range"
               class="w-full rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[11rem] sm:w-auto"

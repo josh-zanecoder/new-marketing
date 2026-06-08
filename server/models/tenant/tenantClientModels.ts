@@ -1,5 +1,6 @@
 import type { Connection, Model } from 'mongoose'
 import { campaignSchema } from './Campaign'
+import { campaignEmailEventSchema } from './CampaignEmailEvent'
 import { campaignRecipientSchema } from './CampaignRecipient'
 import { contactTypeSchema } from './ContactType'
 import { contactSchema } from './Contact'
@@ -12,6 +13,7 @@ import { recipientListMemberSchema } from './RecipientListMember'
 
 export type TenantClientModels = {
   Campaign: Model<unknown>
+  CampaignEmailEvent: Model<unknown>
   CampaignRecipient: Model<unknown>
   ManualRecipient: Model<unknown>
   EmailTemplate: Model<unknown>
@@ -26,6 +28,9 @@ export type TenantClientModels = {
 export function getTenantClientModels(conn: Connection): TenantClientModels {
   return {
     Campaign: conn.models.Campaign || conn.model('Campaign', campaignSchema),
+    CampaignEmailEvent:
+      conn.models.CampaignEmailEvent ||
+      conn.model('CampaignEmailEvent', campaignEmailEventSchema),
     CampaignRecipient:
       conn.models.CampaignRecipient ||
       conn.model('CampaignRecipient', campaignRecipientSchema),

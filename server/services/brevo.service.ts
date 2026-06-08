@@ -1,5 +1,4 @@
 import { BrevoClient } from '@getbrevo/brevo'
-import type { GetEmailEventReportRequest } from '@getbrevo/brevo/transactionalEmails'
 import {
   buildCampaignBrevoBatchRequest,
   type CampaignBatchMessageVersion
@@ -226,25 +225,6 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
           ? (e as { response?: { status?: unknown } }).response?.status
           : undefined
     console.error('[Brevo] Send failed:', err, { to: params.to[0]?.email, statusCode: status })
-    return { error: err }
-  }
-}
-
-export async function getTransactionalEmailEventReport(
-  params: GetEmailEventReportRequest = {}
-): Promise<{ report?: unknown; error?: string }> {
-  const client = getBrevoClient()
-  if (!client) {
-    console.error('[Brevo] API key is not configured')
-    return { error: 'Brevo API key is not configured' }
-  }
-
-  try {
-    const report = await client.transactionalEmails.getEmailEventReport(params)
-    return { report }
-  } catch (e: unknown) {
-    const err = extractBrevoError(e)
-    console.error('[Brevo] getEmailEventReport failed:', err)
     return { error: err }
   }
 }

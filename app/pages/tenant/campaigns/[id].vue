@@ -343,8 +343,7 @@ async function handleUnschedule() {
   await unscheduleCampaign(c)
 }
 
-type CampaignViewTab = 'details' | 'tracking'
-const campaignViewTab = ref<CampaignViewTab>('details')
+const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details')
 </script>
 
 <template>
@@ -873,11 +872,13 @@ const campaignViewTab = ref<CampaignViewTab>('details')
         </div>
 
         <section
-          v-show="campaignViewTab === 'tracking'"
-          class="min-w-0 pt-2"
+          v-if="campaignViewTab === 'tracking'"
+          :key="trackingSessionKey"
+          class="min-w-0 space-y-8 pt-2"
           aria-label="Campaign send tracking"
         >
-          <TenantCampaignSendTrackingTable :campaign-id="id" />
+          <TenantCampaignTrackingAnalytics :campaign-id="id" />
+          <CampaignTrackingEventsTable :campaign-id="id" />
         </section>
       </div>
     </div>

@@ -18,6 +18,11 @@ export default defineNuxtConfig({
     /** Default DB name on that cluster (e.g. `marketing`). */
     mongodbDbName: process.env.MONGODB_DB_NAME || 'marketing',
     brevoApiKey: process.env.BREVO_API_KEY || '',
+    /** Shared secret for Brevo outbound webhook Token auth / custom headers. */
+    brevoWebhookSecret: process.env.BREVO_WEBHOOK_SECRET || '',
+    /** Local dev only — accept webhooks with no auth header when true. */
+    brevoWebhookAllowUnsigned:
+      String(process.env.BREVO_WEBHOOK_ALLOW_UNSIGNED || '').toLowerCase() === 'true',
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
@@ -83,6 +88,10 @@ export default defineNuxtConfig({
   },
   css: ['grapesjs/dist/css/grapes.min.css'],
   vite: {
+    server: {
+      /** Allow ngrok (and similar) tunnels to reach the dev server for Brevo webhooks. */
+      allowedHosts: ['.ngrok-free.app', '.ngrok.io']
+    },
     optimizeDeps: {
       include: [
         '@vue/devtools-core',

@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
       .sort({ status: 1, email: 1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .select('email status sentAt error')
+      .select('email status sentAt error brevoLastEvent brevoLastEventAt')
       .lean<CampaignRecipientLean[]>(),
     (CampaignRecipient as CampaignRecipientModel).countDocuments(baseFilter),
     (CampaignRecipient as CampaignRecipientModel).countDocuments({
@@ -102,7 +102,11 @@ export default defineEventHandler(async (event) => {
       email: r.email,
       status: r.status,
       sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : undefined,
-      error: r.error
+      error: r.error,
+      brevoLastEvent: r.brevoLastEvent || undefined,
+      brevoLastEventAt: r.brevoLastEventAt
+        ? new Date(r.brevoLastEventAt).toISOString()
+        : undefined
     }))
   }
 })

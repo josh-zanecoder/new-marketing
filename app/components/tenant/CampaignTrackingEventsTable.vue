@@ -1,13 +1,5 @@
 <script setup lang="ts">
-interface BrevoEmailEvent {
-  email?: string
-  date?: string
-  event?: string
-}
-
-interface BrevoEventReport {
-  events?: BrevoEmailEvent[]
-}
+import type { TrackingEventReport } from '~/types/campaignTracking'
 
 const props = defineProps<{
   campaignId: string
@@ -25,17 +17,17 @@ const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking
   key: fetchKey
 })
 
-const report = computed((): BrevoEventReport | null => {
+const report = computed((): TrackingEventReport | null => {
   const r = data.value?.report
   if (r && typeof r === 'object' && r !== null && 'events' in r) {
-    return r as BrevoEventReport
+    return r as TrackingEventReport
   }
   return null
 })
 
 const events = computed(() => report.value?.events ?? [])
 
-/** One row per recipient email; event types in first-seen order (by Brevo date). */
+/** One row per recipient email; event types in first-seen order (by event date). */
 const recipientRows = computed(() => {
   const list = events.value
   const sorted = [...list].sort(
@@ -128,7 +120,9 @@ function eventBadgeClass(ev: string | undefined): string {
     class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
   >
     <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Send tracking</h2>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Events</h2>
+      </div>
     </div>
 
     <div v-if="pending" class="px-5 py-8 text-sm text-zinc-500 sm:px-6">Loading…</div>
@@ -175,7 +169,7 @@ function eventBadgeClass(ev: string | undefined): string {
       </div>
 
       <div v-if="recipientRows.length === 0" class="px-5 py-10 text-center text-sm text-zinc-500 sm:px-6">
-        No Brevo events for this campaign yet.
+        No webhook events for this campaign yet.
       </div>
 
       <div v-else-if="filteredRows.length === 0" class="px-5 py-10 text-center text-sm text-zinc-500 sm:px-6">

@@ -43,7 +43,9 @@ export default defineEventHandler(async (event) => {
       const newTemplate = await new EmailTemplate({
         name: `${source.name} (copy) - Template`,
         subject: template.subject?.trim() || source.subject || `${source.name} (copy)`,
-        htmlTemplate: htmlBody
+        htmlTemplate: htmlBody,
+        htmlSource: template.htmlSource === 'upload' ? 'upload' : 'editor',
+        saveToLibrary: false
       }).save()
       emailTemplateId = newTemplate._id.toString()
     }
