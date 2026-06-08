@@ -117,12 +117,15 @@ export function applyDefaultUnsubscribeMergeValue(
     dbName?: string
     contactId?: string
     clientKeyHash?: string
+    crmAppUrl?: string | null
     previewPlaceholder?: string
   }
 ): void {
   let url = ''
   if (options.dbName && options.contactId && options.clientKeyHash) {
-    url = buildUnsubscribeUrl(options.dbName, options.contactId, options.clientKeyHash)
+    url = buildUnsubscribeUrl(options.dbName, options.contactId, options.clientKeyHash, {
+      crmAppUrl: options.crmAppUrl
+    })
   }
   if (!url && options.previewPlaceholder) {
     url = options.previewPlaceholder

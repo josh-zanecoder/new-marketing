@@ -801,6 +801,7 @@ export async function processBatch(
     const tenantDbNameForTags = (Campaign as CampaignModel).db?.db?.databaseName
     let brevoTenantTagValue: string | undefined
     let unsubscribeSigningSecret: string | undefined
+    let unsubscribeCrmAppUrl: string | undefined
     if (tenantDbNameForTags) {
       brevoTenantTagValue = tenantDbNameForTags
       try {
@@ -809,6 +810,7 @@ export async function processBatch(
         const tid = row?.tenantId?.trim()
         if (tid) brevoTenantTagValue = tid
         if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
+        if (row?.crmAppUrl) unsubscribeCrmAppUrl = row.crmAppUrl
       } catch (err) {
         console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
           dbName: tenantDbNameForTags,
@@ -845,7 +847,8 @@ export async function processBatch(
       applyDefaultUnsubscribeMergeValue(mergeRoot, {
         dbName: tenantDbNameForTags,
         contactId: contact?._id ? String(contact._id) : undefined,
-        clientKeyHash: unsubscribeSigningSecret
+        clientKeyHash: unsubscribeSigningSecret,
+        crmAppUrl: unsubscribeCrmAppUrl
       })
       const toEmail = (r.email ?? '').trim()
       if (toEmail) {

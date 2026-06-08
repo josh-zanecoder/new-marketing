@@ -7,7 +7,9 @@ export default defineNuxtConfig({
   },
   srcDir: 'app',
   devServer: {
-    port: Number(process.env.NUXT_PORT) || 3001
+    port: Number(process.env.NUXT_PORT) || 3001,
+    /** Allow CRM Docker backend to reach Marketing via host.docker.internal */
+    host: process.env.NUXT_HOST || '0.0.0.0'
   },
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },

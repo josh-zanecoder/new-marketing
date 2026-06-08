@@ -61,20 +61,24 @@ export default defineEventHandler(async (event) => {
   const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(dynModel)
 
   let clientKeyHash: string | undefined
+  let crmAppUrl: string | undefined
   if (dbName) {
     try {
       const registry = await getRegistryConnection()
       const row = await findRegistryTenantByDbName(registry, dbName)
       if (row?.clientKeyHash) clientKeyHash = row.clientKeyHash
+      if (row?.crmAppUrl) crmAppUrl = row.crmAppUrl
     } catch {
       /* preview only */
     }
   }
 
   const marketingBase = getMarketingPublicBaseUrl()
-  const previewUnsubscribePlaceholder = marketingBase
-    ? `${marketingBase}/api/v1/unsubscribe?token=preview`
-    : undefined
+  const previewUnsubscribePlaceholder = crmAppUrl
+    ? `${crmAppUrl}/marketing/unsubscribe?token=preview`
+    : marketingBase
+      ? `${marketingBase}/api/v1/unsubscribe?token=preview`
+      : undefined
 
   const authSnap = tenantUserFieldsFromAuth(auth)
 
@@ -100,6 +104,7 @@ export default defineEventHandler(async (event) => {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
       clientKeyHash,
+      crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
     return { mergeRoot }
@@ -131,6 +136,7 @@ export default defineEventHandler(async (event) => {
     dbName,
     contactId: contact?._id ? String(contact._id) : undefined,
     clientKeyHash,
+    crmAppUrl,
     previewPlaceholder: previewUnsubscribePlaceholder
   })
   return { mergeRoot }
