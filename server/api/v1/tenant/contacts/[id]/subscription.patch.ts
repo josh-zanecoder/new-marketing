@@ -2,6 +2,10 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import {
+  onContactSubscribed,
+  onContactUnsubscribed
+} from '@server/utils/contact/contactSubscriptionEffects'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type SubscriptionPatchLean = Pick<ContactLean, 'isUnsubscribe' | 'updatedAt'>
@@ -33,6 +37,13 @@ export default defineEventHandler(async (event) => {
 
   if (!updated) {
     throw createError({ statusCode: 404, message: 'Contact not found' })
+  }
+
+  const contactId = new mongoose.Types.ObjectId(rawId)
+  if (body.subscribed) {
+    await onContactSubscribed(conn, contactId)
+  } else {
+    await onContactUnsubscribed(conn, contactId)
   }
 
   return {
