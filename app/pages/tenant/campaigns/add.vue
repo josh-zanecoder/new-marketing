@@ -494,6 +494,15 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
         </NuxtLink>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
           <button
+            v-if="canSendTestEmail"
+            type="button"
+            class="inline-flex items-center justify-center rounded-xl border border-violet-200/90 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.06] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
+            :disabled="wizardSendBusy || testEmailSending"
+            @click.prevent="handleOpenTestEmailModal"
+          >
+            Send test email
+          </button>
+          <button
             v-if="campaignFormComplete"
             type="button"
             class="inline-flex items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
@@ -606,6 +615,22 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
       </div>
     </Teleport>
 
+    <ClientTestEmailModal
+      :open="testEmailModalOpen"
+      :recipient="testEmailRecipient"
+      :sending="testEmailSending"
+      :error="testEmailError"
+      @update:recipient="testEmailRecipient = $event"
+      @close="closeTestEmailModal()"
+      @send="submitTestEmail()"
+    />
+
+    <ClientTestEmailSuccessModal
+      :open="testEmailSuccessModalOpen"
+      :recipient="testEmailSentToRecipient"
+      @close="closeTestEmailSuccessModal()"
+    />
+
   </div>
 </template>
 <script setup lang="ts">
@@ -624,6 +649,18 @@ const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
   useCampaignSendFlow()
+const {
+  open: testEmailModalOpen,
+  recipient: testEmailRecipient,
+  sending: testEmailSending,
+  error: testEmailError,
+  successModalOpen: testEmailSuccessModalOpen,
+  sentToRecipient: testEmailSentToRecipient,
+  openModal: openTestEmailModal,
+  closeModal: closeTestEmailModal,
+  closeSuccessModal: closeTestEmailSuccessModal,
+  sendForDraft: sendTestEmailForDraft
+} = useCampaignTestEmail()
 
 const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
@@ -1186,6 +1223,36 @@ const campaignFormComplete = computed(
     && subjectComplete.value
     && designComplete.value
 )
+
+const canSendTestEmail = computed(() => subjectComplete.value && designComplete.value)
+
+function buildTestEmailDraftPayload() {
+  applyStoredOrSelectedTemplate()
+  if (!savedTemplateHtml.value || !form.value.subject?.trim()) return null
+  const recipientsManual =
+    form.value.recipientsMode === 'manual'
+      ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
+      : undefined
+  return {
+    subject: form.value.subject.trim(),
+    senderName: form.value.senderName,
+    senderEmail: form.value.senderEmail,
+    templateHtml: savedTemplateHtml.value,
+    recipientsType: form.value.recipientsMode,
+    recipientsListId: form.value.recipientsListId || undefined,
+    recipientsManual
+  }
+}
+
+function handleOpenTestEmailModal() {
+  openTestEmailModal(form.value.senderEmail)
+}
+
+async function submitTestEmail() {
+  const draft = buildTestEmailDraftPayload()
+  if (!draft) return
+  await sendTestEmailForDraft(draft)
+}
 
 /** Name, recipients, subject, and template — required before "Save campaign" is enabled. */
 const readyToSaveCampaign = computed(

@@ -313,6 +313,23 @@ export function useTenantMarketingApi() {
     )
   }
 
+  async function sendTestEmail(body: {
+    recipient: string
+    campaignId?: string
+    subject?: string
+    senderName?: string
+    senderEmail?: string
+    templateHtml?: string
+    recipientsType?: 'list' | 'manual'
+    recipientsListId?: string
+    recipientsManual?: string[]
+  }) {
+    return $fetch<{ ok: boolean; messageId?: string }>(
+      '/api/v1/tenant/send-campaign/test-email',
+      tenantFetchInit({ method: 'POST', body, timeout: 30000 })
+    )
+  }
+
   return {
     serverAuthHeaders,
     tenantFetchInit,
@@ -337,6 +354,7 @@ export function useTenantMarketingApi() {
     createCampaign,
     updateCampaign,
     scheduleCampaignSend,
-    unscheduleCampaignSend
+    unscheduleCampaignSend,
+    sendTestEmail
   }
 }

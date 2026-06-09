@@ -116,6 +116,32 @@ const discardBusy = ref(false)
 const duplicateConfirmOpen = ref(false)
 const duplicateConfirmLoading = ref(false)
 
+const {
+  open: testEmailModalOpen,
+  recipient: testEmailRecipient,
+  sending: testEmailSending,
+  error: testEmailError,
+  successModalOpen: testEmailSuccessModalOpen,
+  sentToRecipient: testEmailSentToRecipient,
+  openModal: openTestEmailModal,
+  closeModal: closeTestEmailModal,
+  closeSuccessModal: closeTestEmailSuccessModal,
+  sendForCampaign: sendTestEmailForCampaign
+} = useCampaignTestEmail()
+
+const canSendTestEmail = computed(
+  () => !!campaign.value?.templateHtml?.trim() && !!campaign.value?.subject?.trim()
+)
+
+function handleOpenTestEmailModal() {
+  openTestEmailModal(campaign.value?.sender?.email)
+}
+
+async function submitTestEmail() {
+  if (!campaign.value?.id) return
+  await sendTestEmailForCampaign(campaign.value.id)
+}
+
 const canStopCurrentSend = computed(() =>
   campaign.value?.status === 'Sending' &&
   canStopSending(detailSendProgress.value ?? sendProgress.value, campaign.value?.status)
@@ -830,16 +856,29 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
                     Subject: {{ previewSubjectDisplay }}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
-                  @click="openPreviewModal"
-                >
-                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                  Full preview
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    v-if="canSendTestEmail"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/90 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90"
+                    @click="handleOpenTestEmailModal"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Send test email
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
+                    @click="openPreviewModal"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    Full preview
+                  </button>
+                </div>
               </div>
               <div
                 class="relative min-h-[400px] max-h-[600px] cursor-zoom-in overflow-auto bg-[#f8f4ef] p-4 sm:p-6 xl:min-h-[min(52vh,560px)] xl:max-h-[min(88vh,920px)] 2xl:min-h-[min(58vh,640px)]"
@@ -993,6 +1032,22 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
       @update:schedule-local="scheduleLocal = $event"
       @close="closeScheduleModal"
       @confirm="confirmSchedule"
+    />
+
+    <ClientTestEmailModal
+      :open="testEmailModalOpen"
+      :recipient="testEmailRecipient"
+      :sending="testEmailSending"
+      :error="testEmailError"
+      @update:recipient="testEmailRecipient = $event"
+      @close="closeTestEmailModal()"
+      @send="submitTestEmail()"
+    />
+
+    <ClientTestEmailSuccessModal
+      :open="testEmailSuccessModalOpen"
+      :recipient="testEmailSentToRecipient"
+      @close="closeTestEmailSuccessModal()"
     />
   </div>
 </template>
