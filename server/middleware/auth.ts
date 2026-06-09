@@ -19,7 +19,9 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/logout',
   '/api/v1/auth/tenant-handoff',
   '/api/v1/unsubscribe',
-  '/api/v1/webhooks/brevo'
+  '/api/v1/webhooks/brevo',
+  /** Cloud Tasks worker; secured by `X-Campaign-Send-Worker-Secret` in the route handler. */
+  '/api/internal/campaign-sends/batch'
 ]
 
 const ADMIN_API_PREFIX = '/api/v1/admin'
