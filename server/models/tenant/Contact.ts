@@ -61,6 +61,10 @@ contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
 contactSchema.index({ 'metadata.relationships.partnerExternalIds': 1, deletedAt: 1 })
 contactSchema.index({ 'metadata.relationships.partnerTypeKeys': 1, deletedAt: 1 })
+/** Tenant contacts list: active rows by recency. */
+contactSchema.index({ deletedAt: 1, updatedAt: -1, _id: -1 })
+contactSchema.index({ deletedAt: 1, isUnsubscribe: 1, updatedAt: -1 })
+contactSchema.index({ deletedAt: 1, contactType: 1, updatedAt: -1 })
 
 contactSchema.pre('save', async function syncContactTypes(this: mongoose.Document) {
   let types = normalizeContactTypeInput(this.get('contactType'))

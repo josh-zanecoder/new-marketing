@@ -51,8 +51,45 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | `CLOUD_TASKS_PROJECT_ID` | — | GCP project (e.g. `poc-1-aima-pmu`) |
 | `CLOUD_TASKS_LOCATION` | `us-west1` | Queue region |
 | `CLOUD_TASKS_QUEUE_NAME` | `marketing-test` | Cloud Tasks queue ID |
+| `CLOUD_TASKS_CLIENT_EMAIL` / `CLOUD_TASKS_PRIVATE_KEY` | — | Optional dedicated enqueuer SA (local dev). **Not** `FIREBASE_CLIENT_EMAIL`. |
 | `MARKETING_PUBLIC_BASE_URL` | — | Cloud Run origin; worker path appended automatically |
 | `CAMPAIGN_SEND_WORKER_SECRET` | — | `X-Campaign-Send-Worker-Secret` on worker HTTP POST |
+
+### Cloud Tasks IAM (one-time per environment)
+
+On Cloud Run, the client uses the **service’s runtime service account** (ADC) unless `CLOUD_TASKS_CLIENT_EMAIL` is set. **Do not** reuse `FIREBASE_CLIENT_EMAIL` — that account is usually in a different GCP project and lacks `cloudtasks.tasks.create` on `poc-1-aima-pmu`.
+
+1. **Verify the queue exists**
+
+```bash
+gcloud tasks queues describe marketing-test \
+  --location=us-west1 \
+  --project=poc-1-aima-pmu
+```
+
+2. **Grant enqueue to the Cloud Run web service account** (test example)
+
+```bash
+gcloud tasks queues add-iam-policy-binding marketing-test \
+  --location=us-west1 \
+  --project=poc-1-aima-pmu \
+  --member="serviceAccount:980800581325-compute@developer.gserviceaccount.com" \
+  --role="roles/cloudtasks.enqueuer"
+```
+
+Replace the member with your Cloud Run **Service account** from the console (Cloud Run → `marketing-test` → Security).
+
+3. **Allow Cloud Tasks to invoke the worker URL** (after enqueue succeeds)
+
+```bash
+gcloud run services add-iam-policy-binding marketing-test \
+  --region=us-west1 \
+  --project=poc-1-aima-pmu \
+  --member="serviceAccount:service-980800581325@gcp-sa-cloudtasks.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+```
+
+Logs show `[CampaignCloudTasks] client.init` with `authMode` and `principal` when the client starts; `enqueue.failed` repeats them on `PERMISSION_DENIED`.
 | `CAMPAIGN_SEND_FANOUT_COUNT` | `20` | Parallel batch tasks at send start (1–30) |
 | `CAMPAIGN_SEND_BATCH_SIZE_UNIFORM` | `500` | Chunk size when subject/body has no merge tags |
 | `CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED` | `200` | Chunk size when `{{…}}` merge tags or recipient dynamic vars |

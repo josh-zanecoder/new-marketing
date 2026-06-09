@@ -20,10 +20,15 @@ export type CampaignCloudTasksConfig = {
   workerSecret: string
 }
 
-export function getCampaignCloudTasksClientAuth(): {
+export type CampaignCloudTasksAuthMode = 'key_file' | 'explicit_credentials' | 'application_default'
+
+export type CampaignCloudTasksClientAuth = {
   keyFilename?: string
   credentials?: { client_email: string; private_key: string }
-} {
+}
+
+/** Auth for Cloud Tasks API. Never uses Firebase credentials (different project / wrong IAM). */
+export function getCampaignCloudTasksClientAuth(): CampaignCloudTasksClientAuth {
   const taskKeyFile = process.env.CLOUD_TASKS_KEY_FILENAME?.trim()
   if (taskKeyFile) return { keyFilename: taskKeyFile }
 
@@ -33,16 +38,32 @@ export function getCampaignCloudTasksClientAuth(): {
     return { credentials: { client_email: taskEmail, private_key: taskKey } }
   }
 
-  const gcpEmail =
-    process.env.GCP_CLIENT_EMAIL?.trim() || process.env.FIREBASE_CLIENT_EMAIL?.trim()
-  const gcpKey = normalizePrivateKeyFromEnv(
-    process.env.GCP_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY
-  )
+  const gcpEmail = process.env.GCP_CLIENT_EMAIL?.trim()
+  const gcpKey = normalizePrivateKeyFromEnv(process.env.GCP_PRIVATE_KEY)
   if (gcpEmail && gcpKey) {
     return { credentials: { client_email: gcpEmail, private_key: gcpKey } }
   }
 
   return {}
+}
+
+export function resolveCampaignCloudTasksAuth(): {
+  mode: CampaignCloudTasksAuthMode
+  principal?: string
+  auth: CampaignCloudTasksClientAuth
+} {
+  const auth = getCampaignCloudTasksClientAuth()
+  if (auth.keyFilename) {
+    return { mode: 'key_file', auth }
+  }
+  if (auth.credentials?.client_email) {
+    return {
+      mode: 'explicit_credentials',
+      principal: auth.credentials.client_email,
+      auth
+    }
+  }
+  return { mode: 'application_default', auth }
 }
 
 function resolveWorkerPostUrl(configured: string, fallbackBaseUrl: string): string {

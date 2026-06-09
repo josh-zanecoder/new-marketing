@@ -57,12 +57,24 @@ export interface TenantContactDetailPayload {
   contact: TenantContactDetail
 }
 
-/** GET `/api/v1/tenant/contacts` response body. */
+/** GET `/api/v1/tenant/contacts` response body (server-paginated). */
 export interface TenantContactsListPayload {
   contacts: TenantContactListRow[]
   contactTypes?: TenantContactTypeOption[]
   total: number
-  truncated: boolean
+  page: number
+  pageSize: number
+  totalPages: number
+  /** Legacy field; always false with server pagination. */
+  truncated?: boolean
+}
+
+export type TenantContactsListQuery = {
+  page?: number
+  limit?: number
+  search?: string
+  subscription?: 'all' | 'subscribed' | 'unsubscribed'
+  contactType?: string
 }
 
 /** Contact row from GET `/api/v1/tenant/recipient-list` (picker / catalog). */

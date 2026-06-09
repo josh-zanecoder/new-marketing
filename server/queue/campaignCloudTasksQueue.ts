@@ -2,8 +2,8 @@ import { CloudTasksClient } from '@google-cloud/tasks'
 import type { CampaignQueueJobData } from './emailQueue'
 import { campaignBatchJobId } from './emailQueue'
 import {
-  getCampaignCloudTasksClientAuth,
-  getCampaignCloudTasksConfig
+  getCampaignCloudTasksConfig,
+  resolveCampaignCloudTasksAuth
 } from '../config/campaignCloudTasks'
 
 const G = globalThis as typeof globalThis & {
@@ -20,15 +20,22 @@ function getClient(): { client: CloudTasksClient; queuePath: string } | null {
   if (!cfg.enabled) return null
 
   if (!G.__campaignCloudTasksClient) {
-    const auth = getCampaignCloudTasksClientAuth()
-    G.__campaignCloudTasksClient = Object.keys(auth).length
-      ? new CloudTasksClient(auth)
+    const resolved = resolveCampaignCloudTasksAuth()
+    G.__campaignCloudTasksClient = Object.keys(resolved.auth).length
+      ? new CloudTasksClient(resolved.auth)
       : new CloudTasksClient()
     G.__campaignCloudTasksQueuePath = G.__campaignCloudTasksClient.queuePath(
       cfg.projectId,
       cfg.location,
       cfg.queueName
     )
+    logCt('client.init', {
+      projectId: cfg.projectId,
+      location: cfg.location,
+      queueName: cfg.queueName,
+      authMode: resolved.mode,
+      principal: resolved.principal ?? '(Cloud Run / ADC service account)'
+    })
   }
 
   if (!G.__campaignCloudTasksQueuePath) return null
@@ -84,7 +91,19 @@ export async function enqueueCampaignBatchCloudTask(
       logCt('enqueue.duplicate', { campaignId, dbName, sendRunId, page, taskId })
       return { taskId, duplicate: true }
     }
-    logCt('enqueue.failed', { campaignId, dbName, taskId, error: msg })
+    const resolved = resolveCampaignCloudTasksAuth()
+    logCt('enqueue.failed', {
+      campaignId,
+      dbName,
+      taskId,
+      error: msg,
+      authMode: resolved.mode,
+      principal: resolved.principal ?? '(Cloud Run / ADC service account)',
+      hint:
+        msg.includes('PERMISSION_DENIED') || msg.includes('cloudtasks.tasks.create')
+          ? 'Grant roles/cloudtasks.enqueuer on the queue (or project) to the principal above. Do not use FIREBASE_CLIENT_EMAIL for Cloud Tasks.'
+          : undefined
+    })
     throw e
   }
 }

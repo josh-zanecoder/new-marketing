@@ -4,6 +4,8 @@ import type {
   SendStatus
 } from '~/types/campaign'
 import type {
+  TenantContactsListPayload,
+  TenantContactsListQuery,
   TenantRecipientListDetailPayload,
   TenantRecipientListEditPayload,
   TenantRecipientListIndexPayload,
@@ -232,6 +234,23 @@ export function useTenantMarketingApi() {
     return $fetch<TenantDashboardResponse>('/api/v1/tenant/dashboard', tenantFetchInit())
   }
 
+  async function fetchContacts(opts?: TenantContactsListQuery) {
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 50))
+    const page = Math.max(1, opts?.page ?? 1)
+    const query: Record<string, string | number> = { page, limit }
+    const search = String(opts?.search ?? '').trim()
+    if (search) query.search = search
+    if (opts?.subscription && opts.subscription !== 'all') {
+      query.subscription = opts.subscription
+    }
+    const contactType = String(opts?.contactType ?? 'all').trim()
+    if (contactType && contactType !== 'all') query.contactType = contactType
+    return $fetch<TenantContactsListPayload>(
+      '/api/v1/tenant/contacts',
+      tenantFetchInit({ query })
+    )
+  }
+
   async function fetchSendCampaignStatus(campaignId: string) {
     return $fetch<SendStatus>(`/api/v1/tenant/send-campaign/status/${campaignId}`, {
       timeout: 60000,
@@ -312,6 +331,7 @@ export function useTenantMarketingApi() {
     fetchEmailTemplates,
     fetchTenantMe,
     fetchDashboard,
+    fetchContacts,
     fetchSendCampaignStatus,
     fetchCampaignSendRecipients,
     createCampaign,

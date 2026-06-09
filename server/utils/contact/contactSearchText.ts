@@ -68,6 +68,18 @@ function buildLegacySearchRegexFilter(re: RegExp): Record<string, unknown> {
   }
 }
 
+/** List/search API filter without `$text` (no text index required). */
+export function buildContactListSearchFilter(search: string): Record<string, unknown> | null {
+  const q = search.trim()
+  if (q.length < MIN_CONTACT_SEARCH_LENGTH) return null
+
+  if (looksLikeEmailQuery(q)) {
+    return { email: new RegExp(`^${escapeRegex(q)}`, 'i') }
+  }
+
+  return buildLegacySearchRegexFilter(new RegExp(escapeRegex(q), 'i'))
+}
+
 /** Server-side contact search clause, or `null` when search is too short. */
 export function buildContactSearchFilter(search: string): Record<string, unknown> | null {
   const q = search.trim()

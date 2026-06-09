@@ -21,27 +21,6 @@
     </div>
 
     <div
-      v-if="data?.truncated"
-      class="flex gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm sm:text-[0.9375rem]"
-      role="status"
-    >
-      <div class="mt-0.5 shrink-0 text-amber-600">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-      </div>
-      <div>
-        <p class="font-semibold text-amber-950">
-          Partial list
-        </p>
-        <p class="mt-1.5 leading-relaxed text-amber-900/90">
-          Showing the <strong class="font-semibold">{{ data.contacts.length }}</strong> most recently updated contacts.
-          Total in database: <strong class="font-semibold tabular-nums">{{ data.total.toLocaleString() }}</strong>.
-        </p>
-      </div>
-    </div>
-
-    <div
       v-if="subscriptionActionError"
       class="flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50 px-5 py-4 text-sm leading-snug text-red-900 shadow-sm sm:text-[0.9375rem]"
       role="alert"
@@ -103,10 +82,7 @@
             <option value="all">
               All types
             </option>
-            <option
-              v-if="hasContactsWithoutKind"
-              value="__none__"
-            >
+            <option value="__none__">
               No type
             </option>
             <option
@@ -137,7 +113,7 @@
     </div>
 
     <div
-      v-else-if="data && !filteredContacts.length"
+      v-else-if="data && !listContacts.length"
       class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-20 text-center shadow-sm shadow-slate-900/[0.03] sm:py-24"
     >
       <div
@@ -148,16 +124,17 @@
         </svg>
       </div>
       <h3 class="mt-6 text-lg font-semibold tracking-tight text-slate-900">
-        {{ data.contacts.length ? 'No matching contacts' : 'No contacts yet' }}
+        {{ data.total ? 'No matching contacts' : 'No contacts yet' }}
       </h3>
       <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
-        {{ data.contacts.length ? noMatchesHint : 'Contacts will appear here as they sync into your tenant.' }}
+        {{ data.total ? noMatchesHint : 'Contacts will appear here as they sync into your tenant.' }}
       </p>
     </div>
 
     <div
       v-else-if="data"
       class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+      :class="pageLoading ? 'pointer-events-none opacity-60' : ''"
     >
       <div class="overflow-x-auto">
         <table class="min-w-full text-left text-[0.9375rem] leading-snug">
@@ -203,7 +180,7 @@
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr
-              v-for="row in paginatedContacts"
+              v-for="row in listContacts"
               :key="row.id"
               class="bg-white transition-colors duration-150 ease-out hover:bg-slate-50/90"
             >
@@ -282,7 +259,7 @@
       </div>
 
       <div
-        v-if="filteredContacts.length"
+        v-if="data.total"
         class="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/60 px-4 py-4 text-[0.9375rem] text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
       >
         <p class="tabular-nums text-slate-500">
@@ -294,8 +271,8 @@
           <button
             type="button"
             class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none"
-            :disabled="currentPage === 1"
-            @click="currentPage -= 1"
+            :disabled="currentPage === 1 || pageLoading"
+            @click="goPage(currentPage - 1)"
           >
             Previous
           </button>
@@ -305,8 +282,8 @@
           <button
             type="button"
             class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none"
-            :disabled="currentPage === totalPages"
-            @click="currentPage += 1"
+            :disabled="currentPage === totalPages || pageLoading"
+            @click="goPage(currentPage + 1)"
           >
             Next
           </button>
@@ -485,32 +462,25 @@ import type {
   TenantContactTypeOption
 } from '~/types/tenantContact'
 
-definePageMeta({ layout: 'default' })
+definePageMeta({ layout: 'default', ssr: false })
 
 function typeKeyBadgeClass(kind: string): string {
   return contactTypeKeyBadgeClass(kind)
 }
 
-const PAGE_SIZE = 25
+const marketingApi = useTenantMarketingApi()
+const PAGE_SIZE = 50
+const SEARCH_DEBOUNCE_MS = 300
 
 export type { TenantContactListRow, TenantContactTypeOption }
 
-function serverAuthHeaders(): { headers?: HeadersInit } {
-  if (!import.meta.server) return {}
-  try {
-    return { headers: useRequestHeaders(['cookie']) as HeadersInit }
-  } catch {
-    return {}
-  }
-}
-
 const pending = ref(true)
+const pageLoading = ref(false)
 const loadError = ref('')
 const data = ref<TenantContactsListPayload | null>(null)
 const searchQuery = ref('')
-/** `'all'`, `'__none__'` (no types), or lowercase contact type key. */
+const debouncedSearch = ref('')
 const contactTypeFilter = ref('all')
-/** `'all'`, `'subscribed'`, or `'unsubscribed'`. */
 const subscriptionFilter = ref<'all' | 'subscribed' | 'unsubscribed'>('all')
 const currentPage = ref(1)
 const subscriptionSavingId = ref('')
@@ -521,79 +491,17 @@ const viewContactError = ref('')
 const viewContactDetail = ref<TenantContactDetail | null>(null)
 const ownerAvatarLoadFailed = ref(false)
 
-const KIND_FILTER_NONE = '__none__'
-
-function rowHasAnyContactType(row: TenantContactListRow): boolean {
-  return Boolean(row.contactType?.length)
-}
-
-const hasContactsWithoutKind = computed(() =>
-  (data.value?.contacts ?? []).some((row) => !rowHasAnyContactType(row))
-)
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let loadSeq = 0
 
 const contactTypeFilterOptions = computed(() => {
   const api = data.value?.contactTypes ?? []
-  const ordered = [...api].sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
-  const base = ordered.map((t) => ({ key: t.key, label: t.label }))
-  const keysFromApi = new Set(base.map((o) => o.key.toLowerCase()))
-  const extras: { key: string; label: string }[] = []
-  for (const row of data.value?.contacts ?? []) {
-    const keys = row.contactType?.length ? row.contactType : []
-    for (let i = 0; i < keys.length; i++) {
-      const k = String(keys[i]).trim().toLowerCase()
-      if (!k || keysFromApi.has(k)) continue
-      keysFromApi.add(k)
-      const label = row.contactType?.length ? row.contactTypeLabels[i] || k : row.primaryTypeLabel || k
-      extras.push({ key: k, label })
-    }
-  }
-  extras.sort((a, b) => a.label.localeCompare(b.label))
-  return [...base, ...extras]
+  return [...api]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+    .map((t) => ({ key: t.key, label: t.label }))
 })
 
-const filteredContacts = computed(() => {
-  let list = data.value?.contacts ?? []
-  const kind = contactTypeFilter.value
-  if (kind !== 'all') {
-    if (kind === KIND_FILTER_NONE) {
-      list = list.filter((row) => !rowHasAnyContactType(row))
-    } else {
-      const k = kind.toLowerCase()
-      list = list.filter((row) => {
-        const keys = (row.contactType ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
-        return keys.includes(k)
-      })
-    }
-  }
-  if (subscriptionFilter.value === 'subscribed') {
-    list = list.filter((row) => !row.is_unsubscribe)
-  } else if (subscriptionFilter.value === 'unsubscribed') {
-    list = list.filter((row) => row.is_unsubscribe)
-  }
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return list
-  return list.filter((row) => {
-    const blob = [
-      row.firstName,
-      row.lastName,
-      row.name,
-      row.email,
-      row.company,
-      row.phone,
-      row.primaryTypeLabel,
-      ...(row.contactType ?? []),
-      ...(row.contactTypeLabels ?? []),
-      row.address?.street,
-      row.address?.city,
-      row.address?.state,
-      row.address?.county
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return blob.includes(q)
-  })
-})
+const listContacts = computed(() => data.value?.contacts ?? [])
 
 const noMatchesHint = computed(() => {
   const hasSearch = Boolean(searchQuery.value.trim())
@@ -611,29 +519,47 @@ const noMatchesHint = computed(() => {
   return 'Try a different search or filter.'
 })
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredContacts.value.length / PAGE_SIZE))
-)
-
-const paginatedContacts = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredContacts.value.slice(start, start + PAGE_SIZE)
-})
+const totalPages = computed(() => Math.max(1, data.value?.totalPages ?? 1))
 
 const paginationMeta = computed(() => {
-  const total = filteredContacts.value.length
+  const total = data.value?.total ?? 0
   if (!total) return { from: 0, to: 0, total: 0 }
-  const from = (currentPage.value - 1) * PAGE_SIZE + 1
-  const to = Math.min(currentPage.value * PAGE_SIZE, total)
+  const page = data.value?.page ?? currentPage.value
+  const pageSize = data.value?.pageSize ?? PAGE_SIZE
+  const from = (page - 1) * pageSize + 1
+  const to = Math.min(page * pageSize, total)
   return { from, to, total }
 })
 
-watch([searchQuery, contactTypeFilter, subscriptionFilter], () => {
-  currentPage.value = 1
+function normalizeContactRow(row: TenantContactListRow): TenantContactListRow {
+  return {
+    ...row,
+    contactType: Array.isArray(row.contactType) ? row.contactType : [],
+    contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
+    primaryTypeLabel: row.primaryTypeLabel ?? '—',
+    is_unsubscribe: row.is_unsubscribe === true
+  }
+}
+
+const fetchKey = computed(
+  () =>
+    `${currentPage.value}|${debouncedSearch.value}|${contactTypeFilter.value}|${subscriptionFilter.value}`
+)
+
+watch(searchQuery, (value) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    debouncedSearch.value = value.trim()
+    if (currentPage.value !== 1) currentPage.value = 1
+  }, SEARCH_DEBOUNCE_MS)
 })
 
-watch(totalPages, (pages) => {
-  if (currentPage.value > pages) currentPage.value = pages
+watch([contactTypeFilter, subscriptionFilter], () => {
+  if (currentPage.value !== 1) currentPage.value = 1
+})
+
+watch(fetchKey, () => {
+  if (import.meta.client) void loadList()
 })
 
 function formatDate(iso: string): string {
@@ -807,7 +733,7 @@ async function openContactDetail(contactId: string) {
       `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}`,
       {
         credentials: 'include',
-        ...serverAuthHeaders()
+        ...marketingApi.serverAuthHeaders()
       }
     )
     viewContactDetail.value = {
@@ -853,8 +779,15 @@ async function setContactSubscription(row: TenantContactListRow, subscribed: boo
       method: 'PATCH',
       credentials: 'include',
       body: { subscribed },
-      ...serverAuthHeaders()
+      ...marketingApi.serverAuthHeaders()
     })
+    const excludedByFilter =
+      (subscriptionFilter.value === 'subscribed' && res.is_unsubscribe) ||
+      (subscriptionFilter.value === 'unsubscribed' && !res.is_unsubscribe)
+    if (excludedByFilter) {
+      await loadList()
+      return
+    }
     if (data.value?.contacts) {
       const idx = data.value.contacts.findIndex((c) => c.id === row.id)
       if (idx >= 0) {
@@ -882,42 +815,69 @@ async function setContactSubscription(row: TenantContactListRow, subscribed: boo
   }
 }
 
-async function load() {
-  pending.value = true
+async function loadList() {
+  if (!import.meta.client) return
+
+  const seq = ++loadSeq
+  const isInitial = data.value === null
+  if (isInitial) {
+    pending.value = true
+  } else {
+    pageLoading.value = true
+  }
   loadError.value = ''
   try {
-    const res = await $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
-      credentials: 'include',
-      ...serverAuthHeaders()
+    const res = await marketingApi.fetchContacts({
+      page: currentPage.value,
+      limit: PAGE_SIZE,
+      search: debouncedSearch.value,
+      subscription: subscriptionFilter.value,
+      contactType: contactTypeFilter.value
     })
-    const contacts = (res.contacts ?? []).map((row) => ({
-      ...row,
-      contactType: Array.isArray(row.contactType) ? row.contactType : [],
-      contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
-      primaryTypeLabel: row.primaryTypeLabel ?? '—',
-      is_unsubscribe: row.is_unsubscribe === true
-    }))
+    if (seq !== loadSeq) return
+
+    const totalPagesResolved = Math.max(1, res.totalPages ?? 1)
+    const resolvedPage = res.page ?? currentPage.value
+    if (resolvedPage > totalPagesResolved && (res.total ?? 0) > 0) {
+      currentPage.value = totalPagesResolved
+      return
+    }
+
+    const contacts = (res.contacts ?? []).map(normalizeContactRow)
     data.value = {
       contacts,
-      contactTypes: res.contactTypes ?? [],
+      contactTypes: res.contactTypes ?? data.value?.contactTypes ?? [],
       total: res.total ?? 0,
-      truncated: res.truncated ?? false
+      page: resolvedPage,
+      pageSize: res.pageSize ?? PAGE_SIZE,
+      totalPages: totalPagesResolved
     }
-    if (!contacts.some((r) => !rowHasAnyContactType(r)) && contactTypeFilter.value === KIND_FILTER_NONE) {
-      contactTypeFilter.value = 'all'
-    }
+    currentPage.value = resolvedPage
   } catch (e: unknown) {
+    if (seq !== loadSeq) return
     loadError.value =
       e && typeof e === 'object' && 'data' in e
         ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load contacts')
         : 'Failed to load contacts'
-    data.value = null
+    if (isInitial) data.value = null
   } finally {
-    pending.value = false
+    if (seq === loadSeq) {
+      pending.value = false
+      pageLoading.value = false
+    }
   }
 }
 
 onMounted(() => {
-  load()
+  void loadList()
+})
+
+async function goPage(page: number) {
+  if (page < 1 || page > totalPages.value || pageLoading.value || page === currentPage.value) return
+  currentPage.value = page
+}
+
+onUnmounted(() => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
 })
 </script>
