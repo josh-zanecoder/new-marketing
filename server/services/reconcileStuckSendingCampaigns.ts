@@ -4,7 +4,7 @@ import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
 import type { CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
 import {
-  enqueueCampaignBatch,
+  enqueueCampaignBatchFanOut,
   hasActiveCampaignSendJob
 } from '../queue/emailQueue'
 import { getTenantConnectionByDbName } from '../tenant/connection'
@@ -101,11 +101,12 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
           })
         }
 
-        await enqueueCampaignBatch({
+        await enqueueCampaignBatchFanOut({
           campaignId,
           dbName,
           sendRunId,
-          page: 0
+          startPage: 0,
+          pendingEstimate: pendingCount
         })
         requeued++
         console.log('[SendingReconcile] re-enqueued stuck batch', {

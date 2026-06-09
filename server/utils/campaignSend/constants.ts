@@ -1,8 +1,23 @@
-/** Recipients per BullMQ batch job (Brevo messageVersions limit; aligned with mortdash ratesheet max chunk). */
-export const CAMPAIGN_SEND_BATCH_SIZE = 500
+/** HTTP path Cloud Tasks POSTs for each campaign send chunk. */
+export const CAMPAIGN_SEND_TASK_PATH = '/api/internal/campaign-sends/batch'
 
-/** Serial batch processing per worker (ratesheet-style); override for local experiments only. */
-export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 1
+/** Brevo messageVersions upper bound (aligned with mortdash ratesheet max chunk). */
+export const CAMPAIGN_SEND_BATCH_SIZE_MAX = 500
+
+/** Default chunk size for blast sends (no per-recipient merge tags). */
+export const CAMPAIGN_SEND_BATCH_SIZE_UNIFORM_DEFAULT = 500
+
+/** Default chunk size when subject/body uses merge tags or recipient dynamic vars. */
+export const CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT = 200
+
+/** @deprecated Use CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED or _UNIFORM env vars. */
+export const CAMPAIGN_SEND_BATCH_SIZE = CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT
+
+/** Parallel batch tasks enqueued at send start (and per replenishment hop). */
+export const CAMPAIGN_SEND_FANOUT_DEFAULT = 20
+
+/** Parallel batch jobs per worker process; override with CAMPAIGN_EMAIL_WORKER_CONCURRENCY. */
+export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 3
 
 export const CAMPAIGN_SEND_MAX_RETRY_ATTEMPTS = 3
 export const CAMPAIGN_SEND_RETRY_BASE_DELAY_MS = 5000

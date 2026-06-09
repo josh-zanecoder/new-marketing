@@ -1,5 +1,15 @@
 import { Queue, type Job } from 'bullmq'
+import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import { getBullMqConnectionOptions } from '../lib/bullmq'
+import {
+  enqueueCampaignBatchCloudTask,
+  removeCampaignBatchCloudTasks
+} from './campaignCloudTasksQueue'
+import { getTenantConnectionByDbName } from '../tenant/connection'
+import { getTenantClientModels } from '../models/tenant/tenantClientModels'
+import type { CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
+import { CAMPAIGN_RECIPIENT_STATUS_SENDING } from '../utils/campaignSend/constants'
+import { resolveCampaignSendFanoutTaskCount } from '../utils/campaignSend/batchTiming'
 
 export const EMAIL_QUEUE_NAME = 'emailQueue'
 export const EMAIL_JOB_PROCESS_BATCH = 'processCampaignBatch'
@@ -110,11 +120,32 @@ function matchesCampaignJob(
   return data.campaignId === campaignId && data.dbName === dbName
 }
 
+async function hasInFlightSendingRecipients(
+  campaignId: string,
+  dbName: string
+): Promise<boolean> {
+  try {
+    const tenantConn = await getTenantConnectionByDbName(dbName)
+    const { CampaignRecipient } = getTenantClientModels(tenantConn)
+    const count = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+    })
+    return count > 0
+  } catch {
+    return false
+  }
+}
+
 /** True when a batch or scheduled-start job is waiting, delayed, or active for this campaign. */
 export async function hasActiveCampaignSendJob(
   campaignId: string,
   dbName: string
 ): Promise<boolean> {
+  if (isCampaignCloudTasksEnabled()) {
+    if (await hasInFlightSendingRecipients(campaignId, dbName)) return true
+  }
+
   const queue = getEmailQueue()
   const states = ['waiting', 'active', 'delayed'] as const
   for (const state of states) {
@@ -140,6 +171,12 @@ export async function enqueueCampaignBatch(params: {
   page: number
 }) {
   const { campaignId, dbName, sendRunId, page } = params
+
+  if (isCampaignCloudTasksEnabled()) {
+    await enqueueCampaignBatchCloudTask({ campaignId, dbName, sendRunId, page })
+    return null
+  }
+
   const jobId = campaignBatchJobId(dbName, campaignId, sendRunId, page)
   const queue = getEmailQueue()
   const existing = await queue.getJob(jobId)
@@ -179,6 +216,44 @@ export async function enqueueCampaignBatchFollowUp(params: {
   page: number
 }) {
   return enqueueCampaignBatch(params)
+}
+
+/** Enqueue multiple batch tasks in parallel (pages startPage … startPage+count-1). */
+export async function enqueueCampaignBatchFanOut(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  startPage?: number
+  pendingEstimate?: number
+  count?: number
+}): Promise<number> {
+  const { campaignId, dbName, sendRunId } = params
+  const startPage = Math.max(0, Number(params.startPage ?? 0))
+  const taskCount =
+    params.count != null && params.count > 0
+      ? Math.floor(params.count)
+      : resolveCampaignSendFanoutTaskCount(params.pendingEstimate ?? 0)
+
+  await Promise.all(
+    Array.from({ length: taskCount }, (_, i) =>
+      enqueueCampaignBatch({
+        campaignId,
+        dbName,
+        sendRunId,
+        page: startPage + i
+      })
+    )
+  )
+
+  logQueue('enqueueCampaignBatchFanOut', {
+    campaignId,
+    dbName,
+    sendRunId,
+    startPage,
+    taskCount,
+    pendingEstimate: params.pendingEstimate ?? null
+  })
+  return taskCount
 }
 
 export async function enqueueScheduledCampaignStart(
@@ -224,8 +299,12 @@ export async function removeCampaignBatchJobs(
   campaignId: string,
   dbName: string
 ): Promise<number> {
-  const queue = getEmailQueue()
   let removed = 0
+  if (isCampaignCloudTasksEnabled()) {
+    removed += await removeCampaignBatchCloudTasks(campaignId, dbName)
+  }
+
+  const queue = getEmailQueue()
   for (const state of ['waiting', 'delayed'] as const) {
     const jobs = await queue.getJobs([state], 0, 500)
     for (const job of jobs) {

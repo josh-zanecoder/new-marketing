@@ -17,3 +17,5 @@ export const campaignRecipientSchema = new mongoose.Schema({
 
 campaignRecipientSchema.index({ campaign: 1, email: 1 }, { unique: true })
 campaignRecipientSchema.index({ campaign: 1, status: 1 })
+/** Claim query: find pending/failed sorted by _id within a campaign. */
+campaignRecipientSchema.index({ campaign: 1, status: 1, _id: 1 })

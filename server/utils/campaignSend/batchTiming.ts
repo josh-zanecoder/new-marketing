@@ -1,12 +1,38 @@
-import { CAMPAIGN_SEND_BATCH_SIZE } from './constants'
+import {
+  CAMPAIGN_SEND_BATCH_SIZE_MAX,
+  CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT,
+  CAMPAIGN_SEND_FANOUT_DEFAULT
+} from './constants'
 
-/** Override with `CAMPAIGN_SEND_BATCH_SIZE` (1–500). */
+/** Override with `CAMPAIGN_SEND_FANOUT_COUNT` (1–30). */
+export function resolveCampaignSendFanoutCount(): number {
+  const raw = Number(process.env.CAMPAIGN_SEND_FANOUT_COUNT)
+  if (Number.isFinite(raw) && raw >= 1 && raw <= 30) return Math.floor(raw)
+  return CAMPAIGN_SEND_FANOUT_DEFAULT
+}
+
+/**
+ * How many batch tasks to enqueue for a new send wave.
+ * Caps at fanout limit; scales down for small audiences.
+ */
+export function resolveCampaignSendFanoutTaskCount(pendingEstimate: number): number {
+  const fanout = resolveCampaignSendFanoutCount()
+  if (!Number.isFinite(pendingEstimate) || pendingEstimate <= 0) return fanout
+  const batchEstimate = Math.max(
+    1,
+    Number(process.env.CAMPAIGN_SEND_FANOUT_BATCH_ESTIMATE) || CAMPAIGN_SEND_BATCH_SIZE_MAX
+  )
+  const needed = Math.ceil(pendingEstimate / batchEstimate)
+  return Math.min(fanout, Math.max(1, needed))
+}
+
+/** @deprecated Use resolvePersonalizedCampaignBatchSize / resolveUniformCampaignBatchSize. */
 export function resolveCampaignSendBatchSize(): number {
   const raw = Number(process.env.CAMPAIGN_SEND_BATCH_SIZE)
-  if (Number.isFinite(raw) && raw >= 1 && raw <= CAMPAIGN_SEND_BATCH_SIZE) {
+  if (Number.isFinite(raw) && raw >= 1 && raw <= CAMPAIGN_SEND_BATCH_SIZE_MAX) {
     return Math.floor(raw)
   }
-  return CAMPAIGN_SEND_BATCH_SIZE
+  return CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT
 }
 
 /**
