@@ -1,5 +1,5 @@
 /** Recipients per BullMQ batch job (Brevo messageVersions limit; aligned with mortdash ratesheet max chunk). */
-export const CAMPAIGN_SEND_BATCH_SIZE = 500
+export const CAMPAIGN_SEND_BATCH_SIZE = 100
 
 /** Serial batch processing per worker (ratesheet-style); override for local experiments only. */
 export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 1
