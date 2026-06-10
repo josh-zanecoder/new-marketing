@@ -22,7 +22,6 @@ const props = defineProps<{
     processed: number
     pct: number
     done: boolean
-    preparing?: boolean
     campaignStatus: string
   } | null
 }>()
@@ -59,16 +58,8 @@ const modalTitle = computed(() => {
     return 'Send cancelled'
   }
   if (props.sendProgress?.done) return 'Send finished'
-  if (props.sendProgress?.preparing) return `Preparing ${props.campaignName || 'campaign'}`
   return `Sending ${props.campaignName || 'campaign'}`
 })
-
-const isPreparingRecipients = computed(
-  () =>
-    !!props.sendProgress?.preparing &&
-    !props.sendProgress.done &&
-    props.sendProgress.processed === 0
-)
 
 const tabs: { id: CampaignSendRecipientReportStatus; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -312,21 +303,12 @@ watch(reportPage, () => {
                 <template v-if="props.sendProgress.done">
                   {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} processed
                 </template>
-                <template v-else-if="isPreparingRecipients">
-                  Preparing {{ props.sendProgress.total.toLocaleString() }} recipients…
-                </template>
                 <template v-else>
                   {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
                 </template>
               </p>
               <p
-                v-if="isPreparingRecipients"
-                class="mt-1 text-xs text-slate-600"
-              >
-                Building the recipient list. Sending starts automatically when ready.
-              </p>
-              <p
-                v-else-if="!props.sendProgress.done && (props.sendProgress.inFlight ?? props.sendProgress.sending)"
+                v-if="!props.sendProgress.done && (props.sendProgress.inFlight ?? props.sendProgress.sending)"
                 class="mt-1 text-xs text-sky-700"
               >
                 {{ props.sendProgress.inFlight ?? props.sendProgress.sending }} in flight at Brevo
@@ -443,9 +425,6 @@ watch(reportPage, () => {
                   </span>
                 </li>
               </ul>
-              <p v-else-if="isPreparingRecipients" class="mt-4 text-sm text-slate-500">
-                Recipient list is being prepared…
-              </p>
               <p v-else class="mt-4 text-sm text-slate-500">No recipients in this filter.</p>
 
               <div

@@ -17,20 +17,6 @@ let sendPollGeneration = 0
 /** Campaign id currently polled (modal send or detail-page resume). */
 const sendPollCampaignId = ref<string | null>(null)
 
-/** Keep audience estimate from send POST while async prepare has not materialized rows yet. */
-function mergePolledSendStatus(
-  prev: SendStatus | null,
-  res: SendStatus,
-  campaignId: string
-): SendStatus {
-  const total = Math.max(res.total, prev?.total ?? 0)
-  const preparing =
-    res.preparing ?? (res.campaignStatus === 'Sending' && res.total === 0 && total > 0)
-  const pending =
-    preparing && res.pending === 0 && (prev?.pending ?? 0) > 0 ? prev!.pending : res.pending
-  return { ...res, campaignId, total, pending, preparing }
-}
-
 /** SSR: internal API calls must forward the browser cookie or auth middleware returns 401. */
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
@@ -210,8 +196,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
         sent: 0,
         failed: res.failed,
         total: res.total,
-        done: false,
-        preparing: (res as { preparing?: boolean }).preparing
+        done: false
       }
 
       return { poll: true }
@@ -408,7 +393,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       try {
         const res = await fetchSendCampaignStatus(campaignId)
         if (generation !== sendPollGeneration) return
-        sendStatus.value = mergePolledSendStatus(sendStatus.value, res, campaignId)
+        sendStatus.value = { ...res, campaignId }
 
         if (res.done) {
           stopSendStatusPolling()
@@ -452,7 +437,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
     if (sendPollCampaignId.value === campaignId) return
     try {
       const res = await fetchSendCampaignStatus(campaignId)
-      const status = mergePolledSendStatus(sendStatus.value, res, campaignId)
+      const status: SendStatus = { ...res, campaignId }
       if (res.done) {
         await fetchCampaigns({ force: true })
         await onComplete(status)
