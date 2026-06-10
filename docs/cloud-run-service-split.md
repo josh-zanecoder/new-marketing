@@ -1,21 +1,23 @@
-# Cloud Run service split (web + Kafka worker)
+# Cloud Run service split (web + workers)
 
-Marketing runs as **two Cloud Run services** from the **same Docker image**. Web deploys no longer restart the Kafka inbound consumer.
+Marketing runs as **multiple Cloud Run services** from the **same Docker image**. Web deploys no longer restart background workers or steal CPU from the UI during campaign sends.
 
 ## Services
 
 | Service | Role | Key env overrides |
 |---------|------|-------------------|
-| `marketing-production` | UI, API, email worker, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true` | min **1**, max **10** |
+| `marketing-production` | UI, API, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true`, `EMAIL_WORKER_DISABLED=true`, `CAMPAIGN_SEND_WORKER_URL` → send worker | min **1**, max **10**, 1 CPU |
+| `marketing-send-worker-production` | Cloud Tasks batch HTTP target only | `EMAIL_WORKER_DISABLED=true`, `KAFKA_INBOUND_CONSUMER_DISABLED=true`, self `CAMPAIGN_SEND_WORKER_URL` | min **1**, max **10**, **2 CPU / 2Gi** |
 | `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
-Test environment uses `marketing-test` and `marketing-kafka-worker`.
+Test environment uses `marketing-test`, `marketing-send-worker`, and `marketing-kafka-worker`.
 
 ## Why split
 
-- Redeploying the web service used to kill the consumer mid-sync.
+- Redeploying the web service used to kill the Kafka consumer mid-sync.
 - Web can scale (`max-instances` > 1) without duplicate Kafka consumer group members.
-- Worker stays **min=1, max=1** for a single consumer instance.
+- Kafka worker stays **min=1, max=1** for a single consumer instance.
+- **Campaign send worker** isolates long-running Cloud Tasks batch HTTP from login/navigation on the web service (see GCP logs: batch + UI shared one instance before this split).
 
 ## Logs
 
@@ -23,8 +25,10 @@ Test environment uses `marketing-test` and `marketing-kafka-worker`.
 |---------------|---------|
 | `Kafka inbound consumer running` | `marketing-kafka-worker-production` |
 | `marketing.sync.requested` / `syncedCount` | `marketing-kafka-worker-production` |
-| `POST /api/v1/auth/tenant-handoff` | `marketing-production` |
-| `[EmailWorker]` / `[ScheduleReconcile]` / `[SendingReconcile]` | `marketing-production` (web only) |
+| `POST /api/v1/auth/tenant-handoff` | `marketing-production` / `marketing-test` |
+| `[CampaignBatchWorker]` / `POST /api/internal/campaign-sends/batch` | `marketing-send-worker-production` / `marketing-send-worker` |
+| `[ScheduleReconcile]` / `[SendingReconcile]` | web service only |
+| `[EmailWorker]` | disabled on web when `EMAIL_WORKER_DISABLED=true` |
 
 ## Safe redeploy during sync
 

@@ -14,7 +14,7 @@ Campaign bulk send uses the same ideas as `mortdash-crm` ratesheet sends: chunke
 
 Send and schedule **do not** consume Kafka topics and **do not** require `KAFKA_BROKERS`. After a campaign finishes, an **optional** `campaign.send.completed` event may be published for CRM (`notifyCampaignSendCompleted`); set `CAMPAIGN_SEND_KAFKA_NOTIFY=false` to disable.
 
-On Cloud Run, the **kafka worker** service disables the email worker; the **web** service runs BullMQ send/schedule reconcile — see `docs/cloud-run-service-split.md`.
+On Cloud Run, **batch chunks** target `marketing-send-worker` (`CAMPAIGN_SEND_WORKER_URL`); the **web** service enqueues via Cloud Tasks only (`EMAIL_WORKER_DISABLED=true`). See `docs/cloud-run-service-split.md`.
 
 ## Flow
 
@@ -52,8 +52,10 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | `CLOUD_TASKS_LOCATION` | `us-west1` | Queue region |
 | `CLOUD_TASKS_QUEUE_NAME` | `marketing-test` | Cloud Tasks queue ID |
 | `CLOUD_TASKS_CLIENT_EMAIL` / `CLOUD_TASKS_PRIVATE_KEY` | — | Optional dedicated enqueuer SA (local dev). **Not** `FIREBASE_CLIENT_EMAIL`. |
-| `MARKETING_PUBLIC_BASE_URL` | — | Cloud Run origin; worker path appended automatically |
+| `MARKETING_PUBLIC_BASE_URL` | — | Web Cloud Run origin (UI + tenant API) |
+| `CAMPAIGN_SEND_WORKER_URL` | — | Full batch worker URL (deploy sets to `marketing-send-worker` service) |
 | `CAMPAIGN_SEND_WORKER_SECRET` | — | `X-Campaign-Send-Worker-Secret` on worker HTTP POST |
+| `EMAIL_WORKER_DISABLED` | `false` | `true` on web + send worker when using Cloud Tasks |
 
 Cloud Tasks pipeline notes:
 - Internal worker route is auth-exempt; secured by worker secret header.

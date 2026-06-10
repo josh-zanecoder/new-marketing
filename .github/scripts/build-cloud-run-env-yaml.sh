@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mode="${1:?mode required: web|worker}"
+mode="${1:?mode required: web|worker|send-worker}"
 input="${2:?input .env file required}"
 output="${3:?output yaml file required}"
 
 skip_keys=""
 case "$mode" in
   web)
-    skip_keys="KAFKA_CRM_CONSUMER_DISABLED"
+    # Injected at deploy: CAMPAIGN_SEND_WORKER_URL. Web does not run BullMQ batch worker when CT is on.
+    skip_keys="KAFKA_CRM_CONSUMER_DISABLED|CAMPAIGN_SEND_WORKER_URL|CAMPAIGN_TASK_HANDLER_URL|EMAIL_WORKER_DISABLED"
     ;;
   worker)
     skip_keys="KAFKA_INBOUND_CONSUMER_DISABLED|KAFKA_CRM_CONSUMER_DISABLED|EMAIL_WORKER_DISABLED|SCHEDULE_RECONCILE_DISABLED|SENDING_RECONCILE_DISABLED|KAFKA_INBOUND_TOPIC_REFRESH_MS|KAFKA_INBOUND_TOPIC_SIGNAL_MS|KAFKA_CONSUMER_SESSION_TIMEOUT_MS|KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS|KAFKA_CONSUMER_REBALANCE_TIMEOUT_MS|MARKETING_SYNC_RECIPIENT_LIST_CONCURRENCY"
+    ;;
+  send-worker)
+    skip_keys="KAFKA_INBOUND_CONSUMER_DISABLED|KAFKA_CRM_CONSUMER_DISABLED|EMAIL_WORKER_DISABLED|SCHEDULE_RECONCILE_DISABLED|SENDING_RECONCILE_DISABLED|KAFKA_INBOUND_TOPIC_REFRESH_MS|KAFKA_INBOUND_TOPIC_SIGNAL_MS|KAFKA_CONSUMER_SESSION_TIMEOUT_MS|KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS|KAFKA_CONSUMER_REBALANCE_TIMEOUT_MS|MARKETING_SYNC_RECIPIENT_LIST_CONCURRENCY|CAMPAIGN_SEND_WORKER_URL|CAMPAIGN_TASK_HANDLER_URL|MARKETING_PUBLIC_BASE_URL|NUXT_PUBLIC_MARKETING_BASE_URL|MARKETING_APP_URL"
     ;;
   *)
     echo "Unknown mode: $mode" >&2
@@ -31,6 +35,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 done < "$input"
 
 case "$mode" in
+  web)
+    echo 'EMAIL_WORKER_DISABLED: "true"' >> "$output"
+    ;;
   worker)
     echo 'EMAIL_WORKER_DISABLED: "true"' >> "$output"
     echo 'SCHEDULE_RECONCILE_DISABLED: "true"' >> "$output"
@@ -41,5 +48,11 @@ case "$mode" in
     echo 'KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "3000"' >> "$output"
     echo 'KAFKA_CONSUMER_REBALANCE_TIMEOUT_MS: "120000"' >> "$output"
     echo 'MARKETING_SYNC_RECIPIENT_LIST_CONCURRENCY: "10"' >> "$output"
+    ;;
+  send-worker)
+    echo 'EMAIL_WORKER_DISABLED: "true"' >> "$output"
+    echo 'KAFKA_INBOUND_CONSUMER_DISABLED: "true"' >> "$output"
+    echo 'SCHEDULE_RECONCILE_DISABLED: "true"' >> "$output"
+    echo 'SENDING_RECONCILE_DISABLED: "true"' >> "$output"
     ;;
 esac

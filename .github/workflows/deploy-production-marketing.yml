@@ -10,6 +10,7 @@ env:
   PROJECT_ID: poc-1-aima-pmu
   SERVICE_NAME: marketing-production
   WORKER_SERVICE_NAME: marketing-kafka-worker-production
+  SEND_WORKER_SERVICE_NAME: marketing-send-worker-production
   ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-production
   BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge-production
   BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge-production
@@ -24,6 +25,10 @@ env:
   WEB_MAX_INSTANCES: 10
   WORKER_MIN_INSTANCES: 1
   WORKER_MAX_INSTANCES: 1
+  SEND_WORKER_MIN_INSTANCES: 1
+  SEND_WORKER_MAX_INSTANCES: 10
+  # Set to 'true' to deploy marketing-send-worker-production (Cloud Tasks batch HTTP target).
+  DEPLOY_SEND_WORKER: 'true'
   # Set to 'true' to deploy marketing-kafka-worker-production on production pushes.
   DEPLOY_KAFKA_WORKER: 'false'
   # Set to 'true' to deploy marketing-kafka-producer-bridge-production on production pushes.
@@ -41,6 +46,8 @@ jobs:
       test_success: ${{ steps.test-deployment.outputs.test_success }}
       deploy_kafka_worker: ${{ steps.deploy_flags.outputs.deploy_kafka_worker }}
       deploy_kafka_bridge: ${{ steps.deploy_flags.outputs.deploy_kafka_bridge }}
+      deploy_send_worker: ${{ steps.deploy_flags.outputs.deploy_send_worker }}
+      send_worker_url: ${{ steps.deploy_send_worker.outputs.send_worker_post_url }}
 
     steps:
       - name: Checkout code
@@ -107,6 +114,7 @@ jobs:
         run: |
           echo "deploy_kafka_worker=${{ env.DEPLOY_KAFKA_WORKER }}" >> $GITHUB_OUTPUT
           echo "deploy_kafka_bridge=${{ env.DEPLOY_KAFKA_BRIDGE }}" >> $GITHUB_OUTPUT
+          echo "deploy_send_worker=${{ env.DEPLOY_SEND_WORKER }}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         run: |
@@ -137,10 +145,51 @@ jobs:
             echo "next=blue" >> $GITHUB_OUTPUT
           fi
 
+      - name: Deploy campaign send worker
+        id: deploy_send_worker
+        if: steps.deploy_flags.outputs.deploy_send_worker == 'true'
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh send-worker .env send-worker-env.yaml
+
+          gcloud run deploy ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.SEND_WORKER_MIN_INSTANCES }} \
+            --max-instances ${{ env.SEND_WORKER_MAX_INSTANCES }} \
+            --memory 2Gi \
+            --cpu 2 \
+            --concurrency 40 \
+            --timeout 3600 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --env-vars-file=send-worker-env.yaml
+
+          SEND_WORKER_URL=$(gcloud run services describe ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --region ${{ env.REGION }} --format="value(status.url)")
+          SEND_WORKER_POST_URL="${SEND_WORKER_URL}/api/internal/campaign-sends/batch"
+          echo "send_worker_post_url=$SEND_WORKER_POST_URL" >> $GITHUB_OUTPUT
+
+          gcloud run services update ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --update-env-vars "CAMPAIGN_SEND_WORKER_URL=${SEND_WORKER_POST_URL}"
+
+          echo "Campaign send worker URL: $SEND_WORKER_POST_URL"
+
       - name: Convert .env to env.yaml (web)
         run: |
           chmod +x .github/scripts/build-cloud-run-env-yaml.sh
           .github/scripts/build-cloud-run-env-yaml.sh web .env env.yaml
+          if [ -n "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" ]; then
+            SAFE_URL=$(printf '%s' "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+            echo "CAMPAIGN_SEND_WORKER_URL: \"$SAFE_URL\"" >> env.yaml
+          fi
 
       - name: Deploy new revision
         id: deploy
