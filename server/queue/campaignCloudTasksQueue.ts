@@ -5,6 +5,7 @@ import {
   getCampaignCloudTasksConfig,
   resolveCampaignCloudTasksAuth
 } from '../config/campaignCloudTasks'
+import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 
 const G = globalThis as typeof globalThis & {
   __campaignCloudTasksClient?: CloudTasksClient | null
@@ -115,7 +116,11 @@ export async function countCampaignBatchCloudTasks(
 
 export async function enqueueCampaignBatchCloudTask(
   data: CampaignQueueJobData
-): Promise<{ taskId: string; duplicate?: boolean }> {
+): Promise<{ taskId: string; duplicate?: boolean; skipped?: boolean }> {
+  if (await shouldSkipCampaignBatchEnqueue(data)) {
+    return { taskId: '', skipped: true }
+  }
+
   const conn = getClient()
   const cfg = getCampaignCloudTasksConfig()
   if (!conn) {
@@ -126,12 +131,16 @@ export async function enqueueCampaignBatchCloudTask(
   const taskId = campaignBatchTaskId(dbName, campaignId, sendRunId, page)
   const taskName = `${conn.queuePath}/tasks/${taskId}`
   const taskBody = Buffer.from(JSON.stringify(data)).toString('base64')
+  const delayMs = Math.max(0, Number(data.delayMs || 0))
+  const scheduleTime =
+    delayMs > 0 ? { seconds: Math.floor((Date.now() + delayMs) / 1000) } : undefined
 
   try {
     await conn.client.createTask({
       parent: conn.queuePath,
       task: {
         name: taskName,
+        ...(scheduleTime ? { scheduleTime } : {}),
         httpRequest: {
           httpMethod: 'POST',
           url: cfg.workerUrl,

@@ -6,6 +6,7 @@ import {
   hasCampaignBatchCloudTasks,
   removeCampaignBatchCloudTasks
 } from './campaignCloudTasksQueue'
+import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignRecipientModel } from '../types/tenant/campaignRecipient.model'
@@ -108,6 +109,8 @@ export type CampaignQueueJobData = {
   dbName: string
   sendRunId: string
   page: number
+  retryAttempt?: number
+  delayMs?: number
 }
 
 function matchesCampaignJob(
@@ -171,11 +174,18 @@ export async function enqueueCampaignBatch(params: {
   dbName: string
   sendRunId: string
   page: number
+  retryAttempt?: number
+  delayMs?: number
 }) {
-  const { campaignId, dbName, sendRunId, page } = params
+  const { campaignId, dbName, sendRunId, page, retryAttempt, delayMs } = params
+
+  if (await shouldSkipCampaignBatchEnqueue({ campaignId, dbName, sendRunId, page, retryAttempt, delayMs })) {
+    logQueue('enqueueCampaignBatch.skipGuard', { campaignId, dbName, sendRunId, page })
+    return null
+  }
 
   if (isCampaignCloudTasksEnabled()) {
-    await enqueueCampaignBatchCloudTask({ campaignId, dbName, sendRunId, page })
+    await enqueueCampaignBatchCloudTask({ campaignId, dbName, sendRunId, page, retryAttempt, delayMs })
     return null
   }
 

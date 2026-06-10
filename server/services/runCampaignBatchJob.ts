@@ -62,17 +62,29 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
     return
   }
 
+<<<<<<< Updated upstream
   const pending = result.pending ?? 0
 
   if (!result.done) {
     if (result.chainNext === false) {
       if (pending > 0) {
+=======
+  const outstanding = result.outstanding ?? result.pending ?? 0
+
+  if (!result.done) {
+    if (result.chainNext === false) {
+      if (outstanding > 0) {
+>>>>>>> Stashed changes
         await fanOutMoreWork({
           campaignId,
           dbName,
           sendRunId,
           startPage: page,
+<<<<<<< Updated upstream
           pendingEstimate: pending,
+=======
+          pendingEstimate: outstanding,
+>>>>>>> Stashed changes
           reason: 'waitingInFlight',
           page,
           startedAt
@@ -84,7 +96,11 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
         dbName,
         sendRunId,
         page,
+<<<<<<< Updated upstream
         pending,
+=======
+        outstanding,
+>>>>>>> Stashed changes
         sent: result.sent,
         failed: result.failed,
         processedInBatch: result.processedInBatch,
@@ -112,7 +128,11 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
         nextPage,
         fanout,
         processedInBatch: processed,
+<<<<<<< Updated upstream
         pending,
+=======
+        outstanding,
+>>>>>>> Stashed changes
         ms: Date.now() - startedAt
       })
       return
@@ -123,7 +143,11 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
       dbName,
       sendRunId,
       startPage: page,
+<<<<<<< Updated upstream
       pendingEstimate: pending,
+=======
+      pendingEstimate: outstanding,
+>>>>>>> Stashed changes
       reason: 'emptyClaim',
       page,
       startedAt
@@ -131,14 +155,23 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
     return
   }
 
+<<<<<<< Updated upstream
   if (pending > 0) {
+=======
+  if (outstanding > 0) {
+>>>>>>> Stashed changes
     await fanOutMoreWork({
       campaignId,
       dbName,
       sendRunId,
       startPage: page,
+<<<<<<< Updated upstream
       pendingEstimate: pending,
       reason: 'doneWithPending',
+=======
+      pendingEstimate: outstanding,
+      reason: 'doneWithOutstanding',
+>>>>>>> Stashed changes
       page,
       startedAt
     })
@@ -146,7 +179,11 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
   }
 
   if (result.campaignStatus === 'Sending') {
+<<<<<<< Updated upstream
     jobLog('complete.deferredStillSending', {
+=======
+    jobLog('complete.awaitFinalize', {
+>>>>>>> Stashed changes
       campaignId,
       dbName,
       sendRunId,

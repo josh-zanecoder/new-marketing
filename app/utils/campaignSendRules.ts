@@ -16,9 +16,12 @@ export function canScheduleDraft(c: Campaign): boolean {
   return canSendDraft(c)
 }
 
-/** Continue a paused or partially failed send (unsent only). */
+/** Continue a paused, failed, or stuck in-flight send (unsent only). */
 export function canResumeSend(c: Campaign): boolean {
-  return (c.status === 'Paused' || c.status === 'Failed') && campaignHasSendAudience(c)
+  return (
+    (c.status === 'Paused' || c.status === 'Failed' || c.status === 'Sending') &&
+    campaignHasSendAudience(c)
+  )
 }
 
 /** Legacy cancelled campaigns may still resume unsent recipients (secondary action). */

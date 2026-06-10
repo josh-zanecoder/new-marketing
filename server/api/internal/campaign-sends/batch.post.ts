@@ -1,27 +1,9 @@
-import { createError, defineEventHandler, getHeader, readBody } from 'h3'
-import type { CampaignQueueJobData } from '../../../queue/emailQueue'
+import { createError, defineEventHandler, getHeader, readBody, setResponseStatus } from 'h3'
 import { getCampaignCloudTasksConfig } from '../../../config/campaignCloudTasks'
-import { runCampaignBatchJob } from '../../../services/runCampaignBatchJob'
-
-function parseWorkerBody(raw: unknown): CampaignQueueJobData {
-  if (!raw || typeof raw !== 'object') {
-    throw createError({ statusCode: 400, message: 'Invalid campaign batch payload' })
-  }
-  const body = raw as Partial<CampaignQueueJobData>
-  const campaignId = String(body.campaignId || '').trim()
-  const dbName = String(body.dbName || '').trim()
-  const sendRunId = String(body.sendRunId || '').trim()
-  const page = Math.max(0, Number(body.page ?? 0))
-
-  if (!campaignId || !dbName || !sendRunId) {
-    throw createError({
-      statusCode: 400,
-      message: 'campaignId, dbName, and sendRunId are required'
-    })
-  }
-
-  return { campaignId, dbName, sendRunId, page }
-}
+import {
+  parseCampaignBatchWorkerBody,
+  processCampaignBatchWorkerTask
+} from '../../../services/campaignBatchWorker.service'
 
 export default defineEventHandler(async (event) => {
   const cfg = getCampaignCloudTasksConfig()
@@ -35,27 +17,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const raw = await readBody(event)
-  const data = parseWorkerBody(raw)
+  const data = parseCampaignBatchWorkerBody(raw)
 
-  console.log('[CampaignBatchWorker] task.received', {
-    campaignId: data.campaignId,
-    dbName: data.dbName,
-    sendRunId: data.sendRunId,
-    page: data.page,
-    cloudTask: getHeader(event, 'x-cloudtasks-taskname') || null
-  })
+  const result = await processCampaignBatchWorkerTask(data)
 
-  try {
-    await runCampaignBatchJob(data)
-    return { ok: true }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[CampaignBatchWorker] task.failed', {
-      campaignId: data.campaignId,
-      dbName: data.dbName,
-      page: data.page,
-      message
-    })
-    throw createError({ statusCode: 500, message })
-  }
+  // Always 200 for Cloud Tasks (ratesheet pattern): app-level retry, no CT retry storms.
+  setResponseStatus(event, 200)
+  return result
 })

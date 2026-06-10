@@ -43,3 +43,20 @@ export async function countRecipientStatuses(
 
   return { pending, sent, failed }
 }
+
+/** Recipients still eligible for the active send run (includes retryable `failed`). */
+export async function countOutstandingSendWork(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<number> {
+  return CampaignRecipient.countDocuments({
+    campaign: campaignId,
+    status: {
+      $in: [
+        CAMPAIGN_RECIPIENT_STATUS_PENDING,
+        CAMPAIGN_RECIPIENT_STATUS_SENDING,
+        CAMPAIGN_RECIPIENT_STATUS_FAILED
+      ]
+    }
+  })
+}

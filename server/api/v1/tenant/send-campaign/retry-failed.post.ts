@@ -22,7 +22,9 @@ export default defineEventHandler(async (event) => {
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
 
   const revertStatus =
-    campaign.status === 'Paused'
+    campaign.status === 'Sending'
+      ? 'Sending'
+      : campaign.status === 'Paused'
       ? 'Paused'
       : campaign.status === 'Cancelled'
         ? 'Cancelled'
@@ -30,10 +32,10 @@ export default defineEventHandler(async (event) => {
           ? 'Sent'
           : 'Failed'
 
-  console.log('[SendCampaignAPI] retryFailed', { campaignId, dbName, revertStatus })
+  console.log('[SendCampaignAPI] retryFailed', { campaignId, dbName, revertStatus, status: campaign.status })
 
   return beginCampaignSend(conn, campaignId, {
-    allowedStatuses: ['Paused', 'Failed', 'Sent', 'Cancelled'],
+    allowedStatuses: ['Paused', 'Failed', 'Sent', 'Cancelled', 'Sending'],
     mode: 'retry_failed',
     auth: event.context.auth,
     statusOnEnqueueFailure: revertStatus,

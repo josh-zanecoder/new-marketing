@@ -209,7 +209,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
       c.status !== 'Paused' &&
       c.status !== 'Failed' &&
       c.status !== 'Sent' &&
-      c.status !== 'Cancelled'
+      c.status !== 'Cancelled' &&
+      c.status !== 'Sending'
     ) {
       sendError.value = 'This campaign cannot be resumed.'
       return { poll: false }

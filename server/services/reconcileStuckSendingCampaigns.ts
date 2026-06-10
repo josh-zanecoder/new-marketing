@@ -13,10 +13,7 @@ import {
   clearStaleSendingRecipients,
   finalizeCampaignSendIfComplete
 } from './send-campaign.service'
-import {
-  CAMPAIGN_RECIPIENT_STATUS_PENDING,
-  CAMPAIGN_RECIPIENT_STATUS_SENDING
-} from '../utils/campaignSend/constants'
+import { countOutstandingSendWork } from '../utils/campaignSend/countRecipientStatuses'
 
 /**
  * Safety net for campaigns stuck in `Sending`:
@@ -67,12 +64,12 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
           if (acked > 0) staleCleared += acked
         }
 
-        const pendingCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
-          campaign: campaignId,
-          status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
-        })
+        const outstanding = await countOutstandingSendWork(
+          CampaignRecipient as CampaignRecipientModel,
+          campaignId
+        )
 
-        if (pendingCount === 0) {
+        if (outstanding === 0) {
           const result = await finalizeCampaignSendIfComplete(models, campaignId)
           if (result.finalized) {
             finalized++
@@ -106,14 +103,14 @@ export async function reconcileStuckSendingCampaigns(): Promise<void> {
           dbName,
           sendRunId,
           startPage: 0,
-          pendingEstimate: pendingCount
+          pendingEstimate: outstanding
         })
         requeued++
         console.log('[SendingReconcile] re-enqueued stuck batch', {
           dbName,
           campaignId,
           sendRunId,
-          pending: pendingCount,
+          outstanding,
           updatedAt: doc.updatedAt
         })
       } catch (err: unknown) {

@@ -2,7 +2,14 @@ import type { CampaignLean } from '../../types/tenant/campaign.model'
 
 export function campaignSendJobStoppingStates(campaign: Pick<CampaignLean, 'status'>): boolean {
   const s = String(campaign.status || '')
-  return s === 'Sent' || s === 'Failed' || s === 'Draft' || s === 'Scheduled' || s === 'Cancelled'
+  return (
+    s === 'Sent' ||
+    s === 'Failed' ||
+    s === 'Draft' ||
+    s === 'Scheduled' ||
+    s === 'Cancelled' ||
+    s === 'Paused'
+  )
 }
 
 export function campaignSendJobStaleRun(
@@ -21,5 +28,15 @@ export function campaignSendJobShouldSkip(
 ): boolean {
   if (!campaign) return true
   if (campaign.status !== 'Sending') return true
+  return campaignSendJobStaleRun(campaign, jobSendRunId)
+}
+
+/** True when a batch task must not be scheduled (missing campaign, stopped, or stale send run). */
+export function campaignSendJobShouldBlockEnqueue(
+  campaign: Pick<CampaignLean, 'status' | 'sendRunId'> | null | undefined,
+  jobSendRunId: string
+): boolean {
+  if (!campaign) return true
+  if (campaignSendJobStoppingStates(campaign)) return true
   return campaignSendJobStaleRun(campaign, jobSendRunId)
 }

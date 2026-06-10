@@ -33,7 +33,7 @@ import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
-import { countRecipientStatuses } from '../utils/campaignSend/countRecipientStatuses'
+import { countRecipientStatuses, countOutstandingSendWork } from '../utils/campaignSend/countRecipientStatuses'
 import {
   CAMPAIGN_RECIPIENT_STATUS_CANCELLED,
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
@@ -139,11 +139,20 @@ export async function finalizeCampaignSendIfComplete(
     campaignId
   )
   const { pending: pendingCount, sent: sentCount, failed: failedCount } = counts
+  const outstanding = await countOutstandingSendWork(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId
+  )
+
+  if (outstanding > 0) {
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
 
   if (pendingCount > 0) {
     return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
   }
 
+<<<<<<< Updated upstream
   const total = sentCount + failedCount
   if (total === 0 && (await campaignSendPipelineStillActive(models, campaignId))) {
     logSend('finalize.deferred.pipelineActive', { campaignId, sent: sentCount, failed: failedCount })
@@ -159,7 +168,24 @@ export async function finalizeCampaignSendIfComplete(
   if (!updated) {
     return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
   }
+=======
+>>>>>>> Stashed changes
   const runId = String(campaign.sendRunId || '').trim()
+  const total = sentCount + failedCount
+  if (total === 0 && (await campaignSendPipelineStillActive(models, campaignId, runId))) {
+    logSend('finalize.deferred.pipelineActive', { campaignId, sent: sentCount, failed: failedCount })
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
+
+  const newStatus = total === 0 || failedCount === total ? 'Failed' : 'Sent'
+  const updated = await (Campaign as CampaignModel).findOneAndUpdate(
+    { _id: campaignId, status: 'Sending' },
+    { $set: { status: newStatus }, $unset: { scheduledAt: 1 } },
+    { new: true }
+  )
+  if (!updated) {
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
   if (runId) clearCampaignSendRunCache(runId, campaignId)
   logSend('finalized', { campaignId, newStatus, sent: sentCount, failed: failedCount })
   return {
@@ -208,6 +234,8 @@ export interface ProcessBatchResult {
   skipped?: boolean
   /** When false, worker must not enqueue the next page (in-flight `sending` only). */
   chainNext?: boolean
+  /** Recipients still to process in the active send (pending + sending + retryable failed). */
+  outstanding?: number
   /** Recipients claimed and processed in this job (drives page chaining). */
   processedInBatch?: number
 }
@@ -357,9 +385,16 @@ function tenantDbNameFromModels(models: TenantClientModels): string {
 
 async function campaignSendPipelineStillActive(
   models: TenantClientModels,
+<<<<<<< Updated upstream
   campaignId: string
 ): Promise<boolean> {
   const { CampaignRecipient } = models
+=======
+  campaignId: string,
+  sendRunId?: string
+): Promise<boolean> {
+  const { Campaign, CampaignRecipient } = models
+>>>>>>> Stashed changes
   const sendingCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
     campaign: campaignId,
     status: CAMPAIGN_RECIPIENT_STATUS_SENDING
@@ -369,7 +404,20 @@ async function campaignSendPipelineStillActive(
   if (!isCampaignCloudTasksEnabled()) return false
   const dbName = tenantDbNameFromModels(models)
   if (!dbName) return false
+<<<<<<< Updated upstream
   return hasCampaignBatchCloudTasks(campaignId, dbName)
+=======
+
+  let runId = String(sendRunId || '').trim()
+  if (!runId) {
+    const campaign = await (Campaign as CampaignModel)
+      .findById(campaignId)
+      .select('sendRunId')
+      .lean<Pick<CampaignLean, 'sendRunId'> | null>()
+    runId = String(campaign?.sendRunId || '').trim()
+  }
+  return hasCampaignBatchCloudTasks(campaignId, dbName, runId || undefined)
+>>>>>>> Stashed changes
 }
 
 /**
@@ -655,9 +703,19 @@ export async function getCampaignSendProgress(
     campaignId
   )
   const { pending: pendingCount, sent: sentCount, failed: failedCount } = counts
+  const outstanding =
+    campaign.status === 'Sending'
+      ? await countOutstandingSendWork(CampaignRecipient as CampaignRecipientModel, campaignId)
+      : pendingCount
+  const progressPending =
+    campaign.status === 'Sending' ? outstanding : pendingCount
+  const progressTotal =
+    campaign.status === 'Sending'
+      ? sentCount + outstanding
+      : pendingCount + sentCount + failedCount
 
   let campaignStatus = campaign.status
-  if (pendingCount === 0 && campaignStatus === 'Sending') {
+  if (outstanding === 0 && campaignStatus === 'Sending') {
     const fresh = await (Campaign as CampaignModel)
       .findOne(campaignScope)
       .select('status')
@@ -668,11 +726,11 @@ export async function getCampaignSendProgress(
   return {
     campaignId,
     campaignStatus,
-    pending: pendingCount,
+    pending: progressPending,
     sent: sentCount,
     failed: failedCount,
-    total: pendingCount + sentCount + failedCount,
-    done: pendingCount === 0 && campaignStatus !== 'Sending'
+    total: progressTotal,
+    done: outstanding === 0 && campaignStatus !== 'Sending'
   }
 }
 
@@ -709,6 +767,10 @@ export async function processBatch(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
+    const outstanding = await countOutstandingSendWork(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
     return {
       campaignId,
       campaignStatus: campaign.status,
@@ -716,7 +778,8 @@ export async function processBatch(
       sent: counts.sent,
       failed: counts.failed,
       total: counts.pending + counts.sent + counts.failed,
-      done: counts.pending === 0,
+      outstanding,
+      done: outstanding === 0,
       skipped: true
     }
   }
@@ -765,6 +828,10 @@ export async function processBatch(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
+    const outstanding = await countOutstandingSendWork(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
     const campaignUpdated = await (Campaign as CampaignModel)
       .findById(campaignId)
       .lean<CampaignLean | null>()
@@ -779,7 +846,7 @@ export async function processBatch(
         failed: counts.failed
       })
     }
-    let waitForInFlight = sendingOnlyCount > 0 && counts.pending > 0
+    let waitForInFlight = sendingOnlyCount > 0 && outstanding > 0
     if (waitForInFlight) {
       const acked = await ackStaleInFlightSendingRecipients(models, campaignId)
       if (acked > 0) {
@@ -790,7 +857,11 @@ export async function processBatch(
         counts.pending = afterAck.pending
         counts.sent = afterAck.sent
         counts.failed = afterAck.failed
-        waitForInFlight = afterAck.pending > 0
+        const afterOutstanding = await countOutstandingSendWork(
+          CampaignRecipient as CampaignRecipientModel,
+          campaignId
+        )
+        waitForInFlight = afterOutstanding > 0 && sendingOnlyCount > 0
         if (!waitForInFlight) {
           await finalizeCampaignSendIfComplete(models, campaignId)
           const refreshed = await (Campaign as CampaignModel)
@@ -804,11 +875,12 @@ export async function processBatch(
           campaignId,
           sendRunId: options.sendRunId,
           page: options.page,
-          sendingOnlyCount
+          sendingOnlyCount,
+          outstanding
         })
       }
     }
-    const stillQueued = counts.pending > 0
+    const stillQueued = outstanding > 0
     return {
       campaignId,
       campaignStatus: campaignUpdated.status,
@@ -816,7 +888,8 @@ export async function processBatch(
       sent: counts.sent,
       failed: counts.failed,
       total: counts.pending + counts.sent + counts.failed,
-      done: counts.pending === 0,
+      outstanding,
+      done: outstanding === 0,
       chainNext: stillQueued && !waitForInFlight,
       processedInBatch: 0
     }
@@ -1077,8 +1150,12 @@ export async function processBatch(
     CampaignRecipient as CampaignRecipientModel,
     campaignId
   )
+  const outstanding = await countOutstandingSendWork(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId
+  )
 
-  if (counts.pending === 0) {
+  if (outstanding === 0) {
     await finalizeCampaignSendIfComplete(models, campaignId)
   }
 
@@ -1089,13 +1166,14 @@ export async function processBatch(
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
-  const hasNext = counts.pending > 0
+  const hasNext = outstanding > 0
 
   logSend('batchDone', {
     campaignId,
     sendRunId: options.sendRunId,
     page: options.page,
     pending: counts.pending,
+    outstanding,
     sent: counts.sent,
     failed: counts.failed,
     campaignStatus: campaignUpdated.status,
@@ -1120,6 +1198,7 @@ export async function processBatch(
     sent: counts.sent,
     failed: counts.failed,
     total: counts.pending + counts.sent + counts.failed,
+    outstanding,
     done: !hasNext,
     chainNext: hasNext,
     processedInBatch
