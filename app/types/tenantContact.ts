@@ -44,6 +44,19 @@ export interface TenantContactListRow {
   updatedAt: string | null
 }
 
+/** GET `/api/v1/tenant/contacts/:id` — full contact for detail view. */
+export interface TenantContactDetail extends TenantContactListRow {
+  status: string
+  stage: string
+  metadata: Record<string, unknown>
+  deletedAt: string | null
+}
+
+/** GET `/api/v1/tenant/contacts/:id` response body. */
+export interface TenantContactDetailPayload {
+  contact: TenantContactDetail
+}
+
 /** GET `/api/v1/tenant/contacts` response body. */
 export interface TenantContactsListPayload {
   contacts: TenantContactListRow[]

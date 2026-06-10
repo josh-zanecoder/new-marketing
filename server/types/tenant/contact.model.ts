@@ -36,6 +36,8 @@ export interface ContactLean {
   phone?: string
   address?: ContactAddress
   company?: string
+  status?: string
+  stage?: string
   /** Optional structured segment (type + subtypes), e.g. synced from retail partners. */
   contactProfile?: ContactProfile | null
   /** CRM / Kafka idempotency; optional until integrations land. */
