@@ -59,6 +59,26 @@ describe('buildCampaignSendProgress', () => {
     })
   })
 
+  it('passes through preparing flag for async recipient materialization', () => {
+    const progress = buildCampaignSendProgress({
+      campaignId: 'c1',
+      campaignStatus: 'Sending',
+      pending: 15001,
+      sent: 0,
+      failed: 0,
+      total: 15001,
+      done: false,
+      preparing: true
+    })
+
+    expect(progress).toMatchObject({
+      preparing: true,
+      total: 15001,
+      processed: 0,
+      pct: 0
+    })
+  })
+
   it('returns null when campaignId filter does not match', () => {
     expect(
       buildCampaignSendProgress(

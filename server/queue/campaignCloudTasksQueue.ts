@@ -72,6 +72,23 @@ export function campaignBatchCloudTaskMatchesCampaign(
   return true
 }
 
+/** Match Cloud Task id to a campaign prepare job (optional sendRunId narrows to current run). */
+export function campaignPrepareCloudTaskMatchesCampaign(
+  taskId: string,
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): boolean {
+  if (!taskId.startsWith('cs-prepare-')) return false
+  const dbSeg = dbName.replace(/[^a-zA-Z0-9_-]/g, '-')
+  if (!taskId.includes(campaignId) || !taskId.includes(dbSeg)) return false
+  if (sendRunId) {
+    const runSeg = sendRunId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)
+    if (!taskId.includes(runSeg)) return false
+  }
+  return true
+}
+
 /** True when the Cloud Tasks queue still has batch tasks for this campaign. */
 export async function hasCampaignBatchCloudTasks(
   campaignId: string,
@@ -79,6 +96,16 @@ export async function hasCampaignBatchCloudTasks(
   sendRunId?: string
 ): Promise<boolean> {
   const n = await countCampaignBatchCloudTasks(campaignId, dbName, sendRunId)
+  return n > 0
+}
+
+/** True when a prepare task is still queued for this campaign send. */
+export async function hasCampaignPrepareCloudTask(
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): Promise<boolean> {
+  const n = await countCampaignPrepareCloudTasks(campaignId, dbName, sendRunId)
   return n > 0
 }
 
@@ -107,6 +134,38 @@ export async function countCampaignBatchCloudTasks(
     }
   } catch (e: unknown) {
     logCt('list.failed', {
+      campaignId,
+      dbName,
+      error: e instanceof Error ? e.message : String(e)
+    })
+  }
+
+  return count
+}
+
+export async function countCampaignPrepareCloudTasks(
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): Promise<number> {
+  const conn = getClient()
+  if (!conn) return 0
+
+  const tasksPrefix = `${conn.queuePath}/tasks/`
+  let count = 0
+
+  try {
+    const iterable = conn.client.listTasksAsync({ parent: conn.queuePath })
+    for await (const task of iterable) {
+      const name = task.name || ''
+      if (!name.startsWith(tasksPrefix)) continue
+      const taskId = name.slice(tasksPrefix.length)
+      if (campaignPrepareCloudTaskMatchesCampaign(taskId, campaignId, dbName, sendRunId)) {
+        count += 1
+      }
+    }
+  } catch (e: unknown) {
+    logCt('list.prepare.failed', {
       campaignId,
       dbName,
       error: e instanceof Error ? e.message : String(e)

@@ -14,7 +14,11 @@ import type {
 } from '../types/tenant/campaignRecipient.model'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { enqueueCampaignBatchFanOut, enqueueCampaignSendPrepare } from '../queue/emailQueue'
-import { removeCampaignBatchCloudTasks, hasCampaignBatchCloudTasks } from '../queue/campaignCloudTasksQueue'
+import {
+  removeCampaignBatchCloudTasks,
+  hasCampaignBatchCloudTasks,
+  hasCampaignPrepareCloudTask
+} from '../queue/campaignCloudTasksQueue'
 import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import {
   contactsByEmailForAudience,
@@ -218,6 +222,8 @@ export interface ProcessBatchResult {
   failed: number
   total: number
   done: boolean
+  /** Recipient rows are still being built (async prepare). */
+  preparing?: boolean
   skipped?: boolean
   /** When false, worker must not enqueue the next page (in-flight `sending` only). */
   chainNext?: boolean
@@ -396,7 +402,8 @@ async function campaignSendPipelineStillActive(
       .lean<Pick<CampaignLean, 'sendRunId'> | null>()
     runId = String(campaign?.sendRunId || '').trim()
   }
-  return hasCampaignBatchCloudTasks(campaignId, dbName, runId || undefined)
+  if (await hasCampaignBatchCloudTasks(campaignId, dbName, runId || undefined)) return true
+  return hasCampaignPrepareCloudTask(campaignId, dbName, runId || undefined)
 }
 
 /**
@@ -637,14 +644,34 @@ export async function getCampaignSendProgress(
     campaign.status === 'Sending'
       ? await countOutstandingSendWork(CampaignRecipient as CampaignRecipientModel, campaignId)
       : statusCounts.pending + statusCounts.sending + statusCounts.failed
-  const progressPending =
+  let progressPending =
     campaign.status === 'Sending'
       ? statusCounts.pending + statusCounts.failed
       : statusCounts.pending
-  const progressTotal = statusCounts.total
+  let progressTotal = statusCounts.total
+  let preparing = false
+
+  if (campaign.status === 'Sending' && progressTotal === 0) {
+    const conn = (Campaign as CampaignModel).db as Connection | undefined
+    if (conn) {
+      const audience = await resolveCampaignAudienceSummary(conn, {
+        _id: campaign._id,
+        recipientsType: campaign.recipientsType,
+        recipientsListId: campaign.recipientsListId
+      })
+      const hasListAudience =
+        campaign.recipientsType === 'list' && !!String(campaign.recipientsListId ?? '').trim()
+      const estimate = Math.max(audience.recipientCount, hasListAudience ? 1 : 0)
+      if (estimate > 0) {
+        preparing = true
+        progressTotal = estimate
+        progressPending = estimate
+      }
+    }
+  }
 
   let campaignStatus = campaign.status
-  if (outstanding === 0 && campaignStatus === 'Sending') {
+  if (!preparing && outstanding === 0 && campaignStatus === 'Sending') {
     const fresh = await (Campaign as CampaignModel)
       .findOne(campaignScope)
       .select('status')
@@ -660,7 +687,8 @@ export async function getCampaignSendProgress(
     sending: statusCounts.sending,
     failed: statusCounts.failed,
     total: progressTotal,
-    done: outstanding === 0 && campaignStatus !== 'Sending'
+    preparing,
+    done: preparing ? false : outstanding === 0 && campaignStatus !== 'Sending'
   }
 }
 

@@ -77,6 +77,7 @@ export type CampaignSendProgress = {
   failed: number
   total: number
   done: boolean
+  preparing?: boolean
   processed: number
   pct: number
   remaining: number

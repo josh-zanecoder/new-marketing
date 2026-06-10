@@ -52,6 +52,8 @@ export interface SendStatus {
   failed: number
   total: number
   done: boolean
+  /** Recipient rows are still being built in a background prepare task. */
+  preparing?: boolean
 }
 
 export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed' | 'cancelled'
