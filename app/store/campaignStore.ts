@@ -150,7 +150,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }>('/api/v1/tenant/send-campaign/send', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 30000,
+        timeout: 20000,
         ...apiFetchOptions(),
         ...serverAuthHeaders()
       })
@@ -232,7 +232,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }>('/api/v1/tenant/send-campaign/retry-failed', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 30000,
+        timeout: 20000,
         ...apiFetchOptions(),
         ...serverAuthHeaders()
       })
@@ -279,7 +279,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
       }>('/api/v1/tenant/send-campaign/send-again', {
         method: 'POST',
         body: { campaignId: c.id },
-        timeout: 30000,
+        timeout: 20000,
         ...apiFetchOptions(),
         ...serverAuthHeaders()
       })

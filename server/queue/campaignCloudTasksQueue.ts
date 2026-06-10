@@ -5,6 +5,8 @@ import {
   getCampaignCloudTasksConfig,
   resolveCampaignCloudTasksAuth
 } from '../config/campaignCloudTasks'
+import { CAMPAIGN_SEND_PREPARE_TASK_PATH } from '../utils/campaignSend/constants'
+import type { CampaignPrepareJobData } from '../services/prepareCampaignSend.service'
 import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 
 const G = globalThis as typeof globalThis & {
@@ -112,6 +114,72 @@ export async function countCampaignBatchCloudTasks(
   }
 
   return count
+}
+
+function campaignPrepareWorkerUrl(): string {
+  const cfg = getCampaignCloudTasksConfig()
+  const batchUrl = cfg.workerUrl
+  if (batchUrl.includes(CAMPAIGN_SEND_PREPARE_TASK_PATH)) return batchUrl
+  return batchUrl.replace(/\/batch\/?(\?.*)?$/, CAMPAIGN_SEND_PREPARE_TASK_PATH)
+}
+
+export function campaignPrepareTaskId(
+  dbName: string,
+  campaignId: string,
+  sendRunId: string
+): string {
+  const safeRun = sendRunId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)
+  const safeDb = dbName.replace(/[^a-zA-Z0-9_-]/g, '-')
+  return `cs-prepare-${safeDb}-${campaignId}-${safeRun}`.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 500)
+}
+
+export async function enqueueCampaignPrepareCloudTask(
+  data: CampaignPrepareJobData
+): Promise<{ taskId: string; duplicate?: boolean }> {
+  const conn = getClient()
+  const cfg = getCampaignCloudTasksConfig()
+  if (!conn) {
+    throw new Error('Campaign Cloud Tasks is not configured')
+  }
+
+  const { campaignId, dbName, sendRunId } = data
+  const taskId = campaignPrepareTaskId(dbName, campaignId, sendRunId)
+  const taskName = `${conn.queuePath}/tasks/${taskId}`
+  const taskBody = Buffer.from(JSON.stringify(data)).toString('base64')
+
+  try {
+    await conn.client.createTask({
+      parent: conn.queuePath,
+      task: {
+        name: taskName,
+        httpRequest: {
+          httpMethod: 'POST',
+          url: campaignPrepareWorkerUrl(),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Campaign-Send-Worker-Secret': cfg.workerSecret
+          },
+          body: taskBody
+        }
+      }
+    })
+    logCt('enqueue.prepare', { campaignId, dbName, sendRunId, taskId, queue: cfg.queueName })
+    return { taskId }
+  } catch (e: unknown) {
+    const code = (e as { code?: number })?.code
+    const msg = e instanceof Error ? e.message : String(e)
+    if (code === 6 || msg.includes('ALREADY_EXISTS')) {
+      logCt('enqueue.prepare.duplicate', { campaignId, dbName, sendRunId, taskId })
+      return { taskId, duplicate: true }
+    }
+    logCt('enqueue.prepare.failed', {
+      campaignId,
+      dbName,
+      taskId,
+      error: msg
+    })
+    throw e
+  }
 }
 
 export async function enqueueCampaignBatchCloudTask(

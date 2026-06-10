@@ -3,9 +3,11 @@ import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import { getBullMqConnectionOptions } from '../lib/bullmq'
 import {
   enqueueCampaignBatchCloudTask,
+  enqueueCampaignPrepareCloudTask,
   hasCampaignBatchCloudTasks,
   removeCampaignBatchCloudTasks
 } from './campaignCloudTasksQueue'
+import type { CampaignPrepareJobData } from '../services/prepareCampaignSend.service'
 import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { getTenantClientModels } from '../models/tenant/tenantClientModels'
@@ -266,6 +268,40 @@ export async function enqueueCampaignBatchFanOut(params: {
     pendingEstimate: params.pendingEstimate ?? null
   })
   return taskCount
+}
+
+/** Queue background recipient materialization (returns quickly from send API). */
+export async function enqueueCampaignSendPrepare(data: CampaignPrepareJobData): Promise<void> {
+  if (isCampaignCloudTasksEnabled()) {
+    await enqueueCampaignPrepareCloudTask(data)
+    return
+  }
+
+  const cfg = (await import('../config/campaignCloudTasks')).getCampaignCloudTasksConfig()
+  const url = cfg.workerUrl.replace(/\/batch\/?(\?.*)?$/, '/prepare')
+  const secret = cfg.workerSecret
+  if (!url || !secret) {
+    const { getTenantConnectionByDbName } = await import('../tenant/connection')
+    const { materializeCampaignRecipientsAndEnqueue } = await import(
+      '../services/prepareCampaignSend.service'
+    )
+    const conn = await getTenantConnectionByDbName(data.dbName)
+    await materializeCampaignRecipientsAndEnqueue(conn, data)
+    return
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Campaign-Send-Worker-Secret': secret
+    },
+    body: JSON.stringify(data)
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Local campaign prepare worker failed (${res.status}): ${text}`)
+  }
 }
 
 export async function enqueueScheduledCampaignStart(
