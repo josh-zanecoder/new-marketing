@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import type { CampaignRecipientModel } from '../../types/tenant/campaignRecipient.model'
 import {
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
@@ -5,6 +6,11 @@ import {
   CAMPAIGN_RECIPIENT_STATUS_SENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENT
 } from './constants'
+
+function toCampaignMatchId(campaignId: string): string | mongoose.Types.ObjectId {
+  const trimmed = String(campaignId ?? '').trim()
+  return mongoose.isValidObjectId(trimmed) ? new mongoose.Types.ObjectId(trimmed) : trimmed
+}
 
 export type RecipientStatusCounts = {
   pending: number
@@ -25,7 +31,7 @@ export async function countRecipientStatuses(
   campaignId: string
 ): Promise<RecipientStatusCounts> {
   const rows = await CampaignRecipient.aggregate<{ _id: string; count: number }>([
-    { $match: { campaign: campaignId } },
+    { $match: { campaign: toCampaignMatchId(campaignId) } },
     { $group: { _id: '$status', count: { $sum: 1 } } }
   ])
 
@@ -50,7 +56,7 @@ export async function countOutstandingSendWork(
   campaignId: string
 ): Promise<number> {
   return CampaignRecipient.countDocuments({
-    campaign: campaignId,
+    campaign: toCampaignMatchId(campaignId),
     status: {
       $in: [
         CAMPAIGN_RECIPIENT_STATUS_PENDING,
