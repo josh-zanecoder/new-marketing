@@ -1422,13 +1422,13 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   if (fromTemplate) {
     form.value.subject = fromTemplate
   }
-  const campaignId = `temp-${Date.now()}`
+  savedTemplateHtml.value = template.html
+  const campaignId = returnCampaignId.value || `temp-${Date.now()}`
+  returnCampaignId.value = campaignId
   if (typeof window !== 'undefined') {
-    // Same key the email editor reads after save-and-exit; avoids relying on builderId query + separate storage.
     window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: { ...form.value }, campaignId }))
   }
-  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
 }
 
 function applyStoredOrSelectedTemplate() {
