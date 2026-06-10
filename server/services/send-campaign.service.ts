@@ -34,7 +34,7 @@ import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
-import { countRecipientStatuses, countOutstandingSendWork } from '../utils/campaignSend/countRecipientStatuses'
+import { countRecipientStatuses, countOutstandingSendWork, outstandingSendWorkFromStatusCounts } from '../utils/campaignSend/countRecipientStatuses'
 import { countCampaignRecipientStatuses } from '../utils/campaignSend/recipientStatusCounts'
 import {
   CAMPAIGN_RECIPIENT_STATUS_CANCELLED,
@@ -804,10 +804,7 @@ export async function processBatch(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
-    const outstanding = await countOutstandingSendWork(
-      CampaignRecipient as CampaignRecipientModel,
-      campaignId
-    )
+    let outstanding = outstandingSendWorkFromStatusCounts(statusCounts)
     const campaignUpdated = await (Campaign as CampaignModel)
       .findById(campaignId)
       .lean<CampaignLean | null>()
@@ -834,11 +831,9 @@ export async function processBatch(
         statusCounts.sent = afterAck.sent
         statusCounts.failed = afterAck.failed
         statusCounts.sending = afterAck.sending
-        const afterOutstanding = await countOutstandingSendWork(
-          CampaignRecipient as CampaignRecipientModel,
-          campaignId
-        )
-        waitForInFlight = afterOutstanding > 0 && sendingOnlyCount > 0
+        const afterOutstanding = outstandingSendWorkFromStatusCounts(afterAck)
+        outstanding = afterOutstanding
+        waitForInFlight = afterOutstanding > 0 && afterAck.sending > 0
         if (!waitForInFlight) {
           await finalizeCampaignSendIfComplete(models, campaignId)
           const refreshed = await (Campaign as CampaignModel)
@@ -1153,16 +1148,15 @@ export async function processBatch(
     }
 
     if (routingRows.length) {
-      try {
-        const registry = await getRegistryConnection()
-        await registerCampaignBrevoMessageRouting(registry, routingRows)
-      } catch (err) {
-        logSendWarn('brevoRouting.registerFailed', {
-          campaignId,
-          count: routingRows.length,
-          error: err instanceof Error ? err.message : String(err)
+      void getRegistryConnection()
+        .then((registry) => registerCampaignBrevoMessageRouting(registry, routingRows))
+        .catch((err) => {
+          logSendWarn('brevoRouting.registerFailed', {
+            campaignId,
+            count: routingRows.length,
+            error: err instanceof Error ? err.message : String(err)
+          })
         })
-      }
     }
 
     await (Campaign as CampaignModel).updateOne(
@@ -1175,10 +1169,7 @@ export async function processBatch(
     CampaignRecipient as CampaignRecipientModel,
     campaignId
   )
-  const outstanding = await countOutstandingSendWork(
-    CampaignRecipient as CampaignRecipientModel,
-    campaignId
-  )
+  const outstanding = outstandingSendWorkFromStatusCounts(statusCounts)
 
   if (outstanding === 0) {
     await finalizeCampaignSendIfComplete(models, campaignId)
@@ -1206,16 +1197,18 @@ export async function processBatch(
     hasNext
   })
 
-  await logCampaignSendBatchVisibility(
-    CampaignRecipient as CampaignRecipientModel,
-    campaignId,
-    logSend,
-    {
-      sendRunId: options.sendRunId,
-      page: options.page,
-      batchEmails: processedInBatch > 0 ? pending.map((r) => r.email) : undefined
-    }
-  )
+  if (String(process.env.CAMPAIGN_SEND_VISIBILITY_LOG || '').toLowerCase() === 'true') {
+    void logCampaignSendBatchVisibility(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId,
+      logSend,
+      {
+        sendRunId: options.sendRunId,
+        page: options.page,
+        batchEmails: processedInBatch > 0 ? pending.map((r) => r.email) : undefined
+      }
+    )
+  }
 
   return {
     campaignId,

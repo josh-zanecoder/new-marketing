@@ -51,6 +51,14 @@ export async function countRecipientStatuses(
 }
 
 /** Recipients still eligible for the active send run (includes retryable `failed`). */
+export function outstandingSendWorkFromStatusCounts(counts: {
+  pending: number
+  sending: number
+  failed: number
+}): number {
+  return counts.pending + counts.sending + counts.failed
+}
+
 export async function countOutstandingSendWork(
   CampaignRecipient: CampaignRecipientModel,
   campaignId: string

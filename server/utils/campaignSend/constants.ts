@@ -14,7 +14,10 @@ export const CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT = 200
 export const CAMPAIGN_SEND_BATCH_SIZE = CAMPAIGN_SEND_BATCH_SIZE_PERSONALIZED_DEFAULT
 
 /** Parallel batch tasks enqueued at send start (and per replenishment hop). */
-export const CAMPAIGN_SEND_FANOUT_DEFAULT = 20
+export const CAMPAIGN_SEND_FANOUT_DEFAULT = 30
+
+/** Upper bound for `CAMPAIGN_SEND_FANOUT_COUNT`. */
+export const CAMPAIGN_SEND_FANOUT_MAX = 50
 
 /** Parallel batch jobs per worker process; override with CAMPAIGN_EMAIL_WORKER_CONCURRENCY. */
 export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 3

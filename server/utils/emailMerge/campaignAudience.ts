@@ -22,15 +22,20 @@ function pickPreferredContact(a: ContactLean, b: ContactLean): ContactLean {
   return String(a._id) >= String(b._id) ? a : b
 }
 
+const BATCH_CONTACT_SELECT =
+  'email firstName lastName isUnsubscribe metadata updatedAt _id'
+
 async function loadContactsByNormalizedEmail(
   Contact: ContactModel,
-  emails: string[]
+  emails: string[],
+  selectFields = BATCH_CONTACT_SELECT
 ): Promise<Map<string, ContactLean>> {
   const normalized = [...new Set(emails.map((e) => normalizeMarketingEmail(e)).filter(Boolean))]
   if (!normalized.length) return new Map()
   const docs = await Contact.find(
     withMarketableContactFilter({ email: { $in: normalized } })
   )
+    .select(selectFields)
     .lean<ContactLean[]>()
   const map = new Map<string, ContactLean>()
   for (const c of docs) {

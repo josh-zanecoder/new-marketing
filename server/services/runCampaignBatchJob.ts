@@ -7,7 +7,11 @@ import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import { notifyCampaignSendCompleted } from '../kafka/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import { processBatch } from './send-campaign.service'
-import { resolveCampaignSendFanoutCount } from '../utils/campaignSend/batchTiming'
+import {
+  resolveCampaignSendFanoutCount,
+  resolveCampaignSendIdleRetryDelayMs,
+  resolveCampaignSendReplenishPages
+} from '../utils/campaignSend/batchTiming'
 
 function jobLog(event: string, details: Record<string, unknown>) {
   console.log(`[CampaignBatchJob] ${event}`, details)
@@ -42,6 +46,69 @@ async function fanOutMoreWork(params: {
   })
 }
 
+async function replenishBatchPages(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  page: number
+  outstanding: number
+  startedAt: number
+}) {
+  const pages = resolveCampaignSendReplenishPages(params.page, params.outstanding)
+  if (!pages.length) return
+
+  await Promise.all(
+    pages.map((nextPage) =>
+      enqueueCampaignBatch({
+        campaignId: params.campaignId,
+        dbName: params.dbName,
+        sendRunId: params.sendRunId,
+        page: nextPage
+      })
+    )
+  )
+
+  jobLog('replenish', {
+    campaignId: params.campaignId,
+    dbName: params.dbName,
+    sendRunId: params.sendRunId,
+    page: params.page,
+    nextPages: pages,
+    fanout: resolveCampaignSendFanoutCount(),
+    outstanding: params.outstanding,
+    ms: Date.now() - params.startedAt
+  })
+}
+
+async function scheduleIdleRetry(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  page: number
+  outstanding: number
+  reason: string
+  startedAt: number
+}) {
+  const delayMs = resolveCampaignSendIdleRetryDelayMs()
+  await enqueueCampaignBatch({
+    campaignId: params.campaignId,
+    dbName: params.dbName,
+    sendRunId: params.sendRunId,
+    page: params.page,
+    delayMs
+  })
+  jobLog('idleRetry', {
+    campaignId: params.campaignId,
+    dbName: params.dbName,
+    sendRunId: params.sendRunId,
+    page: params.page,
+    outstanding: params.outstanding,
+    delayMs,
+    reason: params.reason,
+    ms: Date.now() - params.startedAt
+  })
+}
+
 export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<void> {
   const { campaignId, dbName } = data
   const sendRunId = String(data.sendRunId || '')
@@ -66,20 +133,7 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
 
   if (!result.done) {
     if (result.chainNext === false) {
-      if (outstanding > 0) {
-        await fanOutMoreWork({
-          campaignId,
-          dbName,
-          sendRunId,
-          startPage: page,
-          pendingEstimate: outstanding,
-          reason: 'waitingInFlight',
-          page,
-          startedAt
-        })
-        return
-      }
-      jobLog('deferChain', {
+      jobLog('deferInFlight', {
         campaignId,
         dbName,
         sendRunId,
@@ -94,39 +148,42 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
     }
 
     const processed = result.processedInBatch ?? 0
-    const fanout = resolveCampaignSendFanoutCount()
 
     if (processed > 0) {
-      const nextPage = page + fanout
-      await enqueueCampaignBatch({
-        campaignId,
-        dbName,
-        sendRunId,
-        page: nextPage
-      })
-      jobLog('replenish', {
+      await replenishBatchPages({
         campaignId,
         dbName,
         sendRunId,
         page,
-        nextPage,
-        fanout,
-        processedInBatch: processed,
         outstanding,
-        ms: Date.now() - startedAt
+        startedAt
       })
       return
     }
 
-    await fanOutMoreWork({
+    if (outstanding > 0) {
+      await scheduleIdleRetry({
+        campaignId,
+        dbName,
+        sendRunId,
+        page,
+        outstanding,
+        reason: 'emptyClaim',
+        startedAt
+      })
+      return
+    }
+
+    jobLog('deferChain', {
       campaignId,
       dbName,
       sendRunId,
-      startPage: page,
-      pendingEstimate: outstanding,
-      reason: 'emptyClaim',
       page,
-      startedAt
+      outstanding,
+      sent: result.sent,
+      failed: result.failed,
+      processedInBatch: processed,
+      ms: Date.now() - startedAt
     })
     return
   }
