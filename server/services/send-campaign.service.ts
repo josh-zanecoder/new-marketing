@@ -18,6 +18,7 @@ import { removeCampaignBatchCloudTasks, hasCampaignBatchCloudTasks } from '../qu
 import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import {
   contactsByEmailForAudience,
+  contactsByEmailForBatch,
   recipientEmailsForCampaign
 } from '../utils/emailMerge/campaignAudience'
 import { applyDefaultUnsubscribeMergeValue, composeEmailMergeRoot } from '../utils/emailMerge/composeMergeRoot'
@@ -34,6 +35,7 @@ import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import { countRecipientStatuses, countOutstandingSendWork } from '../utils/campaignSend/countRecipientStatuses'
+import { countCampaignRecipientStatuses } from '../utils/campaignSend/recipientStatusCounts'
 import {
   CAMPAIGN_RECIPIENT_STATUS_CANCELLED,
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
@@ -210,6 +212,8 @@ export interface ProcessBatchResult {
   campaignStatus: string
   pending: number
   sent: number
+  /** Recipients claimed by a worker and awaiting Brevo / DB ack. */
+  sending?: number
   failed: number
   total: number
   done: boolean
@@ -670,21 +674,19 @@ export async function getCampaignSendProgress(
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
-  const counts = await countRecipientStatuses(
+  const statusCounts = await countCampaignRecipientStatuses(
     CampaignRecipient as CampaignRecipientModel,
     campaignId
   )
-  const { pending: pendingCount, sent: sentCount, failed: failedCount } = counts
   const outstanding =
     campaign.status === 'Sending'
       ? await countOutstandingSendWork(CampaignRecipient as CampaignRecipientModel, campaignId)
-      : pendingCount
+      : statusCounts.pending + statusCounts.sending + statusCounts.failed
   const progressPending =
-    campaign.status === 'Sending' ? outstanding : pendingCount
-  const progressTotal =
     campaign.status === 'Sending'
-      ? sentCount + outstanding
-      : pendingCount + sentCount + failedCount
+      ? statusCounts.pending + statusCounts.failed
+      : statusCounts.pending
+  const progressTotal = statusCounts.total
 
   let campaignStatus = campaign.status
   if (outstanding === 0 && campaignStatus === 'Sending') {
@@ -699,8 +701,9 @@ export async function getCampaignSendProgress(
     campaignId,
     campaignStatus,
     pending: progressPending,
-    sent: sentCount,
-    failed: failedCount,
+    sent: statusCounts.sent,
+    sending: statusCounts.sending,
+    failed: statusCounts.failed,
     total: progressTotal,
     done: outstanding === 0 && campaignStatus !== 'Sending'
   }
@@ -735,7 +738,7 @@ export async function processBatch(
       campaignSendRunId: campaign.sendRunId,
       status: campaign.status
     })
-    const counts = await countRecipientStatuses(
+    const statusCounts = await countCampaignRecipientStatuses(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
@@ -746,10 +749,11 @@ export async function processBatch(
     return {
       campaignId,
       campaignStatus: campaign.status,
-      pending: counts.pending,
-      sent: counts.sent,
-      failed: counts.failed,
-      total: counts.pending + counts.sent + counts.failed,
+      pending: statusCounts.pending + statusCounts.failed,
+      sent: statusCounts.sent,
+      sending: statusCounts.sending,
+      failed: statusCounts.failed,
+      total: statusCounts.total,
       outstanding,
       done: outstanding === 0,
       skipped: true
@@ -796,7 +800,7 @@ export async function processBatch(
       })
     }
 
-    const counts = await countRecipientStatuses(
+    const statusCounts = await countCampaignRecipientStatuses(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
@@ -814,21 +818,22 @@ export async function processBatch(
       logSend('batchComplete.noPending', {
         campaignId,
         status: campaignUpdated.status,
-        sent: counts.sent,
-        failed: counts.failed
+        sent: statusCounts.sent,
+        failed: statusCounts.failed
       })
     }
     let waitForInFlight = sendingOnlyCount > 0 && outstanding > 0
     if (waitForInFlight) {
       const acked = await ackStaleInFlightSendingRecipients(models, campaignId)
       if (acked > 0) {
-        const afterAck = await countRecipientStatuses(
+        const afterAck = await countCampaignRecipientStatuses(
           CampaignRecipient as CampaignRecipientModel,
           campaignId
         )
-        counts.pending = afterAck.pending
-        counts.sent = afterAck.sent
-        counts.failed = afterAck.failed
+        statusCounts.pending = afterAck.pending
+        statusCounts.sent = afterAck.sent
+        statusCounts.failed = afterAck.failed
+        statusCounts.sending = afterAck.sending
         const afterOutstanding = await countOutstandingSendWork(
           CampaignRecipient as CampaignRecipientModel,
           campaignId
@@ -856,10 +861,11 @@ export async function processBatch(
     return {
       campaignId,
       campaignStatus: campaignUpdated.status,
-      pending: counts.pending,
-      sent: counts.sent,
-      failed: counts.failed,
-      total: counts.pending + counts.sent + counts.failed,
+      pending: statusCounts.pending + statusCounts.failed,
+      sent: statusCounts.sent,
+      sending: statusCounts.sending,
+      failed: statusCounts.failed,
+      total: statusCounts.total,
       outstanding,
       done: outstanding === 0,
       chainNext: stillQueued && !waitForInFlight,
@@ -879,11 +885,11 @@ export async function processBatch(
 
   let processedInBatch = 0
 
-  const contactByEmail = await contactsByEmailForAudience(
-    models,
-    campaign,
-    pending.map((r) => r.email)
-  )
+  const personalized = sendContext.requiresPerRecipientMerge
+  const batchEmails = pending.map((r) => r.email)
+  const contactByEmail = personalized
+    ? await contactsByEmailForAudience(models, campaign, batchEmails)
+    : await contactsByEmailForBatch(models, batchEmails)
   const dynamicVariableBindings = sendContext.dynamicVariableBindings
 
   if (!templateHtml || !campaign.sender?.email) {
@@ -918,51 +924,97 @@ export async function processBatch(
       failed?: string
     }
 
-    const prepared: Prepared[] = pending.map((r) => {
-      const emailKey = normalizeMarketingEmail(r.email)
-      const contact = emailKey ? contactByEmail.get(emailKey) : undefined
-      if (contact?.isUnsubscribe === true) {
-        return { row: r, version: { to: [{ email: r.email }], subject: '', htmlContent: '' }, failed: 'Contact unsubscribed' }
-      }
-      const mergeRoot = composeEmailMergeRoot(
-        mergeUserSnapshotForContact(contact, campaign.mergeUserSnapshot),
-        contact ?? null,
+    let prepared: Prepared[]
+
+    if (personalized) {
+      prepared = pending.map((r) => {
+        const emailKey = normalizeMarketingEmail(r.email)
+        const contact = emailKey ? contactByEmail.get(emailKey) : undefined
+        if (contact?.isUnsubscribe === true) {
+          return {
+            row: r,
+            version: { to: [{ email: r.email }], subject: '', htmlContent: '' },
+            failed: 'Contact unsubscribed'
+          }
+        }
+        const mergeRoot = composeEmailMergeRoot(
+          mergeUserSnapshotForContact(contact, campaign.mergeUserSnapshot),
+          contact ?? null,
+          dynamicVariableBindings
+        )
+        applyDefaultUnsubscribeMergeValue(mergeRoot, {
+          dbName: tenantDbNameForTags,
+          contactId: contact?._id ? String(contact._id) : undefined,
+          clientKeyHash: unsubscribeSigningSecret,
+          crmAppUrl: unsubscribeCrmAppUrl
+        })
+        const toEmail = (r.email ?? '').trim()
+        if (toEmail) {
+          const cur = mergeRoot.recipient
+          const curObj =
+            cur != null && typeof cur === 'object' && !Array.isArray(cur)
+              ? (cur as Record<string, unknown>)
+              : {}
+          if (!String(curObj.email ?? '').trim()) {
+            mergeRoot.recipient = { ...curObj, email: toEmail }
+          }
+        }
+        const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
+        const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+        const name =
+          [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
+        const params = recipientBrevoParams(contact)
+        const replyTo = buildReplyToFromContactOwner(contact, creatorReplyTo)
+        return {
+          row: r,
+          version: {
+            to: [{ email: r.email, ...(name ? { name } : {}) }],
+            subject: subjectRendered,
+            htmlContent: htmlRendered,
+            ...(params ? { params } : {}),
+            ...(replyTo ? { replyTo } : {})
+          }
+        }
+      })
+    } else {
+      const baseMergeRoot = composeEmailMergeRoot(
+        mergeUserSnapshotForContact(null, campaign.mergeUserSnapshot),
+        null,
         dynamicVariableBindings
       )
-      applyDefaultUnsubscribeMergeValue(mergeRoot, {
+      applyDefaultUnsubscribeMergeValue(baseMergeRoot, {
         dbName: tenantDbNameForTags,
-        contactId: contact?._id ? String(contact._id) : undefined,
         clientKeyHash: unsubscribeSigningSecret,
         crmAppUrl: unsubscribeCrmAppUrl
       })
-      const toEmail = (r.email ?? '').trim()
-      if (toEmail) {
-        const cur = mergeRoot.recipient
-        const curObj =
-          cur != null && typeof cur === 'object' && !Array.isArray(cur)
-            ? (cur as Record<string, unknown>)
-            : {}
-        if (!String(curObj.email ?? '').trim()) {
-          mergeRoot.recipient = { ...curObj, email: toEmail }
+      const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', baseMergeRoot)
+      const htmlRendered = mergeMustacheTemplate(templateHtml, baseMergeRoot)
+      prepared = pending.map((r) => {
+        const emailKey = normalizeMarketingEmail(r.email)
+        const contact = emailKey ? contactByEmail.get(emailKey) : undefined
+        if (contact?.isUnsubscribe === true) {
+          return {
+            row: r,
+            version: { to: [{ email: r.email }], subject: '', htmlContent: '' },
+            failed: 'Contact unsubscribed'
+          }
         }
-      }
-      const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
-      const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
-      const name =
-        [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
-      const params = recipientBrevoParams(contact)
-      const replyTo = buildReplyToFromContactOwner(contact, creatorReplyTo)
-      return {
-        row: r,
-        version: {
-          to: [{ email: r.email, ...(name ? { name } : {}) }],
-          subject: subjectRendered,
-          htmlContent: htmlRendered,
-          ...(params ? { params } : {}),
-          ...(replyTo ? { replyTo } : {})
+        const name =
+          [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
+        const params = recipientBrevoParams(contact)
+        const replyTo = buildReplyToFromContactOwner(contact, creatorReplyTo)
+        return {
+          row: r,
+          version: {
+            to: [{ email: r.email, ...(name ? { name } : {}) }],
+            subject: subjectRendered,
+            htmlContent: htmlRendered,
+            ...(params ? { params } : {}),
+            ...(replyTo ? { replyTo } : {})
+          }
         }
-      }
-    })
+      })
+    }
 
     processedInBatch = pending.length
 
@@ -1057,7 +1109,8 @@ export async function processBatch(
                     status: CAMPAIGN_RECIPIENT_STATUS_SENT,
                     sentAt: new Date(),
                     brevoMessageId: trimmed
-                  }
+                  },
+                  $unset: { error: 1 }
                 }
               }
             })
@@ -1118,7 +1171,7 @@ export async function processBatch(
     )
   }
 
-  const counts = await countRecipientStatuses(
+  const statusCounts = await countCampaignRecipientStatuses(
     CampaignRecipient as CampaignRecipientModel,
     campaignId
   )
@@ -1144,10 +1197,11 @@ export async function processBatch(
     campaignId,
     sendRunId: options.sendRunId,
     page: options.page,
-    pending: counts.pending,
+    pending: statusCounts.pending,
+    sending: statusCounts.sending,
     outstanding,
-    sent: counts.sent,
-    failed: counts.failed,
+    sent: statusCounts.sent,
+    failed: statusCounts.failed,
     campaignStatus: campaignUpdated.status,
     hasNext
   })
@@ -1166,10 +1220,11 @@ export async function processBatch(
   return {
     campaignId,
     campaignStatus: campaignUpdated.status,
-    pending: counts.pending,
-    sent: counts.sent,
-    failed: counts.failed,
-    total: counts.pending + counts.sent + counts.failed,
+    pending: statusCounts.pending + statusCounts.failed,
+    sent: statusCounts.sent,
+    sending: statusCounts.sending,
+    failed: statusCounts.failed,
+    total: statusCounts.total,
     outstanding,
     done: !hasNext,
     chainNext: hasNext,

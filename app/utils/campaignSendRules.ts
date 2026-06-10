@@ -69,12 +69,14 @@ export type CampaignSendProgress = {
   campaignStatus: string
   pending: number
   sent: number
+  sending: number
   failed: number
   total: number
   done: boolean
   processed: number
   pct: number
   remaining: number
+  inFlight: number
 }
 
 export function buildCampaignSendProgress(
@@ -83,13 +85,16 @@ export function buildCampaignSendProgress(
 ): CampaignSendProgress | null {
   if (!status) return null
   if (campaignId && status.campaignId && status.campaignId !== campaignId) return null
-  const processed = status.sent + status.failed
+  const sending = status.sending ?? 0
+  const processed = status.sent + status.failed + sending
   const pct = status.total > 0 ? (processed / status.total) * 100 : 0
   return {
     ...status,
+    sending,
     processed,
     pct,
-    remaining: status.pending
+    remaining: status.pending,
+    inFlight: sending
   }
 }
 

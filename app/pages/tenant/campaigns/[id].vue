@@ -808,8 +808,10 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
                     class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"
                   >
                     <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
+                    <span class="text-sky-700">In flight: {{ campaign.recipients.filter(r => r.status === 'sending').length }}</span>
                     <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
                     <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
+                    <span class="text-slate-600">Cancelled: {{ campaign.recipients.filter(r => r.status === 'cancelled').length }}</span>
                   </div>
                 </div>
                 <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">

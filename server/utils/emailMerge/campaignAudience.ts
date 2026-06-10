@@ -140,6 +140,15 @@ export async function recipientEmailsForDraft(
 /**
  * Map normalized email → CRM contact for the given audience; list campaigns also hydrate from list membership IDs.
  */
+/** Load CRM contacts for a batch of recipient emails (one indexed query, no full-list scan). */
+export async function contactsByEmailForBatch(
+  models: TenantClientModels,
+  emails: string[]
+): Promise<Map<string, ContactLean>> {
+  const { Contact } = models
+  return loadContactsByNormalizedEmail(Contact as ContactModel, emails)
+}
+
 export async function contactsByEmailForAudience(
   models: TenantClientModels,
   audience: CampaignAudienceConfig,
@@ -147,6 +156,11 @@ export async function contactsByEmailForAudience(
 ): Promise<Map<string, ContactLean>> {
   const { Contact, RecipientListMember } = models
   const contactByEmail = await loadContactsByNormalizedEmail(Contact as ContactModel, emails)
+
+  // Batch sends pass explicit emails — loading every list member per chunk is O(audience) and slow at 15k+.
+  if (emails.length > 0) {
+    return contactByEmail
+  }
 
   if (audience.recipientsType === 'list' && audience.recipientsListId?.trim()) {
     const listIdRaw = audience.recipientsListId.trim()

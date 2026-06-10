@@ -15,6 +15,8 @@ const props = defineProps<{
   sendProgress: {
     total: number
     sent: number
+    sending?: number
+    inFlight?: number
     failed: number
     remaining: number
     processed: number
@@ -178,7 +180,7 @@ watch(
 watch(
   () =>
     props.sendProgress
-      ? `${props.sendProgress.sent}|${props.sendProgress.failed}|${props.sendProgress.remaining}|${props.sendProgress.processed}`
+      ? `${props.sendProgress.sent}|${props.sendProgress.sending ?? 0}|${props.sendProgress.failed}|${props.sendProgress.remaining}|${props.sendProgress.processed}`
       : '',
   () => {
     if (props.open && props.campaignId) void loadReport()
@@ -305,16 +307,28 @@ watch(reportPage, () => {
                   {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
                 </template>
               </p>
+              <p
+                v-if="!props.sendProgress.done && (props.sendProgress.inFlight ?? props.sendProgress.sending)"
+                class="mt-1 text-xs text-sky-700"
+              >
+                {{ props.sendProgress.inFlight ?? props.sendProgress.sending }} in flight at Brevo
+              </p>
               <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
                 <div
                   class="h-full rounded-full bg-slate-900 transition-all duration-700 ease-out"
                   :style="{ width: `${props.sendProgress.pct}%` }"
                 />
               </div>
-              <div class="mt-4 grid grid-cols-3 gap-3">
+              <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
                   <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.sent }}</div>
                   <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Sent</div>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
+                  <div class="text-lg font-bold tabular-nums text-sky-900">
+                    {{ props.sendProgress.inFlight ?? props.sendProgress.sending ?? 0 }}
+                  </div>
+                  <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700">In flight</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
                   <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.failed }}</div>

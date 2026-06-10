@@ -223,10 +223,12 @@ export async function stopCampaignSend(
     throw createError({ statusCode: 409, message: 'Campaign is no longer sending' })
   }
 
+  // Only cancel rows not yet handed to Brevo. In-flight `sending` rows are left for workers
+  // to mark `sent` after Brevo accepts the batch (avoids CRM/Brevo ledger mismatch).
   await (CampaignRecipient as CampaignRecipientModel).updateMany(
     {
       campaign: campaignId,
-      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
+      status: CAMPAIGN_RECIPIENT_STATUS_PENDING
     },
     {
       $set: { status: CAMPAIGN_RECIPIENT_STATUS_CANCELLED, error: reason },

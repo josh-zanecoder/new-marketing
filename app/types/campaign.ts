@@ -35,6 +35,8 @@ export interface SendStatus {
   campaignStatus: string
   pending: number
   sent: number
+  /** Claimed by a worker; submitted or awaiting Brevo. */
+  sending?: number
   failed: number
   total: number
   done: boolean
