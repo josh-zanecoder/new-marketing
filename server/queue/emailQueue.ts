@@ -3,6 +3,7 @@ import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import { getBullMqConnectionOptions } from '../lib/bullmq'
 import {
   enqueueCampaignBatchCloudTask,
+  hasCampaignBatchCloudTasks,
   removeCampaignBatchCloudTasks
 } from './campaignCloudTasksQueue'
 import { getTenantConnectionByDbName } from '../tenant/connection'
@@ -144,6 +145,7 @@ export async function hasActiveCampaignSendJob(
 ): Promise<boolean> {
   if (isCampaignCloudTasksEnabled()) {
     if (await hasInFlightSendingRecipients(campaignId, dbName)) return true
+    if (await hasCampaignBatchCloudTasks(campaignId, dbName)) return true
   }
 
   const queue = getEmailQueue()

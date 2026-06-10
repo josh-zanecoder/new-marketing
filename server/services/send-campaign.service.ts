@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Connection } from 'mongoose'
+import { getRegistryConnection } from '../lib/mongoose'
 import { getTenantClientModels, type TenantClientModels } from '../models/tenant/tenantClientModels'
 import type {
   CampaignLean,
@@ -13,6 +14,8 @@ import type {
 } from '../types/tenant/campaignRecipient.model'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { enqueueCampaignBatchFanOut } from '../queue/emailQueue'
+import { removeCampaignBatchCloudTasks, hasCampaignBatchCloudTasks } from '../queue/campaignCloudTasksQueue'
+import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import {
   contactsByEmailForAudience,
   recipientEmailsForCampaign
@@ -142,11 +145,20 @@ export async function finalizeCampaignSendIfComplete(
   }
 
   const total = sentCount + failedCount
+  if (total === 0 && (await campaignSendPipelineStillActive(models, campaignId))) {
+    logSend('finalize.deferred.pipelineActive', { campaignId, sent: sentCount, failed: failedCount })
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
+
   const newStatus = total === 0 || failedCount === total ? 'Failed' : 'Sent'
-  await (Campaign as CampaignModel).updateOne(
-    { _id: campaignId },
-    { $set: { status: newStatus }, $unset: { scheduledAt: 1 } }
+  const updated = await (Campaign as CampaignModel).findOneAndUpdate(
+    { _id: campaignId, status: 'Sending' },
+    { $set: { status: newStatus }, $unset: { scheduledAt: 1 } },
+    { new: true }
   )
+  if (!updated) {
+    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
+  }
   const runId = String(campaign.sendRunId || '').trim()
   if (runId) clearCampaignSendRunCache(runId, campaignId)
   logSend('finalized', { campaignId, newStatus, sent: sentCount, failed: failedCount })
@@ -313,6 +325,53 @@ async function prepareCancelledRecipientsForRetry(
   )
 }
 
+/** Reset rows stuck in `sending` from a prior interrupted run so retry can claim them. */
+async function resetInterruptedSendingForRetry(
+  CampaignRecipient: CampaignRecipientModel,
+  campaignId: string
+): Promise<number> {
+  const res = await CampaignRecipient.updateMany(
+    {
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+    },
+    {
+      $set: {
+        status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
+        error: 'Interrupted send; queued for retry.'
+      },
+      $unset: { brevoMessageId: 1 }
+    }
+  )
+  const n = res.modifiedCount ?? 0
+  if (n > 0) {
+    logSend('retry.resetSending', { campaignId, count: n })
+  }
+  return n
+}
+
+function tenantDbNameFromModels(models: TenantClientModels): string {
+  const { Campaign } = models
+  return String((Campaign as CampaignModel).db?.db?.databaseName ?? '').trim()
+}
+
+async function campaignSendPipelineStillActive(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<boolean> {
+  const { CampaignRecipient } = models
+  const sendingCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+    campaign: campaignId,
+    status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+  })
+  if (sendingCount > 0) return true
+
+  if (!isCampaignCloudTasksEnabled()) return false
+  const dbName = tenantDbNameFromModels(models)
+  if (!dbName) return false
+  return hasCampaignBatchCloudTasks(campaignId, dbName)
+}
+
 /**
  * Builds recipient rows, moves the campaign to Sending, and enqueues batch processing.
  * Used by the send-now API and the scheduled-send worker.
@@ -363,6 +422,11 @@ export async function beginCampaignSend(
       CampaignRecipient as CampaignRecipientModel,
       campaignId
     )
+    await resetInterruptedSendingForRetry(
+      CampaignRecipient as CampaignRecipientModel,
+      campaignId
+    )
+    await removeCampaignBatchCloudTasks(campaignId, dbName)
 
     const [retryable, sentCount, failedCount] = await Promise.all([
       (CampaignRecipient as CampaignRecipientModel).countDocuments({
@@ -382,16 +446,6 @@ export async function beginCampaignSend(
       throw createError({
         statusCode: 400,
         message: 'No unsent recipients to resume'
-      })
-    }
-    const inFlightSending = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
-    })
-    if (inFlightSending > 0) {
-      throw createError({
-        statusCode: 400,
-        message: 'Campaign send is still in progress'
       })
     }
 
@@ -526,6 +580,7 @@ export async function beginCampaignSend(
     }
 
     const snap = options?.mergeUserSnapshot
+    await removeCampaignBatchCloudTasks(campaignId, dbName)
     await (Campaign as CampaignModel).updateOne(campaignScope, {
       $set: {
         status: 'Sending',
@@ -689,13 +744,23 @@ export async function processBatch(
   )
 
   if (pending.length === 0) {
-    const [sendingOnlyCount, finalized] = await Promise.all([
-      (CampaignRecipient as CampaignRecipientModel).countDocuments({
-        campaign: campaignId,
-        status: CAMPAIGN_RECIPIENT_STATUS_SENDING
-      }),
-      finalizeCampaignSendIfComplete(models, campaignId)
-    ])
+    const sendingOnlyCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
+      campaign: campaignId,
+      status: CAMPAIGN_RECIPIENT_STATUS_SENDING
+    })
+
+    let finalized = { finalized: false as boolean }
+    if (sendingOnlyCount === 0) {
+      finalized = await finalizeCampaignSendIfComplete(models, campaignId)
+    } else {
+      logSend('batchIdle.skipFinalize', {
+        campaignId,
+        sendRunId: options.sendRunId,
+        page: options.page,
+        sendingOnlyCount
+      })
+    }
+
     const counts = await countRecipientStatuses(
       CampaignRecipient as CampaignRecipientModel,
       campaignId

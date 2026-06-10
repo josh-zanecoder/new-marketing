@@ -13,6 +13,35 @@ function jobLog(event: string, details: Record<string, unknown>) {
   console.log(`[CampaignBatchJob] ${event}`, details)
 }
 
+async function fanOutMoreWork(params: {
+  campaignId: string
+  dbName: string
+  sendRunId: string
+  startPage: number
+  pendingEstimate?: number
+  reason: string
+  page: number
+  startedAt: number
+}) {
+  await enqueueCampaignBatchFanOut({
+    campaignId: params.campaignId,
+    dbName: params.dbName,
+    sendRunId: params.sendRunId,
+    startPage: params.startPage,
+    pendingEstimate: params.pendingEstimate
+  })
+  jobLog('fanOutRestart', {
+    campaignId: params.campaignId,
+    dbName: params.dbName,
+    sendRunId: params.sendRunId,
+    page: params.page,
+    startPage: params.startPage,
+    pending: params.pendingEstimate ?? null,
+    reason: params.reason,
+    ms: Date.now() - params.startedAt
+  })
+}
+
 export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<void> {
   const { campaignId, dbName } = data
   const sendRunId = String(data.sendRunId || '')
@@ -33,14 +62,29 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
     return
   }
 
+  const pending = result.pending ?? 0
+
   if (!result.done) {
     if (result.chainNext === false) {
+      if (pending > 0) {
+        await fanOutMoreWork({
+          campaignId,
+          dbName,
+          sendRunId,
+          startPage: page,
+          pendingEstimate: pending,
+          reason: 'waitingInFlight',
+          page,
+          startedAt
+        })
+        return
+      }
       jobLog('deferChain', {
         campaignId,
         dbName,
         sendRunId,
         page,
-        pending: result.pending,
+        pending,
         sent: result.sent,
         failed: result.failed,
         processedInBatch: result.processedInBatch,
@@ -68,25 +112,45 @@ export async function runCampaignBatchJob(data: CampaignQueueJobData): Promise<v
         nextPage,
         fanout,
         processedInBatch: processed,
-        pending: result.pending,
+        pending,
         ms: Date.now() - startedAt
       })
       return
     }
 
-    await enqueueCampaignBatchFanOut({
+    await fanOutMoreWork({
       campaignId,
       dbName,
       sendRunId,
       startPage: page,
-      pendingEstimate: result.pending
+      pendingEstimate: pending,
+      reason: 'emptyClaim',
+      page,
+      startedAt
     })
-    jobLog('fanOutRestart', {
+    return
+  }
+
+  if (pending > 0) {
+    await fanOutMoreWork({
+      campaignId,
+      dbName,
+      sendRunId,
+      startPage: page,
+      pendingEstimate: pending,
+      reason: 'doneWithPending',
+      page,
+      startedAt
+    })
+    return
+  }
+
+  if (result.campaignStatus === 'Sending') {
+    jobLog('complete.deferredStillSending', {
       campaignId,
       dbName,
       sendRunId,
       page,
-      pending: result.pending,
       ms: Date.now() - startedAt
     })
     return

@@ -52,6 +52,67 @@ export function campaignBatchTaskId(
   return `cs-${bullId}`.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 500)
 }
 
+/** Match Cloud Task id to a campaign (optional sendRunId narrows to current run). */
+export function campaignBatchCloudTaskMatchesCampaign(
+  taskId: string,
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): boolean {
+  if (!taskId.startsWith('cs-')) return false
+  const dbSeg = dbName.replace(/[^a-zA-Z0-9_-]/g, '-')
+  if (!taskId.includes(campaignId) || !taskId.includes(dbSeg)) return false
+  if (sendRunId) {
+    const runSeg = sendRunId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)
+    if (!taskId.includes(runSeg)) return false
+  }
+  return true
+}
+
+/** True when the Cloud Tasks queue still has batch tasks for this campaign. */
+export async function hasCampaignBatchCloudTasks(
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): Promise<boolean> {
+  const n = await countCampaignBatchCloudTasks(campaignId, dbName, sendRunId)
+  return n > 0
+}
+
+export async function countCampaignBatchCloudTasks(
+  campaignId: string,
+  dbName: string,
+  sendRunId?: string
+): Promise<number> {
+  const conn = getClient()
+  if (!conn) return 0
+
+  const tasksPrefix = `${conn.queuePath}/tasks/`
+  let count = 0
+
+  try {
+    const iterable = conn.client.listTasksAsync({ parent: conn.queuePath })
+    for await (const task of iterable) {
+      const name = task.name || ''
+      if (!name.startsWith(tasksPrefix)) continue
+      const taskId = name.slice(tasksPrefix.length)
+      if (
+        campaignBatchCloudTaskMatchesCampaign(taskId, campaignId, dbName, sendRunId)
+      ) {
+        count += 1
+      }
+    }
+  } catch (e: unknown) {
+    logCt('list.failed', {
+      campaignId,
+      dbName,
+      error: e instanceof Error ? e.message : String(e)
+    })
+  }
+
+  return count
+}
+
 export async function enqueueCampaignBatchCloudTask(
   data: CampaignQueueJobData
 ): Promise<{ taskId: string; duplicate?: boolean }> {
@@ -117,7 +178,6 @@ export async function removeCampaignBatchCloudTasks(
   if (!conn) return 0
 
   const tasksPrefix = `${conn.queuePath}/tasks/`
-  const dbSeg = dbName.replace(/[^a-zA-Z0-9_-]/g, '-')
   let removed = 0
 
   try {
@@ -126,8 +186,7 @@ export async function removeCampaignBatchCloudTasks(
       const name = task.name || ''
       if (!name.startsWith(tasksPrefix)) continue
       const taskId = name.slice(tasksPrefix.length)
-      if (!taskId.startsWith('cs-')) continue
-      if (!taskId.includes(campaignId) || !taskId.includes(dbSeg)) continue
+      if (!campaignBatchCloudTaskMatchesCampaign(taskId, campaignId, dbName)) continue
       try {
         await conn.client.deleteTask({ name: task.name })
         removed += 1

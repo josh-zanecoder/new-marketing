@@ -55,6 +55,14 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | `MARKETING_PUBLIC_BASE_URL` | — | Cloud Run origin; worker path appended automatically |
 | `CAMPAIGN_SEND_WORKER_SECRET` | — | `X-Campaign-Send-Worker-Secret` on worker HTTP POST |
 
+Cloud Tasks pipeline notes:
+- Internal worker route is auth-exempt; secured by worker secret header.
+- `hasActiveCampaignSendJob` treats queued Cloud Tasks as active (not only `sending` rows).
+- Retry/send clears stale Cloud Tasks for the campaign before fan-out.
+- Interrupted `sending` rows are reset to `failed` on retry so claims can proceed.
+- Finalize is deferred while Cloud Tasks or in-flight `sending` rows remain.
+- Batch workers fan-out again when work is pending but `chainNext` was false (in-flight wait).
+
 ### Cloud Tasks IAM (one-time per environment)
 
 On Cloud Run, the client uses the **service’s runtime service account** (ADC) unless `CLOUD_TASKS_CLIENT_EMAIL` is set. **Do not** reuse `FIREBASE_CLIENT_EMAIL` — that account is usually in a different GCP project and lacks `cloudtasks.tasks.create` on `poc-1-aima-pmu`.
