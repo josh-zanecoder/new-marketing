@@ -152,24 +152,6 @@ export async function finalizeCampaignSendIfComplete(
     return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
   }
 
-<<<<<<< Updated upstream
-  const total = sentCount + failedCount
-  if (total === 0 && (await campaignSendPipelineStillActive(models, campaignId))) {
-    logSend('finalize.deferred.pipelineActive', { campaignId, sent: sentCount, failed: failedCount })
-    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
-  }
-
-  const newStatus = total === 0 || failedCount === total ? 'Failed' : 'Sent'
-  const updated = await (Campaign as CampaignModel).findOneAndUpdate(
-    { _id: campaignId, status: 'Sending' },
-    { $set: { status: newStatus }, $unset: { scheduledAt: 1 } },
-    { new: true }
-  )
-  if (!updated) {
-    return { finalized: false, pending: pendingCount, sent: sentCount, failed: failedCount }
-  }
-=======
->>>>>>> Stashed changes
   const runId = String(campaign.sendRunId || '').trim()
   const total = sentCount + failedCount
   if (total === 0 && (await campaignSendPipelineStillActive(models, campaignId, runId))) {
@@ -385,16 +367,10 @@ function tenantDbNameFromModels(models: TenantClientModels): string {
 
 async function campaignSendPipelineStillActive(
   models: TenantClientModels,
-<<<<<<< Updated upstream
-  campaignId: string
-): Promise<boolean> {
-  const { CampaignRecipient } = models
-=======
   campaignId: string,
   sendRunId?: string
 ): Promise<boolean> {
   const { Campaign, CampaignRecipient } = models
->>>>>>> Stashed changes
   const sendingCount = await (CampaignRecipient as CampaignRecipientModel).countDocuments({
     campaign: campaignId,
     status: CAMPAIGN_RECIPIENT_STATUS_SENDING
@@ -404,9 +380,6 @@ async function campaignSendPipelineStillActive(
   if (!isCampaignCloudTasksEnabled()) return false
   const dbName = tenantDbNameFromModels(models)
   if (!dbName) return false
-<<<<<<< Updated upstream
-  return hasCampaignBatchCloudTasks(campaignId, dbName)
-=======
 
   let runId = String(sendRunId || '').trim()
   if (!runId) {
@@ -417,7 +390,6 @@ async function campaignSendPipelineStillActive(
     runId = String(campaign?.sendRunId || '').trim()
   }
   return hasCampaignBatchCloudTasks(campaignId, dbName, runId || undefined)
->>>>>>> Stashed changes
 }
 
 /**
