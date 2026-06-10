@@ -27,6 +27,15 @@ export interface TenantCampaignDetail {
   status: string
   /** ISO 8601 when status is `Scheduled` (or after reschedule). */
   scheduledAt?: string
+  recipientCount?: number
+  recipientStatusCounts?: {
+    sent: number
+    pending: number
+    sending: number
+    failed: number
+    cancelled: number
+    total: number
+  }
   recipients: Array<{
     email: string
     contactId?: string

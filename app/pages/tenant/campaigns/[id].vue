@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import type { Campaign } from '~/types/campaign'
+import type { Campaign, CampaignSendRecipientReport } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
@@ -62,12 +62,73 @@ const campaignForSend = computed((): Campaign | null => {
     recipientsListId: c.recipientsListId,
     subject: c.subject,
     status: c.status,
+    recipientCount: c.recipientCount,
+    recipientStatusCounts: c.recipientStatusCounts,
     recipients: c.recipients ?? [],
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     scheduledAt: c.scheduledAt
   }
 })
+
+const recipientPage = ref(1)
+const RECIPIENT_PAGE_SIZE = 50
+const recipientReport = ref<CampaignSendRecipientReport | null>(null)
+const recipientReportLoading = ref(false)
+const recipientReportError = ref('')
+
+const recipientDisplayCount = computed(() => {
+  const c = campaign.value
+  return c?.recipientStatusCounts?.total ?? c?.recipientCount ?? 0
+})
+
+const showRecipientList = computed(() => {
+  const c = campaign.value
+  if (!c) return false
+  if (c.status === 'Draft' || c.status === 'Scheduled') return false
+  return recipientDisplayCount.value > 0
+})
+
+const recipientStatusCounts = computed(
+  () => recipientReport.value?.counts ?? campaign.value?.recipientStatusCounts ?? null
+)
+
+async function loadRecipientReport() {
+  if (!showRecipientList.value) {
+    recipientReport.value = null
+    return
+  }
+  recipientReportLoading.value = true
+  recipientReportError.value = ''
+  try {
+    recipientReport.value = await marketingApi.fetchCampaignSendRecipients(id, {
+      page: recipientPage.value,
+      limit: RECIPIENT_PAGE_SIZE
+    })
+  } catch (e: unknown) {
+    recipientReport.value = null
+    recipientReportError.value =
+      e instanceof Error ? e.message : 'Could not load recipients.'
+  } finally {
+    recipientReportLoading.value = false
+  }
+}
+
+watch(showRecipientList, (show) => {
+  if (show) void loadRecipientReport()
+  else recipientReport.value = null
+}, { immediate: true })
+
+watch(recipientPage, () => {
+  if (showRecipientList.value) void loadRecipientReport()
+})
+
+watch(
+  () => campaign.value?.recipientStatusCounts?.total,
+  () => {
+    if (showRecipientList.value) void loadRecipientReport()
+  }
+)
 
 const { countdownNow } = useCampaignCountdown()
 
@@ -734,7 +795,7 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
               class="grid grid-cols-1 gap-8 lg:gap-10 xl:gap-8"
               :class="{
                 'lg:grid-cols-2 xl:grid-cols-1':
-                  campaign.recipients?.length &&
+                  showRecipientList &&
                   (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
               }"
             >
@@ -761,10 +822,10 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Recipients</dt>
                     <dd class="text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       <span v-if="campaign.recipientsType === 'manual'">
-                        {{ campaign.recipients?.length ?? 0 }} manual recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }}
+                        {{ recipientDisplayCount.toLocaleString() }} manual recipient{{ recipientDisplayCount === 1 ? '' : 's' }}
                       </span>
                       <span v-else-if="campaign.recipientsType === 'list'">
-                        {{ campaign.recipients?.length ?? 0 }} recipient{{ (campaign.recipients?.length ?? 0) === 1 ? '' : 's' }} from list
+                        {{ recipientDisplayCount.toLocaleString() }} recipient{{ recipientDisplayCount === 1 ? '' : 's' }} from list
                       </span>
                       <span v-else>–</span>
                     </dd>
@@ -793,56 +854,97 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
               </div>
 
               <div
-                v-if="
-                  campaign.recipients?.length &&
-                  (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list')
-                "
+                v-if="showRecipientList"
                 class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
               >
                 <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                   <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    Recipients ({{ campaign.recipients.length }})
+                    Recipients ({{ recipientDisplayCount.toLocaleString() }})
                   </h2>
                   <div
-                    v-if="campaign.recipients.some(r => r.status)"
+                    v-if="recipientStatusCounts"
                     class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"
                   >
-                    <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
-                    <span class="text-sky-700">In flight: {{ campaign.recipients.filter(r => r.status === 'sending').length }}</span>
-                    <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
-                    <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
-                    <span class="text-slate-600">Cancelled: {{ campaign.recipients.filter(r => r.status === 'cancelled').length }}</span>
+                    <span class="text-amber-700">Pending: {{ recipientStatusCounts.pending.toLocaleString() }}</span>
+                    <span class="text-sky-700">In flight: {{ recipientStatusCounts.sending.toLocaleString() }}</span>
+                    <span class="text-emerald-700">Sent: {{ recipientStatusCounts.sent.toLocaleString() }}</span>
+                    <span class="text-red-700">Failed: {{ recipientStatusCounts.failed.toLocaleString() }}</span>
+                    <span class="text-slate-600">Cancelled: {{ recipientStatusCounts.cancelled.toLocaleString() }}</span>
                   </div>
                 </div>
-                <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
-                  <li
-                    v-for="(r, i) in campaign.recipients"
-                    :key="i"
-                    class="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50/80 sm:px-6"
-                  >
-                    <div class="min-w-0 flex-1">
-                      <span class="text-sm text-slate-900 sm:text-[15px]">{{ r.email }}</span>
-                      <p
-                        v-if="r.status === 'failed' && r.error"
-                        class="mt-1 truncate text-sm text-red-600"
-                        :title="r.error"
-                      >
-                        {{ r.error }}
-                      </p>
-                    </div>
-                    <span
-                      v-if="r.status"
-                      class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 sm:px-3 sm:py-1 sm:text-sm"
-                      :class="{
-                        'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
-                        'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
-                        'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed'
-                      }"
+                <div
+                  v-if="recipientReportLoading && !recipientReport?.items.length"
+                  class="px-5 py-8 text-center text-sm text-slate-500 sm:px-6"
+                  aria-busy="true"
+                >
+                  Loading recipients…
+                </div>
+                <p
+                  v-else-if="recipientReportError"
+                  class="px-5 py-6 text-sm text-red-700 sm:px-6"
+                  role="alert"
+                >
+                  {{ recipientReportError }}
+                </p>
+                <template v-else-if="recipientReport">
+                  <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
+                    <li
+                      v-for="(r, i) in recipientReport.items"
+                      :key="`${r.email}-${i}`"
+                      class="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50/80 sm:px-6"
                     >
-                      {{ r.status }}
+                      <div class="min-w-0 flex-1">
+                        <span class="text-sm text-slate-900 sm:text-[15px]">{{ r.email }}</span>
+                        <p
+                          v-if="r.status === 'failed' && r.error"
+                          class="mt-1 truncate text-sm text-red-600"
+                          :title="r.error"
+                        >
+                          {{ r.error }}
+                        </p>
+                      </div>
+                      <span
+                        v-if="r.status"
+                        class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 sm:px-3 sm:py-1 sm:text-sm"
+                        :class="{
+                          'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
+                          'bg-sky-50 text-sky-800 ring-sky-200/70': r.status === 'sending',
+                          'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
+                          'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed',
+                          'bg-slate-100 text-slate-700 ring-slate-200/70': r.status === 'cancelled'
+                        }"
+                      >
+                        {{ r.status }}
+                      </span>
+                    </li>
+                  </ul>
+                  <div
+                    v-if="recipientReport.totalPages > 1"
+                    class="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-sm text-slate-600 sm:px-6"
+                  >
+                    <span class="tabular-nums">
+                      Page {{ recipientReport.page }} / {{ recipientReport.totalPages }}
                     </span>
-                  </li>
-                </ul>
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                        :disabled="recipientPage <= 1 || recipientReportLoading"
+                        @click="recipientPage -= 1"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                        :disabled="recipientPage >= recipientReport.totalPages || recipientReportLoading"
+                        @click="recipientPage += 1"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </div>

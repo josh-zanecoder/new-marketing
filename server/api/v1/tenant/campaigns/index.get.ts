@@ -1,16 +1,20 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
-import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
-import { batchResolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveCampaignAudienceSummariesBatch } from '@server/utils/campaign/resolveCampaignAudienceCounts'
+
+function campaignKey(raw: string): string {
+  const trimmed = String(raw ?? '').trim()
+  return trimmed && mongoose.isValidObjectId(trimmed)
+    ? String(new mongoose.Types.ObjectId(trimmed))
+    : trimmed
+}
 
 export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
-  const { Campaign, ManualRecipient, Contact } = getTenantClientModels(conn)
+  const { Campaign } = getTenantClientModels(conn)
 
   const campaigns = await (Campaign as CampaignModel)
     .find(mergeTenantOwnerEmailScopeFilter({}, event.context.auth))
@@ -19,57 +23,12 @@ export default defineEventHandler(async (event) => {
     )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
-  const campaignIds = campaigns.map((c) => c._id)
 
-  const recipientDocs = await (ManualRecipient as ManualRecipientModel)
-    .find({ campaign: { $in: campaignIds } })
-    .select('campaign contact')
-    .lean<ManualRecipientLean[]>()
-  const allContactIds = [
-    ...new Set(
-      recipientDocs.map((r) => String(r.contact)).filter((id) => mongoose.isValidObjectId(id))
-    )
-  ].map((s) => new mongoose.Types.ObjectId(s))
-  const contacts =
-    allContactIds.length > 0
-      ? await (Contact as ContactModel)
-          .find(withMarketableContactFilter({ _id: { $in: allContactIds } }))
-          .select('email')
-          .lean<ContactLean[]>()
-      : []
-  const emailByContactId = new Map(contacts.map((c) => [String(c._id), (c.email ?? '').trim()]))
+  const audienceByCampaign = await resolveCampaignAudienceSummariesBatch(conn, campaigns)
 
-  const recipientsByCampaign = new Map<string, { email: string; contactId: string }[]>()
-  for (const r of recipientDocs) {
-    const id = String(r.campaign)
-    if (!recipientsByCampaign.has(id)) recipientsByCampaign.set(id, [])
-    const email = emailByContactId.get(String(r.contact)) ?? ''
-    if (!email.trim()) continue
-    recipientsByCampaign.get(id)!.push({
-      email,
-      contactId: String(r.contact)
-    })
-  }
-  const listIds = [
-    ...new Set(
-      campaigns
-        .filter((c) => c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim())
-        .map((c) => String(c.recipientsListId))
-    )
-  ]
-  const listEmailsById = await batchResolveRecipientListEmails(conn, listIds)
-
-  const campaignsWithRecipients = campaigns.map((c) => {
-    const id = String(c._id)
-    let recipients: { email: string; contactId?: string }[] = []
-
-    if (c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim()) {
-      const listId = String(c.recipientsListId)
-      const emails = listEmailsById.get(String(new mongoose.Types.ObjectId(listId))) ?? []
-      recipients = emails.map((email) => ({ email }))
-    } else if (c.recipientsType === 'manual' || c.recipientsType === 'list') {
-      recipients = recipientsByCampaign.get(id) || []
-    }
+  const campaignsWithCounts = campaigns.map((c) => {
+    const id = campaignKey(String(c._id))
+    const audience = audienceByCampaign.get(id) ?? { recipientCount: 0 }
 
     return {
       id,
@@ -80,11 +39,12 @@ export default defineEventHandler(async (event) => {
       subject: c.subject,
       status: c.status,
       scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
-      recipients,
+      recipientCount: audience.recipientCount,
+      recipients: [] as { email: string; contactId?: string }[],
       createdAt: c.createdAt,
       updatedAt: c.updatedAt
     }
   })
 
-  return { campaigns: campaignsWithRecipients }
+  return { campaigns: campaignsWithCounts }
 })

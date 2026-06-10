@@ -1,11 +1,15 @@
 import type { Campaign } from '~/types/campaign'
 
+function campaignAudienceSize(c: Campaign): number {
+  if (typeof c.recipientCount === 'number') return c.recipientCount
+  return c.recipients?.length ?? 0
+}
+
 export function campaignHasSendAudience(c: Campaign): boolean {
-  if (c.recipientsType === 'manual') return (c.recipients?.length ?? 0) > 0
   if (c.recipientsType === 'list') {
-    return (c.recipients?.length ?? 0) > 0 || !!c.recipientsListId?.trim()
+    return campaignAudienceSize(c) > 0 || !!c.recipientsListId?.trim()
   }
-  return false
+  return campaignAudienceSize(c) > 0
 }
 
 export function canSendDraft(c: Campaign): boolean {

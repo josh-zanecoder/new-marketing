@@ -16,6 +16,15 @@ export interface CampaignRecipient {
 export type CampaignRecipientsType = 'manual' | 'list'
 export type CampaignStatus = 'Draft' | 'Scheduled' | 'Sending' | 'Paused' | 'Sent' | 'Failed' | 'Cancelled'
 
+export interface CampaignRecipientStatusCounts {
+  sent: number
+  pending: number
+  sending: number
+  failed: number
+  cancelled: number
+  total: number
+}
+
 export interface Campaign {
   id: string
   name: string
@@ -26,6 +35,9 @@ export interface Campaign {
   status: CampaignStatus | string
   /** ISO 8601; set when the campaign is scheduled to send later. */
   scheduledAt?: string
+  /** Audience size without loading every email (list/detail APIs). */
+  recipientCount?: number
+  recipientStatusCounts?: CampaignRecipientStatusCounts
   recipients: CampaignRecipient[]
   createdAt: string
   updatedAt: string

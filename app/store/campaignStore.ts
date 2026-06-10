@@ -76,6 +76,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
       recipientsListId: d.recipientsListId,
       subject: d.subject,
       status: d.status,
+      recipientCount: d.recipientCount,
+      recipientStatusCounts: d.recipientStatusCounts,
       recipients: (d.recipients ?? []).map((r) => ({
         email: r.email,
         contactId: r.contactId,

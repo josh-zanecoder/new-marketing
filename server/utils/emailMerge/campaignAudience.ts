@@ -208,13 +208,44 @@ export async function previewContactForSavedCampaign(
 ): Promise<ContactLean | null> {
   if (!mongoose.isValidObjectId(campaignId)) return null
   const models = getTenantClientModels(conn)
-  const { Campaign } = models
+  const { Campaign, ManualRecipient, RecipientListMember, Contact } = models
   const campaign = await (Campaign as CampaignModel).findById(campaignId).lean<CampaignLean | null>()
   if (!campaign) return null
-  const emails = await recipientEmailsForCampaign(conn, campaign)
-  if (!emails.length) return null
-  const map = await contactsByEmailForAudience(models, campaign, emails)
-  return firstContactMatchingRecipientEmails(emails, map)
+
+  if (campaign.recipientsType === 'list' && campaign.recipientsListId?.trim()) {
+    const listIdRaw = campaign.recipientsListId.trim()
+    if (!mongoose.isValidObjectId(listIdRaw)) return null
+    const listId = new mongoose.Types.ObjectId(listIdRaw)
+    type MemberLean = { contactId?: mongoose.Types.ObjectId }
+    const members = await (RecipientListMember as RecipientListMemberModel)
+      .find({ recipientListId: listId })
+      .select('contactId')
+      .sort({ _id: 1 })
+      .limit(24)
+      .lean<MemberLean[]>()
+    const contactIds = members.map((m) => m.contactId).filter(Boolean) as mongoose.Types.ObjectId[]
+    if (!contactIds.length) return null
+    const contacts = await (Contact as ContactModel)
+      .find(withMarketableContactFilter({ _id: { $in: contactIds } }))
+      .limit(1)
+      .lean<ContactLean[]>()
+    return contacts[0] ?? null
+  }
+
+  type ManualLean = { contact?: mongoose.Types.ObjectId }
+  const manualRows = await (ManualRecipient as ManualRecipientModel)
+    .find({ campaign: campaign._id })
+    .select('contact')
+    .sort({ _id: 1 })
+    .limit(24)
+    .lean<ManualLean[]>()
+  const contactIds = manualRows.map((r) => r.contact).filter(Boolean) as mongoose.Types.ObjectId[]
+  if (!contactIds.length) return null
+  const contacts = await (Contact as ContactModel)
+    .find(withMarketableContactFilter({ _id: { $in: contactIds } }))
+    .limit(1)
+    .lean<ContactLean[]>()
+  return contacts[0] ?? null
 }
 
 /** CRM contact used for merge preview before the campaign document exists. */
