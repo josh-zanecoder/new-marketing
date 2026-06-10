@@ -13,7 +13,7 @@ import type {
   CampaignRecipientModel
 } from '../types/tenant/campaignRecipient.model'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
-import { enqueueCampaignBatchFanOut, enqueueCampaignSendPrepare } from '../queue/emailQueue'
+import { enqueueCampaignBatchFanOut } from '../queue/emailQueue'
 import { removeCampaignBatchCloudTasks, hasCampaignBatchCloudTasks } from '../queue/campaignCloudTasksQueue'
 import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import {
@@ -24,7 +24,6 @@ import {
 import { applyDefaultUnsubscribeMergeValue, composeEmailMergeRoot } from '../utils/emailMerge/composeMergeRoot'
 import { registerCampaignBrevoMessageRouting } from './campaignBrevoMessageRouting.service'
 import { logCampaignSendBatchVisibility } from './campaignSendVisibilityLog.service'
-import { resolveCampaignAudienceSummary } from '../utils/campaign/resolveCampaignAudienceCounts'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
   buildCampaignCreatorReplyTo,
@@ -265,8 +264,6 @@ export interface BeginCampaignSendResult {
   pending: number
   sendRunId: string
   resumed?: boolean
-  /** Recipient rows are being built in a background prepare task. */
-  preparing?: boolean
 }
 
 /** When a scheduled send is unscheduled, return the correct pre-schedule status. */
@@ -548,14 +545,66 @@ export async function beginCampaignSend(
   }
 
   if (mode === 'new' || mode === 'resend_all') {
-    const audience = await resolveCampaignAudienceSummary(conn, campaign)
-    const hasListAudience =
-      campaign.recipientsType === 'list' && String(campaign.recipientsListId ?? '').trim()
-    if (!hasListAudience && audience.recipientCount === 0) {
-      throw createError({ statusCode: 400, message: 'No recipients to send to' })
+    await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+
+    const emails = await recipientEmailsForCampaign(conn, campaign)
+    if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })
+
+    const valid: string[] = []
+    const invalid: string[] = []
+    for (const email of emails) {
+      if (isValidMarketingEmail(email)) valid.push(email)
+      else invalid.push(email)
+    }
+
+    const rows: CampaignRecipientInsertRow[] = [
+      ...valid.map(
+        (email): CampaignRecipientInsertRow => ({
+          campaign: campaignId,
+          email,
+          status: 'pending',
+          clientId: ''
+        })
+      ),
+      ...invalid.map(
+        (email): CampaignRecipientInsertRow => ({
+          campaign: campaignId,
+          email,
+          status: 'failed',
+          clientId: '',
+          error: 'Invalid email address'
+        })
+      )
+    ]
+
+    await (CampaignRecipient as CampaignRecipientModel).insertMany(rows)
+
+    if (valid.length === 0) {
+      await (Campaign as CampaignModel).updateOne(campaignScope, {
+        $set: { status: 'Failed' },
+        $unset: { scheduledAt: 1 }
+      })
+      logSendWarn('noValidRecipients', {
+        campaignId,
+        dbName,
+        total: emails.length,
+        invalid: invalid.length
+      })
+      return {
+        ok: true,
+        total: emails.length,
+        valid: 0,
+        invalid: invalid.length,
+        queued: 0,
+        sent: 0,
+        failed: invalid.length,
+        pending: 0,
+        sendRunId
+      }
     }
 
     const snap = options?.mergeUserSnapshot
+    await removeCampaignBatchCloudTasks(campaignId, dbName)
     await (Campaign as CampaignModel).updateOne(campaignScope, {
       $set: {
         status: 'Sending',
@@ -566,48 +615,44 @@ export async function beginCampaignSend(
     })
 
     try {
-      await enqueueCampaignSendPrepare({
+      await enqueueCampaignBatchFanOut({
         campaignId,
         dbName,
         sendRunId,
-        mode,
-        revertStatus: revertStatus
+        startPage: 0,
+        pendingEstimate: valid.length
       })
     } catch (e: unknown) {
-      await (Campaign as CampaignModel).updateOne(campaignScope, {
-        $set: { status: campaign.status }
-      })
-      logSendError('prepareEnqueueFailed', {
+      await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+      await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
+      logSendError('enqueueFailed', {
         campaignId,
         dbName,
-        mode,
+        revertStatus,
         error: e instanceof Error ? e.message : String(e)
       })
       throw createError({ statusCode: 503, message: 'Failed to queue campaign emails. Try again.' })
     }
 
-    const estimate = Math.max(audience.recipientCount, hasListAudience ? 1 : 0)
-
-    logSend(mode === 'resend_all' ? 'queued.resendAll.async' : 'queued.async', {
+    logSend(mode === 'resend_all' ? 'queued.resendAll' : 'queued', {
       campaignId,
       dbName,
       sendRunId,
-      estimate,
-      mode
+      valid: valid.length,
+      invalid: invalid.length
     })
 
     return {
       ok: true,
-      total: estimate,
-      valid: estimate,
-      invalid: 0,
-      queued: estimate,
+      total: emails.length,
+      valid: valid.length,
+      invalid: invalid.length,
+      queued: valid.length,
       sent: 0,
-      failed: 0,
-      pending: estimate,
+      failed: invalid.length,
+      pending: valid.length,
       sendRunId,
-      preparing: true,
-      ...(mode === 'resend_all' ? { resentAll: true as const } : {})
+      ...(mode === 'resend_all' ? { resentAll: true } : {})
     }
   }
 

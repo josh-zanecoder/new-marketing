@@ -1,9 +1,6 @@
 /** HTTP path Cloud Tasks POSTs for each campaign send chunk. */
 export const CAMPAIGN_SEND_TASK_PATH = '/api/internal/campaign-sends/batch'
 
-/** HTTP path Cloud Tasks POSTs to materialize recipients before batch fan-out. */
-export const CAMPAIGN_SEND_PREPARE_TASK_PATH = '/api/internal/campaign-sends/prepare'
-
 /** Brevo messageVersions upper bound (aligned with mortdash ratesheet max chunk). */
 export const CAMPAIGN_SEND_BATCH_SIZE_MAX = 500
 
