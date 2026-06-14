@@ -1,8 +1,8 @@
 import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
 
 /**
- * Restricts contacts to `metadata.ownerEmail` in `scopedEmails` (case-insensitive),
- * plus rows with no owner (unassigned) for backward compatibility.
+ * Restricts contacts to rows whose `metadata.ownerEmail` is in `scopedEmails`
+ * (case-insensitive). Rows with missing or empty owner email are excluded.
  */
 export function mergeContactOwnerScopeFilter(
   base: Record<string, unknown>,
@@ -15,25 +15,18 @@ export function mergeContactOwnerScopeFilter(
     $and: [
       base,
       {
-        $or: [
-          {
-            $expr: {
-              $in: [
-                {
-                  $toLower: {
-                    $trim: {
-                      input: { $toString: { $ifNull: ['$metadata.ownerEmail', ''] } }
-                    }
-                  }
-                },
-                lower
-              ]
-            }
-          },
-          { 'metadata.ownerEmail': { $exists: false } },
-          { 'metadata.ownerEmail': null },
-          { 'metadata.ownerEmail': '' }
-        ]
+        $expr: {
+          $in: [
+            {
+              $toLower: {
+                $trim: {
+                  input: { $toString: { $ifNull: ['$metadata.ownerEmail', ''] } }
+                }
+              }
+            },
+            lower
+          ]
+        }
       }
     ]
   }
