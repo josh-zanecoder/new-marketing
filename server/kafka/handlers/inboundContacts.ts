@@ -13,6 +13,7 @@ import {
   normalizeContactTypeInput
 } from '@server/utils/contact/contactTypeWrite'
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
+import { resolveMarketingInboundSyncUpsertBatchSize } from '../inboundSyncConstants'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -356,6 +357,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
   dBname: string
   occurredAt: string
   contacts: SyncSnapshotContact[]
+  heartbeat?: () => Promise<void>
 }): Promise<number> {
   const tenantConn = await getTenantConnectionForInboundEvent(params.tenantId, {
     eventType: 'marketing.sync.requested',
@@ -366,8 +368,34 @@ export async function upsertContactsFromSyncSnapshot(params: {
 
   const models = getTenantClientModels(tenantConn)
   const defaultTypeKey = await resolveDefaultContactTypeKey(tenantConn)
+  const batchSize = resolveMarketingInboundSyncUpsertBatchSize()
+  let totalSynced = 0
 
-  const rows = params.contacts
+  for (let start = 0; start < params.contacts.length; start += batchSize) {
+    const contactSlice = params.contacts.slice(start, start + batchSize)
+    totalSynced += await upsertContactSyncSlice(
+      tenantConn,
+      models,
+      defaultTypeKey,
+      params.occurredAt,
+      contactSlice
+    )
+    await params.heartbeat?.()
+  }
+
+  return totalSynced
+}
+
+async function upsertContactSyncSlice(
+  tenantConn: Awaited<ReturnType<typeof getTenantConnectionForInboundEvent>>,
+  models: ReturnType<typeof getTenantClientModels>,
+  defaultTypeKey: string,
+  occurredAt: string,
+  contacts: SyncSnapshotContact[]
+): Promise<number> {
+  if (!tenantConn || contacts.length === 0) return 0
+
+  const rows = contacts
     .map((c) => {
       const externalId = String(c.externalId || '').trim()
       const email = String(c.email || '').trim().toLowerCase()
@@ -456,7 +484,7 @@ export async function upsertContactsFromSyncSnapshot(params: {
             ownerPhone: r.ownerPhone
           }),
           ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
-          syncOccurredAt: params.occurredAt
+          syncOccurredAt: occurredAt
         },
         contactType: r.contactTypeKeys
       }
