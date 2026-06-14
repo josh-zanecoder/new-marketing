@@ -71,6 +71,25 @@ export async function invalidateRegistryConnection(): Promise<void> {
   } catch {
     /* ignore */
   }
+  // readyState can stay 1 after the socket is dead; disconnect fully resets the default pool.
+  if (mongoose.connection.readyState !== 0 && mongoose.connection.readyState !== 99) {
+    try {
+      await mongoose.disconnect()
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** readyState === 1 does not guarantee the socket is alive (Atlas idle close, ECONNRESET, etc.). */
+async function isRegistryConnectionAlive(conn: mongoose.Connection): Promise<boolean> {
+  if (conn.readyState !== 1 || !conn.db) return false
+  try {
+    await conn.db.admin().command({ ping: 1 })
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function openRegistryConnection(
@@ -106,7 +125,10 @@ export async function getRegistryConnection(): Promise<mongoose.Connection> {
     conn.readyState === 1 && conn.db?.databaseName === resolvedDbName
 
   if (onCorrectDb) {
-    return conn
+    if (await isRegistryConnectionAlive(conn)) {
+      return conn
+    }
+    await invalidateRegistryConnection()
   }
 
   if (registryConnectInFlight) {
