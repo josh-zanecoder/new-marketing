@@ -30,6 +30,17 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | Worker | Skip chunk when `campaign.sendRunId !== job.sendRunId` or campaign not `Sending` |
 | Brevo | `campaignBatchBrevoIdempotencyKey(campaign, sendRunId, page, recipientIds)` |
 
+## EmailWorker lock renewal errors
+
+If logs show `[EmailWorker] worker.error` with `could not renew lock for job batch|…`:
+
+| Cause | Fix |
+| ----- | --- |
+| Batch job longer than BullMQ default lock (30s) | Deploy with `CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS` (default **5m** in code) |
+| Redis blips during renewal | Stable Redis path (VPC connector); connection retry is enabled in `server/lib/bullmq.ts` |
+| Multiple web replicas each running EmailWorker | Set `WEB_MAX_INSTANCES=1` on `marketing-production` (or accept rare duplicate-worker contention) |
+| Deploy mid-send | Avoid redeploying web during large sends; `SendingReconcile` recovers stale rows |
+
 ## Failure handling
 
 - BullMQ: 3 attempts, exponential backoff (5s base).
@@ -45,6 +56,7 @@ On Cloud Run, the **kafka worker** service disables the email worker; the **web*
 | `CAMPAIGN_SEND_STALE_SENDING_MS` | `7200000` (2h) | Stale `sending` → `failed` |
 | `CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS` | `180000` (3m) | Stale `sending` → `sent` when Brevo likely delivered |
 | `CAMPAIGN_EMAIL_WORKER_CONCURRENCY` | `1` | BullMQ worker parallelism for batch jobs (keep at 1 in prod) |
+| `CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS` | `300000` (5m) | BullMQ job lock before renewal (default library value 30s is too short for 100-recipient Brevo batches) |
 | `CAMPAIGN_SEND_KAFKA_NOTIFY` | (enabled) | Set `false` to skip optional `campaign.send.completed` Kafka publish |
 | `EMAIL_WORKER_DISABLED` | — | `true` on kafka-only Cloud Run worker |
 | `SCHEDULE_RECONCILE_DISABLED` / `SENDING_RECONCILE_DISABLED` | — | Disable Mongo safety-net ticks |

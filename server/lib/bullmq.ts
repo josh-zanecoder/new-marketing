@@ -10,6 +10,10 @@ export function getBullMqConnectionOptions(): ConnectionOptions {
     username: password ? (process.env.REDIS_USERNAME || 'default') : undefined,
     password: password || undefined,
     db: Number(process.env.REDIS_DB) || 0,
-    maxRetriesPerRequest: null
+    maxRetriesPerRequest: null,
+    // Reduce transient "could not renew lock" errors during long batch jobs.
+    keepAlive: 30_000,
+    connectTimeout: 10_000,
+    retryStrategy: (times: number) => Math.min(times * 200, 5_000)
   }
 }

@@ -4,6 +4,9 @@ export const CAMPAIGN_SEND_BATCH_SIZE = 100
 /** Serial batch processing per worker (ratesheet-style); override for local experiments only. */
 export const CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT = 1
 
+/** BullMQ job lock — batch sends (Brevo + Mongo) can exceed the library default of 30s. */
+export const CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS_DEFAULT = 5 * 60 * 1000
+
 export const CAMPAIGN_SEND_MAX_RETRY_ATTEMPTS = 3
 export const CAMPAIGN_SEND_RETRY_BASE_DELAY_MS = 5000
 

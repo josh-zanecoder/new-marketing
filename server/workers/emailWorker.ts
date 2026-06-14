@@ -18,12 +18,21 @@ import {
 } from '../services/send-campaign.service'
 import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
 import { getTenantConnectionByDbName } from '../tenant/connection'
-import { CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT } from '../utils/campaignSend/constants'
+import {
+  CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT,
+  CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS_DEFAULT
+} from '../utils/campaignSend/constants'
 
 function campaignEmailWorkerConcurrency(): number {
   const raw = Number(process.env.CAMPAIGN_EMAIL_WORKER_CONCURRENCY)
   if (Number.isFinite(raw) && raw >= 1 && raw <= 8) return Math.floor(raw)
   return CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT
+}
+
+function campaignEmailWorkerLockDurationMs(): number {
+  const raw = Number(process.env.CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS)
+  if (Number.isFinite(raw) && raw >= 60_000 && raw <= 30 * 60 * 1000) return Math.floor(raw)
+  return CAMPAIGN_EMAIL_WORKER_LOCK_DURATION_MS_DEFAULT
 }
 
 const G = globalThis as typeof globalThis & { __emailBullWorker?: Worker | null }
@@ -250,12 +259,17 @@ export function startEmailWorker() {
     },
     {
       connection: getBullMqConnectionOptions(),
-      concurrency: campaignEmailWorkerConcurrency()
+      concurrency: campaignEmailWorkerConcurrency(),
+      lockDuration: campaignEmailWorkerLockDurationMs()
     }
   )
 
   G.__emailBullWorker.on('ready', () => {
-    jobLog('ready', { queue: EMAIL_QUEUE_NAME })
+    jobLog('ready', {
+      queue: EMAIL_QUEUE_NAME,
+      concurrency: campaignEmailWorkerConcurrency(),
+      lockDurationMs: campaignEmailWorkerLockDurationMs()
+    })
   })
   G.__emailBullWorker.on('completed', (job) => {
     jobLog('job.completed', { jobId: job.id, name: job.name })
