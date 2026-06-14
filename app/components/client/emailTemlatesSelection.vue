@@ -29,7 +29,7 @@ const emit = defineEmits<{
   'upload-html': [UploadedEmailDesignPayload]
 }>()
 
-const saveHtmlToLibrary = ref(true)
+const saveHtmlToLibrary = ref(false)
 const uploadPasteHtml = ref('')
 const uploadError = ref('')
 const uploadPending = ref(false)
@@ -76,7 +76,7 @@ function resetUploadForm() {
   uploadPending.value = false
   uploadDragOver.value = false
   uploadEditorOpen.value = false
-  saveHtmlToLibrary.value = true
+  saveHtmlToLibrary.value = false
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
 

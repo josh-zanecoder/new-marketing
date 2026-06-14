@@ -677,7 +677,7 @@ const form = ref({
   recipientsManual: [] as string[],
   templateMode: 'scratch' as 'scratch' | 'existing' | 'upload',
   selectedTemplateId: '',
-  saveHtmlToLibrary: true
+  saveHtmlToLibrary: false
 })
 
 const recipientsOpen = ref(false)

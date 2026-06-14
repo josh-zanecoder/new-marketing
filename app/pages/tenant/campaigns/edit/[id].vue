@@ -674,7 +674,7 @@ const form = ref({
   recipientsManual: [] as string[],
   templateMode: 'scratch' as 'scratch' | 'existing' | 'upload',
   selectedTemplateId: '',
-  saveHtmlToLibrary: true
+  saveHtmlToLibrary: false
 })
 
 const recipientsOpen = ref(false)
@@ -1112,7 +1112,7 @@ async function loadEditCampaign() {
       recipientsManual: ids,
       templateMode: 'scratch',
       selectedTemplateId: '',
-      saveHtmlToLibrary: true
+      saveHtmlToLibrary: false
     }
     returnCampaignId.value = editId.value
     loadedEditCampaignId.value = editId.value
@@ -1151,7 +1151,7 @@ async function loadEditCampaign() {
       recipientsManual: ids,
       templateMode: 'scratch',
       selectedTemplateId: '',
-      saveHtmlToLibrary: true
+      saveHtmlToLibrary: false
     }
     returnCampaignId.value = editId.value
     loadedEditCampaignId.value = editId.value
