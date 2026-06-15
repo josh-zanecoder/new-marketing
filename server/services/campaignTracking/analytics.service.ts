@@ -1,15 +1,24 @@
 import type { TenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignEmailEventModel } from '@server/types/tenant/campaignEmailEvent.model'
+import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import { classifyEngagementEvent } from './classifyEngagementEvent'
+import { fillTimeseriesDays } from './timeseriesDays'
 import type { CampaignTrackingSummary, CampaignTrackingTimeseriesPoint } from './types'
 
-export async function buildCampaignTrackingSummary(
+export async function resolveAccessibleCampaignIds(
   models: TenantClientModels,
-  campaignId: string
-): Promise<CampaignTrackingSummary> {
-  const EventModel = models.CampaignEmailEvent as CampaignEmailEventModel
-  const rows = await EventModel.find({ campaign: campaignId }).select('email event').lean()
+  campaignFilter: Record<string, unknown>,
+  campaignId?: string | null
+): Promise<string[]> {
+  const Campaign = models.Campaign as CampaignModel
+  const filter = campaignId ? { ...campaignFilter, _id: campaignId } : campaignFilter
+  const rows = await Campaign.find(filter).select('_id').lean()
+  return rows.map((row) => String(row._id))
+}
 
+function buildSummaryFromRows(
+  rows: Array<{ email?: string; event?: string }>
+): CampaignTrackingSummary {
   const recipientsByBucket = {
     sent: new Set<string>(),
     delivered: new Set<string>(),
@@ -87,21 +96,83 @@ export async function buildCampaignTrackingSummary(
   }
 }
 
+export async function buildCampaignTrackingSummary(
+  models: TenantClientModels,
+  campaignId: string
+): Promise<CampaignTrackingSummary> {
+  const EventModel = models.CampaignEmailEvent as CampaignEmailEventModel
+  const rows = await EventModel.find({ campaign: campaignId }).select('email event').lean()
+  return buildSummaryFromRows(rows)
+}
+
+export async function buildTrackingSummary(
+  models: TenantClientModels,
+  options: {
+    campaignFilter: Record<string, unknown>
+    campaignId?: string | null
+  }
+): Promise<CampaignTrackingSummary> {
+  const campaignIds = await resolveAccessibleCampaignIds(
+    models,
+    options.campaignFilter,
+    options.campaignId
+  )
+  if (campaignIds.length === 0) {
+    return buildSummaryFromRows([])
+  }
+
+  const EventModel = models.CampaignEmailEvent as CampaignEmailEventModel
+  const rows = await EventModel.find({ campaign: { $in: campaignIds } })
+    .select('email event')
+    .lean()
+  return buildSummaryFromRows(rows)
+}
+
 export async function buildCampaignTrackingTimeseries(
   models: TenantClientModels,
   campaignId: string,
   days = 14
 ): Promise<{ points: CampaignTrackingTimeseriesPoint[] }> {
+  return buildTrackingTimeseries(models, {
+    campaignFilter: {},
+    campaignId,
+    days
+  })
+}
+
+export async function buildTrackingTimeseries(
+  models: TenantClientModels,
+  options: {
+    campaignFilter: Record<string, unknown>
+    campaignId?: string | null
+    days?: number
+  }
+): Promise<{ points: CampaignTrackingTimeseriesPoint[] }> {
+  const days = Math.max(1, Math.min(options.days ?? 14, 90))
+  const campaignIds = await resolveAccessibleCampaignIds(
+    models,
+    options.campaignFilter,
+    options.campaignId
+  )
+  if (campaignIds.length === 0) {
+    return { points: fillTimeseriesDays([], days) }
+  }
+
   const EventModel = models.CampaignEmailEvent as CampaignEmailEventModel
   const since = new Date()
   since.setUTCHours(0, 0, 0, 0)
-  since.setUTCDate(since.getUTCDate() - Math.max(1, Math.min(days, 90)) + 1)
+  since.setUTCDate(since.getUTCDate() - days + 1)
 
   const rows = await EventModel.aggregate<{
     _id: { day: string; event: string }
     count: number
   }>([
-    { $match: { campaign: campaignId, occurredAt: { $gte: since } } },
+    {
+      $match: {
+        campaign: { $in: campaignIds },
+        occurredAt: { $gte: since }
+      }
+    },
     {
       $group: {
         _id: {
@@ -132,5 +203,6 @@ export async function buildCampaignTrackingTimeseries(
     else point.other += row.count
   }
 
-  return { points: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)) }
+  const sparse = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date))
+  return { points: fillTimeseriesDays(sparse, days) }
 }

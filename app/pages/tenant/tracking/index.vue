@@ -6,10 +6,17 @@
           Tracking
         </h1>
         <p class="max-w-xl text-sm text-zinc-500 sm:text-[15px]">
-          Delivery, opens, and clicks from webhooks across this workspace, grouped by message.
+          Brevo delivery, opens, clicks, and engagement reporting across this workspace.
         </p>
       </div>
     </header>
-    <TenantTrackingEventsPanel />
+
+    <section class="mb-10" aria-label="Brevo analytics overview">
+      <TenantCampaignTrackingAnalytics />
+    </section>
+
+    <TenantTrackingEventsPanel
+      panel-hint="Browse individual Brevo webhook events grouped by message."
+    />
   </div>
 </template>
