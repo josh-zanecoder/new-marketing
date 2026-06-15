@@ -300,11 +300,8 @@ const previewSubject = computed(() => {
 const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
 const previewSubjectDisplay = computed(() => previewSubject.value || campaign.value?.subject || 'No subject')
 
-const showSkeleton = computed(
-  () =>
-    !error.value &&
-    pending.value
-)
+/** Skeleton only until first campaign payload; keeps stale UI during background refresh. */
+const showSkeleton = computed(() => !error.value && !campaign.value)
 
 function previewSrcdoc(html: string, scale = 0.45) {
   return `<!DOCTYPE html><html><head><meta charset=utf-8><style>

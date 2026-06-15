@@ -70,12 +70,20 @@ const deleteModalMessage = computed(() =>
     : ''
 )
 
-const { pending: campaignsIndexPending } = useAsyncData(
+const { status: campaignsIndexStatus } = useAsyncData(
   'tenant-campaigns-index',
   async () => {
     await store.fetchCampaigns()
     return true
   }
+)
+
+/** Skeleton until first fetch settles; skip when store already has list rows (e.g. recent cache). */
+const showCampaignsSkeleton = computed(
+  () =>
+    campaigns.value.length === 0 &&
+    campaignsIndexStatus.value !== 'success' &&
+    campaignsIndexStatus.value !== 'error'
 )
 
 const filteredCampaigns = computed(() => {
@@ -272,7 +280,7 @@ function openScheduleModal(c: Campaign, mode: CampaignScheduleMode = 'new') {
     </div>
 
     <div
-      v-if="campaignsIndexPending"
+      v-if="showCampaignsSkeleton"
       class="animate-pulse space-y-5"
       aria-busy="true"
       aria-label="Loading campaigns"
