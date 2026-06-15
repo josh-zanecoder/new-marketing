@@ -23,6 +23,11 @@ export default defineNitroPlugin(() => {
       })
   }
 
-  setTimeout(tick, 12_000)
-  setInterval(tick, intervalMs)
+  void import('../lib/mongoose')
+    .then(({ getRegistryConnection }) => getRegistryConnection())
+    .then(() => {
+      setTimeout(tick, 12_000)
+      setInterval(tick, intervalMs)
+    })
+    .catch((e) => console.error('[SendingReconcile] startup failed', e))
 })

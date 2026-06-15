@@ -12,6 +12,28 @@ const TENANT_DB_NAME = /^[a-z0-9][a-z0-9_]{0,62}$/i
 
 const MAX_REGISTRY_TENANT_ID_LEN = 128
 
+/** `useDb()` can return before the child connection is query-ready (Mongoose 8, cold start). */
+async function ensureTenantConnectionReady(conn: Connection): Promise<Connection> {
+  if (conn.readyState === 1 && conn.db) {
+    try {
+      await conn.db.admin().command({ ping: 1 })
+      return conn
+    } catch {
+      /* reconnect below */
+    }
+  }
+  if (conn.readyState === 2 || conn.readyState === 0) {
+    await conn.asPromise()
+  }
+  if (conn.readyState !== 1 || !conn.db) {
+    throw createError({
+      statusCode: 503,
+      message: 'Tenant database connection is not ready'
+    })
+  }
+  return conn
+}
+
 function normalizeAndAssertTenantDbName(raw: string): string {
   const dbName = raw.trim()
   if (!dbName || !TENANT_DB_NAME.test(dbName)) {
@@ -50,7 +72,7 @@ export async function getTenantConnectionFromEvent(
 
   const dbName = normalizeAndAssertTenantDbName(auth.dbName)
   const registry = await getRegistryConnection()
-  return registry.useDb(dbName)
+  return ensureTenantConnectionReady(registry.useDb(dbName))
 }
 
 /**
@@ -62,7 +84,7 @@ export async function getTenantConnectionByDbName(
 ): Promise<Connection> {
   const normalized = normalizeAndAssertTenantDbName(dbName)
   const registry = await getRegistryConnection()
-  return registry.useDb(normalized)
+  return ensureTenantConnectionReady(registry.useDb(normalized))
 }
 
 /**
@@ -80,7 +102,7 @@ export async function getTenantConnectionByTenantId(
   if (!row?.dbName) return null
   try {
     const normalized = normalizeAndAssertTenantDbName(row.dbName)
-    return registry.useDb(normalized)
+    return ensureTenantConnectionReady(registry.useDb(normalized))
   } catch {
     return null
   }
