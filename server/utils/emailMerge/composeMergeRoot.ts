@@ -24,7 +24,6 @@ export type EmailDynamicVariableBinding = {
   contactPath: string
   sourceType: 'recipient' | 'user'
   enabled: boolean
-  fallbackValue?: string
 }
 
 /**
@@ -64,9 +63,6 @@ export function composeEmailMergeRoot(
       raw = getMergeValue(contactLookup, v.contactPath.trim())
     }
     let str = String(raw ?? '').trim()
-    if (!str && v.fallbackValue != null && String(v.fallbackValue).length) {
-      str = String(v.fallbackValue)
-    }
     setMergePath(root, v.key.trim(), str)
   }
 
@@ -143,7 +139,6 @@ export async function fetchEnabledEmailDynamicVariableBindings(
     key: d.key,
     contactPath: d.contactPath,
     sourceType: d.sourceType === 'user' ? 'user' : 'recipient',
-    enabled: true,
-    fallbackValue: d.fallbackValue
+    enabled: true
   }))
 }
