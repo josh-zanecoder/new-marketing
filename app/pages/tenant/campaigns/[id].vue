@@ -914,7 +914,7 @@ const { campaignViewTab, trackingSessionKey } = useCampaignTrackingTab('details'
           v-if="campaignViewTab === 'tracking'"
           :key="trackingSessionKey"
           class="min-w-0 space-y-8 pt-2"
-          aria-label="Campaign send tracking"
+          aria-label="Brevo campaign tracking"
         >
           <TenantCampaignTrackingAnalytics :campaign-id="id" />
           <CampaignTrackingEventsTable :campaign-id="id" />
