@@ -997,7 +997,9 @@ const cancelOrBackLabel = computed(() => (editId.value ? 'Back to campaign' : 'B
 /** Preserved from server for cache rows after save (edit). */
 const editCampaignStatus = ref('Draft')
 const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
-const editLoadPending = ref(false)
+const editLoadPending = ref(
+  editId.value ? !campaignStore.getCampaignDetailCache(editId.value) : false
+)
 const loadedEditCampaignId = ref('')
 const showWizardSkeleton = computed(() => editLoadPending.value)
 
