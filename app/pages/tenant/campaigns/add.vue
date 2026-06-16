@@ -435,14 +435,21 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
             <label class="mb-2 block text-sm font-medium text-slate-700">Subject line</label>
             <div class="flex flex-col gap-3 sm:flex-row">
               <input
+                ref="subjectInputRef"
                 v-model="form.subject"
                 type="text"
                 placeholder="Build with text and Insert variable (merge fields)"
                 class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                @click="syncSubjectCaret"
+                @keyup="syncSubjectCaret"
+                @select="syncSubjectCaret"
+                @input="syncSubjectCaret"
+                @blur="syncSubjectCaret"
               >
               <select
                 v-model="subjectVariable"
                 class="w-full shrink-0 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:w-44 sm:text-[15px]"
+                @mousedown="syncSubjectCaret"
               >
                 <option value="">Insert variable</option>
                 <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
@@ -680,6 +687,14 @@ const form = ref({
   saveHtmlToLibrary: false
 })
 
+const subjectField = computed({
+  get: () => form.value.subject,
+  set: (value: string) => {
+    form.value.subject = value
+  }
+})
+const { subjectVariable, subjectInputRef, syncSubjectCaret } = useSubjectVariableInsert(subjectField)
+
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
 const designModalOpen = ref(false)
@@ -698,7 +713,6 @@ function onChangeDesignConfirmed() {
   changeDesignConfirmOpen.value = false
   openDesignModal()
 }
-const subjectVariable = ref('')
 const returnCampaignId = ref<string | null>(null)
 const savedTemplateHtml = ref<string | null>(null)
 const isSaving = ref(false)
@@ -1057,8 +1071,8 @@ async function loadEmailTemplates() {
 const route = useRoute()
 const cancelOrBackHref = computed(() => '/tenant/campaigns')
 const cancelOrBackLabel = computed(() => 'Back to campaigns')
-/** Create mode (client): brief skeleton while lists, templates, and variables load. */
-const wizardBootPending = ref(false)
+/** Create mode: skeleton until sender defaults, lists, templates, and variables are ready. */
+const wizardBootPending = ref(true)
 
 const showWizardSkeleton = computed(() => wizardBootPending.value)
 
@@ -1208,18 +1222,21 @@ const designSectionRef = ref<HTMLElement | null>(null)
 // )
 
 onMounted(async () => {
-  await defaultSenderReady
-  if (!returnCampaignId.value) {
-    form.value.senderName = defaultSenderName.value
-    form.value.senderEmail = defaultSenderEmail.value
-  }
-  loadFromEditorReturn()
   wizardBootPending.value = true
   try {
-    await Promise.all([loadRecipientLists(), loadEmailTemplates(), loadDynamicVariables()])
+    await Promise.all([
+      defaultSenderReady,
+      loadRecipientLists(),
+      loadEmailTemplates(),
+      loadDynamicVariables(),
+      loadFromEditorReturn()
+    ])
+    if (!returnCampaignId.value) {
+      form.value.senderName = defaultSenderName.value
+      form.value.senderEmail = defaultSenderEmail.value
+    }
     applyRecipientListFromQuery()
   } finally {
-    // dynamic-variable preview merge temporarily disabled
     wizardBootPending.value = false
   }
 })
@@ -1375,13 +1392,6 @@ function removeManualRecipientById(contactId: string) {
   const { [id]: _removed, ...rest } = manualRecipientLabels.value
   manualRecipientLabels.value = rest
 }
-
-watch(subjectVariable, (val) => {
-  if (val) {
-    form.value.subject += val
-    subjectVariable.value = ''
-  }
-})
 
 function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   designModalOpen.value = false

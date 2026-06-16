@@ -433,14 +433,21 @@
             <label class="mb-2 block text-sm font-medium text-slate-700">Subject line</label>
             <div class="flex flex-col gap-3 sm:flex-row">
               <input
+                ref="subjectInputRef"
                 v-model="form.subject"
                 type="text"
                 placeholder="Build with text and Insert variable (merge fields)"
                 class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                @click="syncSubjectCaret"
+                @keyup="syncSubjectCaret"
+                @select="syncSubjectCaret"
+                @input="syncSubjectCaret"
+                @blur="syncSubjectCaret"
               >
               <select
                 v-model="subjectVariable"
                 class="w-full shrink-0 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:w-44 sm:text-[15px]"
+                @mousedown="syncSubjectCaret"
               >
                 <option value="">Insert variable</option>
                 <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
@@ -677,6 +684,14 @@ const form = ref({
   saveHtmlToLibrary: false
 })
 
+const subjectField = computed({
+  get: () => form.value.subject,
+  set: (value: string) => {
+    form.value.subject = value
+  }
+})
+const { subjectVariable, subjectInputRef, syncSubjectCaret } = useSubjectVariableInsert(subjectField)
+
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
 const designModalOpen = ref(false)
@@ -698,7 +713,6 @@ function onChangeDesignConfirmed() {
   changeDesignConfirmOpen.value = false
   openDesignModal()
 }
-const subjectVariable = ref('')
 const returnCampaignId = ref<string | null>(null)
 const savedTemplateHtml = ref<string | null>(null)
 const isSaving = ref(false)
@@ -1078,96 +1092,75 @@ const cancelOrBackLabel = computed(() => (editId.value ? 'Back to campaign' : 'B
 /** Preserved from server for cache rows after save (edit). */
 const editCampaignStatus = ref('Draft')
 const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
-const editLoadPending = ref(false)
+/** Skeleton until campaign data and recipient lists are ready. */
+const editLoadPending = ref(true)
 const loadedEditCampaignId = ref('')
 const showWizardSkeleton = computed(() => editLoadPending.value)
 
-async function loadEditCampaign() {
-  await defaultSenderReady
-  if (!editId.value) {
-    editLoadPending.value = false
-    return
+function applyCampaignToEditForm(c: TenantCampaignDetail) {
+  editCampaignStatus.value = String(c.status || 'Draft')
+  editCampaignMeta.value = { createdAt: c.createdAt || '', updatedAt: c.updatedAt || '' }
+  const ids: string[] = []
+  const labels: Record<string, { email: string; name: string }> = {}
+  for (const r of c.recipients ?? []) {
+    const cid = r.contactId?.trim()
+    if (cid && isManualContactIdString(cid)) {
+      ids.push(cid)
+      labels[cid] = { email: (r.email ?? '').trim(), name: '' }
+    }
   }
+  manualRecipientLabels.value = labels
+  form.value = {
+    name: c.name,
+    senderName: c.sender?.name || defaultSenderName.value,
+    senderEmail: c.sender?.email || defaultSenderEmail.value,
+    subject: c.subject || '',
+    recipientsMode: c.recipientsType || 'manual',
+    recipientsListId: c.recipientsListId || '',
+    recipientsManual: ids,
+    templateMode: 'scratch',
+    selectedTemplateId: '',
+    saveHtmlToLibrary: false
+  }
+  returnCampaignId.value = editId.value
+  loadedEditCampaignId.value = editId.value
+  const fromEditor = route.query.fromEditor === '1'
+  if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
+  if (c.templateHtmlSource === 'upload') {
+    form.value.templateMode = 'upload'
+  }
+}
+
+async function hydrateEditCampaign() {
+  await defaultSenderReady
+  if (!editId.value) return
   const cached = campaignStore.getCampaignDetailCache(editId.value)
   if (cached) {
-    editCampaignStatus.value = String(cached.status || 'Draft')
-    editCampaignMeta.value = { createdAt: cached.createdAt || '', updatedAt: cached.updatedAt || '' }
-    const ids: string[] = []
-    const labels: Record<string, { email: string; name: string }> = {}
-    for (const r of cached.recipients ?? []) {
-      const cid = r.contactId?.trim()
-      if (cid && isManualContactIdString(cid)) {
-        ids.push(cid)
-        labels[cid] = { email: (r.email ?? '').trim(), name: '' }
-      }
-    }
-    manualRecipientLabels.value = labels
-    form.value = {
-      name: cached.name,
-      senderName: cached.sender?.name || defaultSenderName.value,
-      senderEmail: cached.sender?.email || defaultSenderEmail.value,
-      subject: cached.subject || '',
-      recipientsMode: cached.recipientsType || 'manual',
-      recipientsListId: cached.recipientsListId || '',
-      recipientsManual: ids,
-      templateMode: 'scratch',
-      selectedTemplateId: '',
-      saveHtmlToLibrary: false
-    }
-    returnCampaignId.value = editId.value
-    loadedEditCampaignId.value = editId.value
-    const fromEditor = route.query.fromEditor === '1'
-    if (cached.templateHtml && !fromEditor) savedTemplateHtml.value = cached.templateHtml
-    if (cached.templateHtmlSource === 'upload') {
-      form.value.templateMode = 'upload'
-    }
-    editLoadPending.value = false
+    applyCampaignToEditForm(cached)
     return
   }
-  editLoadPending.value = true
   try {
     const res = await marketingApi.fetchCampaignById(editId.value)
-    const c = res.campaign
-    campaignStore.setCampaignDetailCache(editId.value, c)
-    editCampaignStatus.value = String(c.status || 'Draft')
-    editCampaignMeta.value = { createdAt: c.createdAt || '', updatedAt: c.updatedAt || '' }
-    const ids: string[] = []
-    const labels: Record<string, { email: string; name: string }> = {}
-    for (const r of c.recipients ?? []) {
-      const cid = r.contactId?.trim()
-      if (cid && isManualContactIdString(cid)) {
-        ids.push(cid)
-        labels[cid] = { email: (r.email ?? '').trim(), name: '' }
-      }
-    }
-    manualRecipientLabels.value = labels
-    form.value = {
-      name: c.name,
-      senderName: c.sender?.name || defaultSenderName.value,
-      senderEmail: c.sender?.email || defaultSenderEmail.value,
-      subject: c.subject || '',
-      recipientsMode: c.recipientsType || 'manual',
-      recipientsListId: c.recipientsListId || '',
-      recipientsManual: ids,
-      templateMode: 'scratch',
-      selectedTemplateId: '',
-      saveHtmlToLibrary: false
-    }
-    returnCampaignId.value = editId.value
-    loadedEditCampaignId.value = editId.value
-    const fromEditor = route.query.fromEditor === '1'
-    if (c.templateHtml && !fromEditor) savedTemplateHtml.value = c.templateHtml
-    if (c.templateHtmlSource === 'upload') {
-      form.value.templateMode = 'upload'
-    }
+    campaignStore.setCampaignDetailCache(editId.value, res.campaign)
+    applyCampaignToEditForm(res.campaign)
   } catch {
     /* ignore load errors; form stays empty */
+  }
+}
+
+async function bootEditPage() {
+  editLoadPending.value = true
+  try {
+    await Promise.all([hydrateEditCampaign(), loadRecipientLists()])
+    await loadFromEditorReturn()
   } finally {
     editLoadPending.value = false
   }
 }
 
-watch(editId, loadEditCampaign, { immediate: true })
+watch(editId, () => {
+  void bootEditPage()
+}, { immediate: true })
 
 async function loadFromEditorReturn() {
   await defaultSenderReady
@@ -1305,14 +1298,6 @@ const designSectionRef = ref<HTMLElement | null>(null)
 //   () => scheduleMergeRootDraftRefresh()
 // )
 
-onMounted(async () => {
-  loadFromEditorReturn()
-  try {
-    await loadRecipientLists()
-  } finally {
-    // dynamic-variable preview merge temporarily disabled
-  }
-})
 watch(() => [route.query.campaignId, route.query.fromEditor], loadFromEditorReturn, { immediate: false })
 watch(subjectOpen, (open) => {
   if (open) {
@@ -1463,13 +1448,6 @@ function removeManualRecipientById(contactId: string) {
   const { [id]: _removed, ...rest } = manualRecipientLabels.value
   manualRecipientLabels.value = rest
 }
-
-watch(subjectVariable, (val) => {
-  if (val) {
-    form.value.subject += val
-    subjectVariable.value = ''
-  }
-})
 
 function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   if (!editId.value) return

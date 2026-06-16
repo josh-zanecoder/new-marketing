@@ -188,9 +188,7 @@ const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
 const previewSubjectDisplay = computed(() => previewSubject.value || campaign.value?.subject || 'No subject')
 
 const showSkeleton = computed(
-  () =>
-    !error.value &&
-    pending.value
+  () => !error.value && (pending.value || !campaign.value)
 )
 
 function previewSrcdoc(html: string, scale = 0.45) {
