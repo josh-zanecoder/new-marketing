@@ -535,7 +535,8 @@ async function load(options?: { force?: boolean }) {
     try {
       const res = await $fetch<RecipientListIndexPayload>('/api/v1/tenant/recipient-list', {
         credentials: 'include',
-        ...serverAuthHeaders()
+        ...serverAuthHeaders(),
+        query: { scope: 'index' }
       })
       data.value = {
         tenantIdConfigured: res.tenantIdConfigured,

@@ -127,6 +127,98 @@ async function buildRecipientListFormMetadata(params: {
   return { contactTypes, contactCounts, recipientFilters }
 }
 
+function buildRecipientListAudienceMetadata(params: {
+  tenantId: string | null
+  contactTypeDocs: unknown[]
+  filterDocsRaw: unknown[]
+}) {
+  const contactTypes = (params.contactTypeDocs as ContactTypeLean[]).map((d) => {
+    const key = String(d.key ?? '').trim().toLowerCase()
+    const label = String(d.label ?? '').trim() || key
+    return {
+      key,
+      label,
+      sortOrder: Number(d.sortOrder ?? 0)
+    }
+  })
+
+  const recipientFilters = (params.filterDocsRaw as unknown[]).map((d) =>
+    serializeRegistryFilter(
+      d as unknown as Parameters<typeof serializeRegistryFilter>[0],
+      params.tenantId
+    )
+  )
+
+  return { contactTypes, recipientFilters }
+}
+
+function serializeRecipientLists(
+  lists: RecipientListDoc[],
+  memberCountByListId: Map<string, number>
+) {
+  return lists.map((doc) => {
+    const { audience, filters, filterMode, criterionJoins } = normalizeRecipientListDoc(doc)
+    return {
+      id: String(doc._id),
+      name: doc.name ?? '',
+      listType: doc.listType ?? '',
+      audience,
+      filters,
+      filterMode,
+      criterionJoins: criterionJoins ?? [],
+      membershipScope:
+        doc.membershipScope === 'tenant' || doc.membershipScope === 'owner_emails'
+          ? doc.membershipScope
+          : 'owner_emails',
+      membershipOwnerEmails: recipientListStoredMembershipEmails(
+        doc as { membershipOwnerEmails?: unknown }
+      ),
+      memberCount: memberCountByListId.get(String(doc._id)) ?? 0,
+      createdAt: doc.createdAt?.toISOString?.() ?? null,
+      updatedAt: doc.updatedAt?.toISOString?.() ?? null
+    }
+  })
+}
+
+async function memberCountByListIdForLists(params: {
+  lists: RecipientListDoc[]
+  Contact: ReturnType<typeof getTenantClientModels>['Contact']
+  RecipientListMember: ReturnType<typeof getTenantClientModels>['RecipientListMember']
+  contactFilter: Record<string, unknown>
+}) {
+  const memberCountByListId = new Map<string, number>()
+  const listObjectIds = params.lists
+    .map((d) => d._id)
+    .filter((id) => id != null && mongoose.isValidObjectId(String(id)))
+    .map((id) => new mongoose.Types.ObjectId(String(id)))
+
+  if (listObjectIds.length === 0) return memberCountByListId
+
+  const countRows = await params.RecipientListMember.aggregate<{
+    _id: mongoose.Types.ObjectId
+    count: number
+  }>([
+    { $match: { recipientListId: { $in: listObjectIds } } },
+    {
+      $lookup: {
+        from: params.Contact.collection.name,
+        let: { cid: '$contactId' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$_id', '$$cid'] } } },
+          { $match: params.contactFilter }
+        ],
+        as: '_memberContact'
+      }
+    },
+    { $match: { _memberContact: { $ne: [] } } },
+    { $group: { _id: '$recipientListId', count: { $sum: 1 } } }
+  ]).exec()
+  for (const row of countRows) {
+    if (row._id) memberCountByListId.set(String(row._id), row.count)
+  }
+  return memberCountByListId
+}
+
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
   if (!isRegisteredTenantAuthContext(auth)) {
@@ -143,9 +235,46 @@ export default defineEventHandler(async (event) => {
   const contactFilter = mergeTenantOwnerEmailScopeFilter(withMarketableContactFilter({}), auth)
 
   /** `scope=form` — contact types, registry filters, per-type counts only (create/edit list form). */
+  /** `scope=index` — recipient lists + audience metadata only (list index page). */
   const scopeParam = getQuery(event).scope
   const scope = Array.isArray(scopeParam) ? scopeParam[0] : scopeParam
-  if (String(scope ?? '').toLowerCase() === 'form') {
+  const scopeNorm = String(scope ?? '').toLowerCase()
+
+  if (scopeNorm === 'index') {
+    const [listsRaw, contactTypeDocs, filterDocsRaw] = await Promise.all([
+      RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
+        .sort({ updatedAt: -1 })
+        .limit(200)
+        .lean()
+        .exec(),
+      ContactType.find({ enabled: { $ne: false } })
+        .sort({ sortOrder: 1, key: 1 })
+        .lean()
+        .exec(),
+      FilterModel.find({ enabled: true }).sort({ updatedAt: -1 }).lean().exec()
+    ])
+    const lists = listsRaw as RecipientListDoc[]
+    const memberCountByListId = await memberCountByListIdForLists({
+      lists,
+      Contact,
+      RecipientListMember,
+      contactFilter: contactFilter as Record<string, unknown>
+    })
+    const { contactTypes, recipientFilters } = buildRecipientListAudienceMetadata({
+      tenantId,
+      contactTypeDocs,
+      filterDocsRaw
+    })
+    return {
+      tenantId,
+      tenantIdConfigured: Boolean(tenantId),
+      contactTypes,
+      recipientFilters,
+      lists: serializeRecipientLists(lists, memberCountByListId)
+    }
+  }
+
+  if (scopeNorm === 'form') {
     const [contactTypeDocs, distinctContactTypes, filterDocsRaw] = await Promise.all([
       ContactType.find({ enabled: { $ne: false } })
         .sort({ sortOrder: 1, key: 1 })
@@ -213,36 +342,12 @@ export default defineEventHandler(async (event) => {
   const contacts = contactsRaw as ContactRow[]
   const lists = listsRaw as RecipientListDoc[]
 
-  const listObjectIds = lists
-    .map((d) => d._id)
-    .filter((id) => id != null && mongoose.isValidObjectId(String(id)))
-    .map((id) => new mongoose.Types.ObjectId(String(id)))
-
-  const memberCountByListId = new Map<string, number>()
-  if (listObjectIds.length > 0) {
-    const countRows = await RecipientListMember.aggregate<{
-      _id: mongoose.Types.ObjectId
-      count: number
-    }>([
-      { $match: { recipientListId: { $in: listObjectIds } } },
-      {
-        $lookup: {
-          from: Contact.collection.name,
-          let: { cid: '$contactId' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$_id', '$$cid'] } } },
-            { $match: contactFilter as Record<string, unknown> }
-          ],
-          as: '_memberContact'
-        }
-      },
-      { $match: { _memberContact: { $ne: [] } } },
-      { $group: { _id: '$recipientListId', count: { $sum: 1 } } }
-    ]).exec()
-    for (const row of countRows) {
-      if (row._id) memberCountByListId.set(String(row._id), row.count)
-    }
-  }
+  const memberCountByListId = await memberCountByListIdForLists({
+    lists,
+    Contact,
+    RecipientListMember,
+    contactFilter: contactFilter as Record<string, unknown>
+  })
 
   const { contactTypes, contactCounts, recipientFilters } = await buildRecipientListFormMetadata({
     tenantConn,
@@ -280,27 +385,6 @@ export default defineEventHandler(async (event) => {
     contactCounts,
     contactTypes,
     recipientFilters,
-    lists: lists.map((doc) => {
-      const { audience, filters, filterMode, criterionJoins } = normalizeRecipientListDoc(doc)
-      return {
-        id: String(doc._id),
-        name: doc.name ?? '',
-        listType: doc.listType ?? '',
-        audience,
-        filters,
-        filterMode,
-        criterionJoins: criterionJoins ?? [],
-        membershipScope:
-          doc.membershipScope === 'tenant' || doc.membershipScope === 'owner_emails'
-            ? doc.membershipScope
-            : 'owner_emails',
-        membershipOwnerEmails: recipientListStoredMembershipEmails(
-          doc as { membershipOwnerEmails?: unknown }
-        ),
-        memberCount: memberCountByListId.get(String(doc._id)) ?? 0,
-        createdAt: doc.createdAt?.toISOString?.() ?? null,
-        updatedAt: doc.updatedAt?.toISOString?.() ?? null
-      }
-    })
+    lists: serializeRecipientLists(lists, memberCountByListId)
   }
 })
