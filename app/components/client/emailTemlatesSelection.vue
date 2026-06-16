@@ -18,8 +18,10 @@ const props = withDefaults(
     error?: string
     /** Example merge tokens for upload hint */
     mergeTagHints?: string[]
+    /** When false, hides GrapesJS “create from scratch” entry point. */
+    emailEditorEnabled?: boolean
   }>(),
-  { pending: false, error: '', mergeTagHints: () => [] }
+  { pending: false, error: '', mergeTagHints: () => [], emailEditorEnabled: true }
 )
 
 const emit = defineEmits<{
@@ -367,8 +369,9 @@ onUnmounted(() => {
                     </label>
                   </div>
 
-                  <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div class="mt-4 grid gap-4" :class="emailEditorEnabled ? 'lg:grid-cols-2' : ''">
                     <button
+                      v-if="emailEditorEnabled"
                       type="button"
                       class="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 text-left shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/[0.06]"
                       @click="onScratch"
