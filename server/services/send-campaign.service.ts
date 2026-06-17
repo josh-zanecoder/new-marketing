@@ -434,7 +434,8 @@ export async function beginCampaignSend(
       sendRunId,
       sendPage: 0,
       ...(snap ? { mergeUserSnapshot: snap } : {})
-    }
+    },
+    $unset: { scheduledAt: 1 }
   })
 
   try {
