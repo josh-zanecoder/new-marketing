@@ -81,7 +81,7 @@ export default defineNuxtConfig({
       process.env.MARKETING_DEPLOY_ENV ||
       'develop'
   },
-  css: ['grapesjs/dist/css/grapes.min.css'],
+  css: ['grapesjs/dist/css/grapes.min.css', '@vuepic/vue-datepicker/dist/main.css'],
   vite: {
     optimizeDeps: {
       include: [
@@ -91,7 +91,9 @@ export default defineNuxtConfig({
         'grapesjs',
         'grapesjs-preset-newsletter',
         'firebase/app',
-        'firebase/auth'
+        'firebase/auth',
+        'echarts/core',
+        'vue-echarts'
       ]
     }
   },
