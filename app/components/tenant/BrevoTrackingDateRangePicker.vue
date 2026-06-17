@@ -68,17 +68,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="relative shrink-0">
+  <div ref="rootRef" class="relative w-fit shrink-0">
     <label class="sr-only" for="brevo-tracking-date-range">Date range</label>
     <button
       id="brevo-tracking-date-range"
       type="button"
-      class="inline-flex w-full min-w-[11rem] items-center justify-between gap-3 rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-auto"
+      class="inline-flex w-auto max-w-full items-center gap-1.5 rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
       :aria-expanded="open"
       aria-haspopup="listbox"
       @click="open = !open"
     >
-      <span class="min-w-0 truncate">{{ label }}</span>
+      <span
+        class="whitespace-nowrap"
+        :class="datePreset === 'custom' ? 'max-w-[10.5rem] truncate' : ''"
+      >{{ label }}</span>
       <svg
         class="h-4 w-4 shrink-0 text-zinc-400 transition-transform"
         :class="{ 'rotate-180': open }"
@@ -93,7 +96,7 @@ onUnmounted(() => {
 
     <div
       v-show="open"
-      class="absolute right-0 z-30 mt-2 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-lg shadow-zinc-950/10 sm:w-72"
+      class="absolute right-0 z-30 mt-2 min-w-full w-max overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-lg shadow-zinc-950/10"
       role="listbox"
       aria-label="Date range options"
     >
