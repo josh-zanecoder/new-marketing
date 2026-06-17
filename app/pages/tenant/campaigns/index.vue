@@ -8,6 +8,8 @@ const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
 const {
   canSendDraft,
+  canSendScheduled,
+  canSendNow,
   canScheduleDraft,
   sendProgress,
   startSendStatusPolling,
@@ -89,7 +91,7 @@ const sendSuccessSummary = ref<{
 } | null>(null)
 
 async function handleSend(c: Campaign) {
-  if (!canSendDraft(c)) return
+  if (!canSendNow(c)) return
   const { poll } = await store.sendCampaign(c)
   if (!poll) return
   const campaignId = c.id
@@ -508,6 +510,18 @@ onUnmounted(() => {
             </svg>
           </button>
           <button
+            v-if="canSendScheduled(c)"
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="!!sendingCampaignId || scheduleBusy"
+            title="Send now"
+            @click.stop="handleSend(c)"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+          <button
             v-if="canScheduleDraft(c)"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
@@ -524,7 +538,7 @@ onUnmounted(() => {
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="scheduleBusy"
-            title="Cancel schedule"
+            title="Cancel scheduled send"
             @click.stop="handleUnschedule(c)"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
