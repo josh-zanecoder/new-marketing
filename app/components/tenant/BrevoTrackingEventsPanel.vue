@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  isoMatchesBrevoTrackingRange,
+  useBrevoTrackingDateRange
+} from '~/composables/useBrevoTrackingDateRange'
+
 interface BrevoEmailEvent {
   email?: string
   date?: string
@@ -45,6 +50,8 @@ const props = withDefaults(
       'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]'
   }
 )
+
+const route = useRoute()
 
 const query = computed(() => {
   const c = props.campaignId?.trim()
@@ -109,6 +116,39 @@ function isMongoId(s: string): boolean {
   return MONGO_ID_RE.test(s)
 }
 
+function campaignPagePath(campaignId: string): string {
+  return `/tenant/campaigns/${campaignId.trim()}`
+}
+
+async function navigateToCampaign(campaignId: string | null) {
+  const id = campaignId?.trim()
+  if (!id || !isMongoId(id)) return
+
+  const path = campaignPagePath(id)
+  if (route.path === path) {
+    await navigateTo({ path, query: { ...route.query, view: 'details' } })
+    return
+  }
+
+  await navigateTo(path)
+}
+
+async function onCampaignLinkClick(event: MouseEvent, campaignId: string | null) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  await navigateToCampaign(campaignId)
+}
+
 const messageGroups = computed((): MessageEventGroup[] => {
   const map = new Map<string, BrevoEmailEvent[]>()
   for (const ev of events.value) {
@@ -171,118 +211,20 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
 const searchQuery = ref('')
 const selectedEventTypes = ref<string[]>([])
 
-type DatePresetId = 'all' | 'today' | 'yesterday' | 'lastWeek' | 'lastMonth' | 'mtd' | 'ytd' | 'custom'
+const {
+  datePreset,
+  customDateFrom,
+  customDateTo,
+  effectiveDateRange,
+  dateRangeFilterActive,
+  dateRangeLabel,
+  resetDateRange
+} = useBrevoTrackingDateRange()
 
-const datePreset = ref<DatePresetId>('all')
-const customDateFrom = ref('')
-const customDateTo = ref('')
-
-const datePresetOptions: { id: DatePresetId; label: string }[] = [
-  { id: 'all', label: 'All time' },
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'lastWeek', label: 'Last week' },
-  { id: 'lastMonth', label: 'Last month' },
-  { id: 'mtd', label: 'MTD' },
-  { id: 'ytd', label: 'YTD' },
-  { id: 'custom', label: 'Custom' }
-]
-
-function toYmdLocal(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/** Local midnight Monday of the week containing `d` (week starts Monday). */
-function mondayOfWeekContaining(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  const dow = x.getDay()
-  const daysSinceMon = (dow + 6) % 7
-  x.setDate(x.getDate() - daysSinceMon)
-  return x
-}
-
-function presetToRange(preset: DatePresetId, now: Date): { from: string | null; to: string | null } {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const ymdToday = toYmdLocal(today)
-
-  if (preset === 'all' || preset === 'custom') return { from: null, to: null }
-  if (preset === 'today') return { from: ymdToday, to: ymdToday }
-
-  if (preset === 'yesterday') {
-    const y = new Date(today)
-    y.setDate(y.getDate() - 1)
-    const ymd = toYmdLocal(y)
-    return { from: ymd, to: ymd }
-  }
-
-  if (preset === 'lastWeek') {
-    const monThis = mondayOfWeekContaining(today)
-    const monPrev = new Date(monThis)
-    monPrev.setDate(monPrev.getDate() - 7)
-    const sunPrev = new Date(monPrev)
-    sunPrev.setDate(sunPrev.getDate() + 6)
-    return { from: toYmdLocal(monPrev), to: toYmdLocal(sunPrev) }
-  }
-
-  if (preset === 'lastMonth') {
-    const firstThis = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastPrev = new Date(firstThis.getTime() - 1)
-    const firstPrev = new Date(lastPrev.getFullYear(), lastPrev.getMonth(), 1)
-    return { from: toYmdLocal(firstPrev), to: toYmdLocal(lastPrev) }
-  }
-
-  if (preset === 'mtd') {
-    const first = new Date(now.getFullYear(), now.getMonth(), 1)
-    return { from: toYmdLocal(first), to: ymdToday }
-  }
-
-  if (preset === 'ytd') {
-    const first = new Date(now.getFullYear(), 0, 1)
-    return { from: toYmdLocal(first), to: ymdToday }
-  }
-
-  return { from: null, to: null }
-}
-
-const effectiveDateRange = computed((): { from: string | null; to: string | null } => {
-  if (datePreset.value === 'custom') {
-    const from = customDateFrom.value.trim() || null
-    const to = customDateTo.value.trim() || null
-    return { from, to }
-  }
-  return presetToRange(datePreset.value, new Date())
-})
-
-function localDayStartMs(iso: string): number {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return NaN
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-}
-
-function inputYmdToStartMs(ymd: string): number | null {
-  if (!ymd.trim()) return null
-  const [y, m, d] = ymd.split('-').map(Number)
-  if (!y || !m || !d) return null
-  return new Date(y, m - 1, d).getTime()
-}
-
-function groupMatchesDateRange(
-  g: MessageEventGroup,
-  range: { from: string | null; to: string | null }
-): boolean {
-  const latest = groupLatestIso(g)
-  if (!latest) return true
-  const day = localDayStartMs(latest)
-  if (Number.isNaN(day)) return true
+function groupMatchesDateRange(g: MessageEventGroup): boolean {
+  const range = effectiveDateRange.value
   if (!range.from && !range.to) return true
-  const fromMs = range.from ? inputYmdToStartMs(range.from) : null
-  const toMs = range.to ? inputYmdToStartMs(range.to) : null
-  if (fromMs != null && day < fromMs) return false
-  if (toMs != null && day > toMs) return false
-  return true
+  return g.events.some((e) => isoMatchesBrevoTrackingRange(e.date, range))
 }
 
 function groupMatchesSearch(g: MessageEventGroup): boolean {
@@ -303,12 +245,9 @@ function groupMatchesSearch(g: MessageEventGroup): boolean {
   return parts.includes(q) || parts.split(/\s+/).some((w) => w.includes(q))
 }
 
-const groupsAfterSearchDate = computed(() => {
-  const range = effectiveDateRange.value
-  return messageGroups.value.filter(
-    (g) => groupMatchesDateRange(g, range) && groupMatchesSearch(g)
-  )
-})
+const groupsAfterSearchDate = computed(() =>
+  messageGroups.value.filter((g) => groupMatchesDateRange(g) && groupMatchesSearch(g))
+)
 
 const availableEventTypes = computed(() => {
   const s = new Set<string>()
@@ -392,21 +331,22 @@ function eventBadgeClass(ev: string | undefined): string {
   return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
 }
 
+const {
+  currentPage,
+  totalPages,
+  paginatedItems: paginatedTableRows,
+  paginationMeta
+} = useClientPagination(tableRows, 10)
+
+watch([searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes], () => {
+  currentPage.value = 1
+})
+
 function clearAllFilters() {
   searchQuery.value = ''
-  datePreset.value = 'all'
-  customDateFrom.value = ''
-  customDateTo.value = ''
+  resetDateRange()
   clearEventFilters()
 }
-
-const dateRangeFilterActive = computed(() => {
-  if (datePreset.value === 'all') return false
-  if (datePreset.value === 'custom') {
-    return !!(customDateFrom.value.trim() || customDateTo.value.trim())
-  }
-  return true
-})
 
 const hasActiveFilters = computed(
   () =>
@@ -464,19 +404,12 @@ const hasActiveFilters = computed(
               class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
             >
           </div>
-          <div class="shrink-0">
-            <label class="sr-only" for="brevo-tracking-date">Date range</label>
-            <select
-              id="brevo-tracking-date"
-              v-model="datePreset"
-              aria-label="Date range"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[11rem] sm:w-auto"
-            >
-              <option v-for="opt in datePresetOptions" :key="opt.id" :value="opt.id">
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
+          <TenantBrevoTrackingDateRangePicker
+            v-model:preset="datePreset"
+            v-model:custom-from="customDateFrom"
+            v-model:custom-to="customDateTo"
+            :label="dateRangeLabel"
+          />
           <button
             v-if="hasActiveFilters"
             type="button"
@@ -485,27 +418,6 @@ const hasActiveFilters = computed(
           >
             Clear filters
           </button>
-        </div>
-        <div
-          v-if="datePreset === 'custom'"
-          class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
-        >
-          <label class="block sm:w-44">
-            <span class="mb-1.5 block text-xs font-medium text-zinc-500">From</span>
-            <input
-              v-model="customDateFrom"
-              type="date"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-            >
-          </label>
-          <label class="block sm:w-44">
-            <span class="mb-1.5 block text-xs font-medium text-zinc-500">To</span>
-            <input
-              v-model="customDateTo"
-              type="date"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-            >
-          </label>
         </div>
         <div v-if="availableEventTypes.length">
           <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
@@ -544,6 +456,14 @@ const hasActiveFilters = computed(
         </div>
       </div>
 
+      <div class="mb-6">
+        <TenantBrevoTrackingLineChart
+          :events="events"
+          :date-range="effectiveDateRange"
+          :selected-event-types="selectedEventTypes"
+        />
+      </div>
+
       <div :class="cardClass">
         <div v-if="tableRows.length === 0" class="px-5 py-14 text-center sm:px-6 sm:py-16">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
@@ -567,7 +487,8 @@ const hasActiveFilters = computed(
         </button>
         </div>
 
-        <div v-else class="overflow-x-auto">
+        <div v-else>
+        <div class="overflow-x-auto">
         <table class="w-full min-w-[52rem] text-left text-sm">
           <thead>
             <tr class="border-b border-zinc-200 bg-zinc-50/90">
@@ -590,16 +511,17 @@ const hasActiveFilters = computed(
           </thead>
           <tbody class="divide-y divide-zinc-100">
             <tr
-              v-for="(row, idx) in tableRows"
+              v-for="(row, idx) in paginatedTableRows"
               :key="`${row.messageId}-${idx}`"
               class="transition-colors hover:bg-zinc-50/80"
             >
               <td class="px-5 py-4 align-top sm:px-6">
                 <NuxtLink
                   v-if="row.campaignId && isMongoId(row.campaignId)"
-                  :to="`/tenant/campaigns/${row.campaignId}`"
+                  :to="campaignPagePath(row.campaignId)"
                   class="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
                   :title="row.campaignId"
+                  @click="onCampaignLinkClick($event, row.campaignId)"
                 >
                   {{ campaignDisplayLabel(row.campaignId) }}
                 </NuxtLink>
@@ -635,7 +557,40 @@ const hasActiveFilters = computed(
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+
+        <div
+          v-if="totalPages > 1"
+          class="flex flex-col gap-4 border-t border-zinc-100 bg-zinc-50/60 px-4 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <p class="tabular-nums text-zinc-500">
+            <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+            <span class="mx-1.5 text-zinc-300">·</span>
+            <span>{{ paginationMeta.total.toLocaleString() }} messages</span>
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
+            <button
+              type="button"
+              class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none"
+              :disabled="currentPage === 1"
+              @click="currentPage -= 1"
+            >
+              Previous
+            </button>
+            <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-zinc-500">
+              Page {{ currentPage }} / {{ totalPages }}
+            </span>
+            <button
+              type="button"
+              class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none"
+              :disabled="currentPage === totalPages"
+              @click="currentPage += 1"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        </div>
       </div>
     </div>
 
