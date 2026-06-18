@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
     recipientsManual?: string[]
     templateHtml?: string
     templateHtmlSource?: 'editor' | 'upload'
-    /** When true (default), uploaded HTML also appears in Saved templates. */
+    /** When true, the design also appears in Saved templates. Defaults to false when omitted. */
     saveHtmlToLibrary?: boolean
   }>(event)
 
@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
   if (body.templateHtml) {
     const htmlSource =
       body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
-    const saveToLibrary = body.saveHtmlToLibrary !== false
+    const saveToLibrary = body.saveHtmlToLibrary === true
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
       subject: body.subject?.trim() || body.name.trim(),

@@ -32,6 +32,8 @@ export interface TenantCampaignDetail {
   templateHtml?: string | null
   /** `upload` = raw HTML file; `editor` = GrapesJS */
   templateHtmlSource?: 'editor' | 'upload'
+  /** Whether the linked template is visible in Email templates / design library. */
+  saveHtmlToLibrary?: boolean
   mergeUserSnapshot?: Record<string, unknown>
   replyTo?: { email: string; name: string }
   createdAt: string
