@@ -43,11 +43,14 @@ const props = withDefaults(
     campaignId?: string
     panelHint?: string
     cardClass?: string
+    /** Hide campaign column when viewing a single campaign's tracking tab. */
+    hideCampaignColumn?: boolean
   }>(),
   {
     panelHint: '',
     cardClass:
-      'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]'
+      'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]',
+    hideCampaignColumn: false
   }
 )
 
@@ -463,190 +466,197 @@ const hasActiveFilters = computed(
           :selected-event-types="selectedEventTypes"
         />
 
-      <div :class="cardClass">
-        <div v-if="tableRows.length === 0" class="px-5 py-14 text-center sm:px-6 sm:py-16">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
-          <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-        </div>
-        <p class="mt-4 text-sm font-medium text-zinc-900">
-          No messages match your filters
-        </p>
-        <p class="mt-1 text-sm text-zinc-500">
-          Try clearing search, widening the date range, or resetting event types.
-        </p>
-        <button
-          v-if="hasActiveFilters"
-          type="button"
-          class="mt-6 inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
-          @click="clearAllFilters"
-        >
-          Clear all filters
-        </button>
-        </div>
-
-        <div v-else>
-        <ul class="divide-y divide-zinc-100 lg:hidden">
-          <li
-            v-for="(row, idx) in paginatedTableRows"
-            :key="`mobile-${row.messageId}-${idx}`"
-            class="p-4"
+        <div :class="cardClass">
+          <div
+            v-if="tableRows.length === 0"
+            class="px-4 py-14 text-center sm:px-6 sm:py-16"
           >
-            <div class="space-y-2">
-              <div>
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Campaign</p>
-                <NuxtLink
-                  v-if="row.campaignId && isMongoId(row.campaignId)"
-                  :to="campaignPagePath(row.campaignId)"
-                  class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
-                  @click="onCampaignLinkClick($event, row.campaignId)"
-                >
-                  {{ campaignDisplayLabel(row.campaignId) }}
-                </NuxtLink>
-                <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
-                  {{ row.campaignId }}
-                </p>
-                <p v-else class="mt-0.5 text-sm text-zinc-400">—</p>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
-                <p
-                  class="mt-0.5 break-all text-sm text-zinc-800"
-                  :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
-                >
-                  {{ row.recipientEmail?.trim() || '—' }}
-                </p>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
-                <p class="mt-0.5 line-clamp-2 text-sm text-zinc-900">
-                  {{ row.subject }}
-                </p>
-              </div>
-              <p class="text-xs tabular-nums text-zinc-500">
-                {{ formatEventDate(row.latestIso) }}
-              </p>
-              <div class="flex flex-wrap gap-1.5 pt-1">
-                <span
-                  v-for="ev in row.eventTypesOrdered"
-                  :key="ev"
-                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
-                  :class="eventBadgeClass(ev)"
-                >
-                  {{ ev }}
-                </span>
-              </div>
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
+              <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
             </div>
-          </li>
-        </ul>
-
-        <div class="hidden overflow-x-auto lg:block">
-        <table class="w-full text-left text-sm">
-          <thead>
-            <tr class="border-b border-zinc-200 bg-zinc-50/90">
-              <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
-                Campaign
-              </th>
-              <th scope="col" class="min-w-[9rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
-                Recipient
-              </th>
-              <th scope="col" class="min-w-[10rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
-                Subject
-              </th>
-              <th scope="col" class="whitespace-nowrap px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
-                Date
-              </th>
-              <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
-                Events
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-zinc-100">
-            <tr
-              v-for="(row, idx) in paginatedTableRows"
-              :key="`${row.messageId}-${idx}`"
-              class="transition-colors hover:bg-zinc-50/80"
+            <p class="mt-4 text-sm font-medium text-zinc-900">
+              No messages match your filters
+            </p>
+            <p class="mt-1 text-sm text-zinc-500">
+              Try clearing search, widening the date range, or resetting event types.
+            </p>
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              class="mt-6 inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+              @click="clearAllFilters"
             >
-              <td class="px-5 py-4 align-top sm:px-6">
-                <NuxtLink
-                  v-if="row.campaignId && isMongoId(row.campaignId)"
-                  :to="campaignPagePath(row.campaignId)"
-                  class="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
-                  :title="row.campaignId"
-                  @click="onCampaignLinkClick($event, row.campaignId)"
-                >
-                  {{ campaignDisplayLabel(row.campaignId) }}
-                </NuxtLink>
-                <span v-else-if="row.campaignId" class="font-mono text-xs text-zinc-700">{{
-                  row.campaignId
-                }}</span>
-                <span v-else class="text-zinc-400">—</span>
-              </td>
-              <td
-                class="max-w-[14rem] break-all px-5 py-4 align-top text-sm text-zinc-800 sm:px-6"
-                :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
+              Clear all filters
+            </button>
+          </div>
+
+          <template v-else>
+            <ul class="divide-y divide-zinc-100 lg:hidden">
+              <li
+                v-for="(row, idx) in paginatedTableRows"
+                :key="`mobile-${row.messageId}-${idx}`"
+                class="p-4"
               >
-                {{ row.recipientEmail?.trim() || '—' }}
-              </td>
-              <td class="max-w-xs px-5 py-4 align-top text-zinc-900 sm:px-6" :title="row.subject">
-                <span class="line-clamp-2 leading-snug">{{ row.subject }}</span>
-              </td>
-              <td class="whitespace-nowrap px-5 py-4 align-top tabular-nums text-zinc-600 sm:px-6">
-                {{ formatEventDate(row.latestIso) }}
-              </td>
-              <td class="px-5 py-4 align-top sm:px-6">
-                <div class="flex flex-wrap gap-1.5">
-                  <span
-                    v-for="ev in row.eventTypesOrdered"
-                    :key="ev"
-                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
-                    :class="eventBadgeClass(ev)"
-                  >
-                    {{ ev }}
-                  </span>
+                <div class="space-y-2">
+                  <div :class="{ hidden: hideCampaignColumn }">
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Campaign</p>
+                    <NuxtLink
+                      v-if="row.campaignId && isMongoId(row.campaignId)"
+                      :to="campaignPagePath(row.campaignId)"
+                      class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
+                      @click="onCampaignLinkClick($event, row.campaignId)"
+                    >
+                      {{ campaignDisplayLabel(row.campaignId) }}
+                    </NuxtLink>
+                    <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
+                      {{ row.campaignId }}
+                    </p>
+                    <p v-else class="mt-0.5 text-sm text-zinc-400">—</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
+                    <p
+                      class="mt-0.5 break-all text-sm text-zinc-800"
+                      :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
+                    >
+                      {{ row.recipientEmail?.trim() || '—' }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
+                    <p class="mt-0.5 line-clamp-2 text-sm text-zinc-900">
+                      {{ row.subject }}
+                    </p>
+                  </div>
+                  <p class="text-xs tabular-nums text-zinc-500">
+                    {{ formatEventDate(row.latestIso) }}
+                  </p>
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    <span
+                      v-for="ev in row.eventTypesOrdered"
+                      :key="ev"
+                      class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
+                      :class="eventBadgeClass(ev)"
+                    >
+                      {{ ev }}
+                    </span>
+                  </div>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        </div>
+              </li>
+            </ul>
 
-        <div
-          v-if="totalPages > 1"
-          class="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
-        >
-          <p class="min-w-0 text-xs tabular-nums text-zinc-500 sm:text-sm">
-            <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-            <span class="text-zinc-300"> / </span>
-            <span>{{ paginationMeta.total.toLocaleString() }}</span>
-          </p>
-          <nav class="flex shrink-0 items-center gap-1 sm:gap-1.5" aria-label="Tracking pagination">
-            <button
-              type="button"
-              class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-              :disabled="currentPage === 1"
-              @click="currentPage -= 1"
+            <div class="hidden overflow-x-auto lg:block">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="border-b border-zinc-200 bg-zinc-50/90">
+                    <th
+                      scope="col"
+                      class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6"
+                      :class="{ hidden: hideCampaignColumn }"
+                    >
+                      Campaign
+                    </th>
+                    <th scope="col" class="min-w-[9rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                      Recipient
+                    </th>
+                    <th scope="col" class="min-w-[10rem] px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                      Subject
+                    </th>
+                    <th scope="col" class="whitespace-nowrap px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                      Date
+                    </th>
+                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
+                      Events
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-100">
+                  <tr
+                    v-for="(row, idx) in paginatedTableRows"
+                    :key="`${row.messageId}-${idx}`"
+                    class="transition-colors hover:bg-zinc-50/80"
+                  >
+                    <td class="px-5 py-4 align-top sm:px-6" :class="{ hidden: hideCampaignColumn }">
+                      <NuxtLink
+                        v-if="row.campaignId && isMongoId(row.campaignId)"
+                        :to="campaignPagePath(row.campaignId)"
+                        class="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
+                        :title="row.campaignId"
+                        @click="onCampaignLinkClick($event, row.campaignId)"
+                      >
+                        {{ campaignDisplayLabel(row.campaignId) }}
+                      </NuxtLink>
+                      <span v-else-if="row.campaignId" class="font-mono text-xs text-zinc-700">{{
+                        row.campaignId
+                      }}</span>
+                      <span v-else class="text-zinc-400">—</span>
+                    </td>
+                    <td
+                      class="max-w-[14rem] break-all px-5 py-4 align-top text-sm text-zinc-800 sm:px-6"
+                      :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
+                    >
+                      {{ row.recipientEmail?.trim() || '—' }}
+                    </td>
+                    <td class="max-w-xs px-5 py-4 align-top text-zinc-900 sm:px-6" :title="row.subject">
+                      <span class="line-clamp-2 leading-snug">{{ row.subject }}</span>
+                    </td>
+                    <td class="whitespace-nowrap px-5 py-4 align-top tabular-nums text-zinc-600 sm:px-6">
+                      {{ formatEventDate(row.latestIso) }}
+                    </td>
+                    <td class="px-5 py-4 align-top sm:px-6">
+                      <div class="flex flex-wrap gap-1.5">
+                        <span
+                          v-for="ev in row.eventTypesOrdered"
+                          :key="ev"
+                          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                          :class="eventBadgeClass(ev)"
+                        >
+                          {{ ev }}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              v-if="totalPages > 1"
+              class="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
             >
-              <span class="sm:hidden">Prev</span>
-              <span class="hidden sm:inline">Previous</span>
-            </button>
-            <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-zinc-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
-              <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
-              <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
-            </span>
-            <button
-              type="button"
-              class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-              :disabled="currentPage === totalPages"
-              @click="currentPage += 1"
-            >
-              Next
-            </button>
-          </nav>
+              <p class="min-w-0 text-xs tabular-nums text-zinc-500 sm:text-sm">
+                <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+                <span class="text-zinc-300"> / </span>
+                <span>{{ paginationMeta.total.toLocaleString() }}</span>
+              </p>
+              <nav class="flex shrink-0 items-center gap-1 sm:gap-1.5" aria-label="Tracking pagination">
+                <button
+                  type="button"
+                  class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+                  :disabled="currentPage === 1"
+                  @click="currentPage -= 1"
+                >
+                  <span class="sm:hidden">Prev</span>
+                  <span class="hidden sm:inline">Previous</span>
+                </button>
+                <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-zinc-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
+                  <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+                  <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+                  :disabled="currentPage === totalPages"
+                  @click="currentPage += 1"
+                >
+                  Next
+                </button>
+              </nav>
+            </div>
+          </template>
         </div>
-        </div>
-      </div>
       </div>
     </div>
 
@@ -660,10 +670,14 @@ const hasActiveFilters = computed(
         </svg>
       </div>
       <h3 class="mt-5 text-lg font-semibold text-zinc-900">
-        No events in this report
+        {{ campaignId?.trim() ? 'No tracking events for this campaign yet' : 'No events in this report' }}
       </h3>
       <p class="mt-2 max-w-sm text-sm text-zinc-500">
-        After you send campaigns, opens, clicks, and delivery events will show up here.
+        {{
+          campaignId?.trim()
+            ? 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
+            : 'After you send campaigns, opens, clicks, and delivery events will show up here.'
+        }}
       </p>
     </div>
   </div>
