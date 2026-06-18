@@ -341,45 +341,38 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
             <span class="shrink-0 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:px-4 sm:text-[15px]">{{ designSectionToggleLabel }}</span>
           </button>
           <div v-if="savedTemplateHtml" class="border-t border-slate-100 bg-slate-50/50 px-5 py-5 sm:px-6 sm:py-6">
-            <div class="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
-              <div class="flex flex-col gap-4 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0">
-                  <h3 class="text-base font-semibold text-slate-900">Current email design</h3>
-                  <p class="mt-1 text-sm text-slate-500">{{ designSourceSummary }}</p>
-                </div>
-                <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                  <button
-                    type="button"
-                    class="rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
-                    @click="confirmChangeDesign"
-                  >
-                    Change design
-                  </button>
-                  <button
-                    v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
-                    type="button"
-                    class="rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
-                    @click="openEditorWithCurrentDesign"
-                  >
-                    Edit in editor
-                  </button>
-                </div>
-              </div>
-              <div class="relative min-h-[280px] max-h-[min(480px,55vh)] overflow-auto bg-[#f8f4ef]">
-                <iframe
-                  :srcdoc="previewSrcdoc(designPreviewHtml || '')"
-                  title="Email preview"
-                  class="absolute inset-0 h-full w-full border-0"
-                  sandbox="allow-same-origin"
-                />
-              </div>
-              <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-                Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
-              </p>
-              <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-                Save the campaign once to get a stable link for the editor.
-              </p>
-            </div>
+            <TenantCampaignEmailPreview
+              :html="designPreviewHtml"
+              title="Current email design"
+              :subject="form.subject"
+              :summary="designSourceSummary"
+            >
+              <template #actions>
+                <button
+                  type="button"
+                  class="rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
+                  @click="confirmChangeDesign"
+                >
+                  Change design
+                </button>
+                <button
+                  v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
+                  type="button"
+                  class="rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+                  @click="openEditorWithCurrentDesign"
+                >
+                  Edit in editor
+                </button>
+              </template>
+              <template #footer>
+                <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                  Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
+                </p>
+                <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                  Save the campaign once to get a stable link for the editor.
+                </p>
+              </template>
+            </TenantCampaignEmailPreview>
           </div>
         </div>
 
@@ -1769,14 +1762,5 @@ async function handleCreate() {
       saveError.value = 'Something went wrong'
     }
   }
-}
-
-function previewSrcdoc(html: string, scale = 0.45) {
-  // Don't escape - escaping " breaks inline styles (style="...")
-  return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);min-height:100%;display:flex;justify-content:center;align-items:flex-start}
-#preview-wrap{transform:scale(${scale});transform-origin:center top;width:600px}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
 }
 </script>

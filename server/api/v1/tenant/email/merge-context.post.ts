@@ -24,7 +24,7 @@ import {
   mergeUserSnapshotForContact,
   tenantUserFieldsFromAuth
 } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
+import { getUnsubscribePageUrl } from '@server/utils/unsubscribePageUrl'
 
 type MergeRootBody =
   | { campaignId: string }
@@ -61,20 +61,31 @@ export default defineEventHandler(async (event) => {
   const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(dynModel)
 
   let clientKeyHash: string | undefined
+  let crmAppUrl: string | undefined
   if (dbName) {
     try {
       const registry = await getRegistryConnection()
       const row = await findRegistryTenantByDbName(registry, dbName)
       if (row?.clientKeyHash) clientKeyHash = row.clientKeyHash
+      if (row?.crmAppUrl) crmAppUrl = row.crmAppUrl
     } catch {
       /* preview only */
     }
   }
+  if (
+    !crmAppUrl &&
+    auth &&
+    typeof auth === 'object' &&
+    'crmAppUrl' in auth &&
+    typeof (auth as { crmAppUrl?: unknown }).crmAppUrl === 'string'
+  ) {
+    crmAppUrl = (auth as { crmAppUrl: string }).crmAppUrl.trim() || undefined
+  }
 
-  const marketingBase = getMarketingPublicBaseUrl()
-  const previewUnsubscribePlaceholder = marketingBase
-    ? `${marketingBase}/api/v1/unsubscribe?token=preview`
-    : undefined
+  const previewUnsubscribePlaceholder = (() => {
+    const pageUrl = getUnsubscribePageUrl(crmAppUrl)
+    return pageUrl ? `${pageUrl}?token=preview` : undefined
+  })()
 
   const authSnap = tenantUserFieldsFromAuth(auth)
 
@@ -100,6 +111,7 @@ export default defineEventHandler(async (event) => {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
       clientKeyHash,
+      crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
     return { mergeRoot }
@@ -131,6 +143,7 @@ export default defineEventHandler(async (event) => {
     dbName,
     contactId: contact?._id ? String(contact._id) : undefined,
     clientKeyHash,
+    crmAppUrl,
     previewPlaceholder: previewUnsubscribePlaceholder
   })
   return { mergeRoot }

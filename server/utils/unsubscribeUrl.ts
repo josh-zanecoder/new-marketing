@@ -1,14 +1,15 @@
-import { getMarketingPublicBaseUrl } from './marketingPublicBaseUrl'
+import { getUnsubscribePageUrl } from './unsubscribePageUrl'
 import { signUnsubscribeToken } from './unsubscribeToken'
 
-/** Signed URL merged into templates as `{{unsubscribe}}`. */
+/** Signed URL merged into templates as `{{unsubscribe}}` (CRM confirmation page). */
 export function buildUnsubscribeUrl(
   dbName: string,
   contactId: string,
-  clientKeyHash: string
+  clientKeyHash: string,
+  crmAppUrl?: string | null
 ): string {
-  const base = getMarketingPublicBaseUrl()
-  if (!base) return ''
+  const pageUrl = getUnsubscribePageUrl(crmAppUrl)
+  if (!pageUrl) return ''
   const token = signUnsubscribeToken({ db: dbName, c: String(contactId) }, clientKeyHash)
-  return `${base}/api/v1/unsubscribe?token=${encodeURIComponent(token)}`
+  return `${pageUrl}?token=${encodeURIComponent(token)}`
 }

@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   },
   srcDir: 'app',
   devServer: {
+    host: process.env.NUXT_HOST || '0.0.0.0',
     port: Number(process.env.NUXT_PORT) || 3001
   },
   compatibilityDate: '2025-07-15',

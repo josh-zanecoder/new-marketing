@@ -26,7 +26,7 @@ import {
   buildCampaignReplyTo,
   replyToNameFromUserSnapshot
 } from '@server/utils/email/replyToFromContactMetadata'
-import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
+import { getUnsubscribePageUrl } from '@server/utils/unsubscribePageUrl'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -70,19 +70,28 @@ function testSubjectLine(subject: string): string {
 async function resolveRegistryMeta(dbName: string): Promise<{
   brevoTenantTagValue: string
   unsubscribeSigningSecret?: string
+  crmAppUrl?: string
 }> {
   let brevoTenantTagValue = dbName
   let unsubscribeSigningSecret: string | undefined
+  let crmAppUrl: string | undefined
   try {
     const registry = await getRegistryConnection()
     const row = await findRegistryTenantByDbName(registry, dbName)
     const tid = row?.tenantId?.trim()
     if (tid) brevoTenantTagValue = tid
     if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
+    if (row?.crmAppUrl) crmAppUrl = row.crmAppUrl
   } catch (err) {
     console.warn('[TestEmail] registry lookup failed', { dbName, err })
   }
-  return { brevoTenantTagValue, unsubscribeSigningSecret }
+  return { brevoTenantTagValue, unsubscribeSigningSecret, crmAppUrl }
+}
+
+function crmAppUrlFromAuth(auth: unknown): string | undefined {
+  if (!auth || typeof auth !== 'object' || !('crmAppUrl' in auth)) return undefined
+  const raw = (auth as { crmAppUrl?: unknown }).crmAppUrl
+  return typeof raw === 'string' && raw.trim() ? raw.trim().replace(/\/+$/, '') : undefined
 }
 
 function replyToFromSessionUser(auth: unknown): { email: string; name: string } | undefined {
@@ -115,10 +124,11 @@ export async function sendCampaignTestEmail(
   )
 
   const registryMeta = await resolveRegistryMeta(dbName)
-  const marketingBase = getMarketingPublicBaseUrl()
-  const previewUnsubscribePlaceholder = marketingBase
-    ? `${marketingBase}/api/v1/unsubscribe?token=preview`
-    : undefined
+  const crmAppUrl = registryMeta.crmAppUrl ?? crmAppUrlFromAuth(auth)
+  const previewUnsubscribePlaceholder = (() => {
+    const pageUrl = getUnsubscribePageUrl(crmAppUrl)
+    return pageUrl ? `${pageUrl}?token=preview` : undefined
+  })()
   const authSnap = tenantUserFieldsFromAuth(auth)
 
   const campaignId = String(input.campaignId ?? '').trim()
@@ -158,6 +168,7 @@ export async function sendCampaignTestEmail(
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
       clientKeyHash: registryMeta.unsubscribeSigningSecret,
+      crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
     replyTo = buildCampaignReplyTo({ campaign, sessionUser: authSnap })
@@ -200,6 +211,7 @@ export async function sendCampaignTestEmail(
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
       clientKeyHash: registryMeta.unsubscribeSigningSecret,
+      crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
     replyTo = replyToFromSessionUser(auth)
