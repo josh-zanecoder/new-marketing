@@ -70,13 +70,13 @@ function clearAllFilters() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 sm:space-y-8">
     <section
       class="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] sm:p-5"
       aria-label="Analytics filters"
     >
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <div>
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
           <h2 class="text-sm font-semibold text-zinc-900">
             Filters
           </h2>
@@ -84,10 +84,10 @@ function clearAllFilters() {
             Refine metrics and the performance chart
           </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50"
+            class="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 sm:flex-none"
             :disabled="pending"
             @click="() => refresh()"
           >
@@ -96,7 +96,7 @@ function clearAllFilters() {
           <button
             v-if="hasActiveFilters"
             type="button"
-            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+            class="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
             @click="clearAllFilters"
           >
             Clear filters
@@ -105,7 +105,7 @@ function clearAllFilters() {
       </div>
 
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-5">
-        <div class="w-fit shrink-0">
+        <div class="w-full shrink-0 lg:w-auto">
           <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
           <TenantBrevoTrackingDateRangePicker
             v-model:preset="datePreset"

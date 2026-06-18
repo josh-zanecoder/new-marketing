@@ -1,11 +1,15 @@
+<script setup lang="ts">
+definePageMeta({ layout: 'default' })
+</script>
+
 <template>
-  <div class="w-full min-w-0 space-y-8">
-    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 sm:space-y-8">
+    <header>
       <div class="min-w-0 space-y-1">
         <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">
           Insights
         </p>
-        <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+        <h1 class="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl lg:text-3xl">
           Marketing Analytics
         </h1>
         <p class="max-w-2xl text-sm text-zinc-500 sm:text-[15px]">

@@ -151,22 +151,14 @@
               </div>
               <div v-if="form.recipientsMode === 'list'">
                 <label class="mb-2 block text-sm font-medium text-slate-700">Recipient list</label>
-                <select
+                <TenantFilterSelect
+                  id="campaign-edit-recipient-list"
                   v-model="form.recipientsListId"
-                  class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:text-[15px]"
+                  label="Recipient list"
+                  variant="field"
+                  :options="recipientListSelectOptions"
                   :disabled="recipientListsPending"
-                >
-                  <option value="">
-                    {{ recipientListsPending ? 'Loading lists…' : 'Choose a list' }}
-                  </option>
-                  <option
-                    v-for="list in recipientLists"
-                    :key="list.id"
-                    :value="list.id"
-                  >
-                    {{ list.name }}
-                  </option>
-                </select>
+                />
                 <p
                   v-if="recipientListsError"
                   class="mt-2 text-sm text-red-600"
@@ -438,14 +430,15 @@
                 @input="syncSubjectCaret"
                 @blur="syncSubjectCaret"
               >
-              <select
+              <TenantFilterSelect
+                id="campaign-edit-subject-variable"
                 v-model="subjectVariable"
-                class="w-full shrink-0 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:w-44 sm:text-[15px]"
-                @mousedown="syncSubjectCaret"
-              >
-                <option value="">Insert variable</option>
-                <option v-for="v in subjectVariables" :key="v.value" :value="v.value">{{ v.label }}</option>
-              </select>
+                label="Insert variable"
+                variant="field"
+                :options="subjectVariableSelectOptions"
+                class="w-full shrink-0 sm:w-44"
+                @before-select="syncSubjectCaret"
+              />
             </div>
           </div>
         </div>
@@ -1007,6 +1000,22 @@ const subjectVariables = computed(() => {
     return true
   })
 })
+
+const subjectVariableSelectOptions = computed(() => [
+  { value: '', label: 'Insert variable' },
+  ...subjectVariables.value
+])
+
+const recipientListSelectOptions = computed(() => [
+  {
+    value: '',
+    label: recipientListsPending.value ? 'Loading lists…' : 'Choose a list'
+  },
+  ...recipientLists.value.map((list) => ({
+    value: list.id,
+    label: list.name
+  }))
+])
 
 async function loadDynamicVariables() {
   if (dynamicVariablesLoaded.value) return

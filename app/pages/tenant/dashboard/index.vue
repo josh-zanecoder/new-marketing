@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TenantDashboardRecentCampaign } from '~/composables/useTenantMarketingApi'
 
+definePageMeta({ layout: 'default' })
+
 const marketingApi = useTenantMarketingApi()
 
 const { data, pending, error, refresh } = await useAsyncData('tenant-dashboard', () =>
@@ -9,6 +11,65 @@ const { data, pending, error, refresh } = await useAsyncData('tenant-dashboard',
 
 const stats = computed(() => data.value?.stats)
 const recentCampaigns = computed(() => data.value?.recentCampaigns ?? [])
+
+interface StatCard {
+  id: string
+  label: string
+  value: string
+  hint?: string
+  cardClass: string
+  iconBgClass: string
+  iconClass: string
+}
+
+const statCards = computed((): StatCard[] => {
+  const s = stats.value
+  const loading = pending.value
+
+  const deliveryHint =
+    !loading && s && s.emailsDeliveredTotal + s.emailsFailedTotal > 0
+      ? `${formatInt(s.emailsDeliveredTotal)} delivered, ${formatInt(s.emailsFailedTotal)} failed`
+      : !loading
+        ? 'After sends finish (sent vs failed)'
+        : undefined
+
+  return [
+    {
+      id: 'total-campaigns',
+      label: 'Total campaigns',
+      value: loading ? '…' : formatInt(s?.totalCampaigns ?? 0),
+      cardClass: 'border-slate-200/80 bg-white',
+      iconBgClass: 'bg-slate-100',
+      iconClass: 'text-slate-600'
+    },
+    {
+      id: 'sent-month',
+      label: 'Emails sent this month',
+      value: loading ? '…' : formatInt(s?.sentThisMonth ?? 0),
+      cardClass: 'border-indigo-100/90 bg-gradient-to-br from-indigo-50/80 to-white',
+      iconBgClass: 'bg-indigo-100',
+      iconClass: 'text-indigo-600'
+    },
+    {
+      id: 'scheduled',
+      label: 'Scheduled',
+      value: loading ? '…' : formatInt(s?.scheduledCampaigns ?? 0),
+      hint: 'Campaigns waiting to send',
+      cardClass: 'border-sky-100/80 bg-gradient-to-br from-sky-50/60 to-white',
+      iconBgClass: 'bg-sky-100',
+      iconClass: 'text-sky-600'
+    },
+    {
+      id: 'delivery-rate',
+      label: 'Delivery rate',
+      value: loading ? '…' : formatPercent(s?.deliveryRatePercent ?? null),
+      hint: deliveryHint,
+      cardClass: 'border-emerald-100/80 bg-gradient-to-br from-emerald-50/60 to-white',
+      iconBgClass: 'bg-emerald-100',
+      iconClass: 'text-emerald-600'
+    }
+  ]
+})
 
 function formatInt(n: number) {
   return new Intl.NumberFormat().format(n)
@@ -54,20 +115,49 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
 </script>
 
 <template>
-  <div class="w-full min-w-0 space-y-8">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Dashboard</h1>
-        <p class="mt-1.5 text-sm text-slate-500">Overview of your marketing activity</p>
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Overview</p>
+        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+          Dashboard
+        </h1>
+        <p class="text-sm text-slate-500">Your marketing activity at a glance</p>
       </div>
-      <button
-        type="button"
-        class="inline-flex shrink-0 items-center justify-center self-start rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 disabled:pointer-events-none disabled:opacity-50"
-        :disabled="pending"
-        @click="() => refresh()"
-      >
-        Refresh
-      </button>
+      <div class="flex items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          to="/tenant/campaigns/add"
+          class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700"
+        >
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          New campaign
+        </NuxtLink>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 disabled:pointer-events-none disabled:opacity-50"
+          :disabled="pending"
+          @click="() => refresh()"
+        >
+          <svg
+            class="h-4 w-4"
+            :class="pending ? 'animate-spin' : ''"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
+      </div>
     </header>
 
     <div
@@ -78,133 +168,275 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
       Could not load dashboard. Try again.
     </div>
 
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label="Key metrics">
       <div
-        class="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+        v-if="pending"
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4"
       >
-        <p class="text-sm font-medium text-slate-500">Total campaigns</p>
-        <p class="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
-          <span v-if="pending" class="text-slate-300">…</span>
-          <span v-else>{{ formatInt(stats?.totalCampaigns ?? 0) }}</span>
-        </p>
-      </div>
-      <div
-        class="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
-      >
-        <p class="text-sm font-medium text-slate-500">Emails sent this month</p>
-        <p class="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-indigo-600">
-          <span v-if="pending" class="text-slate-300">…</span>
-          <span v-else>{{ formatInt(stats?.sentThisMonth ?? 0) }}</span>
-        </p>
-      </div>
-      <div
-        class="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
-      >
-        <p class="text-sm font-medium text-slate-500">Scheduled</p>
-        <p class="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
-          <span v-if="pending" class="text-slate-300">…</span>
-          <span v-else>{{ formatInt(stats?.scheduledCampaigns ?? 0) }}</span>
-        </p>
-        <p class="mt-2 text-xs text-slate-400">Campaigns waiting to send</p>
-      </div>
-      <div
-        class="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
-      >
-        <p class="text-sm font-medium text-slate-500">Delivery rate</p>
-        <p class="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-emerald-600">
-          <span v-if="pending" class="text-slate-300">…</span>
-          <span v-else>{{ formatPercent(stats?.deliveryRatePercent ?? null) }}</span>
-        </p>
-        <p
-          v-if="!pending && stats && stats.emailsDeliveredTotal + stats.emailsFailedTotal > 0"
-          class="mt-2 text-xs text-slate-400"
+        <div
+          v-for="n in 4"
+          :key="n"
+          class="animate-pulse rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5"
         >
-          {{ formatInt(stats.emailsDeliveredTotal) }} delivered,
-          {{ formatInt(stats.emailsFailedTotal) }} failed
-        </p>
-        <p v-else-if="!pending" class="mt-2 text-xs text-slate-400">
-          After sends finish (sent vs failed)
-        </p>
+          <div class="h-10 w-10 rounded-xl bg-slate-100" />
+          <div class="mt-4 h-3.5 w-24 rounded bg-slate-100" />
+          <div class="mt-3 h-8 w-16 rounded bg-slate-100" />
+        </div>
       </div>
-    </div>
 
-    <div
-      class="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-2xl border border-slate-200/80 bg-white px-6 py-4 text-sm text-slate-600 shadow-sm shadow-slate-900/[0.04]"
+      <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+        <article
+          v-for="card in statCards"
+          :key="card.id"
+          class="rounded-2xl border p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-5"
+          :class="card.cardClass"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11"
+              :class="card.iconBgClass"
+            >
+              <svg
+                v-if="card.id === 'total-campaigns'"
+                class="h-5 w-5"
+                :class="card.iconClass"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              <svg
+                v-else-if="card.id === 'sent-month'"
+                class="h-5 w-5"
+                :class="card.iconClass"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+                />
+              </svg>
+              <svg
+                v-else-if="card.id === 'scheduled'"
+                class="h-5 w-5"
+                :class="card.iconClass"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <svg
+                v-else
+                class="h-5 w-5"
+                :class="card.iconClass"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+          </div>
+          <p class="mt-3 text-xs font-medium text-slate-500 sm:text-sm">{{ card.label }}</p>
+          <p
+            class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-slate-900 sm:mt-2 sm:text-3xl"
+            :class="{
+              'text-indigo-600': card.id === 'sent-month',
+              'text-emerald-600': card.id === 'delivery-rate' && card.value !== '—'
+            }"
+          >
+            {{ card.value }}
+          </p>
+          <p v-if="card.hint" class="mt-1.5 line-clamp-2 text-[11px] leading-snug text-slate-400 sm:text-xs">
+            {{ card.hint }}
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section
+      aria-label="Audience summary"
+      class="rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04]"
     >
-      <span v-if="pending" class="text-slate-400">Loading audience…</span>
-      <template v-else>
+      <div v-if="pending" class="px-4 py-4 text-sm text-slate-400 sm:px-6">Loading audience…</div>
+      <div
+        v-else
+        class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+      >
         <NuxtLink
           to="/tenant/recipient-list"
-          class="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+          class="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50/90 sm:px-6"
         >
-          {{ formatInt(stats?.recipientLists ?? 0) }} recipient lists
+          <div
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <p class="text-lg font-semibold tabular-nums text-slate-900">
+              {{ formatInt(stats?.recipientLists ?? 0) }}
+            </p>
+            <p class="text-xs font-medium text-indigo-600 group-hover:text-indigo-700">Recipient lists</p>
+          </div>
         </NuxtLink>
-        <span class="hidden h-4 w-px bg-slate-200 sm:block" aria-hidden="true" />
+
         <NuxtLink
           to="/tenant/contacts"
-          class="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+          class="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50/90 sm:px-6"
         >
-          {{ formatInt(stats?.contacts ?? 0) }} contacts
+          <div
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 transition-colors group-hover:bg-violet-100"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <p class="text-lg font-semibold tabular-nums text-slate-900">
+              {{ formatInt(stats?.contacts ?? 0) }}
+            </p>
+            <p class="text-xs font-medium text-indigo-600 group-hover:text-indigo-700">Contacts</p>
+          </div>
         </NuxtLink>
-        <span
-          v-if="stats && stats.emailsPendingTotal > 0"
-          class="w-full text-slate-500 sm:ml-auto sm:w-auto"
-        >
-          {{ formatInt(stats.emailsPendingTotal) }} sends still queued
-        </span>
-      </template>
-    </div>
 
-    <div
+        <div class="flex items-center gap-3 px-4 py-4 sm:px-6">
+          <div
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <p class="text-lg font-semibold tabular-nums text-slate-900">
+              {{ formatInt(stats?.emailsPendingTotal ?? 0) }}
+            </p>
+            <p class="text-xs text-slate-500">Sends still queued</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      aria-label="Recent campaigns"
       class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
     >
       <div
-        class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 px-6 py-5"
+        class="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5"
       >
-        <div>
+        <div class="min-w-0">
           <h2 class="text-base font-semibold text-slate-900">Recent campaigns</h2>
           <p class="mt-0.5 text-xs text-slate-500">Last updated activity</p>
         </div>
         <NuxtLink
           to="/tenant/campaigns"
-          class="text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+          class="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
         >
           View all
-        </NuxtLink>
-      </div>
-
-      <div v-if="pending" class="p-14 text-center text-sm text-slate-500">Loading…</div>
-      <div v-else-if="recentCampaigns.length === 0" class="px-6 py-14 text-center">
-        <p class="text-sm text-slate-500">No campaigns yet</p>
-        <NuxtLink
-          to="/tenant/campaigns/add"
-          class="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
-        >
-          Create your first campaign
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </NuxtLink>
       </div>
+
+      <div v-if="pending" class="space-y-3 p-4 sm:p-6">
+        <div v-for="n in 3" :key="n" class="animate-pulse rounded-xl border border-slate-100 p-4">
+          <div class="h-4 w-2/3 max-w-xs rounded bg-slate-100" />
+          <div class="mt-2 h-3 w-1/2 max-w-[12rem] rounded bg-slate-100" />
+        </div>
+      </div>
+
+      <div v-else-if="recentCampaigns.length === 0" class="px-4 py-10 text-center sm:px-6 sm:py-14">
+        <div
+          class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"
+        >
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
+          </svg>
+        </div>
+        <p class="mt-4 text-sm font-medium text-slate-900">No campaigns yet</p>
+        <p class="mt-1 text-sm text-slate-500">Create your first campaign to start sending.</p>
+        <NuxtLink
+          to="/tenant/campaigns/add"
+          class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
+        >
+          Create your first campaign
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </NuxtLink>
+      </div>
+
       <ul v-else class="divide-y divide-slate-100">
         <li v-for="c in recentCampaigns" :key="c.id">
           <NuxtLink
             :to="`/tenant/campaigns/${c.id}`"
-            class="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-slate-50/90 sm:flex-row sm:items-center sm:justify-between"
+            class="block px-4 py-3.5 transition-colors hover:bg-slate-50/90 sm:px-6 sm:py-4"
           >
-            <div class="min-w-0">
-              <p class="truncate font-medium text-slate-900">{{ c.name || 'Untitled' }}</p>
-              <p class="mt-0.5 line-clamp-2 text-xs text-slate-500">{{ rowSubtitle(c) }}</p>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-slate-900 sm:text-[15px]">
+                  {{ c.name || 'Untitled' }}
+                </p>
+                <p class="mt-0.5 line-clamp-2 text-xs text-slate-500">{{ rowSubtitle(c) }}</p>
+              </div>
+              <span
+                class="inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset sm:text-xs"
+                :class="statusBadgeClass(c.status)"
+              >
+                {{ c.status }}
+              </span>
             </div>
-            <span
-              class="inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset"
-              :class="statusBadgeClass(c.status)"
-            >
-              {{ c.status }}
-            </span>
           </NuxtLink>
         </li>
       </ul>
-    </div>
+    </section>
   </div>
 </template>
