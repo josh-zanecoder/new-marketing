@@ -352,7 +352,29 @@ async function handleUnschedule() {
 }
 
 type CampaignViewTab = 'details' | 'tracking'
-const campaignViewTab = ref<CampaignViewTab>('details')
+
+function campaignViewTabFromQuery(view: unknown): CampaignViewTab | null {
+  if (view === 'tracking') return 'tracking'
+  if (view === 'details') return 'details'
+  return null
+}
+
+const campaignViewTab = ref<CampaignViewTab>(
+  campaignViewTabFromQuery(route.query.view) ?? 'details'
+)
+
+watch(
+  () => route.query.view,
+  (view) => {
+    const tab = campaignViewTabFromQuery(view)
+    if (tab) campaignViewTab.value = tab
+  }
+)
+
+function setCampaignViewTab(tab: CampaignViewTab) {
+  campaignViewTab.value = tab
+  void navigateTo({ query: { ...route.query, view: tab } }, { replace: true })
+}
 </script>
 
 <template>
@@ -592,7 +614,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'details' ? 'page' : undefined"
-            @click="campaignViewTab = 'details'"
+            @click="setCampaignViewTab('details')"
           >
             Details
           </button>
@@ -605,7 +627,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'tracking' ? 'page' : undefined"
-            @click="campaignViewTab = 'tracking'"
+            @click="setCampaignViewTab('tracking')"
           >
             Tracking
           </button>
@@ -801,7 +823,7 @@ const campaignViewTab = ref<CampaignViewTab>('details')
           class="min-w-0 pt-2"
           aria-label="Campaign send tracking"
         >
-          <TenantCampaignSendTrackingTable :campaign-id="id" />
+          <TenantBrevoTrackingEventsPanel :campaign-id="id" />
         </section>
       </div>
     </div>
