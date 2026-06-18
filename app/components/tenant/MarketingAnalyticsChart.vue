@@ -49,7 +49,7 @@ const hasChartData = computed(() =>
     >
       <div
         v-if="loading"
-        class="flex h-[22rem] items-center justify-center sm:h-96"
+        class="flex h-56 items-center justify-center sm:h-96"
       >
         <div class="flex flex-col items-center gap-3">
           <div class="h-9 w-9 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-600" />
@@ -60,16 +60,16 @@ const hasChartData = computed(() =>
       </div>
 
       <ClientOnly v-else>
-        <div v-if="hasChartData" class="px-3 pb-4 pt-3 sm:px-4 sm:pb-5 sm:pt-4">
+        <div v-if="hasChartData" class="px-1 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-4">
           <VChart
-            class="h-[22rem] w-full min-h-[22rem] sm:h-96"
+            class="h-56 w-full min-h-[14rem] sm:h-96 sm:min-h-[24rem]"
             :option="chartOption"
             autoresize
           />
         </div>
         <div
           v-else
-          class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
+          class="flex flex-col items-center px-4 py-12 text-center sm:px-6 sm:py-20"
         >
           <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
             <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -84,7 +84,7 @@ const hasChartData = computed(() =>
           </p>
         </div>
         <template #fallback>
-          <div class="flex h-[22rem] items-center justify-center text-sm text-zinc-500 sm:h-96">
+          <div class="flex h-56 items-center justify-center text-sm text-zinc-500 sm:h-96">
             Loading chart…
           </div>
         </template>

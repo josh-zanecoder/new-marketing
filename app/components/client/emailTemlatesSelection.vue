@@ -43,14 +43,6 @@ function close() {
   emit('update:modelValue', false)
 }
 
-function previewSrcdoc(html: string, scale = 0.28) {
-  return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);min-height:100%;display:flex;justify-content:center;align-items:flex-start}
-#preview-wrap{transform:scale(${scale});transform-origin:center top;width:600px}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
-}
-
 function editorPreviewSrcdoc(html: string) {
   const trimmed = html.trim()
   const body = trimmed
@@ -211,53 +203,37 @@ onUnmounted(() => {
             class="relative z-[81] flex flex-col overflow-hidden bg-white"
             :class="
               uploadEditorOpen
-                ? 'h-[100dvh] w-full'
-                : 'max-h-[min(92vh,900px)] w-full max-w-7xl rounded-t-2xl border border-slate-200/90 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/[0.04] sm:rounded-2xl'
+                ? 'h-[100dvh] w-full max-h-[100dvh]'
+                : 'max-h-[min(92dvh,900px)] w-full max-w-7xl rounded-t-2xl border border-slate-200/90 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/[0.04] sm:rounded-2xl'
             "
+            @click.stop
           >
             <!-- Full-page HTML editor: code + preview -->
             <template v-if="uploadEditorOpen">
-              <header class="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-                <div class="flex min-w-0 items-center gap-3">
+              <header class="flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6">
+                <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                   <button
                     type="button"
-                    class="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    class="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
                     @click="closeUploadEditor"
                   >
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
-                    Back
+                    <span class="hidden sm:inline">Back</span>
                   </button>
-                  <div class="min-w-0 border-l border-slate-200 pl-3">
+                  <div class="min-w-0 flex-1 border-l border-slate-200 pl-2 sm:pl-3">
                     <h2 id="email-templates-modal-title" class="truncate text-base font-semibold text-slate-900 sm:text-lg">
                       Edit HTML
                     </h2>
-                    <p class="hidden text-xs text-slate-500 sm:block">
-                      Code on the left, live preview on the right
+                    <p class="text-xs text-slate-500 sm:text-sm">
+                      <span class="sm:hidden">Edit code, preview below</span>
+                      <span class="hidden sm:inline">Code on the left, live preview on the right</span>
                     </p>
                   </div>
-                </div>
-                <div class="flex shrink-0 items-center gap-3">
-                  <label class="hidden cursor-pointer items-center gap-2 sm:flex">
-                    <input
-                      v-model="saveHtmlToLibrary"
-                      type="checkbox"
-                      class="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/30"
-                    >
-                    <span class="text-sm font-medium text-slate-700">Save to library</span>
-                  </label>
                   <button
                     type="button"
-                    class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    :disabled="uploadPending || !uploadPasteHtml.trim()"
-                    @click="onUploadFromPaste"
-                  >
-                    Use HTML
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                    class="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 sm:hidden"
                     aria-label="Close"
                     @click="close"
                   >
@@ -266,9 +242,39 @@ onUnmounted(() => {
                     </svg>
                   </button>
                 </div>
+                <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+                    <input
+                      v-model="saveHtmlToLibrary"
+                      type="checkbox"
+                      class="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/30"
+                    >
+                    <span class="text-sm font-medium text-slate-700">Save to library</span>
+                  </label>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="hidden rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 sm:inline-flex"
+                      aria-label="Close"
+                      @click="close"
+                    >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="flex-1 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:rounded-lg sm:py-2"
+                      :disabled="uploadPending || !uploadPasteHtml.trim()"
+                      @click="onUploadFromPaste"
+                    >
+                      Use HTML
+                    </button>
+                  </div>
+                </div>
               </header>
 
-              <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                 <!-- Code panel -->
                 <section class="flex min-h-0 flex-1 flex-col border-b border-slate-200 lg:w-1/2 lg:border-b-0 lg:border-r">
                   <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
@@ -284,7 +290,7 @@ onUnmounted(() => {
                   <textarea
                     id="upload-paste-html"
                     v-model="uploadPasteHtml"
-                    class="min-h-[40vh] flex-1 resize-none border-0 bg-slate-950 px-4 py-4 font-mono text-[13px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 lg:min-h-0"
+                    class="min-h-[min(36dvh,320px)] flex-1 resize-none border-0 bg-slate-950 px-3 py-3 font-mono text-[12px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 sm:px-4 sm:py-4 sm:text-[13px] lg:min-h-0"
                     placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"
                     spellcheck="false"
                     :disabled="uploadPending"
@@ -308,7 +314,7 @@ onUnmounted(() => {
                   <div class="flex shrink-0 items-center border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
                     <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Preview</span>
                   </div>
-                  <div class="relative min-h-[40vh] flex-1 bg-[#f8f4ef] lg:min-h-0">
+                  <div class="relative min-h-[min(32dvh,280px)] flex-1 bg-[#f8f4ef] lg:min-h-0">
                     <iframe
                       :srcdoc="editorPreviewDoc"
                       title="HTML preview"
@@ -329,9 +335,18 @@ onUnmounted(() => {
 
             <!-- Default picker -->
             <template v-else>
-              <header class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-5 py-5 sm:px-6">
+              <div
+                class="flex shrink-0 justify-center pt-2.5 sm:hidden"
+                aria-hidden="true"
+              >
+                <span class="h-1 w-10 rounded-full bg-slate-200" />
+              </div>
+              <header class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
                 <div class="min-w-0">
-                  <h2 id="email-templates-modal-title" class="text-xl font-semibold tracking-tight text-slate-900">
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 sm:text-xs">
+                    Design
+                  </p>
+                  <h2 id="email-templates-modal-title" class="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
                     Email design
                   </h2>
                   <p class="mt-1 max-w-lg text-sm leading-relaxed text-slate-500">
@@ -340,7 +355,7 @@ onUnmounted(() => {
                 </div>
                 <button
                   type="button"
-                  class="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                  class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 sm:h-auto sm:w-auto sm:border-0 sm:p-2"
                   aria-label="Close"
                   @click="close"
                 >
@@ -350,14 +365,14 @@ onUnmounted(() => {
                 </button>
               </header>
 
-              <div class="min-h-0 flex-1 overflow-y-auto">
+              <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 <!-- Get started -->
-                <section class="border-b border-slate-100 px-5 py-6 sm:px-6">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
+                <section class="border-b border-slate-100 px-4 py-5 sm:px-6 sm:py-6">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Get started
                     </h3>
-                    <label class="flex shrink-0 cursor-pointer items-center gap-2.5">
+                    <label class="flex shrink-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                       <input
                         v-model="saveHtmlToLibrary"
                         type="checkbox"
@@ -369,15 +384,15 @@ onUnmounted(() => {
                     </label>
                   </div>
 
-                  <div class="mt-4 grid gap-4" :class="emailEditorEnabled ? 'lg:grid-cols-2' : ''">
+                  <div class="mt-4 grid gap-3 sm:gap-4" :class="emailEditorEnabled ? 'lg:grid-cols-2' : ''">
                     <button
                       v-if="emailEditorEnabled"
                       type="button"
-                      class="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 text-left shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/[0.06]"
+                      class="group flex w-full items-center gap-3 rounded-2xl border border-slate-200/90 bg-white p-4 text-left shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/[0.06] sm:gap-4 sm:p-5"
                       @click="onScratch"
                     >
-                      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm sm:h-12 sm:w-12">
+                        <svg class="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </div>
@@ -385,21 +400,21 @@ onUnmounted(() => {
                         <div class="font-semibold text-slate-900">Create from scratch</div>
                         <p class="mt-0.5 text-sm text-slate-500">Open the GrapesJS email editor</p>
                       </div>
-                      <svg class="h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="hidden h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
 
                     <div
-                      class="rounded-2xl border border-dashed p-5 transition-colors"
+                      class="rounded-2xl border border-dashed p-4 transition-colors sm:p-5"
                       :class="uploadDragOver ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200/90 bg-slate-50/50'"
                       @dragover="onDragOver"
                       @dragleave="onDragLeave"
                       @drop="onDrop"
                     >
                       <div class="flex items-start gap-3">
-                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-                          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm sm:h-12 sm:w-12">
+                          <svg class="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
                         </div>
@@ -416,10 +431,10 @@ onUnmounted(() => {
                             :disabled="uploadPending"
                             @change="onFileChange"
                           >
-                          <div class="mt-3 flex flex-wrap gap-2">
+                          <div class="mt-3 flex flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap">
                             <button
                               type="button"
-                              class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                              class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 min-[400px]:w-auto min-[400px]:py-2"
                               :disabled="uploadPending"
                               @click="onBrowseClick"
                             >
@@ -427,13 +442,13 @@ onUnmounted(() => {
                             </button>
                             <button
                               type="button"
-                              class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                              class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 min-[400px]:w-auto min-[400px]:py-2"
                               @click="openUploadEditor"
                             >
                               Paste HTML
                             </button>
                           </div>
-                          <p class="mt-2 text-xs text-slate-400">or drag and drop .html here</p>
+                          <p class="mt-2 hidden text-xs text-slate-400 min-[400px]:block">or drag and drop .html here</p>
                           <p v-if="uploadError && !uploadEditorOpen" class="mt-2 text-xs text-red-600">
                             {{ uploadError }}
                           </p>
@@ -444,7 +459,7 @@ onUnmounted(() => {
                 </section>
 
                 <!-- Saved templates -->
-                <section class="px-5 py-6 sm:px-6">
+                <section class="px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 sm:pb-6">
                   <div class="flex items-baseline justify-between gap-3">
                     <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Saved templates
@@ -473,13 +488,13 @@ onUnmounted(() => {
                       Upload HTML, create from scratch, or sync templates from your library.
                     </p>
                   </div>
-                  <div v-else class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div v-else class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                     <article
                       v-for="t in templates"
                       :key="t.id"
                       class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06]"
                     >
-                      <div class="border-b border-slate-100 px-4 py-3">
+                      <div class="border-b border-slate-100 px-3 py-2.5 sm:px-4 sm:py-3">
                         <h4 class="truncate text-sm font-semibold text-slate-900" :title="t.name">
                           {{ t.name }}
                         </h4>
@@ -488,11 +503,10 @@ onUnmounted(() => {
                         </p>
                       </div>
                       <div class="relative aspect-[4/3] overflow-hidden bg-[#f8f4ef]">
-                        <iframe
-                          :srcdoc="previewSrcdoc(t.html, 0.26)"
+                        <TenantEmailTemplateThumbnail
+                          :html="t.html"
                           :title="`${t.name} preview`"
-                          class="pointer-events-none absolute inset-0 h-full w-full border-0"
-                          sandbox="allow-same-origin"
+                          class="absolute inset-0"
                         />
                         <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f8f4ef] to-transparent" />
                       </div>

@@ -1,17 +1,18 @@
 <template>
-  <div class="w-full min-w-0 space-y-8 antialiased">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div class="min-w-0">
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audience</p>
+        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Contacts
         </h1>
-        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+        <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
           All contacts in your tenant database, newest updates first.
         </p>
       </div>
       <button
         type="button"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
         @click="openAddContactModal"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -61,8 +62,8 @@
       {{ subscriptionActionError }}
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="min-w-0 w-full max-w-lg">
+    <div class="flex min-w-0 flex-col gap-3">
+      <div class="min-w-0 w-full">
         <label class="sr-only" for="contacts-search">Search contacts</label>
         <div class="relative">
           <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -73,79 +74,43 @@
             v-model="searchQuery"
             type="search"
             autocomplete="off"
-            placeholder="Search name, email, company, phone, address…"
-            class="w-full rounded-xl border border-slate-200/90 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+            placeholder="Search name, email, company…"
+            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
           >
         </div>
       </div>
-      <div class="relative w-full shrink-0 sm:w-[14rem]">
-        <label class="sr-only" for="contacts-subscription-filter">Subscription</label>
-        <select
-          id="contacts-subscription-filter"
-          v-model="subscriptionFilter"
-          class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
-        >
-          <option value="all">
-            All subscriptions
-          </option>
-          <option value="subscribed">
-            Subscribed
-          </option>
-          <option value="unsubscribed">
-            Unsubscribed
-          </option>
-        </select>
-        <svg
-          class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-      <div class="relative w-full shrink-0 sm:w-[14rem]">
-        <label class="sr-only" for="contacts-kind-filter">Contact type</label>
-        <select
-          id="contacts-kind-filter"
-          v-model="contactTypeFilter"
-          class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
-        >
-            <option value="all">
-              All types
-            </option>
-            <option
-              v-if="hasContactsWithoutKind"
-              value="__none__"
-            >
-              No type
-            </option>
-            <option
-              v-for="opt in contactTypeFilterOptions"
-              :key="opt.key"
-              :value="opt.key"
-            >
-              {{ opt.label }}
-            </option>
-          </select>
-        <svg
-          class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
+      <div class="grid min-w-0 grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:flex lg:items-stretch">
+      <TenantFilterSelect
+        id="contacts-subscription-filter"
+        v-model="subscriptionFilter"
+        label="Subscription"
+        :options="subscriptionFilterSelectOptions"
+        class="w-full shrink-0 lg:w-[14rem]"
+      />
+      <TenantFilterSelect
+        id="contacts-kind-filter"
+        v-model="contactTypeFilter"
+        label="Contact type"
+        :options="contactTypeSelectOptions"
+        class="w-full shrink-0 lg:w-[14rem]"
+      />
       </div>
     </div>
 
     <div
       v-if="pending"
-      class="space-y-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-6"
+      class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
     >
-      <div v-for="n in 8" :key="n" class="h-12 animate-pulse rounded-xl bg-slate-100" />
+      <div class="divide-y divide-slate-100 lg:hidden">
+        <div v-for="n in 5" :key="`mobile-skel-${n}`" class="animate-pulse space-y-3 p-4">
+          <div class="h-4 w-2/3 max-w-xs rounded bg-slate-100" />
+          <div class="h-3 w-1/2 max-w-[10rem] rounded bg-slate-100" />
+          <div class="h-8 w-full rounded-lg bg-slate-100" />
+        </div>
+      </div>
+      <div class="hidden space-y-3 p-5 sm:p-6 lg:block">
+        <div v-for="n in 8" :key="n" class="h-12 animate-pulse rounded-xl bg-slate-100" />
+      </div>
     </div>
 
     <div
@@ -171,7 +136,78 @@
       v-else-if="data"
       class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
     >
-      <div class="overflow-x-auto">
+      <ul class="divide-y divide-slate-100 lg:hidden">
+        <li v-for="row in paginatedContacts" :key="`mobile-${row.id}`" class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-slate-900">
+                {{ row.name || '—' }}
+              </p>
+              <p class="mt-0.5 truncate text-xs text-slate-500" :title="row.email || undefined">
+                {{ row.email || '—' }}
+              </p>
+              <p v-if="row.company" class="mt-1 truncate text-xs text-slate-500" :title="row.company">
+                {{ row.company }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              @click="openContactDetail(row.id)"
+            >
+              View
+            </button>
+          </div>
+
+          <div v-if="row.contactType?.length" class="mt-3 flex flex-wrap gap-1.5">
+            <span
+              v-for="(label, idx) in row.contactTypeLabels"
+              :key="`${row.id}-mobile-${row.contactType![idx]}`"
+              class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
+              :class="typeKeyBadgeClass(row.contactType![idx] ?? '')"
+            >
+              {{ label }}
+            </span>
+          </div>
+          <span
+            v-else
+            class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
+            :class="typeKeyBadgeClass(row.contactType?.[0] ?? '')"
+          >
+            {{ row.primaryTypeLabel }}
+          </span>
+
+          <div class="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <span class="text-xs font-medium text-slate-500">Subscription</span>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                role="switch"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                :class="!row.is_unsubscribe ? 'bg-emerald-600' : 'bg-slate-300'"
+                :aria-checked="!row.is_unsubscribe"
+                :aria-label="row.is_unsubscribe ? 'Subscribe contact' : 'Unsubscribe contact'"
+                :disabled="subscriptionSavingId === row.id"
+                @click="setContactSubscription(row, row.is_unsubscribe)"
+              >
+                <span class="sr-only">{{ row.is_unsubscribe ? 'Subscribed off' : 'Subscribed on' }}</span>
+                <span
+                  class="pointer-events-none inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="!row.is_unsubscribe ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+              <span
+                class="text-xs font-medium tabular-nums"
+                :class="row.is_unsubscribe ? 'text-amber-800' : 'text-emerald-800'"
+              >
+                {{ subscriptionSavingId === row.id ? 'Saving…' : row.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
+              </span>
+            </div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="hidden overflow-x-auto lg:block">
         <table class="min-w-full text-left text-[0.9375rem] leading-snug">
           <thead class="sticky top-0 z-[1] border-b border-slate-100 bg-slate-50/95 backdrop-blur-sm">
             <tr>
@@ -248,7 +284,7 @@
                 </span>
               </td>
               <td class="whitespace-nowrap px-4 py-4 sm:px-4">
-                <div class="flex items-center gap-2.5">
+                <div class="flex items-center gap-2">
                   <button
                     type="button"
                     role="switch"
@@ -266,7 +302,7 @@
                     />
                   </button>
                   <span
-                    class="text-[0.8125rem] font-medium tabular-nums"
+                    class="hidden text-[0.8125rem] font-medium tabular-nums xl:inline"
                     :class="row.is_unsubscribe ? 'text-amber-800' : 'text-emerald-800'"
                   >
                     {{ subscriptionSavingId === row.id ? 'Saving…' : row.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
@@ -295,34 +331,39 @@
 
       <div
         v-if="filteredContacts.length"
-        class="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/60 px-4 py-4 text-[0.9375rem] text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
+        class="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
       >
-        <p class="tabular-nums text-slate-500">
+        <p class="min-w-0 text-xs tabular-nums text-slate-500 sm:text-sm">
           <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          <span class="mx-1.5 text-slate-300">·</span>
-          <span>{{ paginationMeta.total.toLocaleString() }} total</span>
+          <span class="text-slate-300"> / </span>
+          <span>{{ paginationMeta.total.toLocaleString() }}</span>
         </p>
-        <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
+        <nav
+          class="flex shrink-0 items-center gap-1 sm:gap-1.5"
+          aria-label="Contacts pagination"
+        >
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
-            Previous
+            <span class="sm:hidden">Prev</span>
+            <span class="hidden sm:inline">Previous</span>
           </button>
-          <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-slate-500">
-            Page {{ currentPage }} / {{ totalPages }}
+          <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-slate-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
+            <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+            <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
           </span>
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
             Next
           </button>
-        </div>
+        </nav>
       </div>
     </div>
 
@@ -342,17 +383,17 @@
         <div
           class="relative flex max-h-[min(92vh,840px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-slate-50 shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
         >
-          <div class="shrink-0 border-b border-slate-200/80 bg-white px-5 py-5 sm:px-8 sm:py-6">
-            <div class="flex items-start justify-between gap-4">
-              <div class="flex min-w-0 items-start gap-4">
+          <div class="shrink-0 border-b border-slate-200/80 bg-white px-4 py-4 sm:px-8 sm:py-6">
+            <div class="flex items-start justify-between gap-3 sm:gap-4">
+              <div class="flex min-w-0 items-start gap-3 sm:gap-4">
                 <div
-                  class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-semibold text-white shadow-md shadow-indigo-500/25"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-semibold text-white shadow-md shadow-indigo-500/25 sm:h-14 sm:w-14 sm:text-lg"
                   aria-hidden="true"
                 >
                   {{ contactDetailInitials }}
                 </div>
                 <div class="min-w-0">
-                  <h2 id="contact-detail-title" class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                  <h2 id="contact-detail-title" class="text-lg font-semibold tracking-tight text-slate-900 sm:text-2xl">
                     {{ viewContactDetail?.name || 'Contact details' }}
                   </h2>
                   <p v-if="viewContactDetail?.email" class="mt-1 truncate text-sm text-slate-600">
@@ -380,15 +421,19 @@
               </div>
               <button
                 type="button"
-                class="shrink-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2 sm:text-sm sm:font-semibold"
+                aria-label="Close contact details"
                 @click="closeContactDetail"
               >
-                Close
+                <svg class="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span class="hidden sm:inline">Close</span>
               </button>
             </div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+          <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
             <div v-if="viewContactLoading" class="flex items-center justify-center py-16">
               <p class="text-sm font-medium text-slate-500">
                 Loading contact…
@@ -402,7 +447,7 @@
                 <section
                   v-for="section in contactDetailSections"
                   :key="section.title"
-                  class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02]"
+                  class="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] sm:p-5"
                   :class="section.fullWidth ? 'lg:col-span-2' : ''"
                 >
                   <div class="mb-4 border-b border-slate-100 pb-3">
@@ -488,7 +533,7 @@
     <Teleport to="body">
       <div
         v-if="addContactOpen"
-        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4 lg:p-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-contact-title"
@@ -499,19 +544,40 @@
           @click="closeAddContactModal"
         />
         <div
-          class="relative flex max-h-[min(92vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
+          class="relative flex max-h-[min(92dvh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
+          @click.stop
         >
-          <div class="shrink-0 border-b border-slate-100 px-5 py-5 sm:px-6">
-            <h2 id="add-contact-title" class="text-lg font-semibold text-slate-900">
-              Add contact
-            </h2>
-            <p class="mt-1 text-sm text-slate-500">
-              Create a contact manually in your tenant database.
-            </p>
+          <div
+            class="flex shrink-0 justify-center pt-2.5 sm:hidden"
+            aria-hidden="true"
+          >
+            <span class="h-1 w-10 rounded-full bg-slate-200" />
+          </div>
+          <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-5">
+            <div class="min-w-0">
+              <h2 id="add-contact-title" class="text-base font-semibold text-slate-900 sm:text-lg">
+                Add contact
+              </h2>
+              <p class="mt-1 text-xs text-slate-500 sm:text-sm">
+                Create a contact manually in your tenant database.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:h-auto sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:shadow-none"
+              aria-label="Close add contact form"
+              :disabled="addContactSubmitting"
+              @click="closeAddContactModal"
+            >
+              <svg class="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span class="hidden text-sm font-semibold text-slate-600 sm:inline">Close</span>
+            </button>
           </div>
           <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submitAddContact">
-            <div class="tenant-add-contact-form min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="tenant-add-contact-form min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-4 sm:px-6 sm:py-5">
+            <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700" for="add-contact-first-name">First name</label>
                 <input
@@ -569,8 +635,8 @@
                 :class="ADD_CONTACT_INPUT_CLASS"
               >
             </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
+            <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
+              <div :class="contactTypeFilterOptions.length ? '' : 'min-[480px]:col-span-2'">
                 <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
                 <select
                   id="add-contact-channel"
@@ -606,7 +672,7 @@
                 </select>
               </div>
             </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700" for="add-contact-status">Status</label>
                 <input
@@ -628,12 +694,12 @@
                 >
               </div>
             </div>
-            <fieldset class="space-y-4 rounded-xl border border-slate-200/80 px-4 py-4">
+            <fieldset class="space-y-3 rounded-xl border border-slate-200/80 px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4">
               <legend class="px-1 text-sm font-medium text-slate-700">
                 Address
               </legend>
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div class="tenant-place-autocomplete-field">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
+                <div class="tenant-place-autocomplete-field sm:col-span-4">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
                   <div
                     id="add-contact-street"
@@ -641,7 +707,7 @@
                     class="tenant-place-autocomplete-host w-full"
                   />
                 </div>
-                <div>
+                <div class="sm:col-span-2">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-unit">Unit</label>
                   <input
                     id="add-contact-unit"
@@ -653,7 +719,7 @@
                   >
                 </div>
               </div>
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-city">City</label>
                   <input
@@ -697,21 +763,23 @@
               {{ addContactError }}
             </p>
             </div>
-            <div class="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+            <div
+              class="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:pb-4"
+            >
+              <button
+                type="submit"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:order-2 sm:w-auto"
+                :disabled="addContactSubmitting"
+              >
+                {{ addContactSubmitting ? 'Saving…' : 'Add contact' }}
+              </button>
               <button
                 type="button"
-                class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 sm:order-1 sm:w-auto"
                 :disabled="addContactSubmitting"
                 @click="closeAddContactModal"
               >
                 Cancel
-              </button>
-              <button
-                type="submit"
-                class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
-                :disabled="addContactSubmitting"
-              >
-                {{ addContactSubmitting ? 'Saving…' : 'Add contact' }}
               </button>
             </div>
           </form>
@@ -723,7 +791,7 @@
 
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
-import { formatContactAddress, joinContactStreetParts, normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { joinContactStreetParts, normalizeContactCounty } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
@@ -743,6 +811,7 @@ const PAGE_SIZE = 25
 const marketingApi = useTenantMarketingApi()
 
 const addContactOpen = ref(false)
+let contactModalEscListener: ((e: KeyboardEvent) => void) | null = null
 const addContactSubmitting = ref(false)
 const addContactError = ref('')
 const addContactForm = ref({
@@ -775,7 +844,7 @@ const { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener } = useGo
 )
 
 const ADD_CONTACT_INPUT_CLASS =
-  'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20'
+  'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20'
 
 const CONTACT_CHANNEL_OPTIONS = [
   { value: 'email', label: 'Email' },
@@ -827,10 +896,6 @@ watch(
   },
   { flush: 'post' }
 )
-
-onBeforeUnmount(() => {
-  clearGoogleAutocompleteListener()
-})
 
 async function submitAddContact() {
   const email = addContactForm.value.email.trim()
@@ -957,6 +1022,23 @@ const contactTypeFilterOptions = computed(() => {
   return [...base, ...extras]
 })
 
+const subscriptionFilterSelectOptions = [
+  { value: 'all', label: 'All subscriptions' },
+  { value: 'subscribed', label: 'Subscribed' },
+  { value: 'unsubscribed', label: 'Unsubscribed' }
+] as const
+
+const contactTypeSelectOptions = computed(() => {
+  const options: { value: string; label: string }[] = [{ value: 'all', label: 'All types' }]
+  if (hasContactsWithoutKind.value) {
+    options.push({ value: KIND_FILTER_NONE, label: 'No type' })
+  }
+  for (const opt of contactTypeFilterOptions.value) {
+    options.push({ value: opt.key, label: opt.label })
+  }
+  return options
+})
+
 const filteredContacts = computed(() => {
   let list = data.value?.contacts ?? []
   const kind = contactTypeFilter.value
@@ -1041,10 +1123,6 @@ watch([searchQuery, contactTypeFilter, subscriptionFilter], () => {
 watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
-
-function formatAddress(addr?: { street?: string; city?: string; state?: string; county?: string }): string {
-  return formatContactAddress(addr)
-}
 
 function formatDate(iso: string): string {
   try {
@@ -1250,6 +1328,29 @@ function closeContactDetail() {
   ownerAvatarLoadFailed.value = false
 }
 
+watch([addContactOpen, viewContactOpen], ([addOpen, viewOpen]) => {
+  if (!import.meta.client) return
+
+  document.body.style.overflow = addOpen || viewOpen ? 'hidden' : ''
+
+  if (contactModalEscListener) {
+    window.removeEventListener('keydown', contactModalEscListener)
+    contactModalEscListener = null
+  }
+
+  if (addOpen || viewOpen) {
+    contactModalEscListener = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (addContactOpen.value && !addContactSubmitting.value) {
+        closeAddContactModal()
+      } else if (viewContactOpen.value) {
+        closeContactDetail()
+      }
+    }
+    window.addEventListener('keydown', contactModalEscListener)
+  }
+})
+
 async function setContactSubscription(row: TenantContactListRow, subscribed: boolean) {
   if (subscriptionSavingId.value) return
   subscriptionSavingId.value = row.id
@@ -1329,5 +1430,16 @@ async function load() {
 
 onMounted(() => {
   load()
+})
+
+onBeforeUnmount(() => {
+  clearGoogleAutocompleteListener()
+  if (contactModalEscListener) {
+    window.removeEventListener('keydown', contactModalEscListener)
+    contactModalEscListener = null
+  }
+  if (import.meta.client) {
+    document.body.style.overflow = ''
+  }
 })
 </script>
