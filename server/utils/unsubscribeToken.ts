@@ -16,6 +16,21 @@ function b64urlDecode(s: string): Buffer {
   return Buffer.from(s, 'base64url')
 }
 
+export function peekUnsubscribePayloadUnsafe(token: string): UnsubscribeTokenPayload | null {
+  const trimmed = token.trim()
+  const dot = trimmed.lastIndexOf('.')
+  if (dot <= 0) return null
+  try {
+    const payload = JSON.parse(
+      b64urlDecode(trimmed.slice(0, dot)).toString('utf8')
+    ) as UnsubscribeTokenPayload
+    if (!payload?.db?.trim() || !payload?.c?.trim()) return null
+    return payload
+  } catch {
+    return null
+  }
+}
+
 export function signUnsubscribeToken(
   payload: Omit<UnsubscribeTokenPayload, 'exp'>,
   secret: string,
