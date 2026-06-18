@@ -303,6 +303,7 @@
 
 <script setup lang="ts">
 import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
+import { formatContactAddress } from '~~/shared/utils/contactAddress'
 import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
@@ -389,12 +390,13 @@ function formatDate(iso: string): string {
 }
 
 function formatAddress(addr: Record<string, unknown>): string {
-  const parts = [
-    addr.city,
-    addr.state,
-    addr.county
-  ].filter((x) => typeof x === 'string' && x.trim())
-  return parts.length ? parts.join(', ') : '—'
+  const formatted = formatContactAddress({
+    street: typeof addr.street === 'string' ? addr.street : undefined,
+    city: typeof addr.city === 'string' ? addr.city : undefined,
+    state: typeof addr.state === 'string' ? addr.state : undefined,
+    county: typeof addr.county === 'string' ? addr.county : undefined
+  })
+  return formatted || '—'
 }
 
 async function load(p: number) {
