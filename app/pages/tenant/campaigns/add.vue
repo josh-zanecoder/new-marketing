@@ -1096,6 +1096,36 @@ function applyRecipientListFromQuery(): void {
   recipientsOpen.value = true
 }
 
+function readTemplateIdFromQuery(): string {
+  const q = route.query.templateId
+  if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0].trim() : ''
+  return typeof q === 'string' ? q.trim() : ''
+}
+
+function applyTemplateFromQuery(): void {
+  if (route.query.fromEditor === '1') return
+  const templateId = readTemplateIdFromQuery()
+  if (!templateId) return
+  const template = existingTemplates.value.find((t) => t.id === templateId)
+  if (!template) return
+  form.value.templateMode = 'existing'
+  form.value.selectedTemplateId = template.id
+  const fromTemplate = template.subject?.trim()
+  if (fromTemplate) {
+    form.value.subject = fromTemplate
+  }
+  savedTemplateHtml.value = template.html
+  const campaignId = returnCampaignId.value || `temp-${Date.now()}`
+  returnCampaignId.value = campaignId
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
+    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: { ...form.value }, campaignId }))
+  }
+  void nextTick(() => {
+    designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
 async function loadFromEditorReturn() {
   await defaultSenderReady
   const campaignId = route.query.campaignId as string
@@ -1238,6 +1268,7 @@ onMounted(async () => {
       form.value.senderEmail = defaultSenderEmail.value
     }
     applyRecipientListFromQuery()
+    applyTemplateFromQuery()
   } finally {
     wizardBootPending.value = false
   }
@@ -1247,6 +1278,13 @@ watch(
   () => route.query.recipientListId,
   () => {
     applyRecipientListFromQuery()
+  },
+  { immediate: false }
+)
+watch(
+  () => route.query.templateId,
+  () => {
+    applyTemplateFromQuery()
   },
   { immediate: false }
 )

@@ -27,7 +27,10 @@ export default defineNuxtConfig({
       firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || ''
+      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
+      /** Google Places Autocomplete (New); enable Places API (New) + Maps JavaScript API on the key. */
+      googleMapsApiKey:
+        process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || ''
     },
     redisHost: process.env.REDIS_HOST || '127.0.0.1',
     redisPort: Number(process.env.REDIS_PORT) || 6379,
@@ -81,7 +84,11 @@ export default defineNuxtConfig({
       process.env.MARKETING_DEPLOY_ENV ||
       'develop'
   },
-  css: ['grapesjs/dist/css/grapes.min.css', '@vuepic/vue-datepicker/dist/main.css'],
+  css: [
+    'grapesjs/dist/css/grapes.min.css',
+    '@vuepic/vue-datepicker/dist/main.css',
+    '~/assets/css/google-places.css'
+  ],
   vite: {
     optimizeDeps: {
       include: [
