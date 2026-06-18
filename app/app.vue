@@ -3,7 +3,7 @@ const route = useRoute()
 </script>
 
 <template>
-  <div>
+  <div class="h-full min-h-0">
     <NuxtRouteAnnouncer />
     <NuxtLayout>
       <NuxtPage :key="route.fullPath" />

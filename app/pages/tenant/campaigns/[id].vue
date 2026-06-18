@@ -197,62 +197,6 @@ const showSkeleton = computed(
   () => !error.value && (pending.value || !campaign.value)
 )
 
-function previewSrcdoc(html: string, scale = 0.45) {
-  return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);min-height:100%;display:flex;justify-content:center;align-items:flex-start}
-#preview-wrap{transform:scale(${scale});transform-origin:center top;width:600px}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
-}
-
-/** Larger scale for modal for better readability. */
-function previewSrcdocModal(html: string, scale = 1) {
-  return previewSrcdoc(html, scale)
-}
-
-const previewModalOpen = ref(false)
-
-function openPreviewModal() {
-  previewModalOpen.value = true
-}
-
-function closePreviewModal() {
-  previewModalOpen.value = false
-}
-
-let previewEscListener: ((e: KeyboardEvent) => void) | null = null
-
-watch(previewModalOpen, (open) => {
-  if (!import.meta.client) return
-  document.body.style.overflow = open ? 'hidden' : ''
-  if (previewEscListener) {
-    window.removeEventListener('keydown', previewEscListener)
-    previewEscListener = null
-  }
-  if (open) {
-    previewEscListener = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePreviewModal()
-    }
-    window.addEventListener('keydown', previewEscListener)
-  }
-})
-
-onBeforeUnmount(() => {
-  if (!import.meta.client) return
-  document.body.style.overflow = ''
-  if (previewEscListener) {
-    window.removeEventListener('keydown', previewEscListener)
-    previewEscListener = null
-  }
-  if (countdownInterval) {
-    clearInterval(countdownInterval)
-    countdownInterval = null
-  }
-  if (isSendPolling(id) && sendingCampaignId.value !== id) {
-    stopSendPolling()
-  }
-})
-
 function formatDate(d: string) {
   if (!d) return '–'
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -294,6 +238,17 @@ onMounted(() => {
   }, 30000)
 })
 
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+  if (isSendPolling(id) && sendingCampaignId.value !== id) {
+    stopSendPolling()
+  }
+})
+
 function toDatetimeLocalValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -303,6 +258,8 @@ const scheduleModalOpen = ref(false)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
+
+useMarketingScrollLock(scheduleModalOpen)
 
 function openScheduleModal() {
   scheduleError.value = ''
@@ -423,8 +380,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 </script>
 
 <template>
-  <div class="w-full min-w-0 antialiased">
-    <div class="w-full min-w-0">
+  <div class="mx-auto w-full min-w-0 max-w-6xl overflow-x-hidden antialiased">
+    <div class="w-full min-w-0 space-y-6 sm:space-y-8">
       <NuxtLink
         to="/tenant/campaigns"
         class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
@@ -692,8 +649,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         </nav>
 
         <div
-          v-show="campaignViewTab === 'details'"
-          class="flex flex-col gap-8 sm:gap-10 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12"
+          v-if="campaignViewTab === 'details'"
+          class="flex flex-col gap-6 sm:gap-8 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12"
         >
           <div class="min-w-0 space-y-8 xl:col-span-5 2xl:col-span-4 xl:space-y-8">
             <div
@@ -811,65 +768,33 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             </div>
           </div>
 
-          <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
-            <div v-if="campaign.templateHtml" class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
-              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-                <div class="min-w-0">
-                  <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    {{ previewTitle }}
-                  </h2>
-                  <p class="mt-1 truncate text-sm text-slate-600" :title="previewSubjectDisplay">
-                    Subject: {{ previewSubjectDisplay }}
-                  </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <button
-                    v-if="canSendTestEmail"
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/90 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90"
-                    @click="handleOpenTestEmailModal"
-                  >
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Send test email
-                  </button>
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800"
-                    @click="openPreviewModal"
-                  >
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
-                    Full preview
-                  </button>
-                </div>
-              </div>
-              <div
-                class="relative min-h-[400px] max-h-[600px] cursor-zoom-in overflow-auto bg-[#f8f4ef] p-4 sm:p-6 xl:min-h-[min(52vh,560px)] xl:max-h-[min(88vh,920px)] 2xl:min-h-[min(58vh,640px)]"
-                role="button"
-                tabindex="0"
-                :aria-label="'Open full email preview. Subject: ' + (previewSubject || campaign.name)"
-                @click="openPreviewModal"
-                @keydown.enter.prevent="openPreviewModal"
-                @keydown.space.prevent="openPreviewModal"
-              >
-                <iframe
-                  :srcdoc="previewSrcdoc(previewHtml)"
-                  title="Email preview"
-                  class="pointer-events-none min-h-[400px] w-full select-none border-0 xl:min-h-[min(48vh,520px)]"
-                  sandbox="allow-same-origin"
-                />
-                <p class="pointer-events-none mt-3 text-center text-xs text-slate-500">
-                  Click to open full preview
-                </p>
-              </div>
-            </div>
+          <div class="min-w-0 xl:col-span-7 2xl:col-span-8">
+            <TenantCampaignEmailPreview
+              v-if="campaign.templateHtml"
+              :html="previewHtml"
+              :thumbnail-html="campaign.templateHtml"
+              :title="previewTitle"
+              :subject="previewSubjectDisplay"
+              summary="Preview with merge tags applied from your recipients."
+            >
+              <template #actions>
+                <button
+                  v-if="canSendTestEmail"
+                  type="button"
+                  class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 sm:w-auto"
+                  @click="handleOpenTestEmailModal"
+                >
+                  <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send test email
+                </button>
+              </template>
+            </TenantCampaignEmailPreview>
 
             <div
               v-else
-              class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-10 text-center shadow-sm shadow-slate-900/[0.02] sm:px-8 sm:py-12 xl:py-16"
+              class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center shadow-sm shadow-slate-900/[0.02] sm:px-8 sm:py-12"
             >
               <p class="text-sm text-slate-500 sm:text-[0.9375rem]">No email template</p>
             </div>
@@ -877,62 +802,19 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         </div>
 
         <section
-          v-show="campaignViewTab === 'tracking'"
-          class="min-w-0 pt-2"
+          v-if="campaignViewTab === 'tracking'"
+          class="min-w-0 space-y-4 sm:space-y-6"
           aria-label="Campaign send tracking"
         >
-          <TenantBrevoTrackingEventsPanel :campaign-id="id" />
+          <TenantBrevoTrackingEventsPanel
+            :key="`campaign-tracking-${id}`"
+            :campaign-id="id"
+            hide-campaign-column
+            panel-hint="Delivery, opens, and clicks for this campaign."
+          />
         </section>
       </div>
     </div>
-
-    <Teleport to="body">
-      <div
-        v-if="previewModalOpen && previewHtml"
-        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4 lg:p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="email-preview-modal-title"
-      >
-        <div
-          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-          aria-hidden="true"
-          @click="closePreviewModal"
-        />
-        <div
-          class="relative flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:h-[92vh] sm:rounded-2xl"
-        >
-          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-            <div class="min-w-0">
-              <p id="email-preview-modal-title" class="text-base font-semibold text-slate-900 sm:text-lg">
-                {{ previewTitle }}
-              </p>
-              <p class="mt-1 truncate text-sm text-slate-600 sm:text-base" :title="previewSubjectDisplay">
-                Subject: {{ previewSubjectDisplay }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Close preview"
-              @click="closePreviewModal"
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div class="min-h-0 flex-1 overflow-auto bg-[#f8f4ef] p-3 sm:p-4 lg:p-5">
-            <iframe
-              :srcdoc="previewSrcdocModal(previewHtml)"
-              class="h-full w-full min-h-[420px] border-0"
-              sandbox="allow-same-origin"
-              title="Email preview (full size)"
-            />
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <ClientSendProgressModal
       :open="sendProgressModalOpen"

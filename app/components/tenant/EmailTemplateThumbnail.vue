@@ -9,7 +9,7 @@ const props = defineProps<{
   title?: string
 }>()
 
-const THUMB_PADDING = 10
+const THUMB_PADDING = 12
 const FALLBACK_CONTENT_HEIGHT = 720
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -36,22 +36,16 @@ function measureIframeContentHeight(iframe: HTMLIFrameElement): number {
   return heights.length ? Math.max(...heights) : FALLBACK_CONTENT_HEIGHT
 }
 
+/** Scale to container width; crop vertically so the email header stays readable. */
 function updateScale() {
   const container = containerRef.value
   if (!container) return
 
   const containerWidth = container.clientWidth
-  const containerHeight = container.clientHeight
-  if (!containerWidth || !containerHeight) return
+  if (!containerWidth) return
 
   const innerWidth = Math.max(containerWidth - THUMB_PADDING * 2, 1)
-  const innerHeight = Math.max(containerHeight - THUMB_PADDING * 2, 1)
-  const layoutHeight = Math.max(contentHeight.value, 120)
-
-  const widthScale = innerWidth / EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH
-  const heightScale = innerHeight / layoutHeight
-
-  scale.value = Math.min(widthScale, heightScale, 1)
+  scale.value = Math.min(innerWidth / EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH, 1)
 }
 
 function scheduleMeasure() {
@@ -67,6 +61,7 @@ function scheduleMeasure() {
   requestAnimationFrame(measure)
   window.setTimeout(measure, 150)
   window.setTimeout(measure, 500)
+  window.setTimeout(measure, 900)
 }
 
 function onIframeLoad() {
@@ -80,7 +75,10 @@ watch(
   () => {
     contentHeight.value = FALLBACK_CONTENT_HEIGHT
     scale.value = 0.5
-    nextTick(updateScale)
+    nextTick(() => {
+      updateScale()
+      scheduleMeasure()
+    })
   }
 )
 
@@ -90,6 +88,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(() => updateScale())
   resizeObserver.observe(containerRef.value)
   updateScale()
+  scheduleMeasure()
 })
 
 onBeforeUnmount(() => {
@@ -101,8 +100,9 @@ const frameStyle = computed(() => ({
   width: `${EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH}px`,
   height: `${contentHeight.value}px`,
   left: '50%',
-  top: '50%',
-  transform: `translate(-50%, -50%) scale(${scale.value})`
+  top: `${THUMB_PADDING}px`,
+  transform: `translateX(-50%) scale(${scale.value})`,
+  transformOrigin: 'top center'
 }))
 </script>
 

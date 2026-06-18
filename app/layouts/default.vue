@@ -19,6 +19,12 @@ let sidebarMediaQuery: MediaQueryList | null = null
 let sidebarEscListener: ((e: KeyboardEvent) => void) | null = null
 
 const mobileDrawerOpen = computed(() => isMobileViewport.value && !sidebarCompact.value)
+const mainScrollRef = ref<HTMLElement | null>(null)
+
+useHead({
+  htmlAttrs: { class: 'h-full overflow-hidden' },
+  bodyAttrs: { class: 'h-full overflow-hidden' }
+})
 
 const sidebarTitle = computed(() =>
   me.value?.authType === 'apiKey' ? me.value.tenantName : 'Mortdash'
@@ -44,7 +50,8 @@ function syncMobileDrawerSideEffects() {
   if (!import.meta.client) return
 
   const drawerOpen = mobileDrawerOpen.value
-  document.body.style.overflow = drawerOpen ? 'hidden' : ''
+  const main = mainScrollRef.value
+  if (main) main.style.overflow = drawerOpen ? 'hidden' : ''
 
   clearSidebarEscListener()
   if (drawerOpen) {
@@ -80,7 +87,6 @@ onBeforeUnmount(() => {
   if (!import.meta.client) return
   sidebarMediaQuery?.removeEventListener('change', syncMobileViewport)
   clearSidebarEscListener()
-  document.body.style.overflow = ''
 })
 
 watch(sidebarCompact, (v) => {
@@ -176,7 +182,7 @@ function navLinkLayoutClass(compact: boolean) {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <div class="flex h-svh min-h-0 overflow-hidden bg-slate-50 text-slate-900 antialiased">
     <NuxtLoadingIndicator
       :height="3"
       color="#4f46e5"
@@ -324,7 +330,8 @@ function navLinkLayoutClass(compact: boolean) {
     </aside>
 
     <main
-      class="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out lg:min-h-0"
+      ref="mainScrollRef"
+      class="marketing-main-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain transition-[padding] duration-200 ease-out"
       :class="sidebarCompact ? 'pl-16 lg:pl-0' : 'pl-0'"
     >
       <div class="flex-1 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
