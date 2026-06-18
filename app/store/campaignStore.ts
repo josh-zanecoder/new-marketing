@@ -132,7 +132,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
   }
 
   async function sendCampaign(c: Campaign): Promise<{ poll: boolean }> {
-    if (c.status !== 'Draft') {
+    if (c.status !== 'Draft' && c.status !== 'Scheduled') {
       sendError.value = 'Campaign cannot be sent in its current status.'
       sendingCampaignId.value = c.id
       sendStatus.value = null

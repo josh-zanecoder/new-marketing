@@ -11,6 +11,8 @@ const { sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const marketingApi = useTenantMarketingApi()
 const {
   canSendDraft,
+  canSendScheduled,
+  canSendNow,
   canScheduleDraft,
   sendProgress,
   buildCampaignSendProgress,
@@ -42,6 +44,10 @@ const { data, error, pending, refresh } = detailAsync
 const { data: mergeRootPayload } = mergeAsync
 
 const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
+
+const isScheduledCampaign = computed(
+  () => campaign.value?.status === 'Scheduled' && !!campaign.value?.scheduledAt
+)
 
 const campaignForSend = computed((): Campaign | null => {
   const c = campaign.value
@@ -109,7 +115,7 @@ async function submitTestEmail() {
 
 async function handleSend() {
   const c = campaignForSend.value
-  if (!c || !canSendDraft(c)) return
+  if (!c || !canSendNow(c)) return
   const { poll } = await campaignStore.sendCampaign(c)
   if (!poll) return
   startSendStatusPolling(c.id, onSendPollingComplete)
@@ -321,10 +327,30 @@ async function confirmSchedule() {
   }
   scheduleBusy.value = true
   try {
-    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    const scheduledIso = parsed.toISOString()
+    const res = await marketingApi.scheduleCampaignSend(c.id, scheduledIso)
     scheduleModalOpen.value = false
+    const now = new Date().toISOString()
+    const nextScheduledAt = res.scheduledAt ?? scheduledIso
+    if (data.value?.campaign) {
+      data.value = {
+        campaign: {
+          ...data.value.campaign,
+          status: 'Scheduled',
+          scheduledAt: nextScheduledAt,
+          updatedAt: now
+        }
+      }
+    }
+    campaignStore.patchCampaignDetailCache(c.id, {
+      status: 'Scheduled',
+      scheduledAt: nextScheduledAt,
+      updatedAt: now
+    })
+    const cached = campaignStore.getCampaignDetailCache(c.id)
+    if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
     await refresh()
-    await campaignStore.fetchCampaigns()
+    await campaignStore.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
@@ -333,6 +359,7 @@ async function confirmSchedule() {
           ? e.message
           : 'Could not schedule send.'
     scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+    scheduleModalOpen.value = true
   } finally {
     scheduleBusy.value = false
   }
@@ -344,8 +371,26 @@ async function handleUnschedule() {
   scheduleBusy.value = true
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
+    const now = new Date().toISOString()
+    if (data.value?.campaign) {
+      data.value = {
+        campaign: {
+          ...data.value.campaign,
+          status: 'Draft',
+          scheduledAt: undefined,
+          updatedAt: now
+        }
+      }
+    }
+    campaignStore.patchCampaignDetailCache(c.id, {
+      status: 'Draft',
+      scheduledAt: undefined,
+      updatedAt: now
+    })
+    const cached = campaignStore.getCampaignDetailCache(c.id)
+    if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
     await refresh()
-    await campaignStore.fetchCampaigns()
+    await campaignStore.fetchCampaigns({ force: true })
   } finally {
     scheduleBusy.value = false
   }
@@ -509,10 +554,10 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               Created {{ formatDate(campaign.createdAt) }}
             </p>
             <div
-              v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
+              v-if="isScheduledCampaign && campaign.scheduledAt"
               class="mt-3 flex flex-col gap-2 rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-2.5 text-sm text-sky-950 shadow-sm ring-1 ring-sky-100/80 sm:flex-row sm:items-center sm:gap-4 sm:py-3 sm:pl-4"
             >
-              <span class="flex items-center gap-2 min-w-0 font-medium">
+              <span class="flex min-w-0 items-center gap-2 font-medium">
                 <svg class="h-4 w-4 shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -544,6 +589,18 @@ function setCampaignViewTab(tab: CampaignViewTab) {
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
+              v-if="campaignForSend && canSendScheduled(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="!!sendingCampaignId || scheduleBusy"
+              @click="handleSend"
+            >
+              <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+              Send now
+            </button>
+            <button
               v-if="campaignForSend && canSendDraft(campaignForSend)"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
@@ -568,13 +625,14 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               Schedule send
             </button>
             <button
-              v-if="campaign?.status === 'Scheduled'"
+              v-if="isScheduledCampaign"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition-colors hover:bg-amber-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="scheduleBusy"
+              title="Cancel scheduled send and return to draft"
               @click="handleUnschedule"
             >
-              Cancel schedule
+              Cancel
             </button>
             <NuxtLink
               v-if="campaign.status === 'Draft' || campaign.status === 'Failed' || campaign.status === 'Scheduled'"
@@ -684,7 +742,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                     </dd>
                   </div>
                   <div
-                    v-if="campaign.status === 'Scheduled' && campaign.scheduledAt"
+                    v-if="isScheduledCampaign && campaign.scheduledAt"
                     class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5"
                   >
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Scheduled send</dt>
