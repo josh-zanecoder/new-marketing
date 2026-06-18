@@ -61,6 +61,9 @@ export interface TenantEmailTemplateRow {
   name: string
   htmlTemplate: string
   subject?: string
+  description?: string
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 export interface TenantDashboardStats {
@@ -163,6 +166,29 @@ export function useTenantMarketingApi() {
     )
   }
 
+  async function createContact(body: {
+    firstName?: string
+    lastName?: string
+    email: string
+    phone?: string
+    company?: string
+    contactType?: string | string[]
+    channel?: string
+    status?: string
+    stage?: string
+    address?: {
+      street?: string
+      city?: string
+      state?: string
+      county?: string
+    }
+  }) {
+    return $fetch<{ ok: boolean; contact: { id: string; firstName: string; lastName: string; email: string } }>(
+      '/api/v1/tenant/contacts',
+      tenantFetchInit({ method: 'POST', body, timeout: 30000 })
+    )
+  }
+
   async function fetchEmailTemplates() {
     return $fetch<{ templates: TenantEmailTemplateRow[] }>(
       '/api/v1/tenant/email-templates',
@@ -262,6 +288,7 @@ export function useTenantMarketingApi() {
     fetchRecipientListResource,
     fetchRecipientListById,
     fetchDynamicVariables,
+    createContact,
     fetchEmailTemplates,
     fetchTenantMe,
     fetchDashboard,

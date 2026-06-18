@@ -1,12 +1,24 @@
 <template>
   <div class="w-full min-w-0 space-y-8 antialiased">
-    <header>
-      <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-        Contacts
-      </h1>
-      <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
-        All contacts in your tenant database, newest updates first.
-      </p>
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          Contacts
+        </h1>
+        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+          All contacts in your tenant database, newest updates first.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        @click="openAddContactModal"
+      >
+        <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Add contact
+      </button>
     </header>
 
     <div
@@ -472,11 +484,246 @@
         </div>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="addContactOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-contact-title"
+      >
+        <div
+          class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeAddContactModal"
+        />
+        <div
+          class="relative flex max-h-[min(92vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
+        >
+          <div class="shrink-0 border-b border-slate-100 px-5 py-5 sm:px-6">
+            <h2 id="add-contact-title" class="text-lg font-semibold text-slate-900">
+              Add contact
+            </h2>
+            <p class="mt-1 text-sm text-slate-500">
+              Create a contact manually in your tenant database.
+            </p>
+          </div>
+          <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submitAddContact">
+            <div class="tenant-add-contact-form min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-first-name">First name</label>
+                <input
+                  id="add-contact-first-name"
+                  v-model="addContactForm.firstName"
+                  type="text"
+                  autocomplete="given-name"
+                  placeholder="John"
+                  :class="ADD_CONTACT_INPUT_CLASS"
+                >
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-last-name">Last name</label>
+                <input
+                  id="add-contact-last-name"
+                  v-model="addContactForm.lastName"
+                  type="text"
+                  autocomplete="family-name"
+                  placeholder="Doe"
+                  :class="ADD_CONTACT_INPUT_CLASS"
+                >
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-email">Email <span class="text-red-600">*</span></label>
+              <input
+                id="add-contact-email"
+                v-model="addContactForm.email"
+                type="email"
+                required
+                autocomplete="email"
+                placeholder="john.doe@example.com"
+                :class="ADD_CONTACT_INPUT_CLASS"
+              >
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-phone">Phone</label>
+              <input
+                id="add-contact-phone"
+                v-model="addContactForm.phone"
+                type="tel"
+                autocomplete="tel"
+                placeholder="(555) 123-4567"
+                :class="ADD_CONTACT_INPUT_CLASS"
+              >
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-company">Company</label>
+              <input
+                id="add-contact-company"
+                v-model="addContactForm.company"
+                type="text"
+                autocomplete="organization"
+                placeholder="Acme Inc."
+                :class="ADD_CONTACT_INPUT_CLASS"
+              >
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
+                <select
+                  id="add-contact-channel"
+                  v-model="addContactForm.channel"
+                  :class="`${ADD_CONTACT_INPUT_CLASS} cursor-pointer appearance-none`"
+                >
+                  <option
+                    v-for="opt in CONTACT_CHANNEL_OPTIONS"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="contactTypeFilterOptions.length">
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-type">Contact type</label>
+                <select
+                  id="add-contact-type"
+                  v-model="addContactForm.contactType"
+                  :class="`${ADD_CONTACT_INPUT_CLASS} cursor-pointer appearance-none`"
+                >
+                  <option value="">
+                    Default type
+                  </option>
+                  <option
+                    v-for="opt in contactTypeFilterOptions"
+                    :key="opt.key"
+                    :value="opt.key"
+                  >
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-status">Status</label>
+                <input
+                  id="add-contact-status"
+                  v-model="addContactForm.status"
+                  type="text"
+                  placeholder="e.g. prospect"
+                  :class="ADD_CONTACT_INPUT_CLASS"
+                >
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-stage">Stage</label>
+                <input
+                  id="add-contact-stage"
+                  v-model="addContactForm.stage"
+                  type="text"
+                  placeholder="e.g. qualified"
+                  :class="ADD_CONTACT_INPUT_CLASS"
+                >
+              </div>
+            </div>
+            <fieldset class="space-y-4 rounded-xl border border-slate-200/80 px-4 py-4">
+              <legend class="px-1 text-sm font-medium text-slate-700">
+                Address
+              </legend>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="tenant-place-autocomplete-field">
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
+                  <div
+                    id="add-contact-street"
+                    ref="addContactStreetHostRef"
+                    class="tenant-place-autocomplete-host w-full"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-unit">Unit</label>
+                  <input
+                    id="add-contact-unit"
+                    v-model="addContactForm.addressUnit"
+                    type="text"
+                    autocomplete="address-line2"
+                    placeholder="Apt 4B"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+              </div>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-city">City</label>
+                  <input
+                    id="add-contact-city"
+                    v-model="addContactForm.addressCity"
+                    type="text"
+                    autocomplete="address-level2"
+                    placeholder="New York"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-state">State</label>
+                  <input
+                    id="add-contact-state"
+                    v-model="addContactForm.addressState"
+                    type="text"
+                    autocomplete="address-level1"
+                    placeholder="NY"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-county">County</label>
+                  <input
+                    id="add-contact-county"
+                    v-model="addContactForm.addressCounty"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="El Paso"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+              </div>
+            </fieldset>
+            <p
+              v-if="addContactError"
+              class="text-sm text-red-600"
+              role="alert"
+            >
+              {{ addContactError }}
+            </p>
+            </div>
+            <div class="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+              <button
+                type="button"
+                class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                :disabled="addContactSubmitting"
+                @click="closeAddContactModal"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                :disabled="addContactSubmitting"
+              >
+                {{ addContactSubmitting ? 'Saving…' : 'Add contact' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
+import { formatContactAddress, joinContactStreetParts, normalizeContactCounty } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
@@ -492,6 +739,165 @@ function typeKeyBadgeClass(kind: string): string {
 }
 
 const PAGE_SIZE = 25
+
+const marketingApi = useTenantMarketingApi()
+
+const addContactOpen = ref(false)
+const addContactSubmitting = ref(false)
+const addContactError = ref('')
+const addContactForm = ref({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  company: '',
+  contactType: '',
+  channel: 'email',
+  status: '',
+  stage: '',
+  addressStreet: '',
+  addressUnit: '',
+  addressCity: '',
+  addressState: '',
+  addressCounty: ''
+})
+
+const addContactStreetHostRef = ref<HTMLElement | null>(null)
+const { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener } = useGoogleAddressAutocomplete(
+  addContactForm as Ref<Record<string, unknown>>,
+  {
+    street: 'addressStreet',
+    city: 'addressCity',
+    state: 'addressState',
+    county: 'addressCounty',
+    unit: 'addressUnit'
+  }
+)
+
+const ADD_CONTACT_INPUT_CLASS =
+  'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20'
+
+const CONTACT_CHANNEL_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'linkedin', label: 'LinkedIn' }
+] as const
+
+function openAddContactModal() {
+  addContactError.value = ''
+  addContactForm.value = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: '',
+    contactType: '',
+    channel: 'email',
+    status: '',
+    stage: '',
+    addressStreet: '',
+    addressUnit: '',
+    addressCity: '',
+    addressState: '',
+    addressCounty: ''
+  }
+  addContactOpen.value = true
+}
+
+function closeAddContactModal() {
+  if (addContactSubmitting.value) return
+  clearGoogleAutocompleteListener()
+  addContactOpen.value = false
+  addContactError.value = ''
+}
+
+watch(
+  [addContactOpen, addContactStreetHostRef],
+  async ([open, host]) => {
+    if (!open) {
+      clearGoogleAutocompleteListener()
+      return
+    }
+    if (!host) return
+    await nextTick()
+    await initGoogleAddressAutocomplete(addContactStreetHostRef, true, {
+      placeholder: '123 Main Street',
+      regionCodes: ['us']
+    })
+  },
+  { flush: 'post' }
+)
+
+onBeforeUnmount(() => {
+  clearGoogleAutocompleteListener()
+})
+
+async function submitAddContact() {
+  const email = addContactForm.value.email.trim()
+  if (!email) {
+    addContactError.value = 'Email is required.'
+    return
+  }
+  addContactSubmitting.value = true
+  addContactError.value = ''
+  try {
+    const body: {
+      firstName?: string
+      lastName?: string
+      email: string
+      phone?: string
+      company?: string
+      contactType?: string
+      channel?: string
+      status?: string
+      stage?: string
+      address?: {
+        street?: string
+        city?: string
+        state?: string
+        county?: string
+      }
+    } = {
+      firstName: addContactForm.value.firstName.trim(),
+      lastName: addContactForm.value.lastName.trim(),
+      email
+    }
+    const phone = addContactForm.value.phone.trim()
+    const company = addContactForm.value.company.trim()
+    const contactType = addContactForm.value.contactType.trim()
+    const channel = addContactForm.value.channel.trim()
+    const status = addContactForm.value.status.trim()
+    const stage = addContactForm.value.stage.trim()
+    if (phone) body.phone = phone
+    if (company) body.company = company
+    if (contactType) body.contactType = contactType
+    if (channel) body.channel = channel
+    if (status) body.status = status
+    if (stage) body.stage = stage
+    const address = {
+      street: joinContactStreetParts(
+        addContactForm.value.addressStreet,
+        addContactForm.value.addressUnit
+      ),
+      city: addContactForm.value.addressCity.trim(),
+      state: addContactForm.value.addressState.trim(),
+      county: normalizeContactCounty(addContactForm.value.addressCounty)
+    }
+    if (address.street || address.city || address.state || address.county) {
+      body.address = address
+    }
+    await marketingApi.createContact(body)
+    addContactOpen.value = false
+    await load()
+  } catch (e: unknown) {
+    addContactError.value =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to add contact')
+        : 'Failed to add contact'
+  } finally {
+    addContactSubmitting.value = false
+  }
+}
 
 export type { TenantContactListRow, TenantContactTypeOption }
 
@@ -637,8 +1043,7 @@ watch(totalPages, (pages) => {
 })
 
 function formatAddress(addr?: { street?: string; city?: string; state?: string; county?: string }): string {
-  if (!addr) return ''
-  return [addr.street, addr.city, addr.state].filter(Boolean).join(', ')
+  return formatContactAddress(addr)
 }
 
 function formatDate(iso: string): string {
@@ -777,7 +1182,7 @@ const contactDetailSections = computed((): ContactDetailSection[] => {
         { label: 'Street', value: formatDetailValue(c.address?.street), span: 2 },
         { label: 'City', value: formatDetailValue(c.address?.city) },
         { label: 'State', value: formatDetailValue(c.address?.state) },
-        { label: 'County', value: formatDetailValue(c.address?.county), span: 2 }
+        { label: 'County', value: formatDetailValue(normalizeContactCounty(c.address?.county)), span: 2 }
       ]
     },
     {
