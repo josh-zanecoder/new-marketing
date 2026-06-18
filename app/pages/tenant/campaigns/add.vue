@@ -373,6 +373,9 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
                 </p>
               </template>
             </TenantCampaignEmailPreview>
+            <div class="border-t border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
+              <TenantCampaignSaveToLibraryOption v-model="form.saveHtmlToLibrary" />
+            </div>
           </div>
         </div>
 
@@ -1430,7 +1433,7 @@ function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   designModalOpen.value = false
   form.value.templateMode = 'upload'
   form.value.selectedTemplateId = ''
-  form.value.saveHtmlToLibrary = payload.saveToLibrary
+  form.value.saveHtmlToLibrary = false
   savedTemplateHtml.value = payload.html
   const campaignId = returnCampaignId.value || `temp-${Date.now()}`
   returnCampaignId.value = campaignId
@@ -1447,6 +1450,7 @@ function handleCreateFromScratch() {
   designModalOpen.value = false
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
+  form.value.saveHtmlToLibrary = false
   const campaignId = `temp-${Date.now()}`
   if (typeof window !== 'undefined') {
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
@@ -1461,6 +1465,7 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   designModalOpen.value = false
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
+  form.value.saveHtmlToLibrary = false
   const fromTemplate = template.subject?.trim()
   if (fromTemplate) {
     form.value.subject = fromTemplate
@@ -1525,6 +1530,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
     templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
+    saveHtmlToLibrary: form.value.saveHtmlToLibrary,
     createdAt: now,
     updatedAt: now
   }
@@ -1551,8 +1557,7 @@ async function persistSavedCampaign(): Promise<string> {
     recipientsManual,
     templateHtml: savedTemplateHtml.value!,
     templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
-    saveHtmlToLibrary:
-      form.value.templateMode === 'upload' ? form.value.saveHtmlToLibrary : true
+    saveHtmlToLibrary: form.value.saveHtmlToLibrary
   }
 
   const res = await marketingApi.createCampaign(body)
