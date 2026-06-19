@@ -3,8 +3,7 @@ import {
   type RegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
 import { computeMarketingAnalytics } from '@server/utils/tracking/computeMarketingAnalytics'
-import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
-import { normalizeYmdQuery } from '@server/utils/tracking/brevoTenantEvents'
+import { loadScopedBrevoTrackingEvents } from '@server/utils/tracking/loadScopedBrevoTrackingEvents'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth
@@ -24,13 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Missing tenant database context' })
   }
 
-  const fromYmd = normalizeYmdQuery(event, 'from')
-  const toYmd = normalizeYmdQuery(event, 'to')
-
-  const { events, error } = await fetchTenantBrevoEmailEvents({
-    fromYmd,
-    toYmd
-  })
+  const { events, fromYmd, toYmd, error } = await loadScopedBrevoTrackingEvents(event, tenantAuth)
   if (error) {
     throw createError({ statusCode: 502, statusMessage: error })
   }
