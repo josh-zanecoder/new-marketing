@@ -17,7 +17,7 @@ export const BREVO_TRACKING_DATE_PRESET_OPTIONS: {
   id: BrevoTrackingDatePresetId
   label: string
 }[] = [
-  { id: 'all', label: 'All time' },
+  { id: 'all', label: 'Last 90 days' },
   { id: 'today', label: 'Today' },
   { id: 'yesterday', label: 'Yesterday' },
   { id: 'last7days', label: 'Last 7 days' },
@@ -146,7 +146,7 @@ export function formatBrevoTrackingDateRangeLabel(
   if (preset !== 'custom') {
     return (
       BREVO_TRACKING_DATE_PRESET_OPTIONS.find((option) => option.id === preset)?.label ??
-      'All time'
+      'Last 90 days'
     )
   }
 

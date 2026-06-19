@@ -53,15 +53,30 @@ const props = withDefaults(
 
 const route = useRoute()
 
-const query = computed(() => {
+const {
+  datePreset,
+  customDateFrom,
+  customDateTo,
+  effectiveDateRange,
+  dateRangeFilterActive,
+  dateRangeLabel,
+  resetDateRange
+} = useBrevoTrackingDateRange()
+
+const trackingQuery = computed(() => {
+  const q: Record<string, string> = {}
   const c = props.campaignId?.trim()
-  return c ? { campaignId: c } : {}
+  if (c) q.campaignId = c
+  const range = effectiveDateRange.value
+  if (range.from) q.from = range.from
+  if (range.to) q.to = range.to
+  return q
 })
 
-const fetchKey = computed(() => `tenant-tracking-brevo-${props.campaignId?.trim() || 'all'}`)
+const fetchKey = computed(() => `tenant-tracking-brevo-${JSON.stringify(trackingQuery.value)}`)
 
-const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking', {
-  query,
+const { data, error, pending, refresh } = useFetch<{ report: unknown }>('/api/v1/tracking', {
+  query: trackingQuery,
   key: fetchKey
 })
 
@@ -210,16 +225,6 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
 
 const searchQuery = ref('')
 const selectedEventTypes = ref<string[]>([])
-
-const {
-  datePreset,
-  customDateFrom,
-  customDateTo,
-  effectiveDateRange,
-  dateRangeFilterActive,
-  dateRangeLabel,
-  resetDateRange
-} = useBrevoTrackingDateRange()
 
 function groupMatchesDateRange(g: MessageEventGroup): boolean {
   const range = effectiveDateRange.value
