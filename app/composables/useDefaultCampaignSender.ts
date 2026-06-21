@@ -2,6 +2,7 @@ import {
   DEFAULT_CAMPAIGN_SENDER_EMAIL,
   DEFAULT_CAMPAIGN_SENDER_NAME
 } from '~~/shared/defaultCampaignSender'
+import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
 
 export type TenantMeCampaignSender = {
   defaultCampaignSenderName?: string
@@ -21,9 +22,23 @@ export function unwrapTenantMePayload(payload: unknown): TenantMeCampaignSender 
 
 export function useDefaultCampaignSender() {
   const marketingApi = useTenantMarketingApi()
+  const { data: authUser } = useMarketingMe()
   const defaultSenderName = ref(DEFAULT_CAMPAIGN_SENDER_NAME)
   const defaultSenderEmail = ref(DEFAULT_CAMPAIGN_SENDER_EMAIL)
   const loaded = ref(false)
+
+  const senderDisplayName = computed(() => {
+    const u = authUser.value
+    if (u?.authType === 'apiKey') {
+      const fromUser = formatPersonDisplayName({
+        firstName: u.firstName,
+        lastName: u.lastName,
+        name: u.name
+      })
+      if (fromUser) return fromUser
+    }
+    return defaultSenderName.value
+  })
 
   async function loadDefaultCampaignSender() {
     try {
@@ -42,5 +57,5 @@ export function useDefaultCampaignSender() {
     }
   }
 
-  return { defaultSenderName, defaultSenderEmail, loaded, loadDefaultCampaignSender }
+  return { defaultSenderName, defaultSenderEmail, senderDisplayName, loaded, loadDefaultCampaignSender }
 }

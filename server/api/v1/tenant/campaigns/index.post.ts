@@ -11,6 +11,7 @@ import {
   tenantOwnershipFieldsFromAuth
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
 
@@ -86,14 +87,14 @@ export default defineEventHandler(async (event) => {
       ? auth.dbName
       : ''
   const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+  const sender = resolveCampaignSenderForPersistence(auth, senderDefaults, {
+    senderEmail: body.senderEmail
+  })
 
   const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
   const campaignData: Record<string, unknown> = {
     name: body.name.trim(),
-    sender: {
-      name: body.senderName?.trim() || senderDefaults.name,
-      email: body.senderEmail?.trim() || senderDefaults.email
-    },
+    sender,
     recipientsType,
     recipientsListId,
     subject: body.subject?.trim() || '',

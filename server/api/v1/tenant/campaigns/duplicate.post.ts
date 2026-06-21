@@ -11,9 +11,12 @@ import type {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
+import { tenantOwnershipFieldsFromAuth, isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { campaignSenderDisplayNameFromAuth } from '@server/utils/campaign/campaignSenderFromAuth'
+import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -52,12 +55,27 @@ export default defineEventHandler(async (event) => {
   const mergeSnap =
     tenantUserFieldsFromAuth(event.context.auth) ?? source.mergeUserSnapshot
 
+  const auth = event.context.auth
+  const registryConn = await getRegistryConnection()
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
+      ? auth.dbName
+      : ''
+  const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+  const senderName =
+    campaignSenderDisplayNameFromAuth(auth) ||
+    source.sender?.name?.trim() ||
+    senderDefaults.name
+
   const ownership = tenantOwnershipFieldsFromAuth(event.context.auth)
   const replyTo = campaignReplyToFromAuth(event.context.auth)
 
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
-    sender: source.sender,
+    sender: {
+      name: senderName,
+      email: source.sender?.email?.trim() || senderDefaults.email
+    },
     recipientsType: source.recipientsType,
     recipientsListId: source.recipientsListId || '',
     emailTemplate: emailTemplateId,

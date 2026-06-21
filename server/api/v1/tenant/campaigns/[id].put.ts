@@ -18,6 +18,7 @@ import {
   tenantCreatedByFromAuth
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 
 export default defineEventHandler(async (event) => {
@@ -96,10 +97,9 @@ export default defineEventHandler(async (event) => {
   const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
 
   campaign.name = body.name.trim()
-  campaign.sender = {
-    name: body.senderName?.trim() || senderDefaults.name,
-    email: body.senderEmail?.trim() || senderDefaults.email
-  }
+  campaign.sender = resolveCampaignSenderForPersistence(auth, senderDefaults, {
+    senderEmail: body.senderEmail
+  })
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
   campaign.subject = body.subject?.trim() || ''

@@ -643,7 +643,7 @@ import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSo
 import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
 
 const campaignStore = useCampaignStore()
-const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
+const { defaultSenderEmail, senderDisplayName, loadDefaultCampaignSender } =
   useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
@@ -667,7 +667,7 @@ const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
 const form = ref({
   name: '',
-  senderName: defaultSenderName.value,
+  senderName: '',
   senderEmail: defaultSenderEmail.value,
   subject: '',
   recipientsMode: 'list' as 'list' | 'manual',
@@ -1122,7 +1122,7 @@ function applyCampaignToEditForm(c: TenantCampaignDetail) {
   manualRecipientLabels.value = labels
   form.value = {
     name: c.name,
-    senderName: c.sender?.name || defaultSenderName.value,
+    senderName: senderDisplayName.value,
     senderEmail: c.sender?.email || defaultSenderEmail.value,
     subject: c.subject || '',
     recipientsMode: c.recipientsType || 'manual',
@@ -1208,7 +1208,7 @@ async function loadFromEditorReturn() {
       manualRecipientLabels.value = labels
       form.value = {
         name: c.name,
-        senderName: c.sender?.name || defaultSenderName.value,
+        senderName: senderDisplayName.value,
         senderEmail: c.sender?.email || defaultSenderEmail.value,
         subject: c.subject || '',
         recipientsMode: c.recipientsType || 'manual',
@@ -1232,7 +1232,14 @@ async function loadFromEditorReturn() {
     if (stored) {
       try {
         const { form: storedForm } = JSON.parse(stored)
-        if (storedForm) form.value = { ...form.value, ...storedForm }
+        if (storedForm) {
+          form.value = {
+            ...form.value,
+            ...storedForm,
+            senderName: senderDisplayName.value,
+            senderEmail: defaultSenderEmail.value
+          }
+        }
       } catch {
         /* ignore invalid stored JSON */
       }

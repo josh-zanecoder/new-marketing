@@ -26,6 +26,7 @@ import {
   buildCampaignReplyTo,
   replyToNameFromUserSnapshot
 } from '@server/utils/email/replyToFromContactMetadata'
+import { campaignSenderDisplayNameFromAuth } from '@server/utils/campaign/campaignSenderFromAuth'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
@@ -141,7 +142,9 @@ export async function sendCampaignTestEmail(
     templateHtml = await resolveCampaignTemplateHtml(EmailTemplate as EmailTemplateModel, campaign)
     subject = String(campaign.subject ?? '').trim()
     sender = {
-      name: String(campaign.sender?.name ?? '').trim(),
+      name:
+        campaignSenderDisplayNameFromAuth(auth) ||
+        String(campaign.sender?.name ?? '').trim(),
       email: String(campaign.sender?.email ?? '').trim()
     }
     if (!templateHtml) {
@@ -166,7 +169,9 @@ export async function sendCampaignTestEmail(
     templateHtml = String(input.templateHtml ?? '').trim()
     subject = String(input.subject ?? '').trim()
     sender = {
-      name: String(input.senderName ?? '').trim(),
+      name:
+        campaignSenderDisplayNameFromAuth(auth) ||
+        String(input.senderName ?? '').trim(),
       email: String(input.senderEmail ?? '').trim()
     }
     const recipientsType = input.recipientsType
