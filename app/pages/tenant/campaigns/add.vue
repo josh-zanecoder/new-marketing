@@ -335,46 +335,41 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
             </div>
             <span class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto sm:px-4 sm:text-[15px]">{{ designSectionToggleLabel }}</span>
           </button>
-          <div v-if="savedTemplateHtml" class="border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-6 sm:py-6">
-            <div class="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
-              <div class="flex flex-col gap-3 border-b border-slate-100 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-5">
-                <div class="min-w-0">
-                  <h3 class="text-base font-semibold text-slate-900">Current email design</h3>
-                  <p class="mt-1 text-sm text-slate-500">{{ designSourceSummary }}</p>
-                </div>
-                <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                  <button
-                    type="button"
-                    class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
-                    @click="confirmChangeDesign"
-                  >
-                    Change design
-                  </button>
-                  <button
-                    v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
-                    type="button"
-                    class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
-                    @click="openEditorWithCurrentDesign"
-                  >
-                    Edit in editor
-                  </button>
-                </div>
-              </div>
-              <div class="relative min-h-[min(240px,40dvh)] max-h-[min(480px,55dvh)] overflow-auto bg-[#f8f4ef] sm:min-h-[280px]">
-                <iframe
-                  :srcdoc="previewSrcdoc(designPreviewHtml || '')"
-                  title="Email preview"
-                  class="absolute inset-0 h-full w-full border-0"
-                  sandbox="allow-same-origin"
-                />
-              </div>
-              <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
-                Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
-              </p>
-              <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
-                Save the campaign once to get a stable link for the editor.
-              </p>
-            </div>
+          <div v-if="savedTemplateHtml" class="border-t border-slate-100">
+            <TenantCampaignEmailPreview
+              embedded
+              :html="designPreviewHtml"
+              :thumbnail-html="savedTemplateHtml"
+              title="Current email design"
+              :subject="form.subject"
+              :summary="designSourceSummary"
+            >
+              <template #actions>
+                <button
+                  type="button"
+                  class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
+                  @click="confirmChangeDesign"
+                >
+                  Change design
+                </button>
+                <button
+                  v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
+                  type="button"
+                  class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
+                  @click="openEditorWithCurrentDesign"
+                >
+                  Edit in editor
+                </button>
+              </template>
+              <template #footer>
+                <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
+                  Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
+                </p>
+                <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
+                  Save the campaign once to get a stable link for the editor.
+                </p>
+              </template>
+            </TenantCampaignEmailPreview>
           </div>
         </div>
 
@@ -1780,16 +1775,5 @@ async function handleCreate() {
       saveError.value = 'Something went wrong'
     }
   }
-}
-
-function previewSrcdoc(html: string) {
-  return `<!DOCTYPE html><html><head><meta charset=utf-8><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*,*::before,*::after{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{padding:16px 10px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);-webkit-overflow-scrolling:touch}
-#preview-wrap{width:100%;max-width:600px;margin:0 auto}
-#preview-wrap img{max-width:100%!important;height:auto!important}
-#preview-wrap table{max-width:100%!important}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
 }
 </script>

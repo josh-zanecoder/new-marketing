@@ -196,17 +196,6 @@ const showSkeleton = computed(
   () => !error.value && (pending.value || !campaign.value)
 )
 
-onBeforeUnmount(() => {
-  if (!import.meta.client) return
-  if (countdownInterval) {
-    clearInterval(countdownInterval)
-    countdownInterval = null
-  }
-  if (isSendPolling(id) && sendingCampaignId.value !== id) {
-    stopSendPolling()
-  }
-})
-
 function formatDate(d: string) {
   if (!d) return '–'
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -248,6 +237,17 @@ onMounted(() => {
   }, 30000)
 })
 
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+  if (isSendPolling(id) && sendingCampaignId.value !== id) {
+    stopSendPolling()
+  }
+})
+
 function toDatetimeLocalValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -257,6 +257,8 @@ const scheduleModalOpen = ref(false)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
+
+useMarketingScrollLock(scheduleModalOpen)
 
 function openScheduleModal() {
   scheduleError.value = ''
@@ -377,8 +379,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 </script>
 
 <template>
-  <div class="w-full min-w-0 antialiased">
-    <div class="w-full min-w-0">
+  <div class="mx-auto w-full min-w-0 max-w-6xl overflow-x-hidden antialiased">
+    <div class="w-full min-w-0 space-y-6 sm:space-y-8">
       <NuxtLink
         to="/tenant/campaigns"
         class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
@@ -646,8 +648,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         </nav>
 
         <div
-          v-show="campaignViewTab === 'details'"
-          class="flex flex-col gap-8 sm:gap-10 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12"
+          v-if="campaignViewTab === 'details'"
+          class="flex flex-col gap-6 sm:gap-8 xl:grid xl:grid-cols-12 xl:items-start xl:gap-10 2xl:gap-12"
         >
           <div class="min-w-0 space-y-8 xl:col-span-5 2xl:col-span-4 xl:space-y-8">
             <div
@@ -765,22 +767,23 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             </div>
           </div>
 
-          <div class="min-w-0 xl:col-span-7 2xl:col-span-8 xl:sticky xl:top-6 xl:self-start">
+          <div class="min-w-0 xl:col-span-7 2xl:col-span-8">
             <TenantCampaignEmailPreview
               v-if="campaign.templateHtml"
               :html="previewHtml"
+              :thumbnail-html="campaign.templateHtml"
               :title="previewTitle"
               :subject="previewSubject"
-              class="rounded-2xl"
+              summary="Preview with merge tags applied from your recipients."
             >
               <template #actions>
                 <button
                   v-if="canSendTestEmail"
                   type="button"
-                  class="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/90 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 sm:px-4 sm:py-2.5 sm:text-sm"
+                  class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 sm:w-auto"
                   @click="handleOpenTestEmailModal"
                 >
-                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   Send test email
@@ -790,7 +793,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 
             <div
               v-else
-              class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-10 text-center shadow-sm shadow-slate-900/[0.02] sm:px-8 sm:py-12 xl:py-16"
+              class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center shadow-sm shadow-slate-900/[0.02] sm:px-8 sm:py-12"
             >
               <p class="text-sm text-slate-500 sm:text-[0.9375rem]">No email template</p>
             </div>
@@ -798,11 +801,16 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         </div>
 
         <section
-          v-show="campaignViewTab === 'tracking'"
-          class="min-w-0 pt-2"
+          v-if="campaignViewTab === 'tracking'"
+          class="min-w-0 space-y-4 sm:space-y-6"
           aria-label="Campaign send tracking"
         >
-          <TenantBrevoTrackingEventsPanel :campaign-id="id" />
+          <TenantBrevoTrackingEventsPanel
+            :key="`campaign-tracking-${id}`"
+            :campaign-id="id"
+            hide-campaign-column
+            panel-hint="Delivery, opens, and clicks for this campaign."
+          />
         </section>
       </div>
     </div>
