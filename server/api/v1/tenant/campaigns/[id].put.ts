@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''
 
-  const saveToLibrary = body.saveHtmlToLibrary !== false
+  const saveToLibrary = body.saveHtmlToLibrary === true
 
   if (body.templateHtml && campaign.emailTemplate) {
     const htmlSource =

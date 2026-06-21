@@ -86,18 +86,23 @@ export default defineEventHandler(async (event) => {
   let emailTemplate: { html: string; name: string } | null = null
   let templateHtml: string | null = null
   let templateHtmlSource: 'editor' | 'upload' = 'editor'
+  let linkedTemplate: EmailTemplateDoc | null = null
   if (campaign.emailTemplate) {
-    const template = await (EmailTemplate as EmailTemplateModel)
+    linkedTemplate = await (EmailTemplate as EmailTemplateModel)
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
-    if (template) {
-      const rawHtml = template.htmlTemplate ?? template.html ?? ''
-      emailTemplate = { name: template.name, html: rawHtml }
+    if (linkedTemplate) {
+      const rawHtml = linkedTemplate.htmlTemplate ?? linkedTemplate.html ?? ''
+      emailTemplate = { name: linkedTemplate.name, html: rawHtml }
       templateHtmlSource =
-        template.htmlSource === 'upload' ? 'upload' : 'editor'
-      templateHtml = template.css ? `<style>${template.css}</style>${rawHtml}` : rawHtml
+        linkedTemplate.htmlSource === 'upload' ? 'upload' : 'editor'
+      templateHtml = linkedTemplate.css ? `<style>${linkedTemplate.css}</style>${rawHtml}` : rawHtml
     }
   }
+
+  const saveHtmlToLibrary = linkedTemplate
+    ? linkedTemplate.saveToLibrary !== false
+    : undefined
 
   return {
     campaign: {
@@ -115,6 +120,7 @@ export default defineEventHandler(async (event) => {
       emailTemplate,
       templateHtml,
       templateHtmlSource,
+      saveHtmlToLibrary,
       mergeUserSnapshot: campaign.mergeUserSnapshot,
       replyTo: campaign.replyTo,
       createdAt: campaign.createdAt,
