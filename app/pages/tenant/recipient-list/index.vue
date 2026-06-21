@@ -1,17 +1,18 @@
 <template>
-  <div class="w-full min-w-0 space-y-8 antialiased">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div class="min-w-0">
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audience</p>
+        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Recipient lists
         </h1>
-        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+        <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
           Build segments for campaigns with filters on audience and contact attributes.
         </p>
       </div>
       <NuxtLink
         to="/tenant/recipient-list/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -52,8 +53,8 @@
       {{ loadError }}
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="relative min-w-0 w-full max-w-lg">
+    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch">
+      <div class="relative min-w-0 w-full sm:flex-1 sm:max-w-lg">
         <label class="sr-only" for="recipient-list-search">Search lists</label>
         <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -64,44 +65,23 @@
           type="search"
           autocomplete="off"
           placeholder="Search by list name…"
-          class="w-full rounded-xl border border-slate-200/90 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
         >
       </div>
-      <div class="relative w-full shrink-0 sm:w-[14rem]">
-        <select
-          id="recipient-list-audience-filter"
-          v-model="audienceFilter"
-          aria-label="Filter by audience"
-          class="h-full w-full min-h-[2.875rem] cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] font-medium text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
-        >
-          <option value="all">
-            All audiences
-          </option>
-          <option
-            v-for="opt in audienceOptions"
-            :key="opt.value"
-            :value="opt.value"
-          >
-            {{ opt.label }}
-          </option>
-        </select>
-        <svg
-          class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
+      <TenantFilterSelect
+        id="recipient-list-audience-filter"
+        v-model="audienceFilter"
+        label="Filter by audience"
+        :options="audienceFilterSelectOptions"
+        class="w-full shrink-0 sm:w-[14rem]"
+      />
     </div>
 
-    <div v-if="pending" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div v-if="pending" class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
       <div
         v-for="n in 6"
         :key="n"
-        class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+        class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-6"
       >
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0 flex-1 space-y-2">
@@ -144,7 +124,7 @@
       <NuxtLink
         v-if="!data.lists.length"
         to="/tenant/recipient-list/add"
-        class="mt-8 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
       >
         Create list
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -153,20 +133,20 @@
       </NuxtLink>
     </div>
 
-    <div v-else-if="data" class="space-y-8">
-      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div v-else-if="data" class="space-y-6 sm:space-y-8">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
         <article
           v-for="row in paginatedLists"
           :key="row.id"
-          class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06]"
+          class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:p-6"
         >
-          <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start justify-between gap-3 sm:gap-4">
             <div class="min-w-0 flex-1">
               <NuxtLink
                 :to="`/tenant/recipient-list/${row.id}`"
                 class="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
               >
-                <h2 class="text-base font-semibold leading-snug text-slate-900">
+                <h2 class="truncate text-base font-semibold leading-snug text-slate-900">
                   {{ row.name }}
                 </h2>
               </NuxtLink>
@@ -215,8 +195,8 @@
             </div>
           </div>
 
-          <div class="mt-5 flex-1">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div class="mt-5 flex-1 sm:mt-5">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
               Includes people who:
             </p>
             <div class="mt-2 flex flex-wrap gap-2">
@@ -238,8 +218,8 @@
             </div>
           </div>
 
-          <div class="mt-6 flex items-end justify-between gap-3 border-t border-slate-100 pt-5">
-            <p class="text-sm text-slate-400">
+          <div class="mt-5 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:mt-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pt-5">
+            <p class="text-xs text-slate-400 sm:text-sm">
               {{ listCardFooterLeft(row) }}
             </p>
             <NuxtLink
@@ -254,34 +234,39 @@
 
       <div
         v-if="filteredLists.length"
-        class="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4 text-sm text-slate-600 shadow-sm shadow-slate-900/[0.03] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
+        class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5 shadow-sm shadow-slate-900/[0.03] sm:gap-4 sm:px-6 sm:py-4"
       >
-        <p class="tabular-nums text-slate-500">
+        <p class="min-w-0 text-xs tabular-nums text-slate-500 sm:text-sm">
           <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          <span class="mx-1.5 text-slate-300">·</span>
+          <span class="text-slate-300"> / </span>
           <span>{{ paginationMeta.total }} lists</span>
         </p>
-        <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
+        <nav
+          class="flex shrink-0 items-center gap-1 sm:gap-1.5"
+          aria-label="Recipient lists pagination"
+        >
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
-            Previous
+            <span class="sm:hidden">Prev</span>
+            <span class="hidden sm:inline">Previous</span>
           </button>
-          <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-slate-500">
-            Page {{ currentPage }} / {{ totalPages }}
+          <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-slate-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
+            <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+            <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
           </span>
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
             Next
           </button>
-        </div>
+        </nav>
       </div>
     </div>
 
@@ -407,6 +392,11 @@ const audienceOptions = computed((): { value: string; label: string }[] => {
       value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
   }))
 })
+
+const audienceFilterSelectOptions = computed(() => [
+  { value: 'all', label: 'All audiences' },
+  ...audienceOptions.value
+])
 
 const filteredLists = computed(() => {
   const lists = data.value?.lists ?? []

@@ -3,7 +3,7 @@
     <div class="mx-auto max-w-6xl">
     <NuxtLink
       to="/tenant/recipient-list"
-      class="group mb-6 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 sm:mb-8"
+      class="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 sm:mb-8"
     >
       <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -31,10 +31,10 @@
     </div>
 
     <template v-else-if="payload">
-      <header class="mb-8 sm:mb-10">
-        <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
-          <div class="min-w-0 flex-1 space-y-4">
-            <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl lg:text-[2rem] lg:leading-tight">
+      <header class="mb-6 sm:mb-10">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+          <div class="min-w-0 flex-1 space-y-3 sm:space-y-4">
+            <h1 class="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl lg:text-[2rem] lg:leading-tight">
               {{ payload.list.name }}
             </h1>
             <div
@@ -60,7 +60,7 @@
           <div class="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
             <NuxtLink
               :to="`/tenant/recipient-list/edit/${listId}`"
-              class="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-zinc-900/15 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-zinc-900/15 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 sm:px-5 sm:py-3"
             >
               <svg class="h-4 w-4 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -69,7 +69,7 @@
             </NuxtLink>
             <button
               type="button"
-              class="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-medium text-red-700 shadow-sm transition hover:border-red-200 hover:bg-red-50/80"
+              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:border-red-200 hover:bg-red-50/80 sm:px-5 sm:py-3"
               @click="deleteConfirmOpen = true"
             >
               <svg class="h-4 w-4 text-red-600/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -194,7 +194,37 @@
           v-else
           class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-md shadow-zinc-950/[0.06] ring-1 ring-zinc-100/80"
         >
-          <div class="overflow-x-auto">
+          <ul class="divide-y divide-zinc-100 lg:hidden">
+            <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-4">
+              <p class="truncate text-sm font-semibold text-zinc-900">
+                {{ m.name }}
+              </p>
+              <p class="mt-0.5 truncate text-xs text-zinc-600" :title="m.email">
+                {{ m.email }}
+              </p>
+              <div v-if="m.contactType?.length" class="mt-2 flex flex-wrap gap-1">
+                <span
+                  v-for="t in m.contactType"
+                  :key="`${m.id}-mobile-${t}`"
+                  class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
+                >
+                  {{ t }}
+                </span>
+              </div>
+              <p v-if="m.company" class="mt-2 truncate text-xs text-zinc-500" :title="m.company">
+                {{ m.company }}
+              </p>
+              <p
+                v-if="formatAddress(m.address) !== '—'"
+                class="mt-1 line-clamp-2 text-xs text-zinc-500"
+                :title="formatAddress(m.address)"
+              >
+                {{ formatAddress(m.address) }}
+              </p>
+            </li>
+          </ul>
+
+          <div class="hidden overflow-x-auto lg:block">
             <table class="min-w-full text-left text-sm">
               <thead>
                 <tr class="border-b border-zinc-200 bg-zinc-50/90">
@@ -257,32 +287,36 @@
 
           <div
             v-if="payload.members.totalPages > 1"
-            class="flex flex-col gap-4 border-t border-zinc-200 bg-zinc-50/70 px-4 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+            class="flex items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50/70 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
           >
-            <p class="tabular-nums text-zinc-600">
-              Page <span class="font-semibold text-zinc-900">{{ payload.members.page }}</span>
-              of {{ payload.members.totalPages }}
-              <span class="text-zinc-300">·</span>
-              {{ payload.members.pageSize }} per page
+            <p class="min-w-0 text-xs tabular-nums text-zinc-600 sm:text-sm">
+              <span class="font-semibold text-zinc-900">{{ payload.members.page }}</span>
+              <span class="text-zinc-300"> / </span>
+              <span>{{ payload.members.totalPages }}</span>
+              <span class="hidden text-zinc-400 sm:inline"> · {{ payload.members.pageSize }}/page</span>
             </p>
-            <div class="flex items-center gap-2">
+            <nav class="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="Recipients pagination">
               <button
                 type="button"
-                class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-sm"
                 :disabled="page <= 1 || pageLoading"
                 @click="goPage(page - 1)"
               >
-                Previous
+                <span class="sm:hidden">Prev</span>
+                <span class="hidden sm:inline">Previous</span>
               </button>
+              <span class="whitespace-nowrap px-1 text-xs font-medium tabular-nums text-zinc-500 sm:hidden">
+                {{ page }}/{{ payload.members.totalPages }}
+              </span>
               <button
                 type="button"
-                class="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-sm"
                 :disabled="page >= payload.members.totalPages || pageLoading"
                 @click="goPage(page + 1)"
               >
                 Next
               </button>
-            </div>
+            </nav>
           </div>
         </div>
       </section>

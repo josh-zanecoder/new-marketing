@@ -22,12 +22,12 @@ defineProps<{
 
     <div
       v-if="loading"
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 xl:grid-cols-3"
     >
       <div
         v-for="n in 6"
         :key="n"
-        class="animate-pulse rounded-2xl border border-zinc-200/90 bg-white p-5"
+        class="animate-pulse rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-5"
       >
         <div class="h-10 w-10 rounded-xl bg-zinc-100" />
         <div class="mt-4 h-4 w-24 rounded bg-zinc-100" />
@@ -37,12 +37,12 @@ defineProps<{
 
     <div
       v-else
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 xl:grid-cols-3"
     >
       <article
         v-for="card in cards"
         :key="card.id"
-        class="rounded-2xl border p-5 shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-900/[0.02]"
+        class="rounded-2xl border p-4 shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-900/[0.02] sm:p-5"
         :class="card.cardClass"
       >
         <div class="flex items-start justify-between gap-3">
@@ -120,13 +120,13 @@ defineProps<{
           </div>
         </div>
 
-        <p class="mt-4 text-sm font-medium text-zinc-500">
+        <p class="mt-3 text-xs font-medium text-zinc-500 sm:mt-4 sm:text-sm">
           {{ card.label }}
         </p>
-        <p class="mt-2 text-3xl font-semibold tabular-nums tracking-tight" :class="card.accentClass">
+        <p class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight sm:mt-2 sm:text-3xl" :class="card.accentClass">
           {{ card.value }}
         </p>
-        <p v-if="card.hint" class="mt-2 text-xs text-zinc-500">
+        <p v-if="card.hint" class="mt-1.5 line-clamp-2 text-[11px] text-zinc-500 sm:mt-2 sm:text-xs">
           {{ card.hint }}
         </p>
       </article>

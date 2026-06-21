@@ -49,7 +49,7 @@ const hasChartData = computed(() => {
       'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]'
     "
   >
-    <div class="border-b border-zinc-100 px-5 py-4 sm:px-6">
+    <div class="border-b border-zinc-100 px-4 py-3.5 sm:px-6 sm:py-4">
       <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         Event activity
       </h2>
@@ -59,16 +59,16 @@ const hasChartData = computed(() => {
     </div>
 
     <ClientOnly>
-      <div v-if="hasChartData" class="px-2 py-4 sm:px-4 sm:py-5">
+      <div v-if="hasChartData" class="px-1 py-3 sm:px-4 sm:py-5">
         <VChart
-          class="h-72 w-full min-h-[18rem]"
+          class="h-56 w-full min-h-[14rem] sm:h-72 sm:min-h-[18rem]"
           :option="chartOption"
           autoresize
         />
       </div>
       <div
         v-else
-        class="flex flex-col items-center px-6 py-14 text-center sm:py-16"
+        class="flex flex-col items-center px-4 py-12 text-center sm:px-6 sm:py-16"
       >
         <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

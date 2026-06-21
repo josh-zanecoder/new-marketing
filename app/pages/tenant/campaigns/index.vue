@@ -3,6 +3,8 @@ import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 
+definePageMeta({ layout: 'default' })
+
 const store = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
@@ -19,6 +21,16 @@ const {
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
+
+const statusFilterSelectOptions = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Sending', label: 'Sending' },
+  { value: 'Scheduled', label: 'Scheduled' },
+  { value: 'Sent', label: 'Sent' },
+  { value: 'Failed', label: 'Failed' }
+]
+
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
 const campaignToSchedule = ref<Campaign | null>(null)
@@ -283,19 +295,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="w-full min-w-0 space-y-8 antialiased">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div class="min-w-0">
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+      <div class="min-w-0 space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Outreach</p>
+        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Campaigns
         </h1>
-        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+        <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
           Create sends, track draft and delivery status, and manage campaigns from one place.
         </p>
       </div>
       <NuxtLink
         to="/tenant/campaigns/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -306,18 +319,20 @@ onUnmounted(() => {
 
     <div
       v-if="sendError && !sendingCampaignId"
-      class="flex items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
+      class="flex flex-col gap-3 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-4 py-4 text-sm text-amber-950 shadow-sm sm:flex-row sm:items-start sm:gap-3.5 sm:px-5"
       role="alert"
     >
-      <div class="mt-0.5 shrink-0 text-amber-600">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
+      <div class="flex min-w-0 flex-1 items-start gap-3">
+        <div class="mt-0.5 shrink-0 text-amber-600">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
       </div>
-      <span class="min-w-0 flex-1 leading-relaxed">{{ sendError }}</span>
       <button
         type="button"
-        class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100/90"
+        class="shrink-0 self-start rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100/90 sm:self-center"
         @click="closeSendModal()"
       >
         Dismiss
@@ -337,7 +352,7 @@ onUnmounted(() => {
       <div
         v-for="n in 5"
         :key="n"
-        class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:px-6 sm:py-5"
+        class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:px-6 sm:py-5"
       >
         <div class="flex items-start gap-3 sm:gap-4">
           <div class="min-w-0 flex-1 space-y-3">
@@ -365,8 +380,8 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-      <div class="relative min-w-0 w-full max-w-lg">
+    <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch">
+      <div class="relative min-w-0 w-full sm:flex-1 sm:max-w-lg">
         <label class="sr-only" for="campaigns-search">Search campaigns</label>
         <svg
           class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400"
@@ -383,49 +398,21 @@ onUnmounted(() => {
           type="search"
           autocomplete="off"
           placeholder="Search campaigns…"
-          class="w-full rounded-xl border border-slate-200/90 bg-white py-3.5 pl-11 pr-4 text-[0.9375rem] text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
         >
       </div>
-      <div class="relative w-full shrink-0 sm:w-[11rem]">
-        <select
-          v-model="statusFilter"
-          aria-label="Filter by status"
-          class="h-full w-full min-h-[2.875rem] cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-[0.9375rem] font-medium text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
-        >
-        <option value="all">
-          All statuses
-        </option>
-        <option value="Draft">
-          Draft
-        </option>
-        <option value="Sending">
-          Sending
-        </option>
-        <option value="Scheduled">
-          Scheduled
-        </option>
-        <option value="Sent">
-          Sent
-        </option>
-        <option value="Failed">
-          Failed
-        </option>
-        </select>
-        <svg
-          class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
+      <TenantFilterSelect
+        id="campaigns-status-filter"
+        v-model="statusFilter"
+        label="Filter by status"
+        :options="statusFilterSelectOptions"
+        class="w-full shrink-0 sm:w-[11rem]"
+      />
     </div>
 
     <div
       v-if="!filteredCampaigns.length"
-      class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-14 text-center shadow-sm shadow-slate-900/[0.03] sm:px-6 sm:py-20"
     >
       <div
         class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
@@ -443,7 +430,7 @@ onUnmounted(() => {
       <NuxtLink
         v-if="!campaigns.length"
         to="/tenant/campaigns/add"
-        class="mt-8 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
       >
         Create campaign
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -452,39 +439,38 @@ onUnmounted(() => {
       </NuxtLink>
     </div>
 
-    <div v-else class="space-y-5">
+    <div v-else class="space-y-4 sm:space-y-5">
       <article
         v-for="c in paginatedCampaigns"
         :key="c.id"
-        class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:px-6 sm:py-5"
+        class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:px-6 sm:py-5"
       >
-        <div class="flex items-start gap-3 sm:gap-4">
-          <NuxtLink
-            :to="`/tenant/campaigns/${c.id}`"
-            class="min-w-0 flex-1 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
-          >
-            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h2 class="text-[15px] font-semibold leading-snug text-slate-900 sm:text-base">
-                {{ c.name || 'Untitled' }}
-              </h2>
-              <span
-                class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset"
-                :class="{
-                  'bg-amber-50 text-amber-700 ring-amber-200/80': c.status === 'Draft',
-                  'bg-sky-50 text-sky-700 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
-                  'bg-emerald-50 text-emerald-700 ring-emerald-200/80': c.status === 'Sent',
-                  'bg-red-50 text-red-700 ring-red-200/80': c.status === 'Failed',
-                  'bg-slate-100 text-slate-600 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
-                }"
-              >
-                {{ c.status }}
-              </span>
-            </div>
-            <p class="mt-2 text-sm text-slate-500">
-              {{ campaignSubtitle(c, countdownNow) }}
-            </p>
-          </NuxtLink>
-        <div class="flex shrink-0 items-center justify-end gap-0.5">
+        <NuxtLink
+          :to="`/tenant/campaigns/${c.id}`"
+          class="block min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="min-w-0 truncate text-[15px] font-semibold leading-snug text-slate-900 sm:text-base">
+              {{ c.name || 'Untitled' }}
+            </h2>
+            <span
+              class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset"
+              :class="{
+                'bg-amber-50 text-amber-700 ring-amber-200/80': c.status === 'Draft',
+                'bg-sky-50 text-sky-700 ring-sky-200/80': c.status === 'Scheduled' || c.status === 'Sending',
+                'bg-emerald-50 text-emerald-700 ring-emerald-200/80': c.status === 'Sent',
+                'bg-red-50 text-red-700 ring-red-200/80': c.status === 'Failed',
+                'bg-slate-100 text-slate-600 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(c.status),
+              }"
+            >
+              {{ c.status }}
+            </span>
+          </div>
+          <p class="mt-1.5 line-clamp-2 text-sm text-slate-500 sm:line-clamp-none">
+            {{ campaignSubtitle(c, countdownNow) }}
+          </p>
+        </NuxtLink>
+        <div class="mt-3 flex flex-wrap items-center gap-0.5 border-t border-slate-100 pt-3 sm:mt-4">
           <NuxtLink
             v-if="c.status === 'Draft'"
             :to="`/tenant/campaigns/edit/${c.id}`"
@@ -567,38 +553,42 @@ onUnmounted(() => {
             </svg>
           </button>
         </div>
-        </div>
       </article>
 
       <div
-        class="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4 text-sm text-slate-600 shadow-sm shadow-slate-900/[0.03] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4"
+        class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5 shadow-sm shadow-slate-900/[0.03] sm:gap-4 sm:px-6 sm:py-4"
       >
-        <p class="tabular-nums text-slate-500">
+        <p class="min-w-0 text-xs tabular-nums text-slate-500 sm:text-sm">
           <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          <span class="mx-1.5 text-slate-300">·</span>
-          <span>{{ paginationMeta.total.toLocaleString() }} campaigns</span>
+          <span class="text-slate-300"> / </span>
+          <span>{{ paginationMeta.total.toLocaleString() }}</span>
         </p>
-        <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
+        <nav
+          class="flex shrink-0 items-center gap-1 sm:gap-1.5"
+          aria-label="Campaigns pagination"
+        >
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
-            Previous
+            <span class="sm:hidden">Prev</span>
+            <span class="hidden sm:inline">Previous</span>
           </button>
-          <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-slate-500">
-            Page {{ currentPage }} / {{ totalPages }}
+          <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-slate-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
+            <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+            <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
           </span>
           <button
             type="button"
-            class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
             Next
           </button>
-        </div>
+        </nav>
       </div>
     </div>
     </template>
@@ -681,7 +671,7 @@ onUnmounted(() => {
           <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
               :disabled="scheduleBusy"
               @click="closeScheduleModal"
             >
@@ -689,7 +679,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
               :disabled="scheduleBusy"
               @click="confirmScheduleFromList"
             >

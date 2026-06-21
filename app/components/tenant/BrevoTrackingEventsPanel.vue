@@ -390,14 +390,14 @@ const hasActiveFilters = computed(
 
     <div v-else-if="events.length > 0" class="space-y-0">
       <!-- Filters sit on page background (same pattern as campaigns list: controls above the card) -->
-      <div class="mb-6 space-y-4">
+      <div class="mb-4 space-y-3 sm:mb-6 sm:space-y-4">
         <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
           {{ panelHint }}
         </p>
         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
           <div class="relative min-w-0 w-full sm:w-80 md:w-96">
             <label class="sr-only" for="brevo-tracking-search">Search events</label>
-            <svg class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-zinc-400 sm:left-4 sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -405,8 +405,8 @@ const hasActiveFilters = computed(
               v-model="searchQuery"
               type="search"
               autocomplete="off"
-              placeholder="Subject, email, message ID, campaign, tags…"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-12 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+              placeholder="Subject, email, campaign…"
+              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:pl-12"
             >
           </div>
           <TenantBrevoTrackingDateRangePicker
@@ -418,7 +418,7 @@ const hasActiveFilters = computed(
           <button
             v-if="hasActiveFilters"
             type="button"
-            class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+            class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
             @click="clearAllFilters"
           >
             Clear filters
@@ -461,13 +461,12 @@ const hasActiveFilters = computed(
         </div>
       </div>
 
-      <div class="mb-6">
+      <div class="space-y-2 sm:space-y-4">
         <TenantBrevoTrackingLineChart
           :events="events"
           :date-range="effectiveDateRange"
           :selected-event-types="selectedEventTypes"
         />
-      </div>
 
       <div :class="cardClass">
         <div v-if="tableRows.length === 0" class="px-5 py-14 text-center sm:px-6 sm:py-16">
@@ -493,8 +492,62 @@ const hasActiveFilters = computed(
         </div>
 
         <div v-else>
-        <div class="overflow-x-auto">
-        <table class="w-full min-w-[52rem] text-left text-sm">
+        <ul class="divide-y divide-zinc-100 lg:hidden">
+          <li
+            v-for="(row, idx) in paginatedTableRows"
+            :key="`mobile-${row.messageId}-${idx}`"
+            class="p-4"
+          >
+            <div class="space-y-2">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Campaign</p>
+                <NuxtLink
+                  v-if="row.campaignId && isMongoId(row.campaignId)"
+                  :to="campaignPagePath(row.campaignId)"
+                  class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
+                  @click="onCampaignLinkClick($event, row.campaignId)"
+                >
+                  {{ campaignDisplayLabel(row.campaignId) }}
+                </NuxtLink>
+                <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
+                  {{ row.campaignId }}
+                </p>
+                <p v-else class="mt-0.5 text-sm text-zinc-400">—</p>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
+                <p
+                  class="mt-0.5 break-all text-sm text-zinc-800"
+                  :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
+                >
+                  {{ row.recipientEmail?.trim() || '—' }}
+                </p>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
+                <p class="mt-0.5 line-clamp-2 text-sm text-zinc-900">
+                  {{ row.subject }}
+                </p>
+              </div>
+              <p class="text-xs tabular-nums text-zinc-500">
+                {{ formatEventDate(row.latestIso) }}
+              </p>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <span
+                  v-for="ev in row.eventTypesOrdered"
+                  :key="ev"
+                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
+                  :class="eventBadgeClass(ev)"
+                >
+                  {{ ev }}
+                </span>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <div class="hidden overflow-x-auto lg:block">
+        <table class="w-full text-left text-sm">
           <thead>
             <tr class="border-b border-zinc-200 bg-zinc-50/90">
               <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
@@ -566,42 +619,45 @@ const hasActiveFilters = computed(
 
         <div
           v-if="totalPages > 1"
-          class="flex flex-col gap-4 border-t border-zinc-100 bg-zinc-50/60 px-4 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+          class="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
         >
-          <p class="tabular-nums text-zinc-500">
+          <p class="min-w-0 text-xs tabular-nums text-zinc-500 sm:text-sm">
             <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-            <span class="mx-1.5 text-zinc-300">·</span>
-            <span>{{ paginationMeta.total.toLocaleString() }} messages</span>
+            <span class="text-zinc-300"> / </span>
+            <span>{{ paginationMeta.total.toLocaleString() }}</span>
           </p>
-          <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-2.5">
+          <nav class="flex shrink-0 items-center gap-1 sm:gap-1.5" aria-label="Tracking pagination">
             <button
               type="button"
-              class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none"
+              class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
               :disabled="currentPage === 1"
               @click="currentPage -= 1"
             >
-              Previous
+              <span class="sm:hidden">Prev</span>
+              <span class="hidden sm:inline">Previous</span>
             </button>
-            <span class="min-w-[6.5rem] px-1 text-center text-[0.8125rem] font-medium tabular-nums text-zinc-500">
-              Page {{ currentPage }} / {{ totalPages }}
+            <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-zinc-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
+              <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+              <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
             </span>
             <button
               type="button"
-              class="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[0.8125rem] font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none"
+              class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
               :disabled="currentPage === totalPages"
               @click="currentPage += 1"
             >
               Next
             </button>
-          </div>
+          </nav>
         </div>
         </div>
+      </div>
       </div>
     </div>
 
     <div
       v-else
-      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center shadow-sm shadow-zinc-950/[0.04] sm:py-20"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-14 text-center shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-20"
     >
       <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
         <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -8,25 +8,32 @@
       aria-labelledby="add-campaign-contacts-title"
     >
       <div
-        class="absolute inset-0 bg-zinc-950/55 backdrop-blur-[2px]"
+        class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
         aria-hidden="true"
         @click="close"
       />
       <div
-        class="relative flex max-h-[min(92vh,800px)] w-full max-w-4xl flex-col rounded-t-2xl bg-white shadow-2xl ring-1 ring-zinc-200/90 sm:max-h-[85vh] sm:rounded-2xl"
+        class="relative flex max-h-[min(92dvh,800px)] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:max-h-[min(85vh,800px)] sm:rounded-2xl"
+        @click.stop
       >
-        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-100 px-4 py-4 sm:px-5 sm:py-4">
+        <div
+          class="flex shrink-0 justify-center pt-2.5 sm:hidden"
+          aria-hidden="true"
+        >
+          <span class="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
           <div class="min-w-0">
-            <h2 id="add-campaign-contacts-title" class="text-lg font-semibold text-zinc-900">
+            <h2 id="add-campaign-contacts-title" class="text-base font-semibold text-slate-900 sm:text-lg">
               Add contacts
             </h2>
-            <p class="mt-1 text-sm text-zinc-500">
+            <p class="mt-1 text-xs text-slate-500 sm:text-sm">
               Search your CRM and add people with an email to this campaign.
             </p>
           </div>
           <button
             type="button"
-            class="shrink-0 rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 sm:border-0 sm:bg-transparent sm:shadow-none"
             aria-label="Close"
             @click="close"
           >
@@ -36,7 +43,7 @@
           </button>
         </div>
 
-        <div class="flex shrink-0 flex-col gap-3 border-b border-zinc-100 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+        <div class="flex shrink-0 flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-5">
           <label class="sr-only" for="modal-contact-search">Search contacts</label>
           <input
             id="modal-contact-search"
@@ -44,55 +51,69 @@
             type="search"
             autocomplete="off"
             placeholder="Search by name or email…"
-            class="min-w-0 w-full flex-1 rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[12rem] sm:basis-[14rem]"
+            class="min-w-0 w-full flex-1 rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:min-w-[12rem] sm:basis-[14rem]"
           >
-          <label class="sr-only" for="modal-contact-type">Contact type</label>
-          <select
-            id="modal-contact-type"
-            v-model="typeFilter"
-            class="w-full shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-auto sm:min-w-[11rem]"
-          >
-            <option value="all">
-              All types
-            </option>
-            <option
-              v-for="opt in typeFilterSelectOptions"
-              :key="opt.key"
-              :value="opt.key"
+          <div class="grid grid-cols-1 gap-2 min-[420px]:grid-cols-[1fr_auto] sm:contents">
+            <div class="relative min-w-0 sm:min-w-[11rem]">
+              <label class="sr-only" for="modal-contact-type">Contact type</label>
+              <select
+                id="modal-contact-type"
+                v-model="typeFilter"
+                class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+              >
+                <option value="all">
+                  All types
+                </option>
+                <option
+                  v-for="opt in typeFilterSelectOptions"
+                  :key="opt.key"
+                  :value="opt.key"
+                >
+                  {{ typeOptionDisplay(opt) }}
+                </option>
+              </select>
+              <svg
+                class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            <button
+              type="button"
+              class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition hover:border-indigo-200 hover:bg-indigo-50/80 disabled:opacity-50 min-[420px]:w-auto sm:ml-auto"
+              :disabled="pending"
+              @click="$emit('refresh')"
             >
-              {{ typeOptionDisplay(opt) }}
-            </option>
-          </select>
-          <button
-            type="button"
-            class="shrink-0 rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 sm:ml-auto"
-            :disabled="pending"
-            @click="$emit('refresh')"
-          >
-            Refresh
-          </button>
+              Refresh
+            </button>
+          </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-4 py-2 sm:px-5 sm:py-3">
-          <p v-if="error" class="py-4 text-sm text-red-600">
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-5 sm:py-3">
+          <p v-if="error" class="py-4 text-sm text-red-600" role="alert">
             {{ error }}
           </p>
           <div
             v-else-if="pending"
-            class="py-10 text-center text-sm text-zinc-500"
+            class="py-10 text-center text-sm text-slate-500"
           >
             Loading contacts…
           </div>
           <template v-else>
             <p
               v-if="truncated"
-              class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200/80"
+              class="mb-3 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900"
+              role="status"
             >
               Showing recently updated contacts only (list is capped). Refine your search or use a recipient list for larger audiences.
             </p>
             <p
               v-if="!filteredRows.length"
-              class="py-8 text-center text-sm text-zinc-500"
+              class="py-8 text-center text-sm text-slate-500"
             >
               {{
                 searchQuery.trim()
@@ -102,27 +123,27 @@
                     : 'No contacts with an email address yet.'
               }}
             </p>
-            <ul v-else class="divide-y divide-zinc-100">
+            <ul v-else class="space-y-2 sm:divide-y sm:divide-slate-100 sm:space-y-0">
               <li
                 v-for="c in filteredRows"
                 :key="c.id"
-                class="flex items-center justify-between gap-3 py-3"
+                class="flex flex-col gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/40 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-3"
               >
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium text-zinc-900">
+                  <p class="truncate text-sm font-semibold text-slate-900">
                     {{ c.name || '—' }}
                   </p>
-                  <p class="truncate text-sm text-zinc-500">
+                  <p class="mt-0.5 break-all text-sm text-slate-500 sm:truncate">
                     {{ c.email }}
                   </p>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p v-if="c.company" class="truncate text-xs text-zinc-400">
+                  <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <p v-if="c.company" class="max-w-full truncate text-xs text-slate-400">
                       {{ c.company }}
                     </p>
                     <span
                       v-for="tag in contactTypeTags(c)"
                       :key="tag"
-                      class="inline-flex shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold capitalize leading-none text-zinc-600 ring-1 ring-zinc-200/80"
+                      class="inline-flex shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold capitalize leading-none text-slate-600 ring-1 ring-slate-200/80"
                     >
                       {{ tag }}
                     </span>
@@ -130,7 +151,7 @@
                 </div>
                 <button
                   type="button"
-                  class="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/80 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5 sm:text-xs"
                   :disabled="isSelected(c.id)"
                   @click="emit('addContact', c)"
                 >
@@ -141,10 +162,10 @@
           </template>
         </div>
 
-        <div class="shrink-0 border-t border-zinc-100 px-4 py-3 sm:flex sm:justify-end sm:px-5">
+        <div class="shrink-0 border-t border-slate-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:pb-3">
           <button
             type="button"
-            class="w-full rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 sm:w-auto"
+            class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 sm:ml-auto sm:w-auto"
             @click="close"
           >
             Done
@@ -180,10 +201,34 @@ const emit = defineEmits<{
 const searchQuery = ref('')
 const typeFilter = ref('all')
 
+let escListener: ((e: KeyboardEvent) => void) | null = null
+
 watch(open, (isOpen) => {
+  if (!import.meta.client) return
+
+  document.body.style.overflow = isOpen ? 'hidden' : ''
+
+  if (escListener) {
+    window.removeEventListener('keydown', escListener)
+    escListener = null
+  }
+
   if (isOpen) {
     searchQuery.value = ''
     typeFilter.value = 'all'
+    escListener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', escListener)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  document.body.style.overflow = ''
+  if (escListener) {
+    window.removeEventListener('keydown', escListener)
+    escListener = null
   }
 })
 

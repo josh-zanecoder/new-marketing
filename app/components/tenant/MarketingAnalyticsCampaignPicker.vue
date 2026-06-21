@@ -60,7 +60,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="relative min-w-[12rem] flex-1 sm:max-w-sm">
+  <div ref="rootRef" class="relative w-full min-w-0 lg:flex-1 lg:max-w-sm">
     <span class="mb-1.5 block text-xs font-medium text-zinc-500">Campaign</span>
     <button
       type="button"

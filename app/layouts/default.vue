@@ -1,46 +1,109 @@
 <script setup lang="ts">
+import { marketingSidebarNavItems } from '~/constants/marketingSidebarNav'
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 const route = useRoute()
 const { data: me, pending, refresh } = useMarketingMe()
 
 const SIDEBAR_STORAGE_KEY = 'marketing-sidebar-compact'
+const MOBILE_SIDEBAR_MQ = '(max-width: 1023px)'
+
 /** When true, sidebar shows icons only (narrow rail). */
 const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
+const isMobileViewport = ref(false)
 
 /** `null` until client mount — hide handoff “Back” until we know we are not in an iframe (embedded Retail). */
 const inIframe = ref<boolean | null>(null)
+
+let sidebarMediaQuery: MediaQueryList | null = null
+let sidebarEscListener: ((e: KeyboardEvent) => void) | null = null
+
+const mobileDrawerOpen = computed(() => isMobileViewport.value && !sidebarCompact.value)
+
+const sidebarTitle = computed(() =>
+  me.value?.authType === 'apiKey' ? me.value.tenantName : 'Mortdash'
+)
 
 /** Cancel any in-flight `/me` request so we always hit the server again (not a deduped no-op). */
 function refreshMe() {
   return refresh({ dedupe: 'cancel' })
 }
 
+function syncMobileViewport() {
+  if (!import.meta.client) return
+  isMobileViewport.value = window.matchMedia(MOBILE_SIDEBAR_MQ).matches
+}
+
+function clearSidebarEscListener() {
+  if (!sidebarEscListener) return
+  window.removeEventListener('keydown', sidebarEscListener)
+  sidebarEscListener = null
+}
+
+function syncMobileDrawerSideEffects() {
+  if (!import.meta.client) return
+
+  const drawerOpen = mobileDrawerOpen.value
+  document.body.style.overflow = drawerOpen ? 'hidden' : ''
+
+  clearSidebarEscListener()
+  if (drawerOpen) {
+    sidebarEscListener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') sidebarCompact.value = true
+    }
+    window.addEventListener('keydown', sidebarEscListener)
+  }
+}
+
 onMounted(() => {
   if (import.meta.client) {
     const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-    if (saved !== null) sidebarCompact.value = saved === 'true'
+    syncMobileViewport()
+    if (saved !== null) {
+      sidebarCompact.value = saved === 'true'
+    } else if (isMobileViewport.value) {
+      sidebarCompact.value = true
+    }
     try {
       inIframe.value = window.self !== window.top
     } catch {
       inIframe.value = true
     }
+    sidebarMediaQuery = window.matchMedia(MOBILE_SIDEBAR_MQ)
+    sidebarMediaQuery.addEventListener('change', syncMobileViewport)
+    syncMobileDrawerSideEffects()
   }
   void refreshMe()
 })
 
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  sidebarMediaQuery?.removeEventListener('change', syncMobileViewport)
+  clearSidebarEscListener()
+  document.body.style.overflow = ''
+})
+
 watch(sidebarCompact, (v) => {
   if (import.meta.client) localStorage.setItem(SIDEBAR_STORAGE_KEY, String(v))
+  syncMobileDrawerSideEffects()
+})
+
+watch(isMobileViewport, () => {
+  syncMobileDrawerSideEffects()
 })
 
 function toggleSidebarCompact() {
   sidebarCompact.value = !sidebarCompact.value
 }
 
+function openMobileDrawer() {
+  sidebarCompact.value = false
+}
+
 function collapseSidebarIfMobileExpanded() {
   if (!import.meta.client) return
   if (sidebarCompact.value) return
-  if (window.matchMedia('(max-width: 1023px)').matches) sidebarCompact.value = true
+  if (window.matchMedia(MOBILE_SIDEBAR_MQ).matches) sidebarCompact.value = true
 }
 
 watch(
@@ -99,13 +162,13 @@ async function handleLogout() {
 }
 
 const navLinkClass =
-  'group flex items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-[padding,gap,background-color,color] duration-200 hover:bg-slate-100 hover:text-slate-900'
+  'group flex min-h-[2.75rem] items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-[padding,gap,background-color,color,box-shadow] duration-200 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
 
 const navLinkActiveClass =
   '!bg-indigo-600 !text-white shadow-md shadow-indigo-600/25 hover:!bg-indigo-700 hover:!text-white [&_span]:!text-white [&_svg]:!text-white'
 
 const navIconClass =
-  'w-5 h-5 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600 group-[.router-link-active]:!text-white'
+  'h-5 w-5 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600 group-[.router-link-active]:!text-white'
 
 function navLinkLayoutClass(compact: boolean) {
   return compact ? 'justify-center px-2 py-2.5 [&>span]:sr-only' : 'px-3 py-2.5'
@@ -136,11 +199,15 @@ function navLinkLayoutClass(compact: boolean) {
 
     <aside
       id="marketing-app-sidebar"
-      class="fixed inset-y-0 left-0 z-50 flex h-svh min-h-0 flex-col overflow-hidden border-r border-slate-200/90 bg-white shadow-lg shadow-slate-900/[0.06] transition-[width] duration-200 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-svh lg:max-w-none lg:shrink-0 lg:shadow-sm lg:shadow-slate-900/[0.04]"
-      :class="sidebarCompact ? 'w-16 lg:w-16' : 'w-[min(18rem,88vw)] lg:w-72'"
+      class="marketing-app-sidebar fixed inset-y-0 left-0 z-50 flex h-svh min-h-0 flex-col overflow-hidden border-r border-slate-200/90 bg-white shadow-lg shadow-slate-900/[0.06] transition-[width,transform,box-shadow] duration-200 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-svh lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:shadow-sm lg:shadow-slate-900/[0.04]"
+      :class="[
+        sidebarCompact
+          ? 'w-16 lg:w-16'
+          : 'w-[min(18rem,88vw)] shadow-2xl shadow-slate-900/10 lg:w-72 lg:shadow-sm'
+      ]"
     >
       <div
-        class="flex shrink-0 items-center gap-2 border-b border-slate-100 transition-[padding] duration-200"
+        class="flex shrink-0 items-center gap-2 border-b border-slate-100 pt-[max(0px,env(safe-area-inset-top))] transition-[padding] duration-200"
         :class="sidebarCompact ? 'flex-col px-2 py-3' : 'justify-between px-4 py-4 lg:px-5 lg:py-5'"
       >
         <div
@@ -148,7 +215,7 @@ function navLinkLayoutClass(compact: boolean) {
           :class="sidebarCompact ? 'sr-only' : 'flex-1'"
         >
           <h1 class="truncate text-base font-semibold tracking-tight text-slate-900">
-            {{ me?.authType === 'apiKey' ? me.tenantName : 'Mortdash' }}
+            {{ sidebarTitle }}
           </h1>
           <p class="mt-0.5 text-xs font-semibold uppercase tracking-wider text-indigo-600">Marketing</p>
         </div>
@@ -195,89 +262,26 @@ function navLinkLayoutClass(compact: boolean) {
 
       <nav
         id="marketing-app-sidebar-nav"
-        class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3"
+        class="marketing-sidebar-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3"
         aria-label="Primary"
       >
         <NuxtLink
-          to="/tenant/dashboard"
+          v-for="item in marketingSidebarNavItems"
+          :key="item.to"
+          :to="item.to"
+          :title="sidebarCompact ? item.label : undefined"
           :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
           :active-class="navLinkActiveClass"
           @click="collapseSidebarIfMobileExpanded"
         >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="item.iconPath" />
           </svg>
-          <span>Dashboard</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/contacts"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <span>Contacts</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/recipient-list"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          <span>Recipient list</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/email-templates"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-          </svg>
-          <span>Email templates</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/campaigns"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-          <span>Campaigns</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/tracking"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-          </svg>
-          <span>Tracking</span>
-        </NuxtLink>
-        <NuxtLink
-          to="/tenant/analytics"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
-          :active-class="navLinkActiveClass"
-          @click="collapseSidebarIfMobileExpanded"
-        >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3v18h18M7 16l4-4 4 4 6-8" />
-          </svg>
-          <span>Marketing Analytics</span>
+          <span>{{ item.label }}</span>
         </NuxtLink>
       </nav>
 
-      <div class="shrink-0 border-t border-slate-100 p-3">
+      <div class="shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div
           v-if="!isApiKeyBrowserSession && !sidebarCompact"
           class="mb-3 rounded-2xl border border-slate-200/80 bg-slate-50/90 px-3.5 py-3 shadow-sm shadow-slate-900/[0.03]"
@@ -320,12 +324,55 @@ function navLinkLayoutClass(compact: boolean) {
     </aside>
 
     <main
-      class="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out lg:min-h-0 lg:pl-0"
-      :class="sidebarCompact ? 'pl-16' : 'pl-[min(18rem,88vw)]'"
+      class="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out lg:min-h-0"
+      :class="sidebarCompact ? 'pl-16 lg:pl-0' : 'pl-0'"
     >
-      <div class="flex-1 p-4 sm:p-6 lg:p-8">
+      <header
+        v-if="isMobileViewport && sidebarCompact"
+        class="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-slate-200/80 bg-white/95 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-sm shadow-slate-900/[0.03] backdrop-blur-sm lg:hidden"
+      >
+        <button
+          type="button"
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          aria-label="Open navigation menu"
+          aria-controls="marketing-app-sidebar-nav"
+          @click="openMobileDrawer"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-slate-900">
+            {{ sidebarTitle }}
+          </p>
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
+            Marketing
+          </p>
+        </div>
+      </header>
+
+      <div class="flex-1 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
         <slot />
       </div>
     </main>
   </div>
 </template>
+
+<style scoped>
+.marketing-sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.marketing-sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-app-sidebar {
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>

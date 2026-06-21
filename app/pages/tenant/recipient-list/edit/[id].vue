@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full min-w-0 antialiased">
+  <div class="w-full min-w-0 overflow-x-hidden antialiased">
       <NuxtLink
         :to="`/tenant/recipient-list/${listId}`"
         class="group mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
@@ -93,24 +93,14 @@
 
                 <div>
                   <label for="rl-audience" class="mb-2 block text-sm font-medium text-slate-700">Audience</label>
-                  <select
+                  <TenantFilterSelect
                     id="rl-audience"
                     v-model="form.audience"
-                    class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:text-[15px]"
+                    label="Audience"
+                    variant="field"
+                    :options="audienceFieldSelectOptions"
                     :disabled="!audienceOptions.length"
-                    required
-                  >
-                    <option v-if="!audienceOptions.length" disabled value="">
-                      No audience types available
-                    </option>
-                    <option
-                      v-for="opt in audienceOptions"
-                      :key="opt.value"
-                      :value="opt.value"
-                    >
-                      {{ opt.label }}
-                    </option>
-                  </select>
+                  />
                   <p
                     v-if="data.tenantIdConfigured && !audienceOptions.length"
                     class="mt-2 text-sm text-slate-500"
@@ -245,24 +235,14 @@
                 <div class="p-4 sm:p-5">
                   <template v-if="!row.recipientFilterId">
                     <label :for="`rl-filter-${idx}`" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Registry field</label>
-                    <select
+                    <TenantFilterSelect
                       :id="`rl-filter-${idx}`"
                       v-model="row.recipientFilterId"
-                      required
-                      class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                      label="Registry field"
+                      variant="field"
+                      :options="recipientFilterSelectOptions(idx, true)"
                       @change="onRowFilterChange(row)"
-                    >
-                      <option disabled value="">
-                        Select a filter…
-                      </option>
-                      <option
-                        v-for="f in selectableFiltersForRow(idx)"
-                        :key="f.id"
-                        :value="f.id"
-                      >
-                        {{ filterOptionLabel(f) }}
-                      </option>
-                    </select>
+                    />
                   </template>
 
                   <div
@@ -275,20 +255,14 @@
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-12 sm:items-end sm:gap-4">
                       <div class="sm:col-span-5">
                         <label :for="`rl-filter-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">{{ matchRuleFieldLabel(row) }}</label>
-                        <select
+                        <TenantFilterSelect
                           :id="`rl-filter-${idx}`"
                           v-model="row.recipientFilterId"
-                          class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                          :label="matchRuleFieldLabel(row)"
+                          variant="field"
+                          :options="recipientFilterSelectOptions(idx)"
                           @change="onRowFilterChange(row)"
-                        >
-                          <option
-                            v-for="f in selectableFiltersForRow(idx)"
-                            :key="f.id"
-                            :value="f.id"
-                          >
-                            {{ filterOptionLabel(f) }}
-                          </option>
-                        </select>
+                        />
                       </div>
                       <div class="flex items-center justify-center sm:col-span-2 sm:pb-2">
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-indigo-600/25" title="must equal">
@@ -299,23 +273,13 @@
                       <div class="sm:col-span-5">
                         <label :for="`rl-list-property-value-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">Value</label>
                         <template v-if="showPropertyRowFor(row) && rowRegistryTokens(row).length > 1">
-                          <select
+                          <TenantFilterSelect
                             :id="`rl-list-property-value-${idx}`"
                             v-model="row.listPropertyValue"
-                            required
-                            class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
-                          >
-                            <option disabled value="">
-                              Choose a value…
-                            </option>
-                            <option
-                              v-for="opt in rowRegistryTokens(row)"
-                              :key="opt"
-                              :value="opt"
-                            >
-                              {{ registryValueDisplay(opt) }}
-                            </option>
-                          </select>
+                            label="Value"
+                            variant="field"
+                            :options="registryValueSelectOptions(rowRegistryTokens(row))"
+                          />
                         </template>
                         <p
                           v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
@@ -426,4 +390,29 @@ const {
   mode: 'edit',
   listId: computed(() => String(route.params.id ?? ''))
 })
+
+const audienceFieldSelectOptions = computed(() => {
+  if (!audienceOptions.value.length) {
+    return [{ value: '', label: 'No audience types available' }]
+  }
+  return audienceOptions.value
+})
+
+function recipientFilterSelectOptions(idx: number, includePlaceholder = false) {
+  const items = selectableFiltersForRow(idx).map((f) => ({
+    value: f.id,
+    label: filterOptionLabel(f)
+  }))
+  if (includePlaceholder) {
+    return [{ value: '', label: 'Select a filter…' }, ...items]
+  }
+  return items
+}
+
+function registryValueSelectOptions(tokens: string[]) {
+  return [
+    { value: '', label: 'Choose a value…' },
+    ...tokens.map((opt) => ({ value: opt, label: registryValueDisplay(opt) }))
+  ]
+}
 </script>
