@@ -327,31 +327,6 @@ function navLinkLayoutClass(compact: boolean) {
       class="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out lg:min-h-0"
       :class="sidebarCompact ? 'pl-16 lg:pl-0' : 'pl-0'"
     >
-      <header
-        v-if="isMobileViewport && sidebarCompact"
-        class="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-slate-200/80 bg-white/95 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-sm shadow-slate-900/[0.03] backdrop-blur-sm lg:hidden"
-      >
-        <button
-          type="button"
-          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          aria-label="Open navigation menu"
-          aria-controls="marketing-app-sidebar-nav"
-          @click="openMobileDrawer"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold text-slate-900">
-            {{ sidebarTitle }}
-          </p>
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
-            Marketing
-          </p>
-        </div>
-      </header>
-
       <div class="flex-1 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
         <slot />
       </div>
