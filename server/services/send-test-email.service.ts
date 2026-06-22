@@ -19,7 +19,6 @@ import {
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
 import {
-  mergeUserSnapshotsForEmail,
   tenantUserFieldsFromAuth
 } from '../utils/emailMerge/tenantUserFromAuth'
 import {
@@ -162,8 +161,7 @@ export async function sendCampaignTestEmail(
     }
 
     const contact = await previewContactForSavedCampaign(conn, campaignId)
-    const userSnapshot = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
-    mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -206,7 +204,7 @@ export async function sendCampaignTestEmail(
         : undefined
     }
     const contact = await previewContactForDraft(conn, draft)
-    mergeRoot = composeEmailMergeRoot(authSnap ?? {}, contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,

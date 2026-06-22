@@ -458,7 +458,10 @@
 
               <div class="field">
                 <label for="dv-fallback">Fallback value</label>
-                <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Optional">
+                <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Used when AE/recipient value is empty">
+                <p class="filter-form-hint">
+                  Per-tenant default when the contact has no AE (or recipient field is blank). Leave empty to show nothing.
+                </p>
               </div>
 
               <div class="field">

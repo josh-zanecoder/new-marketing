@@ -53,12 +53,11 @@ export function userMergeSnapshotFromContactOwner(
 }
 
 /**
- * `user.*` template tokens at send/preview: account owner on the recipient contact first,
- * then campaign snapshot / session for any missing fields (e.g. phone, role).
+ * Account owner on the recipient contact only (for template `user.*` merge).
+ * Per-variable `fallbackValue` in `email_dynamic_variables` applies when owner fields are empty.
  */
 export function mergeUserSnapshotForContact(
-  contact: { metadata?: Record<string, unknown> } | null | undefined,
-  ...fallbacks: Array<UserMergeSnapshot | null | undefined>
+  contact: { metadata?: Record<string, unknown> } | null | undefined
 ): UserMergeSnapshot | undefined {
-  return mergeUserSnapshotsForEmail(userMergeSnapshotFromContactOwner(contact), ...fallbacks)
+  return userMergeSnapshotFromContactOwner(contact)
 }
