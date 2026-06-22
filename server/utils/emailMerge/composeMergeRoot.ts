@@ -1,7 +1,7 @@
-import type { UserMergeSnapshot } from '../../../shared/utils/emailTemplateMerge'
 import { DEFAULT_UNSUBSCRIBE_MERGE_KEY } from '~~/shared/defaultEmailDynamicVariables'
 import {
   getMergeValue,
+  mergeDynamicVariableValue,
   mergeRootWithUserAndRecipient,
   resolveUserSourceDynamicVariable,
   setMergePath
@@ -13,10 +13,7 @@ import {
   contactLookupRecordForDynamicVariables,
   recipientFieldsFromContact
 } from './recipientFromContact'
-import {
-  mergeUserSnapshotsForEmail,
-  userMergeSnapshotFromContactOwner
-} from './tenantUserFromAuth'
+import { userMergeSnapshotFromContactOwner } from './tenantUserFromAuth'
 
 /** One enabled admin-defined token binding (DB row → merge path). */
 export type EmailDynamicVariableBinding = {
@@ -24,25 +21,22 @@ export type EmailDynamicVariableBinding = {
   contactPath: string
   sourceType: 'recipient' | 'user'
   enabled: boolean
+  fallbackValue?: string
 }
 
 /**
  * Builds the full object passed to `mergeMustacheTemplate`: `user`, `recipient`, plus custom keys
  * from tenant email dynamic variables.
- * `tenantUserFields` should come from `mergeUserSnapshotForContact` so `user.*` reflects the
- * contact's CRM account owner, not the logged-in marketing user.
+ * `user.*` reflects the contact's CRM account owner only; per-variable `fallbackValue` applies
+ * when owner/recipient data is missing (no logged-in user backfill).
  */
 export function composeEmailMergeRoot(
-  tenantUserFields: UserMergeSnapshot | null | undefined,
   crmContact: ContactLean | null | undefined,
   dynamicVariableBindings: EmailDynamicVariableBinding[]
 ): Record<string, unknown> {
   const recipientSnap = recipientFieldsFromContact(crmContact) ?? {}
-  const effectiveUserFields = mergeUserSnapshotsForEmail(
-    userMergeSnapshotFromContactOwner(crmContact),
-    tenantUserFields
-  )
-  const base = mergeRootWithUserAndRecipient(effectiveUserFields, recipientSnap)
+  const ownerUserFields = userMergeSnapshotFromContactOwner(crmContact)
+  const base = mergeRootWithUserAndRecipient(ownerUserFields, recipientSnap)
   const root = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
   const contactLookup = contactLookupRecordForDynamicVariables(crmContact ?? null)
 
@@ -55,14 +49,13 @@ export function composeEmailMergeRoot(
     ) {
       continue
     }
-    let raw: unknown = ''
+    let resolved = ''
     if (v.sourceType === 'user') {
-      const userObj = (root.user as Record<string, unknown>) || {}
-      raw = resolveUserSourceDynamicVariable(v.contactPath.trim(), crmContact ?? null, userObj)
+      resolved = resolveUserSourceDynamicVariable(v.contactPath.trim(), crmContact ?? null)
     } else if (contactLookup) {
-      raw = getMergeValue(contactLookup, v.contactPath.trim())
+      resolved = getMergeValue(contactLookup, v.contactPath.trim())
     }
-    let str = String(raw ?? '').trim()
+    const str = mergeDynamicVariableValue(resolved, v.fallbackValue)
     setMergePath(root, v.key.trim(), str)
   }
 
@@ -136,9 +129,10 @@ export async function fetchEnabledEmailDynamicVariableBindings(
   return docs
     .filter((d) => d.key.trim().toLowerCase() !== DEFAULT_UNSUBSCRIBE_MERGE_KEY)
     .map((d) => ({
-    key: d.key,
-    contactPath: d.contactPath,
-    sourceType: d.sourceType === 'user' ? 'user' : 'recipient',
-    enabled: true
-  }))
+      key: d.key,
+      contactPath: d.contactPath,
+      sourceType: d.sourceType === 'user' ? 'user' : 'recipient',
+      enabled: true,
+      fallbackValue: d.fallbackValue ?? ''
+    }))
 }

@@ -20,10 +20,6 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
-import {
-  mergeUserSnapshotForContact,
-  tenantUserFieldsFromAuth
-} from '@server/utils/emailMerge/tenantUserFromAuth'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 
 type MergeRootBody =
@@ -76,8 +72,6 @@ export default defineEventHandler(async (event) => {
     ? `${marketingBase}/api/v1/unsubscribe?token=preview`
     : undefined
 
-  const authSnap = tenantUserFieldsFromAuth(auth)
-
   if ('campaignId' in body && typeof body.campaignId === 'string' && body.campaignId.trim()) {
     const campaignId = body.campaignId.trim()
     if (!mongoose.isValidObjectId(campaignId)) {
@@ -90,12 +84,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }
     const contact = await previewContactForSavedCampaign(conn, campaignId)
-    const userSnapshot = mergeUserSnapshotForContact(
-      contact,
-      campaign.mergeUserSnapshot,
-      authSnap
-    )
-    const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
+    const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -125,8 +114,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const contact = await previewContactForDraft(conn, draft)
-  const userSnapshot = mergeUserSnapshotForContact(contact, authSnap)
-  const mergeRoot = composeEmailMergeRoot(userSnapshot, contact ?? null, dynamicVariableBindings)
+  const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
   applyDefaultUnsubscribeMergeValue(mergeRoot, {
     dbName,
     contactId: contact?._id ? String(contact._id) : undefined,

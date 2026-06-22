@@ -97,38 +97,37 @@ export function userMergeSnapshotFromContactOwnerMetadata(
 }
 
 /**
- * Resolves admin `sourceType: user` dynamic variables: contact owner metadata first,
- * then the merged `user` object (campaign snapshot / session fallback).
+ * Resolves admin `sourceType: user` dynamic variables from the recipient contact's
+ * CRM account owner (`metadata.owner*`) only — no session or campaign-user fallback.
  */
 export function resolveUserSourceDynamicVariable(
   contactPath: string,
-  contact: { metadata?: Record<string, unknown> } | null | undefined,
-  userObj: Record<string, unknown>
+  contact: { metadata?: Record<string, unknown> } | null | undefined
 ): string {
   const path = contactPath.trim()
   if (!path) return ''
 
   const meta = contact?.metadata
-  if (meta && typeof meta === 'object') {
-    const ownerMetaKey = USER_MERGE_PATH_TO_OWNER_METADATA[path]
-    if (ownerMetaKey) {
-      const fromOwner = formatOwnerMetadataMergeValue(path, meta[ownerMetaKey])
-      if (fromOwner) return fromOwner
-    }
-    if (path.startsWith('metadata.')) {
-      const fromMeta = formatOwnerMetadataMergeValue(
-        path,
-        getMergeValue({ metadata: meta }, path)
-      )
-      if (fromMeta) return fromMeta
-    }
-  }
+  if (!meta || typeof meta !== 'object') return ''
 
-  const fromUser = getMergeValue(userObj, path)
-  if (path === 'phone' || path === 'ownerPhone') {
-    return fromUser ? formatUsPhoneNumber(fromUser) : ''
+  const ownerMetaKey = USER_MERGE_PATH_TO_OWNER_METADATA[path]
+  if (ownerMetaKey) {
+    return formatOwnerMetadataMergeValue(path, meta[ownerMetaKey])
   }
-  return fromUser
+  if (path.startsWith('metadata.')) {
+    return formatOwnerMetadataMergeValue(path, getMergeValue({ metadata: meta }, path))
+  }
+  return ''
+}
+
+/** Primary resolved value, else per-variable tenant fallback, else empty. */
+export function mergeDynamicVariableValue(
+  resolved: string,
+  fallbackValue?: string | null
+): string {
+  const primary = resolved.trim()
+  if (primary) return primary
+  return typeof fallbackValue === 'string' ? fallbackValue.trim() : ''
 }
 
 export function mergeRootWithUserSnapshot(

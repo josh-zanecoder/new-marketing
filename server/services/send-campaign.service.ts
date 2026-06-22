@@ -31,7 +31,6 @@ import {
   buildCampaignCreatorReplyTo,
   buildReplyToFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
-import { mergeUserSnapshotForContact } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
@@ -732,11 +731,7 @@ export async function processBatch(
       if (contact?.isUnsubscribe === true) {
         return { row: r, version: { to: [{ email: r.email }], subject: '', htmlContent: '' }, failed: 'Contact unsubscribed' }
       }
-      const mergeRoot = composeEmailMergeRoot(
-        mergeUserSnapshotForContact(contact, campaign.mergeUserSnapshot),
-        contact ?? null,
-        dynamicVariableBindings
-      )
+      const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
       applyDefaultUnsubscribeMergeValue(mergeRoot, {
         dbName: tenantDbNameForTags,
         contactId: contact?._id ? String(contact._id) : undefined,
