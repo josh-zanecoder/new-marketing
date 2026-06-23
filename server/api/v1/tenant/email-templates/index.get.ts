@@ -1,6 +1,7 @@
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
 
 type EmailTemplateLean = EmailTemplateDoc & {
   description?: string
@@ -25,7 +26,7 @@ export default defineEventHandler(async (event) => {
       description: t.description ?? '',
       subject: t.subject ?? '',
       externalId: t.externalId ?? '',
-      htmlTemplate: t.htmlTemplate ?? t.html ?? '',
+      htmlTemplate: resolveEmailTemplateHtml(t),
       createdAt: t.createdAt?.toISOString?.() ?? null,
       updatedAt: t.updatedAt?.toISOString?.() ?? null
     }))

@@ -19,6 +19,7 @@ import {
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
+import { normalizeEmailTemplateForStorage } from '~~/shared/utils/emailEditorHtml'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -63,24 +64,27 @@ export default defineEventHandler(async (event) => {
   if (body.templateHtml && campaign.emailTemplate) {
     const htmlSource =
       body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
+    const htmlTemplate = normalizeEmailTemplateForStorage(body.templateHtml, htmlSource)
     await (EmailTemplate as EmailTemplateModel).updateOne(
       { _id: campaign.emailTemplate },
       {
         $set: {
-          htmlTemplate: body.templateHtml,
+          htmlTemplate,
           htmlSource,
           subject: body.subject?.trim() || campaign.subject || body.name.trim(),
           saveToLibrary
-        }
+        },
+        $unset: { css: 1, html: 1 }
       }
     )
   } else if (body.templateHtml) {
     const htmlSource =
       body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
+    const htmlTemplate = normalizeEmailTemplateForStorage(body.templateHtml, htmlSource)
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
       subject: body.subject?.trim() || body.name.trim(),
-      htmlTemplate: body.templateHtml,
+      htmlTemplate,
       htmlSource,
       saveToLibrary
     }).save()

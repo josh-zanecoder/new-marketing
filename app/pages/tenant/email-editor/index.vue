@@ -2,6 +2,8 @@
 import type { Editor } from 'grapesjs'
 import { deserializeEmailEditorHtml, serializeEmailEditorFragment, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
+import { readImageFileAsDataUrl } from '~~/shared/utils/uploadImageFile'
 
 definePageMeta({
   layout: false
@@ -57,6 +59,43 @@ const editorInitInFlight = ref(false)
 let editorInitToken = 0
 let blockSyncTimer: ReturnType<typeof setTimeout> | null = null
 let editorCleanupFns: Array<() => void> = []
+let lastDynamicVariablesSignature = ''
+let editorInteractionDepth = 0
+let pendingDynamicBlockSync = false
+let editorBusyResetTimer: ReturnType<typeof setTimeout> | null = null
+
+const IMAGE_PLACEHOLDER_SRC =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="200" viewBox="0 0 560 200"><rect fill="#e2e8f0" width="560" height="200"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="16">Image</text></svg>'
+  )
+
+function isEditorCanvasBusy(): boolean {
+  return editorInteractionDepth > 0
+}
+
+function markEditorCanvasBusy() {
+  editorInteractionDepth += 1
+  if (editorBusyResetTimer) clearTimeout(editorBusyResetTimer)
+  editorBusyResetTimer = setTimeout(() => {
+    editorBusyResetTimer = null
+    if (editorInteractionDepth > 0) {
+      editorInteractionDepth = 0
+      flushPendingDynamicBlockSync()
+    }
+  }, 2000)
+}
+
+function markEditorCanvasIdle() {
+  editorInteractionDepth = Math.max(0, editorInteractionDepth - 1)
+  if (editorInteractionDepth === 0) {
+    if (editorBusyResetTimer) {
+      clearTimeout(editorBusyResetTimer)
+      editorBusyResetTimer = null
+    }
+    flushPendingDynamicBlockSync()
+  }
+}
 
 function logEditorCrash(stage: string, details?: unknown) {
   console.error('[EmailEditor][Crash]', {
@@ -169,6 +208,148 @@ function getEditorExportHtml(editor: Editor): string {
   return serializeEmailEditorHtml(html, css)
 }
 
+function applyImportedHtmlToEditor(editor: Editor, raw: string) {
+  const trimmed = raw.trim()
+  if (!trimmed) return
+  try {
+    editor.setComponents(deserializeEmailEditorHtml(trimmed))
+  } catch {
+    editor.setComponents(trimmed)
+  }
+}
+
+function installHtmlImportCommands(editor: Editor) {
+  const editorFlag = editor as Editor & { __emailImportListenersInstalled?: boolean }
+
+  const IMPORT_CMD = 'gjs-open-import-template'
+  const prefix = editor.getConfig().stylePrefix ?? 'gjs-'
+
+  const injectUploadIntoImportModal = (cmd: Record<string, unknown>) => {
+    const tryInject = () => {
+      const modal = editor.Modal as {
+        getTitle?: () => string
+        getContentEl?: () => HTMLElement | null
+      }
+      const title = String(modal.getTitle?.() ?? '').toLowerCase()
+      if (!title.includes('import')) return
+
+      const contentEl = modal.getContentEl?.()
+      if (!contentEl) return
+
+      const importBtn = contentEl.querySelector(`.${prefix}btn-import`) as HTMLButtonElement | null
+      if (!importBtn) return
+
+      if (!contentEl.querySelector('[data-email-upload-btn]')) {
+        const fileInput = document.createElement('input')
+        fileInput.type = 'file'
+        fileInput.accept = '.html,.htm,text/html'
+        fileInput.hidden = true
+        fileInput.dataset.emailUploadInput = '1'
+
+        const uploadBtn = document.createElement('button')
+        uploadBtn.type = 'button'
+        uploadBtn.dataset.emailUploadBtn = '1'
+        uploadBtn.className = `${prefix}btn-prim`
+        uploadBtn.textContent = 'Upload from device'
+        uploadBtn.style.marginRight = '8px'
+
+        const parent = importBtn.parentElement ?? contentEl
+        parent.insertBefore(uploadBtn, importBtn)
+        contentEl.appendChild(fileInput)
+
+        uploadBtn.addEventListener('click', () => fileInput.click())
+        fileInput.addEventListener('change', async () => {
+          const file = fileInput.files?.[0]
+          if (!file) return
+          try {
+            const html = await readUploadedHtmlFile(file)
+            const codeEditor = cmd.codeEditorHtml as {
+              setContent?: (v: string) => void
+              editor?: { setValue?: (v: string) => void; refresh?: () => void }
+            } | null | undefined
+            if (codeEditor?.setContent) codeEditor.setContent(html)
+            else codeEditor?.editor?.setValue?.(html)
+            codeEditor?.editor?.refresh?.()
+          } catch (err) {
+            logEditorCrash('import-file.modal', err)
+            window.alert(err instanceof Error ? err.message : 'Could not read file')
+          }
+          fileInput.value = ''
+        })
+      }
+
+      importBtn.onclick = () => {
+        const codeEditor = cmd.codeEditorHtml as {
+          editor?: { getValue?: () => string }
+        } | null | undefined
+        const raw = codeEditor?.editor?.getValue?.() ?? ''
+        editor.Components.clear()
+        editor.Css.clear()
+        applyImportedHtmlToEditor(editor, raw)
+        editor.Modal.close()
+      }
+    }
+
+    requestAnimationFrame(tryInject)
+    setTimeout(tryInject, 0)
+    setTimeout(tryInject, 100)
+  }
+
+  const cmd = editor.Commands.get(IMPORT_CMD) as
+    | ({ run?: (...args: unknown[]) => unknown } & Record<string, unknown>)
+    | undefined
+
+  if (cmd?.run && !cmd.__emailUploadPatched) {
+    const originalRun = cmd.run.bind(cmd)
+    cmd.run = (...args: unknown[]) => {
+      const result = originalRun(...args)
+      injectUploadIntoImportModal(cmd)
+      return result
+    }
+    cmd.__emailUploadPatched = true
+  }
+
+  if (!editorFlag.__emailImportListenersInstalled) {
+    editorFlag.__emailImportListenersInstalled = true
+
+    editor.on('modal:open', () => {
+      const openCmd = editor.Commands.get(IMPORT_CMD) as Record<string, unknown> | undefined
+      if (openCmd) injectUploadIntoImportModal(openCmd)
+    })
+
+    editor.Commands.add('import-html-file', {
+    run(ed) {
+      const fileInput = document.createElement('input')
+      fileInput.type = 'file'
+      fileInput.accept = '.html,.htm,text/html'
+      fileInput.hidden = true
+      document.body.appendChild(fileInput)
+
+      fileInput.addEventListener(
+        'change',
+        async () => {
+          const file = fileInput.files?.[0]
+          fileInput.remove()
+          if (!file) return
+          try {
+            const html = await readUploadedHtmlFile(file)
+            ed.Components.clear()
+            ed.Css.clear()
+            applyImportedHtmlToEditor(ed, html)
+          } catch (err) {
+            logEditorCrash('import-file.toolbar', err)
+            window.alert(err instanceof Error ? err.message : 'Could not read file')
+          }
+        },
+        { once: true }
+      )
+
+      fileInput.click()
+    }
+  })
+  }
+}
+
 function isTextEditingTarget(target: EventTarget | null): boolean {
   const el = target as Partial<HTMLElement> | null
   if (!el || typeof el !== 'object') return false
@@ -179,7 +360,17 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
   return Boolean(el.closest('[contenteditable="true"]'))
 }
 
+function dynamicVariablesSignature(list: DynamicVariableItem[]): string {
+  return list
+    .map((v) => `${v.id}|${v.key}|${v.label}|${v.enabled}|${(v.scopes ?? []).join(',')}`)
+    .join('\n')
+}
+
 function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) {
+  const signature = dynamicVariablesSignature(list)
+  if (signature === lastDynamicVariablesSignature) return
+  lastDynamicVariablesSignature = signature
+
   const bm = editor.BlockManager
   const coll = bm.getAll() as {
     each?: (fn: (block: { get(k: string): string }) => void) => void
@@ -214,7 +405,8 @@ function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) 
       category: variableCategory(v),
       media: mergeMedia,
       attributes: { title: `${token} — ${v.label}` },
-      content: `<span style="display:inline;">${token}</span>`
+      content: `<span style="display:inline;">${token}</span>`,
+      activate: false
     })
     addedCount += 1
   }
@@ -233,11 +425,31 @@ function syncDynamicVariableBlocks(editor: Editor, list: DynamicVariableItem[]) 
       category: 'Dynamic variables',
       media: mergeMedia,
       attributes: { title },
-      content: `<p style="margin:0;font-size:12px;line-height:1.45;color:#64748b">${escapeHtml(body)}</p>`
+      content: `<p style="margin:0;font-size:12px;line-height:1.45;color:#64748b">${escapeHtml(body)}</p>`,
+      activate: false
     })
   }
 
-  bm.render()
+  requestAnimationFrame(() => {
+    if (isEditorCanvasBusy()) {
+      pendingDynamicBlockSync = true
+      return
+    }
+    disableBlockAutoActivate(editor)
+    bm.render()
+  })
+}
+
+function flushPendingDynamicBlockSync() {
+  if (!pendingDynamicBlockSync) return
+  pendingDynamicBlockSync = false
+  const editor = editorRef.value
+  if (!editor || isEditorCanvasBusy()) return
+  try {
+    editor.BlockManager.render()
+  } catch (err) {
+    logEditorCrash('dynamic-variable-blocks.render', err)
+  }
 }
 
 function queueDynamicVariableBlocksSync() {
@@ -246,12 +458,214 @@ function queueDynamicVariableBlocksSync() {
     blockSyncTimer = null
     const editor = editorRef.value
     if (!editor) return
+    if (isEditorCanvasBusy()) {
+      pendingDynamicBlockSync = true
+      return
+    }
     try {
       syncDynamicVariableBlocks(editor, dynamicVariables.value)
     } catch (err) {
       logEditorCrash('dynamic-variable-blocks.sync', err)
     }
-  }, 120)
+  }, 300)
+}
+
+function disableBlockAutoActivate(editor: Editor) {
+  const bm = editor.BlockManager
+  const coll = bm.getAll() as {
+    each?: (fn: (block: { set: (props: { activate: boolean; select: boolean }) => void }) => void) => void
+    models?: Array<{ set: (props: { activate: boolean; select: boolean }) => void }>
+  }
+  if (typeof coll.each === 'function') {
+    coll.each((block) => block.set({ activate: false, select: false }))
+  } else if (coll.models) {
+    for (const block of coll.models) block.set({ activate: false, select: false })
+  }
+}
+
+function applyImageSrc(
+  component: { get: (key: string) => unknown; set: (key: string, value: string) => void },
+  src: string
+) {
+  component.set('src', src)
+}
+
+async function pickLocalImageForEditor(
+  editor: Editor,
+  component: { get: (key: string) => unknown; set: (key: string, value: string) => void }
+) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/*'
+  input.hidden = true
+  document.body.appendChild(input)
+
+  input.addEventListener(
+    'change',
+    async () => {
+      const file = input.files?.[0]
+      input.remove()
+      if (!file) return
+      try {
+        const dataUrl = await readImageFileAsDataUrl(file)
+        applyImageSrc(component, dataUrl)
+        editor.AssetManager.add({
+          src: dataUrl,
+          type: 'image',
+          name: file.name
+        })
+      } catch (err) {
+        logEditorCrash('image.upload', err)
+        window.alert(err instanceof Error ? err.message : 'Could not read image')
+      }
+    },
+    { once: true }
+  )
+
+  input.click()
+}
+
+function configureImageUploadTrait(editor: Editor) {
+  const prefix = editor.getConfig().stylePrefix ?? 'gjs-'
+  editor.TraitManager.addType('upload-image', {
+    createInput({ trait }) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.textContent = 'Upload from device'
+      btn.className = `${prefix}btn-prim`
+      btn.style.cssText = 'width:100%;margin-top:4px;'
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        const target = trait.component as {
+          get: (key: string) => unknown
+          set: (key: string, value: string) => void
+        }
+        if (target) pickLocalImageForEditor(editor, target)
+      })
+      return btn
+    }
+  })
+}
+
+function configureImageComponent(editor: Editor) {
+  configureImageUploadTrait(editor)
+  editor.DomComponents.addType('image', {
+    extend: 'image',
+    model: {
+      defaults: {
+        traits: [
+          { type: 'upload-image', label: 'Local file', name: 'upload-image' },
+          { type: 'text', name: 'alt', label: 'Alt text', changeProp: true },
+          {
+            type: 'text',
+            name: 'src',
+            label: 'Image URL',
+            placeholder: 'https://example.com/image.jpg',
+            changeProp: true
+          }
+        ]
+      }
+    }
+  })
+}
+
+function hardenImageBlock(editor: Editor) {
+  const imageBlock = editor.BlockManager.get('image')
+  if (!imageBlock) return
+  imageBlock.set({
+    activate: false,
+    select: false,
+    content: {
+      type: 'image',
+      attributes: { src: IMAGE_PLACEHOLDER_SRC, alt: '' },
+      style: { display: 'block', width: '100%', 'max-width': '100%', height: 'auto' }
+    }
+  })
+}
+
+function configureAssetManager(editor: Editor) {
+  editor.Commands.add('upload-image-local', {
+    run(ed) {
+      const selected = ed.getSelected() as {
+        get: (key: string) => unknown
+        set: (key: string, value: string) => void
+      } | undefined
+      if (!selected || selected.get('type') !== 'image') {
+        window.alert('Select an image on the canvas first, or drag an Image block into your design.')
+        return
+      }
+      pickLocalImageForEditor(ed, selected)
+    }
+  })
+
+  editor.Commands.add('open-assets', {
+    run(ed) {
+      const selected = ed.getSelected() as {
+        get: (key: string) => unknown
+        set: (key: string, value: string) => void
+      } | undefined
+      if (!selected || selected.get('type') !== 'image') return
+      pickLocalImageForEditor(ed, selected)
+    }
+  })
+}
+
+function stabilizeEditorInteractions(editor: Editor) {
+  configureImageComponent(editor)
+  configureAssetManager(editor)
+  disableBlockAutoActivate(editor)
+  hardenTextBlocks(editor)
+  hardenImageBlock(editor)
+
+  const busyEvents = [
+    'block:drag:start',
+    'block:drag:stop',
+    'sorter:drag:start',
+    'sorter:drag:end',
+    'component:drag:start',
+    'component:drag:end'
+  ] as const
+
+  for (const eventName of busyEvents) {
+    editor.on(eventName, () => {
+      if (eventName.endsWith(':start')) markEditorCanvasBusy()
+      else markEditorCanvasIdle()
+    })
+  }
+
+  editor.on('component:add', (component: { get: (key: string) => unknown; set: (key: string, value: string) => void }) => {
+    if (component.get('type') !== 'image') {
+      if (isEditorCanvasBusy() && component.get('type') === 'text') {
+        try {
+          editor.RichTextEditor.disable()
+        } catch {
+          /* noop */
+        }
+      }
+      return
+    }
+
+    const src = String(component.get('src') ?? '').trim()
+    if (!src || src === '##') {
+      component.set('src', IMAGE_PLACEHOLDER_SRC)
+    }
+
+    try {
+      editor.RichTextEditor.disable()
+    } catch {
+      /* noop */
+    }
+  })
+
+  editor.on('rte:enable', () => {
+    if (isEditorCanvasBusy()) {
+      try {
+        editor.RichTextEditor.disable()
+      } catch {
+        /* noop */
+      }
+    }
+  })
 }
 
 function hardenTextBlocks(editor: Editor) {
@@ -316,6 +730,13 @@ function destroyEditorInstance() {
     clearTimeout(blockSyncTimer)
     blockSyncTimer = null
   }
+  lastDynamicVariablesSignature = ''
+  editorInteractionDepth = 0
+  pendingDynamicBlockSync = false
+  if (editorBusyResetTimer) {
+    clearTimeout(editorBusyResetTimer)
+    editorBusyResetTimer = null
+  }
   runEditorCleanups()
   if (editorRef.value) {
     editorRef.value.destroy()
@@ -323,14 +744,13 @@ function destroyEditorInstance() {
   }
 }
 
-watch([editorRef, dynamicVariables], () => {
-  const editor = editorRef.value
-  if (!editor) return
+watch(dynamicVariables, () => {
   queueDynamicVariableBlocksSync()
-})
+}, { deep: true })
 
 const mergePreviewOpen = ref(false)
 const mergePreviewSrcdoc = ref('')
+const headerFileInputRef = ref<HTMLInputElement | null>(null)
 
 function mergePreviewSrcdocHtml(html: string, scale = 0.85): string {
   return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
@@ -365,6 +785,42 @@ async function openMergePreview() {
 
 function closeMergePreview() {
   mergePreviewOpen.value = false
+}
+
+function triggerHeaderHtmlUpload() {
+  headerFileInputRef.value?.click()
+}
+
+function uploadImageToSelection() {
+  const editor = editorRef.value
+  if (!editor) {
+    window.alert('Editor is still loading. Please try again in a moment.')
+    return
+  }
+  editor.runCommand('upload-image-local')
+}
+
+async function onHeaderHtmlFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const editor = editorRef.value
+  if (!editor) {
+    window.alert('Editor is still loading. Please try again in a moment.')
+    input.value = ''
+    return
+  }
+  try {
+    const html = await readUploadedHtmlFile(file)
+    editor.Components.clear()
+    editor.Css.clear()
+    applyImportedHtmlToEditor(editor, html)
+  } catch (err) {
+    logEditorCrash('import-file.header', err)
+    window.alert(err instanceof Error ? err.message : 'Could not read file')
+  } finally {
+    input.value = ''
+  }
 }
 
 onMounted(() => {
@@ -446,6 +902,13 @@ watch([isMounted, htmlReady], async () => {
       container: editorContainerRef.value,
       fromElement: false,
       noticeOnUnload: false,
+      undoManager: { maximumStackLength: 30 },
+      assetManager: {
+        embedAsBase64: true,
+        autoAdd: true,
+        upload: false,
+        multiUpload: false
+      },
       plugins: [
         (editorInstance: Editor) =>
           presetNewsletter(editorInstance, {
@@ -462,11 +925,12 @@ watch([isMounted, htmlReady], async () => {
             },
             inlineCss: false,
             updateStyleManager: true,
-            showStylesOnChange: true,
+            showStylesOnChange: false,
             showBlocksOnLoad: true,
             useCustomTheme: true,
             textCleanCanvas: 'Are you sure you want to clear the canvas?'
-          })
+          }),
+        (editorInstance: Editor) => installHtmlImportCommands(editorInstance)
       ]
     })
     editorCleanupFns.push(() => {
@@ -570,13 +1034,26 @@ watch([isMounted, htmlReady], async () => {
       const optionsPanel = panels.getPanel('options')
       if (optionsPanel) {
         panels.addButton('options', {
+          id: 'upload-image-local',
+          label: '<svg style="display:block;max-width:22px" viewBox="0 0 24 24"><path fill="currentColor" d="M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19M8.5,13.5L11,16.5L14.5,12L19,18H5L8.5,13.5Z"/></svg>',
+          command: 'upload-image-local',
+          attributes: { title: 'Upload image from device' }
+        })
+        panels.addButton('options', {
+          id: 'import-html-file',
+          label: '<svg style="display:block;max-width:22px" viewBox="0 0 24 24"><path fill="currentColor" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12,12L16,16H13.5V19H10.5V16H8L12,12Z"/></svg>',
+          command: 'import-html-file',
+          attributes: { title: 'Import HTML file' }
+        })
+        panels.addButton('options', {
           id: 'save-to-device',
           label: '<svg style="display:block;max-width:22px" viewBox="0 0 24 24"><path fill="currentColor" d="M5,20H19V18H5M19,11H15V17H9V11H5L12,4L19,11Z"/></svg>',
           command: 'save-to-device',
           attributes: { title: 'Save to Device' }
         })
       }
-      hardenTextBlocks(editor)
+      stabilizeEditorInteractions(editor)
+      installHtmlImportCommands(editor)
       if (initialHtml.value) {
         try {
           editor.setComponents(deserializeEmailEditorHtml(initialHtml.value))
@@ -648,6 +1125,27 @@ function handleSaveAndExit() {
       <div
         class="flex shrink-0 items-center justify-end gap-2 border-b border-slate-200 bg-slate-800 px-4 py-2.5"
       >
+        <input
+          ref="headerFileInputRef"
+          type="file"
+          accept=".html,.htm,text/html"
+          class="hidden"
+          @change="onHeaderHtmlFileChange"
+        >
+        <button
+          type="button"
+          class="rounded-lg border border-slate-500 bg-transparent px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          @click="uploadImageToSelection"
+        >
+          Upload image
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-slate-500 bg-transparent px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          @click="triggerHeaderHtmlUpload"
+        >
+          Upload HTML file
+        </button>
         <button
           v-if="campaignId && /^[a-f0-9]{24}$/i.test(campaignId)"
           type="button"
