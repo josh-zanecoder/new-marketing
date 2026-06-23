@@ -1,8 +1,10 @@
 /** Structured contact address aligned with `ContactAddress` in `contact.model.ts`. */
 export type ContactAddressFields = {
   street?: string
+  unit?: string
   city?: string
   state?: string
+  zipCode?: string
   county?: string
 }
 
@@ -24,5 +26,7 @@ export function normalizeContactCounty(value?: string): string {
 /** Display line for tables and summaries (street, city, state). */
 export function formatContactAddress(addr?: ContactAddressFields | null): string {
   if (!addr) return ''
-  return [addr.street, addr.city, addr.state, normalizeContactCounty(addr.county)].filter(Boolean).join(', ')
+  return [joinContactStreetParts(addr.street, addr.unit), addr.city, addr.state, addr.zipCode, normalizeContactCounty(addr.county)]
+    .filter(Boolean)
+    .join(', ')
 }

@@ -89,8 +89,10 @@ export default defineEventHandler(async (event) => {
       contactProfile: doc.contactProfile ?? null,
       address: {
         street: doc.address?.street ?? '',
+        unit: doc.address?.unit ?? '',
         city: doc.address?.city ?? '',
         state: doc.address?.state ?? '',
+        zipCode: doc.address?.zipCode ?? '',
         county: doc.address?.county ?? ''
       },
       metadata,
