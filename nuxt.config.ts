@@ -31,7 +31,18 @@ export default defineNuxtConfig({
       firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
       /** Google Places Autocomplete (New); enable Places API (New) + Maps JavaScript API on the key. */
       googleMapsApiKey:
-        process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || ''
+        process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || '',
+      /**
+       * GrapesJS campaign email editor (Vue client only).
+       * On in local dev unless NUXT_PUBLIC_CAMPAIGN_EMAIL_EDITOR_ENABLED=false.
+       * Off in production unless explicitly set to "true".
+       */
+      campaignEmailEditorEnabled:
+        process.env.NUXT_PUBLIC_CAMPAIGN_EMAIL_EDITOR_ENABLED === 'true'
+        || (
+          process.env.NODE_ENV !== 'production'
+          && process.env.NUXT_PUBLIC_CAMPAIGN_EMAIL_EDITOR_ENABLED !== 'false'
+        )
     },
     redisHost: process.env.REDIS_HOST || '127.0.0.1',
     redisPort: Number(process.env.REDIS_PORT) || 6379,

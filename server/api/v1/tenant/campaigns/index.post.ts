@@ -13,6 +13,7 @@ import {
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
+import { normalizeEmailTemplateForStorage } from '~~/shared/utils/emailEditorHtml'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -43,10 +44,11 @@ export default defineEventHandler(async (event) => {
     const htmlSource =
       body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
     const saveToLibrary = body.saveHtmlToLibrary === true
+    const htmlTemplate = normalizeEmailTemplateForStorage(body.templateHtml, htmlSource)
     const template = await new EmailTemplate({
       name: `${body.name} - Template`,
       subject: body.subject?.trim() || body.name.trim(),
-      htmlTemplate: body.templateHtml,
+      htmlTemplate,
       htmlSource,
       saveToLibrary
     }).save()

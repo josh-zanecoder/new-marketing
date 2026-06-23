@@ -353,7 +353,7 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
                   Change design
                 </button>
                 <button
-                  v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
+                  v-if="campaignEmailEditorEnabled && designEditorCampaignId && form.templateMode !== 'upload'"
                   type="button"
                   class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
                   @click="openEditorWithCurrentDesign"
@@ -365,7 +365,7 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
                 <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
                 </p>
-                <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
+                <p v-else-if="campaignEmailEditorEnabled && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Save the campaign once to get a stable link for the editor.
                 </p>
               </template>
@@ -382,7 +382,7 @@ class="font-semibold text-indigo-600 cursor-pointer" :disabled="contactsCatalogP
           :pending="emailTemplatesPending"
           :error="emailTemplatesError"
           :merge-tag-hints="designMergeTagHints"
-          :email-editor-enabled="CAMPAIGN_EMAIL_EDITOR_ENABLED"
+          :email-editor-enabled="campaignEmailEditorEnabled"
           @create-from-scratch="handleCreateFromScratch"
           @select-template="handleUseTemplate"
           @upload-html="handleUploadHtml"
@@ -644,7 +644,7 @@ import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
-import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
+import { useCampaignEmailEditorEnabled } from '~/composables/useCampaignEmailEditorEnabled'
 
 const campaignStore = useCampaignStore()
 const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
@@ -666,6 +666,8 @@ const {
   closeSuccessModal: closeTestEmailSuccessModal,
   sendForDraft: sendTestEmailForDraft
 } = useCampaignTestEmail()
+
+const campaignEmailEditorEnabled = useCampaignEmailEditorEnabled()
 
 const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 
@@ -1388,6 +1390,7 @@ function buildTestEmailDraftPayload() {
     senderName: form.value.senderName,
     senderEmail: form.value.senderEmail,
     templateHtml: savedTemplateHtml.value,
+    templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
     recipientsType: form.value.recipientsMode === 'manual' ? 'manual' as const : 'list' as const,
     recipientsListId: form.value.recipientsMode === 'list' ? form.value.recipientsListId : undefined,
     recipientsManual

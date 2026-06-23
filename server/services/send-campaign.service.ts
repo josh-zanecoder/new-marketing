@@ -33,6 +33,9 @@ import {
 } from '@server/utils/email/replyToFromContactMetadata'
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
+import { renderCampaignEmailHtmlForSend } from '~~/shared/utils/renderCampaignEmailHtml'
+import { inlineEmailCss } from '../utils/email/inlineEmailCss'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import {
@@ -572,11 +575,7 @@ export async function processBatch(
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
-      const rawHtml = template.htmlTemplate ?? template.html ?? null
-      templateHtml =
-        rawHtml && template.css?.trim()
-          ? `<style>${template.css}</style>${rawHtml}`
-          : rawHtml
+      templateHtml = resolveEmailTemplateHtml(template)
     }
   }
 
@@ -752,7 +751,7 @@ export async function processBatch(
         }
       }
       const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
-      const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+      const htmlRendered = inlineEmailCss(renderCampaignEmailHtmlForSend(templateHtml, mergeRoot))
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)

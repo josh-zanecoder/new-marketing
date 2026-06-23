@@ -9,6 +9,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -96,7 +97,7 @@ export default defineEventHandler(async (event) => {
       emailTemplate = { name: linkedTemplate.name, html: rawHtml }
       templateHtmlSource =
         linkedTemplate.htmlSource === 'upload' ? 'upload' : 'editor'
-      templateHtml = linkedTemplate.css ? `<style>${linkedTemplate.css}</style>${rawHtml}` : rawHtml
+      templateHtml = resolveEmailTemplateHtml(linkedTemplate)
     }
   }
 

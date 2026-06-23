@@ -28,6 +28,12 @@ import {
 import { getUnsubscribePageUrl } from '@server/utils/unsubscribePageUrl'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import {
+  normalizeEmailTemplateForStorage,
+  resolveEmailTemplateHtml
+} from '~~/shared/utils/emailEditorHtml'
+import { renderCampaignEmailHtmlForSend } from '~~/shared/utils/renderCampaignEmailHtml'
+import { inlineEmailCss } from '../utils/email/inlineEmailCss'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
@@ -36,6 +42,7 @@ export interface SendCampaignTestEmailInput {
   senderName?: string
   senderEmail?: string
   templateHtml?: string
+  templateHtmlSource?: 'editor' | 'upload'
   recipientsType?: 'list' | 'manual'
   recipientsListId?: string
   recipientsManual?: string[]
@@ -55,9 +62,7 @@ async function resolveCampaignTemplateHtml(
   if (!campaign.emailTemplate) return ''
   const template = await EmailTemplate.findById(campaign.emailTemplate).lean<EmailTemplateDoc | null>()
   if (!template) return ''
-  const rawHtml = template.htmlTemplate ?? template.html ?? ''
-  if (!rawHtml.trim()) return ''
-  return template.css?.trim() ? `<style>${template.css}</style>${rawHtml}` : rawHtml
+  return resolveEmailTemplateHtml(template)
 }
 
 function testSubjectLine(subject: string): string {
@@ -173,6 +178,8 @@ export async function sendCampaignTestEmail(
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
+    const draftSource = input.templateHtmlSource === 'upload' ? 'upload' : 'editor'
+    templateHtml = normalizeEmailTemplateForStorage(templateHtml, draftSource)
     subject = String(input.subject ?? '').trim()
     sender = {
       name: String(input.senderName ?? '').trim(),
@@ -225,7 +232,7 @@ export async function sendCampaignTestEmail(
   }
 
   const subjectRendered = mergeMustacheTemplate(testSubjectLine(subject), mergeRoot)
-  const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+  const htmlRendered = inlineEmailCss(renderCampaignEmailHtmlForSend(templateHtml, mergeRoot))
 
   const userForTag =
     authSnap?.email?.trim() ||

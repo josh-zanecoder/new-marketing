@@ -271,6 +271,7 @@ export function useTenantMarketingApi() {
     senderName?: string
     senderEmail?: string
     templateHtml?: string
+    templateHtmlSource?: 'editor' | 'upload'
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
     recipientsManual?: string[]
