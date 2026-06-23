@@ -20,16 +20,30 @@ const props = withDefaults(
     mergeTagHints?: string[]
     /** When false, hides GrapesJS “create from scratch” entry point. */
     emailEditorEnabled?: boolean
+    /** When true, shows the EmailBuilder.js editor entry point. */
+    emailBuilderEnabled?: boolean
   }>(),
-  { pending: false, error: '', mergeTagHints: () => [], emailEditorEnabled: true }
+  { pending: false, error: '', mergeTagHints: () => [], emailEditorEnabled: true, emailBuilderEnabled: false }
 )
 
 const emit = defineEmits<{
   'update:modelValue': [boolean]
   'select-template': [EmailTemplateItem]
   'create-from-scratch': []
+  'create-with-email-builder': []
   'upload-html': [UploadedEmailDesignPayload]
 }>()
+
+const startOptionsGridClass = computed(() => {
+  const count =
+    (props.emailEditorEnabled ? 1 : 0)
+    + (props.emailBuilderEnabled ? 1 : 0)
+    + 1
+  if (count >= 4) return 'sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4'
+  if (count >= 3) return 'sm:grid-cols-2 xl:grid-cols-3'
+  if (count >= 2) return 'sm:grid-cols-2'
+  return ''
+})
 
 const saveHtmlToLibrary = ref(false)
 const uploadPasteHtml = ref('')
@@ -58,6 +72,10 @@ const editorPreviewDoc = computed(() => editorPreviewSrcdoc(uploadPasteHtml.valu
 
 function onScratch() {
   emit('create-from-scratch')
+}
+
+function onEmailBuilder() {
+  emit('create-with-email-builder')
 }
 
 function onPick(t: EmailTemplateItem) {
@@ -384,7 +402,7 @@ onUnmounted(() => {
                     </label>
                   </div>
 
-                  <div class="mt-4 grid gap-3 sm:gap-4" :class="emailEditorEnabled ? 'lg:grid-cols-2' : ''">
+                  <div class="mt-4 grid gap-4" :class="startOptionsGridClass">
                     <button
                       v-if="emailEditorEnabled"
                       type="button"
@@ -401,6 +419,26 @@ onUnmounted(() => {
                         <p class="mt-0.5 text-sm text-slate-500">Open the GrapesJS email editor</p>
                       </div>
                       <svg class="hidden h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+
+                    <button
+                      v-if="emailBuilderEnabled"
+                      type="button"
+                      class="group flex w-full items-center gap-4 rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/80 to-white p-5 text-left shadow-sm shadow-emerald-900/[0.04] ring-1 ring-emerald-100/80 transition-all hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-900/[0.08]"
+                      @click="onEmailBuilder"
+                    >
+                      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                        </svg>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="font-semibold text-slate-900">Create with EmailBuilder.js</div>
+                        <p class="mt-0.5 text-sm text-slate-500">Open-source drag-and-drop block email builder</p>
+                      </div>
+                      <svg class="h-5 w-5 shrink-0 text-emerald-300 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>

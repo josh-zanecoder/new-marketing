@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { campaignEmailPreviewSrcdoc } from '~/utils/campaignEmailPreviewSrcdoc'
+import {
+  resolveWebViewWidth,
+  webViewLayoutLabel,
+} from '~/utils/campaignEmailWebView'
 
 const props = withDefaults(
   defineProps<{
@@ -19,44 +22,16 @@ const props = withDefaults(
     subject: '',
     summary: '',
     emptyMessage: 'No email design selected yet.',
-    embedded: false
   }
 )
 
 const previewModalOpen = ref(false)
-const modalIframeRef = ref<HTMLIFrameElement | null>(null)
-
-useMarketingScrollLock(previewModalOpen)
 
 const hasHtml = computed(() => Boolean(props.html?.trim()))
 const thumbnailSource = computed(() => props.thumbnailHtml?.trim() || props.html?.trim() || '')
 const subjectDisplay = computed(() => props.subject?.trim() || 'No subject')
-const srcdoc = computed(() => campaignEmailPreviewSrcdoc(props.html || ''))
-
-const rootClass = computed(() =>
-  props.embedded
-    ? 'overflow-hidden bg-white'
-    : 'overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]'
-)
-
-function measureIframeHeight(iframe: HTMLIFrameElement | null): number {
-  if (!iframe?.contentDocument?.documentElement) return 420
-  const doc = iframe.contentDocument
-  const wrap = doc.getElementById('preview-wrap')
-  const heights = [
-    wrap?.scrollHeight,
-    wrap?.offsetHeight,
-    doc.body?.scrollHeight,
-    doc.documentElement.scrollHeight
-  ].filter((value): value is number => typeof value === 'number' && value > 0)
-  return Math.max(...heights, 420)
-}
-
-function onModalIframeLoad() {
-  const iframe = modalIframeRef.value
-  if (!iframe) return
-  iframe.style.height = `${measureIframeHeight(iframe)}px`
-}
+const previewWidth = computed(() => resolveWebViewWidth('desktop', props.html || ''))
+const layoutLabel = computed(() => webViewLayoutLabel(previewWidth.value, props.html || ''))
 
 function openPreviewModal() {
   if (!hasHtml.value) return
@@ -83,14 +58,6 @@ watch(previewModalOpen, (open) => {
     nextTick(() => onModalIframeLoad())
   }
 })
-
-watch(
-  () => props.html,
-  () => {
-    if (!import.meta.client || !previewModalOpen.value) return
-    nextTick(() => onModalIframeLoad())
-  }
-)
 
 onBeforeUnmount(() => {
   if (!import.meta.client) return
@@ -129,33 +96,23 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <button
-      type="button"
-      class="group relative block w-full overflow-hidden bg-[#f8f4ef] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+    <div
+      class="max-h-[min(72vh,900px)] overflow-auto bg-[#525659] p-3 sm:p-4"
+      role="button"
+      tabindex="0"
       :aria-label="'Open full email preview. Subject: ' + subjectDisplay"
       @click="openPreviewModal"
     >
-      <div class="relative aspect-[5/4] min-h-[12rem] w-full sm:aspect-[3/2] sm:min-h-[15rem]">
-        <TenantEmailTemplateThumbnail
-          :html="thumbnailSource"
-          :title="title"
-          class="absolute inset-0"
-        />
-        <div
-          class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#f8f4ef] via-[#f8f4ef]/95 to-transparent sm:h-24"
-          aria-hidden="true"
-        />
-        <span
-          class="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 transition-colors group-hover:text-indigo-600 sm:bottom-4 sm:text-sm"
-        >
-          <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          Tap to open full preview
-        </span>
-      </div>
-    </button>
+      <TenantEmailWebView
+        :html="html"
+        :preview-width="previewWidth"
+        title="Email web view preview"
+        passive
+      />
+      <p class="pointer-events-none mt-3 text-center text-xs text-slate-300">
+        {{ layoutLabel }} ({{ previewWidth }}px) — click for full preview
+      </p>
+    </div>
 
     <slot name="footer" />
   </div>
@@ -189,28 +146,26 @@ onBeforeUnmount(() => {
             <p class="mt-1 line-clamp-2 text-sm text-slate-600 sm:truncate sm:text-base" :title="subjectDisplay">
               Subject: {{ subjectDisplay }}
             </p>
+            <p class="mt-1 text-xs text-slate-500">{{ layoutLabel }} · {{ previewWidth }}px</p>
           </div>
-          <button
-            type="button"
-            class="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            aria-label="Close preview"
-            @click="closePreviewModal"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              class="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Close preview"
+              @click="closePreviewModal"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#f8f4ef] p-3 sm:p-4 lg:p-5">
-          <iframe
-            ref="modalIframeRef"
-            :key="html"
-            :srcdoc="srcdoc"
-            class="mx-auto block w-full max-w-[600px] border-0"
-            sandbox="allow-same-origin"
-            scrolling="no"
-            title="Email preview (full size)"
-            @load="onModalIframeLoad"
+        <div class="min-h-0 flex-1 overflow-auto bg-[#525659] p-3 sm:p-4 lg:p-5">
+          <TenantEmailWebView
+            :html="html"
+            :preview-width="previewWidth"
+            title="Email web view preview (full size)"
           />
         </div>
       </div>

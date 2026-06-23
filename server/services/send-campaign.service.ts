@@ -33,6 +33,8 @@ import {
 } from '@server/utils/email/replyToFromContactMetadata'
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { repairMergeTagAnchorsForSend } from '~~/shared/utils/mergeTagHtmlRepair'
+import { prepareEmailHtmlForDelivery } from '~~/shared/utils/emailHtmlDelivery'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import {
@@ -578,6 +580,9 @@ export async function processBatch(
           ? `<style>${template.css}</style>${rawHtml}`
           : rawHtml
     }
+  }
+  if (templateHtml) {
+    templateHtml = prepareEmailHtmlForDelivery(repairMergeTagAnchorsForSend(templateHtml))
   }
 
   const pending = await claimCampaignRecipientBatch(
