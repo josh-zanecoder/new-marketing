@@ -14,8 +14,10 @@ export type CrmContactFieldsForMerge = {
   channel?: string
   address?: {
     street?: string
+    unit?: string
     city?: string
     state?: string
+    zipCode?: string
     county?: string
   }
 }
@@ -45,8 +47,10 @@ export function recipientFieldsFromContact(
   }
   if (contact.channel) out.channel = contact.channel
   if (contact.address?.street) out.street = contact.address.street
+  if (contact.address?.unit) out.unit = contact.address.unit
   if (contact.address?.city) out.city = contact.address.city
   if (contact.address?.state) out.state = contact.address.state
+  if (contact.address?.zipCode) out.zipCode = contact.address.zipCode
   if (contact.address?.county) out.county = contact.address.county
   return Object.keys(out).length ? out : undefined
 }
