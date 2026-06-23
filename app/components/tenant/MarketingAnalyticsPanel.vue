@@ -135,6 +135,10 @@ function clearAllFilters() {
 
     <TenantMarketingAnalyticsMetricCards :cards="metricCards" :loading="pending" />
 
-    <TenantMarketingAnalyticsChart :points="timeseries" :loading="pending" />
+    <TenantMarketingAnalyticsChart
+      :points="timeseries"
+      :date-range="effectiveDateRange"
+      :loading="pending"
+    />
   </div>
 </template>
