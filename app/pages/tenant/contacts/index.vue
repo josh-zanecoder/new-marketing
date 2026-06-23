@@ -637,7 +637,7 @@
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div :class="contactTypeFilterOptions.length ? '' : 'min-[480px]:col-span-2'">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Preferred contact</label>
                 <select
                   id="add-contact-channel"
                   v-model="addContactForm.channel"
@@ -1241,7 +1241,7 @@ const contactDetailSections = computed((): ContactDetailSection[] => {
         { label: 'Email', value: formatDetailValue(c.email) },
         { label: 'Phone', value: c.phone ? formatUsPhoneNumber(c.phone) : '—' },
         { label: 'Company', value: formatDetailValue(c.company), span: 2 },
-        { label: 'Channel', value: formatDetailValue(c.channel) },
+        { label: 'Preferred contact', value: formatDetailValue(c.channel) },
         { label: 'Subscription', value: c.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }
       ]
     },
