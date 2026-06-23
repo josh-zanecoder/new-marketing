@@ -617,12 +617,23 @@
               <label class="block text-sm font-medium text-slate-700" for="add-contact-phone">Phone</label>
               <input
                 id="add-contact-phone"
-                v-model="addContactForm.phone"
+                :value="addContactForm.phone"
                 type="tel"
+                inputmode="numeric"
+                maxlength="14"
                 autocomplete="tel"
-                placeholder="(555) 123-4567"
+                placeholder="(555) 555-5555"
                 :class="ADD_CONTACT_INPUT_CLASS"
+                @keydown="usPhone.onKeydown"
+                @input="addContactForm.phone = usPhone.formatInput(($event.target as HTMLInputElement).value)"
               >
+              <p
+                v-if="addContactPhoneError"
+                class="mt-1.5 text-sm text-red-600"
+                role="alert"
+              >
+                {{ addContactPhoneError }}
+              </p>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700" for="add-contact-company">Company</label>
@@ -637,7 +648,7 @@
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div :class="contactTypeFilterOptions.length ? '' : 'min-[480px]:col-span-2'">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Preferred contact</label>
                 <select
                   id="add-contact-channel"
                   v-model="addContactForm.channel"
@@ -719,7 +730,7 @@
                   >
                 </div>
               </div>
-              <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
+              <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-4 sm:gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-city">City</label>
                   <input
@@ -739,6 +750,18 @@
                     type="text"
                     autocomplete="address-level1"
                     placeholder="NY"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-zip">Zip code</label>
+                  <input
+                    id="add-contact-zip"
+                    v-model="addContactForm.addressZipCode"
+                    type="text"
+                    autocomplete="postal-code"
+                    inputmode="numeric"
+                    placeholder="10001"
                     :class="ADD_CONTACT_INPUT_CLASS"
                   >
                 </div>
@@ -791,8 +814,8 @@
 
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
-import { joinContactStreetParts, normalizeContactCounty } from '~~/shared/utils/contactAddress'
-import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
+import { normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { formatUsPhoneNumber, usPhone } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
   TenantContactListRow,
@@ -814,6 +837,7 @@ const addContactOpen = ref(false)
 let contactModalEscListener: ((e: KeyboardEvent) => void) | null = null
 const addContactSubmitting = ref(false)
 const addContactError = ref('')
+const addContactPhoneError = ref('')
 const addContactForm = ref({
   firstName: '',
   lastName: '',
@@ -828,6 +852,7 @@ const addContactForm = ref({
   addressUnit: '',
   addressCity: '',
   addressState: '',
+  addressZipCode: '',
   addressCounty: ''
 })
 
@@ -839,7 +864,8 @@ const { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener } = useGo
     city: 'addressCity',
     state: 'addressState',
     county: 'addressCounty',
-    unit: 'addressUnit'
+    unit: 'addressUnit',
+    zipCode: 'addressZipCode'
   }
 )
 
@@ -854,6 +880,7 @@ const CONTACT_CHANNEL_OPTIONS = [
 
 function openAddContactModal() {
   addContactError.value = ''
+  addContactPhoneError.value = ''
   addContactForm.value = {
     firstName: '',
     lastName: '',
@@ -868,6 +895,7 @@ function openAddContactModal() {
     addressUnit: '',
     addressCity: '',
     addressState: '',
+    addressZipCode: '',
     addressCounty: ''
   }
   addContactOpen.value = true
@@ -878,6 +906,7 @@ function closeAddContactModal() {
   clearGoogleAutocompleteListener()
   addContactOpen.value = false
   addContactError.value = ''
+  addContactPhoneError.value = ''
 }
 
 watch(
@@ -903,8 +932,13 @@ async function submitAddContact() {
     addContactError.value = 'Email is required.'
     return
   }
+  if (!usPhone.isValid(addContactForm.value.phone)) {
+    addContactPhoneError.value = 'Please enter a valid US phone number in the format (555) 555-5555, or leave phone blank.'
+    return
+  }
   addContactSubmitting.value = true
   addContactError.value = ''
+  addContactPhoneError.value = ''
   try {
     const body: {
       firstName?: string
@@ -918,8 +952,10 @@ async function submitAddContact() {
       stage?: string
       address?: {
         street?: string
+        unit?: string
         city?: string
         state?: string
+        zipCode?: string
         county?: string
       }
     } = {
@@ -927,7 +963,8 @@ async function submitAddContact() {
       lastName: addContactForm.value.lastName.trim(),
       email
     }
-    const phone = addContactForm.value.phone.trim()
+    const phoneRaw = addContactForm.value.phone.trim()
+    const phone = phoneRaw ? usPhone.toSave(phoneRaw) : ''
     const company = addContactForm.value.company.trim()
     const contactType = addContactForm.value.contactType.trim()
     const channel = addContactForm.value.channel.trim()
@@ -940,15 +977,14 @@ async function submitAddContact() {
     if (status) body.status = status
     if (stage) body.stage = stage
     const address = {
-      street: joinContactStreetParts(
-        addContactForm.value.addressStreet,
-        addContactForm.value.addressUnit
-      ),
+      street: addContactForm.value.addressStreet.trim(),
+      unit: addContactForm.value.addressUnit.trim(),
       city: addContactForm.value.addressCity.trim(),
       state: addContactForm.value.addressState.trim(),
+      zipCode: addContactForm.value.addressZipCode.trim(),
       county: normalizeContactCounty(addContactForm.value.addressCounty)
     }
-    if (address.street || address.city || address.state || address.county) {
+    if (address.street || address.unit || address.city || address.state || address.zipCode || address.county) {
       body.address = address
     }
     await marketingApi.createContact(body)
@@ -1072,8 +1108,10 @@ const filteredContacts = computed(() => {
       ...(row.contactType ?? []),
       ...(row.contactTypeLabels ?? []),
       row.address?.street,
+      row.address?.unit,
       row.address?.city,
       row.address?.state,
+      row.address?.zipCode,
       row.address?.county
     ]
       .filter(Boolean)
@@ -1241,7 +1279,7 @@ const contactDetailSections = computed((): ContactDetailSection[] => {
         { label: 'Email', value: formatDetailValue(c.email) },
         { label: 'Phone', value: c.phone ? formatUsPhoneNumber(c.phone) : '—' },
         { label: 'Company', value: formatDetailValue(c.company), span: 2 },
-        { label: 'Channel', value: formatDetailValue(c.channel) },
+        { label: 'Preferred contact', value: formatDetailValue(c.channel) },
         { label: 'Subscription', value: c.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }
       ]
     },
@@ -1257,9 +1295,11 @@ const contactDetailSections = computed((): ContactDetailSection[] => {
     {
       title: 'Address',
       fields: [
-        { label: 'Street', value: formatDetailValue(c.address?.street), span: 2 },
+        { label: 'Street', value: formatDetailValue(c.address?.street) },
+        { label: 'Unit', value: formatDetailValue(c.address?.unit) },
         { label: 'City', value: formatDetailValue(c.address?.city) },
         { label: 'State', value: formatDetailValue(c.address?.state) },
+        { label: 'Zip code', value: formatDetailValue(c.address?.zipCode) },
         { label: 'County', value: formatDetailValue(normalizeContactCounty(c.address?.county)), span: 2 }
       ]
     },
