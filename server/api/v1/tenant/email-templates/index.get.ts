@@ -16,6 +16,7 @@ import {
   emailTemplateLibraryExcludePendingFilter
 } from '@server/utils/emailTemplate/emailTemplateApproval'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
 
 type EmailTemplateLean = EmailTemplateDoc & {
   description?: string
@@ -66,7 +67,10 @@ export default defineEventHandler(async (event) => {
         categoryId,
         categoryName: categoryId ? (nameById.get(categoryId) ?? null) : null,
         canEdit: canWriteEmailTemplate(t, event.context.auth),
-        htmlTemplate,
+        htmlTemplate: resolveEmailTemplateHtml({
+          htmlTemplate,
+          css: t.css
+        }),
         createdAt: t.createdAt?.toISOString?.() ?? null,
         updatedAt: t.updatedAt?.toISOString?.() ?? null,
         ...(approval ?? {})
