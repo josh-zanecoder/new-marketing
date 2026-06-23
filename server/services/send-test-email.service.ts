@@ -45,6 +45,9 @@ import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 import { isSelectedCampaignSenderMode } from '~~/shared/campaignSenderMode'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
+import { renderCampaignEmailHtmlForSend } from '~~/shared/utils/renderCampaignEmailHtml'
+import { inlineEmailCss } from '../utils/email/inlineEmailCss'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
@@ -56,6 +59,7 @@ export interface SendCampaignTestEmailInput {
   /** Draft test only: must be `selected` with toggle ON to skip contact-owner rewrite. */
   senderMode?: string
   templateHtml?: string
+  templateHtmlSource?: 'editor' | 'upload'
   recipientsType?: 'list' | 'manual'
   recipientsListId?: string
   recipientsManual?: string[]
@@ -81,7 +85,10 @@ async function resolveCampaignTemplateHtml(
     htmlTemplate: template.htmlTemplate ?? template.html ?? ''
   })
   if (!rawHtml.trim()) return ''
-  return template.css?.trim() ? `<style>${template.css}</style>${rawHtml}` : rawHtml
+  return resolveEmailTemplateHtml({
+    htmlTemplate: rawHtml,
+    css: template.css
+  })
 }
 
 function testSubjectLine(subject: string): string {
@@ -242,6 +249,8 @@ export async function sendCampaignTestEmail(
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
+    const draftSource = input.templateHtmlSource === 'upload' ? 'upload' : 'editor'
+    templateHtml = normalizeEmailTemplateForStorage(templateHtml, draftSource)
     subject = String(input.subject ?? '').trim()
     const senderEmail = String(input.senderEmail ?? '').trim()
     const recipientsType = input.recipientsType
@@ -333,9 +342,11 @@ export async function sendCampaignTestEmail(
 
   const subjectRendered = mergeMustacheTemplate(testSubjectLine(subject), mergeRoot)
   const previewRendered = mergeMustacheTemplate(previewTextSource, mergeRoot)
-  const htmlRendered = applyEmailPreviewText(
-    mergeMustacheTemplate(emailClientSafeImageHtml(templateHtml), mergeRoot),
-    previewRendered
+  const htmlRendered = inlineEmailCss(
+    applyEmailPreviewText(
+      renderCampaignEmailHtmlForSend(emailClientSafeImageHtml(templateHtml), mergeRoot),
+      previewRendered
+    )
   )
 
   const userForTag =

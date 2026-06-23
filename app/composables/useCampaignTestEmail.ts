@@ -5,6 +5,7 @@ export interface CampaignTestEmailDraftPayload {
   senderEmail: string
   senderMode?: 'contact_owner' | 'selected'
   templateHtml: string
+  templateHtmlSource?: 'editor' | 'upload'
   recipientsType: 'list' | 'manual'
   recipientsListId?: string
   recipientsManual?: string[]
@@ -92,6 +93,7 @@ export function useCampaignTestEmail() {
         senderEmail: draft.senderEmail,
         senderMode: draft.senderMode,
         templateHtml: draft.templateHtml,
+        templateHtmlSource: draft.templateHtmlSource,
         recipientsType: draft.recipientsType,
         recipientsListId: draft.recipientsListId,
         recipientsManual: draft.recipientsManual

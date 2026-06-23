@@ -15,6 +15,7 @@ import {
   resolveEmailTemplateApprovalStatus
 } from '~~/shared/emailTemplateApproval'
 import { resolveRecipientListContactRows } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -118,7 +119,10 @@ export default defineEventHandler(async (event) => {
           : linkedTemplate.htmlSource === 'custom'
             ? 'custom'
             : 'editor'
-      templateHtml = linkedTemplate.css ? `<style>${linkedTemplate.css}</style>${rawHtml}` : rawHtml
+      templateHtml = resolveEmailTemplateHtml({
+        htmlTemplate: rawHtml,
+        css: linkedTemplate.css
+      })
     }
   }
 

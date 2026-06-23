@@ -48,6 +48,9 @@ import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
 import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
+import { renderCampaignEmailHtmlForSend } from '~~/shared/utils/renderCampaignEmailHtml'
+import { inlineEmailCss } from '../utils/email/inlineEmailCss'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
 import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
@@ -659,10 +662,12 @@ export async function processBatch(
         id: String(template._id),
         htmlTemplate: template.htmlTemplate ?? template.html ?? ''
       })
-      templateHtml =
-        rawHtml && template.css?.trim()
-          ? `<style>${template.css}</style>${rawHtml}`
-          : rawHtml || null
+      templateHtml = rawHtml
+        ? resolveEmailTemplateHtml({
+            htmlTemplate: rawHtml,
+            css: template.css
+          })
+        : null
     }
   }
 
@@ -856,9 +861,11 @@ export async function processBatch(
       }
       const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
       const previewRendered = mergeMustacheTemplate(campaign.previewText || '', mergeRoot)
-      const htmlRendered = applyEmailPreviewText(
-        mergeMustacheTemplate(templateHtml, mergeRoot),
-        previewRendered
+      const htmlRendered = inlineEmailCss(
+        applyEmailPreviewText(
+          renderCampaignEmailHtmlForSend(templateHtml || '', mergeRoot),
+          previewRendered
+        )
       )
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
