@@ -180,8 +180,10 @@ export function useTenantMarketingApi() {
     stage?: string
     address?: {
       street?: string
+      unit?: string
       city?: string
       state?: string
+      zipCode?: string
       county?: string
     }
   }) {
