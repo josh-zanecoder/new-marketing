@@ -28,6 +28,8 @@ import {
 import { getUnsubscribePageUrl } from '@server/utils/unsubscribePageUrl'
 import { sendEmail } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { repairMergeTagAnchorsForSend } from '~~/shared/utils/mergeTagHtmlRepair'
+import { prepareEmailHtmlForDelivery } from '~~/shared/utils/emailHtmlDelivery'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
@@ -225,7 +227,10 @@ export async function sendCampaignTestEmail(
   }
 
   const subjectRendered = mergeMustacheTemplate(testSubjectLine(subject), mergeRoot)
-  const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+  const htmlRendered = mergeMustacheTemplate(
+    prepareEmailHtmlForDelivery(repairMergeTagAnchorsForSend(templateHtml)),
+    mergeRoot
+  )
 
   const userForTag =
     authSnap?.email?.trim() ||

@@ -41,6 +41,32 @@ export function serializeEmailEditorFragment(
   return `<style>${cssText}</style>${bodyInner}`
 }
 
+/** Whether the string is already a full HTML document. */
+export function isFullHtmlDocument(html: string): boolean {
+  const trimmed = html.trim()
+  return /^<!doctype html>/i.test(trimmed) || /<\s*html[\s>]/i.test(trimmed)
+}
+
+function ensureViewportInDocument(html: string): string {
+  if (/name=["']viewport["']/i.test(html)) return html
+  return html.replace(
+    /<head([^>]*)>/i,
+    '<head$1><meta name="viewport" content="width=device-width, initial-scale=1.0">'
+  )
+}
+
+/** Normalize editor export into a send-ready HTML document. */
+export function ensureEmailHtmlDocument(
+  componentHtml: string,
+  css?: string | null
+): string {
+  const trimmed = componentHtml.trim()
+  if (isFullHtmlDocument(trimmed)) {
+    return ensureViewportInDocument(trimmed)
+  }
+  return serializeEmailEditorHtml(trimmed, css)
+}
+
 /** Serialize GrapesJS editor output into a full HTML document (no reformatting). */
 export function serializeEmailEditorHtml(
   componentHtml: string,

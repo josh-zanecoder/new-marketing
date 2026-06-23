@@ -356,10 +356,26 @@
                 >
                   Edit in editor
                 </button>
+                <button
+                  v-if="EMAIL_BUILDER_JS_ENABLED && designEditorCampaignId"
+                  type="button"
+                  class="rounded-xl bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+                  @click="openEmailBuilderWithCurrentDesign"
+                >
+                  Edit in EmailBuilder
+                </button>
               </template>
               <template #footer>
-                <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
-                  Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
+                <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                  Uploaded HTML is stored as-is for sending.                   Variables like
+                  <code v-pre class="rounded bg-slate-100 px-1">{{unsubscribe}}</code>
+                  stay in the template until each email is sent.
+                  <template v-if="EMAIL_BUILDER_JS_ENABLED && designEditorCampaignId">
+                    Use Edit in EmailBuilder to adjust layout and blocks, or upload a new file to replace it.
+                  </template>
+                  <template v-else>
+                    To change layout, upload a new file.
+                  </template>
                 </p>
                 <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Save the campaign once to get a stable link for the editor.
@@ -379,7 +395,9 @@
           :error="emailTemplatesError"
           :merge-tag-hints="designMergeTagHints"
           :email-editor-enabled="CAMPAIGN_EMAIL_EDITOR_ENABLED"
+          :email-builder-enabled="EMAIL_BUILDER_JS_ENABLED"
           @create-from-scratch="handleCreateFromScratch"
+          @create-with-email-builder="handleCreateWithEmailBuilder"
           @select-template="handleUseTemplate"
           @upload-html="handleUploadHtml"
         />
@@ -640,7 +658,16 @@ import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
-import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
+import {
+  CAMPAIGN_EMAIL_EDITOR_ENABLED,
+  EMAIL_BUILDER_JS_ENABLED
+} from '~/constants/campaignFeatureFlags'
+import {
+  campaignEmailBuilderEditorUrl,
+  hasStoredEmailBuilderDesign,
+  stageCampaignHtmlForEditor,
+  updateCampaignHtmlSession
+} from '~/composables/useCampaignEmailEditorExit'
 
 const campaignStore = useCampaignStore()
 const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
@@ -1084,16 +1111,7 @@ const designMergeTagHints = computed(() => {
   return [...new Set([...fromDyn, ...extras])].slice(0, 12)
 })
 
-const campaignIdForMergePreview = computed(
-  () => returnCampaignId.value || editId.value || null
-)
-
-const { designPreviewHtml } = useCampaignDesignPreview(
-  marketingApi,
-  savedTemplateHtml,
-  form,
-  campaignIdForMergePreview
-)
+const { designPreviewHtml } = useCampaignDesignPreview(savedTemplateHtml)
 
 const cancelOrBackHref = computed(() =>
   editId.value ? `/tenant/campaigns/${editId.value}` : '/tenant/campaigns'
@@ -1189,6 +1207,9 @@ async function loadFromEditorReturn() {
     && loadedEditCampaignId.value === editId.value
   if (isRealCampaignId) {
     if (alreadyLoadedCurrentEdit) {
+      if (typeof window !== 'undefined' && hasStoredEmailBuilderDesign(campaignId)) {
+        form.value.templateMode = 'scratch'
+      }
       await nextTick()
       designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return
@@ -1237,6 +1258,9 @@ async function loadFromEditorReturn() {
         /* ignore invalid stored JSON */
       }
     }
+  }
+  if (typeof window !== 'undefined' && hasStoredEmailBuilderDesign(campaignId)) {
+    form.value.templateMode = 'scratch'
   }
   await nextTick()
   designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1330,7 +1354,7 @@ function openEditorWithCurrentDesign() {
   if (!campaignId) return
   if (typeof window !== 'undefined') {
     if (savedTemplateHtml.value) {
-      window.sessionStorage.setItem(`campaign-template-${campaignId}`, savedTemplateHtml.value)
+      updateCampaignHtmlSession(campaignId, savedTemplateHtml.value)
     }
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
       form: { ...form.value },
@@ -1338,6 +1362,21 @@ function openEditorWithCurrentDesign() {
     }))
   }
   navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
+}
+
+function openEmailBuilderWithCurrentDesign() {
+  const campaignId = designEditorCampaignId.value
+  if (!campaignId) return
+  if (typeof window !== 'undefined') {
+    if (savedTemplateHtml.value) {
+      updateCampaignHtmlSession(campaignId, savedTemplateHtml.value)
+    }
+    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
+      form: { ...form.value },
+      campaignId
+    }))
+  }
+  navigateTo(campaignEmailBuilderEditorUrl(campaignId))
 }
 
 const recipientsDescription = computed(() => {
@@ -1358,7 +1397,9 @@ const designComplete = computed(() => !!savedTemplateHtml.value || (form.value.t
 
 const designSourceSummary = computed(() => {
   if (form.value.templateMode === 'upload') {
-    return 'Uploaded HTML design (saved without GrapesJS editing).'
+    return EMAIL_BUILDER_JS_ENABLED
+      ? 'Uploaded HTML — edit in EmailBuilder to adjust layout and blocks.'
+      : 'Uploaded HTML design (saved without editor changes).'
   }
   if (form.value.templateMode === 'scratch') return 'Built from scratch in the email editor.'
   const t = existingTemplates.value.find((x) => x.id === form.value.selectedTemplateId)
@@ -1374,7 +1415,9 @@ const designSectionToggleLabel = computed(() => {
 const designStepSubtitle = computed(() => {
   if (savedTemplateHtml.value) {
     return form.value.templateMode === 'upload'
-      ? 'Uploaded HTML — preview with merge tags applied.'
+      ? (EMAIL_BUILDER_JS_ENABLED
+        ? 'Uploaded HTML — edit in EmailBuilder or upload a new file.'
+        : 'Uploaded HTML — preview shows variables as stored in the template.')
       : 'Preview ready — change design or edit in the editor.'
   }
   if (form.value.templateMode === 'upload') return 'Upload HTML file'
@@ -1468,7 +1511,7 @@ function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   savedTemplateHtml.value = payload.html
   returnCampaignId.value = editId.value
   if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(`campaign-template-${editId.value}`, payload.html)
+    stageCampaignHtmlForEditor(editId.value, payload.html)
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
       form: { ...form.value, templateMode: 'upload' },
       campaignId: editId.value
@@ -1492,6 +1535,26 @@ function handleCreateFromScratch() {
   navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
 }
 
+function handleCreateWithEmailBuilder() {
+  if (!editId.value) return
+  designModalOpen.value = false
+  form.value.templateMode = 'scratch'
+  form.value.selectedTemplateId = ''
+  form.value.saveHtmlToLibrary = false
+  const campaignId = editId.value
+  returnCampaignId.value = campaignId
+  if (typeof window !== 'undefined') {
+    if (savedTemplateHtml.value) {
+      updateCampaignHtmlSession(campaignId, savedTemplateHtml.value)
+    }
+    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
+      form: { ...form.value, templateMode: 'scratch' },
+      campaignId
+    }))
+  }
+  navigateTo(campaignEmailBuilderEditorUrl(campaignId))
+}
+
 function handleUseTemplate(template: ExistingTemplateOption) {
   if (!editId.value) return
   designModalOpen.value = false
@@ -1506,7 +1569,7 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   returnCampaignId.value = editId.value
   const campaignId = editId.value
   if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
+    stageCampaignHtmlForEditor(campaignId, template.html)
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: { ...form.value }, campaignId }))
   }
 }
@@ -1531,8 +1594,10 @@ function applyStoredOrSelectedTemplate() {
 
 function clearCampaignSessionStorage() {
   if (typeof window !== 'undefined') {
-    if (returnCampaignId.value) {
-      window.sessionStorage.removeItem(`campaign-template-${returnCampaignId.value}`)
+    const id = returnCampaignId.value || editId.value
+    if (id) {
+      window.sessionStorage.removeItem(`campaign-template-${id}`)
+      window.sessionStorage.removeItem(`campaign-email-builder-design-${id}`)
     }
     window.sessionStorage.removeItem(PENDING_CAMPAIGN_KEY)
   }
