@@ -20,8 +20,10 @@ type ContactDoc = {
   isUnsubscribe?: boolean
   address?: {
     street?: string
+    unit?: string
     city?: string
     state?: string
+    zipCode?: string
     county?: string
   }
   createdAt?: Date
@@ -106,8 +108,10 @@ export default defineEventHandler(async (event) => {
     ownerEmail: ownerRaw,
     address: {
       street: c.address?.street ?? '',
+      unit: c.address?.unit ?? '',
       city: c.address?.city ?? '',
       state: c.address?.state ?? '',
+      zipCode: c.address?.zipCode ?? '',
       county: c.address?.county ?? ''
     },
     is_unsubscribe: c.isUnsubscribe === true,

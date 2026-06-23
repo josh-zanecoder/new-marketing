@@ -13,8 +13,10 @@ const TENANT_UI_CONTACT_SOURCE = 'tenant-ui'
 
 export interface ContactAddressInput {
   street?: string
+  unit?: string
   city?: string
   state?: string
+  zipCode?: string
   county?: string
 }
 
@@ -58,8 +60,10 @@ export async function createTenantContact(
   const addressInput = input.address ?? {}
   const address = {
     street: String(addressInput.street ?? '').trim(),
+    unit: String(addressInput.unit ?? '').trim(),
     city: String(addressInput.city ?? '').trim(),
     state: String(addressInput.state ?? '').trim(),
+    zipCode: String(addressInput.zipCode ?? '').trim(),
     county: normalizeContactCounty(String(addressInput.county ?? ''))
   }
 

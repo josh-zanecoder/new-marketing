@@ -34,8 +34,10 @@ export interface TenantContactListRow {
   is_unsubscribe: boolean
   address: {
     street: string
+    unit: string
     city: string
     state: string
+    zipCode: string
     county: string
   }
   /** Present when contact is a partner with retail type / subtype keys. */
