@@ -637,7 +637,7 @@
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div :class="contactTypeFilterOptions.length ? '' : 'min-[480px]:col-span-2'">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Preferred contact</label>
                 <select
                   id="add-contact-channel"
                   v-model="addContactForm.channel"
@@ -701,8 +701,18 @@
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
                 <div class="tenant-place-autocomplete-field sm:col-span-4">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
-                  <div
+                  <input
+                    v-show="!addContactStreetUsesGoogleAutocomplete"
                     id="add-contact-street"
+                    v-model="addContactForm.addressStreet"
+                    type="text"
+                    autocomplete="address-line1"
+                    placeholder="123 Main Street"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                  <div
+                    v-show="addContactStreetUsesGoogleAutocomplete"
+                    id="add-contact-street-autocomplete"
                     ref="addContactStreetHostRef"
                     class="tenant-place-autocomplete-host w-full"
                   />
@@ -832,6 +842,7 @@ const addContactForm = ref({
 })
 
 const addContactStreetHostRef = ref<HTMLElement | null>(null)
+const addContactStreetUsesGoogleAutocomplete = ref(false)
 const { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener } = useGoogleAddressAutocomplete(
   addContactForm as Ref<Record<string, unknown>>,
   {
@@ -854,6 +865,7 @@ const CONTACT_CHANNEL_OPTIONS = [
 
 function openAddContactModal() {
   addContactError.value = ''
+  addContactStreetUsesGoogleAutocomplete.value = false
   addContactForm.value = {
     firstName: '',
     lastName: '',
@@ -876,6 +888,7 @@ function openAddContactModal() {
 function closeAddContactModal() {
   if (addContactSubmitting.value) return
   clearGoogleAutocompleteListener()
+  addContactStreetUsesGoogleAutocomplete.value = false
   addContactOpen.value = false
   addContactError.value = ''
 }
@@ -885,14 +898,17 @@ watch(
   async ([open, host]) => {
     if (!open) {
       clearGoogleAutocompleteListener()
+      addContactStreetUsesGoogleAutocomplete.value = false
       return
     }
     if (!host) return
+    addContactStreetUsesGoogleAutocomplete.value = false
     await nextTick()
-    await initGoogleAddressAutocomplete(addContactStreetHostRef, true, {
+    const initialized = await initGoogleAddressAutocomplete(addContactStreetHostRef, true, {
       placeholder: '123 Main Street',
       regionCodes: ['us']
     })
+    addContactStreetUsesGoogleAutocomplete.value = initialized
   },
   { flush: 'post' }
 )
@@ -1241,7 +1257,7 @@ const contactDetailSections = computed((): ContactDetailSection[] => {
         { label: 'Email', value: formatDetailValue(c.email) },
         { label: 'Phone', value: c.phone ? formatUsPhoneNumber(c.phone) : '—' },
         { label: 'Company', value: formatDetailValue(c.company), span: 2 },
-        { label: 'Channel', value: formatDetailValue(c.channel) },
+        { label: 'Preferred contact', value: formatDetailValue(c.channel) },
         { label: 'Subscription', value: c.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }
       ]
     },
