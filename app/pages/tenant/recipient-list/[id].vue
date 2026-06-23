@@ -426,8 +426,10 @@ function formatDate(iso: string): string {
 function formatAddress(addr: Record<string, unknown>): string {
   const formatted = formatContactAddress({
     street: typeof addr.street === 'string' ? addr.street : undefined,
+    unit: typeof addr.unit === 'string' ? addr.unit : undefined,
     city: typeof addr.city === 'string' ? addr.city : undefined,
     state: typeof addr.state === 'string' ? addr.state : undefined,
+    zipCode: typeof addr.zipCode === 'string' ? addr.zipCode : undefined,
     county: typeof addr.county === 'string' ? addr.county : undefined
   })
   return formatted || '—'

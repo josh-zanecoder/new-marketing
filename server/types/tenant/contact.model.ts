@@ -6,8 +6,10 @@ export type ContactKind = string
 /** Optional structured address; all fields optional for partial CRM sync. */
 export interface ContactAddress {
   street?: string
+  unit?: string
   city?: string
   state?: string
+  zipCode?: string
   county?: string
 }
 

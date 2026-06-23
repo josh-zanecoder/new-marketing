@@ -24,11 +24,17 @@ export default defineEventHandler(async (event) => {
             street: typeof (body.address as Record<string, unknown>).street === 'string'
               ? ((body.address as Record<string, unknown>).street as string)
               : '',
+            unit: typeof (body.address as Record<string, unknown>).unit === 'string'
+              ? ((body.address as Record<string, unknown>).unit as string)
+              : '',
             city: typeof (body.address as Record<string, unknown>).city === 'string'
               ? ((body.address as Record<string, unknown>).city as string)
               : '',
             state: typeof (body.address as Record<string, unknown>).state === 'string'
               ? ((body.address as Record<string, unknown>).state as string)
+              : '',
+            zipCode: typeof (body.address as Record<string, unknown>).zipCode === 'string'
+              ? ((body.address as Record<string, unknown>).zipCode as string)
               : '',
             county: typeof (body.address as Record<string, unknown>).county === 'string'
               ? ((body.address as Record<string, unknown>).county as string)

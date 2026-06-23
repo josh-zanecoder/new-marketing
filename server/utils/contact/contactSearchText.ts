@@ -24,7 +24,7 @@ export function buildContactSearchText(doc: {
   phone?: unknown
   company?: unknown
   contactType?: unknown
-  address?: { street?: unknown; city?: unknown; state?: unknown; county?: unknown } | unknown
+  address?: { street?: unknown; unit?: unknown; city?: unknown; state?: unknown; zipCode?: unknown; county?: unknown } | unknown
 }): string {
   const addr =
     doc.address && typeof doc.address === 'object'
@@ -39,8 +39,10 @@ export function buildContactSearchText(doc: {
     doc.phone,
     doc.company,
     addr.street,
+    addr.unit,
     addr.city,
     addr.state,
+    addr.zipCode,
     addr.county,
     ...typeArr
   ]
@@ -60,8 +62,10 @@ function buildLegacySearchRegexFilter(re: RegExp): Record<string, unknown> {
       { phone: re },
       { company: re },
       { 'address.street': re },
+      { 'address.unit': re },
       { 'address.city': re },
       { 'address.state': re },
+      { 'address.zipCode': re },
       { 'address.county': re },
       { contactType: re }
     ]

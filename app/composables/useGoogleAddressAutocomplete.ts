@@ -220,15 +220,15 @@ export function useGoogleAddressAutocomplete(
     hostRef: Ref<HTMLElement | null>,
     streetFieldVisible: boolean,
     options?: { placeholder?: string; regionCodes?: string[] }
-  ): Promise<void> {
-    if (!streetFieldVisible) return
+  ): Promise<boolean> {
+    if (!streetFieldVisible) return false
     const host = hostRef.value
-    if (!host) return
-    if (boundHost === host && autocompleteElement) return
+    if (!host) return false
+    if (boundHost === host && autocompleteElement) return true
 
     try {
       const placesLibrary = await loadGooglePlacesLibrary(config)
-      if (!placesLibrary?.PlaceAutocompleteElement) return
+      if (!placesLibrary?.PlaceAutocompleteElement) return false
 
       clearGoogleAutocompleteListener()
       host.replaceChildren()
@@ -238,9 +238,14 @@ export function useGoogleAddressAutocomplete(
         noInputIcon: true,
         noClearButton: true
       })
-      placeAutocomplete.placeholder = options?.placeholder ?? '123 Main Street'
+      const placeholder = options?.placeholder ?? '123 Main Street'
+      placeAutocomplete.placeholder = placeholder
       placeAutocomplete.className = 'tenant-place-autocomplete'
       applyTenantPlaceAutocompleteStyles(placeAutocomplete)
+      const existingStreet = String(formRef.value[keys.street] ?? '').trim()
+      if (existingStreet) {
+        placeAutocomplete.value = existingStreet
+      }
 
       selectHandler = async (event: Event) => {
         const placePrediction = (event as Event & PlacePredictionSelectEvent).placePrediction
@@ -272,8 +277,10 @@ export function useGoogleAddressAutocomplete(
       host.appendChild(placeAutocomplete)
       boundHost = host
       autocompleteElement = placeAutocomplete
+      return true
     } catch (err) {
       console.warn('Google Places autocomplete failed to initialize:', err)
+      return false
     }
   }
 
