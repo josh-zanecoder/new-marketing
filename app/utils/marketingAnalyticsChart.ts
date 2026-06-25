@@ -6,6 +6,7 @@ import type {
   TooltipComponentOption,
   YAXisComponentOption
 } from 'echarts/components'
+import type { BrevoTrackingDateRange } from '~/composables/useBrevoTrackingDateRange'
 import type { MarketingAnalyticsTimeseriesPoint } from '~/types/marketingAnalytics'
 import { inputYmdToStartMs } from '~/composables/useBrevoTrackingDateRange'
 
@@ -28,10 +29,83 @@ function formatPercent(value: number | null): string {
   return `${value % 1 === 0 ? value.toFixed(0) : value.toFixed(1)}%`
 }
 
+function toYmdLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function subtractOneDayYmd(ymd: string): string {
+  const ms = inputYmdToStartMs(ymd)
+  if (ms == null) return ymd
+  const d = new Date(ms)
+  d.setDate(d.getDate() - 1)
+  return toYmdLocal(d)
+}
+
+function enumerateDays(fromYmd: string, toYmd: string): string[] {
+  const fromMs = inputYmdToStartMs(fromYmd)
+  const toMs = inputYmdToStartMs(toYmd)
+  if (fromMs == null || toMs == null || fromMs > toMs) return []
+
+  const out: string[] = []
+  const cursor = new Date(fromMs)
+  const end = new Date(toMs)
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(toYmdLocal(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return out
+}
+
+function emptyChartPoint(date: string): MarketingAnalyticsTimeseriesPoint {
+  return {
+    date,
+    emailsSent: 0,
+    emailsDelivered: 0,
+    openRate: 0,
+    clickRate: 0,
+    bounceRate: 0,
+    unsubscribeRate: 0
+  }
+}
+
+/** Ensures every day in the selected range is present and at least two x-axis points for line segments. */
+export function expandPointsForChart(
+  points: MarketingAnalyticsTimeseriesPoint[],
+  range?: BrevoTrackingDateRange
+): MarketingAnalyticsTimeseriesPoint[] {
+  const byDate = new Map(points.map((point) => [point.date, point]))
+  let dayLabels: string[]
+
+  if (range?.from && range?.to) {
+    dayLabels = enumerateDays(range.from, range.to)
+  } else if (points.length > 0) {
+    const sorted = [...points].map((point) => point.date).sort()
+    dayLabels =
+      sorted.length > 1 ? enumerateDays(sorted[0], sorted[sorted.length - 1]) : sorted
+  } else {
+    return points
+  }
+
+  if (dayLabels.length === 0) return points
+
+  // ECharts line series need two or more categories to render connecting segments.
+  if (dayLabels.length === 1) {
+    dayLabels = [subtractOneDayYmd(dayLabels[0]), dayLabels[0]]
+  }
+
+  return dayLabels.map((date) => byDate.get(date) ?? emptyChartPoint(date))
+}
+
 export function buildMarketingAnalyticsChartOption(
-  points: MarketingAnalyticsTimeseriesPoint[]
+  points: MarketingAnalyticsTimeseriesPoint[],
+  range?: BrevoTrackingDateRange
 ): MarketingAnalyticsChartOption {
-  const labels = points.map((point) => formatAxisLabel(point.date))
+  const chartPoints = expandPointsForChart(points, range)
+  const labels = chartPoints.map((point) => formatAxisLabel(point.date))
+  const useSmoothLines = chartPoints.length >= 3
 
   return {
     tooltip: {
@@ -40,7 +114,7 @@ export function buildMarketingAnalyticsChartOption(
       formatter(items) {
         if (!Array.isArray(items) || items.length === 0) return ''
         const idx = items[0]?.dataIndex ?? 0
-        const point = points[idx]
+        const point = chartPoints[idx]
         if (!point) return ''
         const lines = [
           `<strong>${formatAxisLabel(point.date)}</strong>`,
@@ -105,68 +179,68 @@ export function buildMarketingAnalyticsChartOption(
       {
         name: 'Emails sent',
         type: 'line',
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#0284c7' },
         areaStyle: { color: 'rgba(2, 132, 199, 0.08)' },
-        data: points.map((point) => point.emailsSent)
+        data: chartPoints.map((point) => point.emailsSent)
       },
       {
         name: 'Emails delivered',
         type: 'line',
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#059669' },
         areaStyle: { color: 'rgba(5, 150, 105, 0.08)' },
-        data: points.map((point) => point.emailsDelivered)
+        data: chartPoints.map((point) => point.emailsDelivered)
       },
       {
         name: 'Open rate',
         type: 'line',
         yAxisIndex: 1,
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#7c3aed' },
-        data: points.map((point) => point.openRate ?? 0)
+        data: chartPoints.map((point) => point.openRate ?? 0)
       },
       {
         name: 'Click rate',
         type: 'line',
         yAxisIndex: 1,
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#d97706' },
-        data: points.map((point) => point.clickRate ?? 0)
+        data: chartPoints.map((point) => point.clickRate ?? 0)
       },
       {
         name: 'Bounce rate',
         type: 'line',
         yAxisIndex: 1,
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#dc2626' },
-        data: points.map((point) => point.bounceRate ?? 0)
+        data: chartPoints.map((point) => point.bounceRate ?? 0)
       },
       {
         name: 'Unsubscribe rate',
         type: 'line',
         yAxisIndex: 1,
-        smooth: true,
+        smooth: useSmoothLines,
         showSymbol: labels.length <= 31,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: '#52525b' },
-        data: points.map((point) => point.unsubscribeRate ?? 0)
+        data: chartPoints.map((point) => point.unsubscribeRate ?? 0)
       }
     ]
   }

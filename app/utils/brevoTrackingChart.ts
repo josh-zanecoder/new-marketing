@@ -65,24 +65,42 @@ function enumerateDays(fromYmd: string, toYmd: string): string[] {
   return out
 }
 
+function subtractOneDayYmd(ymd: string): string {
+  const ms = inputYmdToStartMs(ymd)
+  if (ms == null) return ymd
+  const d = new Date(ms)
+  d.setDate(d.getDate() - 1)
+  return toYmdLocal(d)
+}
+
+/** ECharts line series need two or more categories to render connecting segments. */
+function ensureMinimumChartDays(dayLabels: string[]): string[] {
+  if (dayLabels.length >= 2) return dayLabels
+  if (dayLabels.length === 0) return dayLabels
+  return [subtractOneDayYmd(dayLabels[0]), dayLabels[0]]
+}
+
 function resolveChartDayLabels(
   events: BrevoTrackingChartEvent[],
   range: BrevoTrackingDateRange
 ): string[] {
+  let dayLabels: string[]
+
   if (range.from && range.to) {
-    return enumerateDays(range.from, range.to)
+    dayLabels = enumerateDays(range.from, range.to)
+  } else {
+    const days = new Set<string>()
+    for (const ev of events) {
+      const ymd = parseEventYmd(ev.date)
+      if (ymd) days.add(ymd)
+    }
+
+    const sorted = [...days].sort()
+    dayLabels =
+      sorted.length > 1 ? enumerateDays(sorted[0], sorted[sorted.length - 1]) : sorted
   }
 
-  const days = new Set<string>()
-  for (const ev of events) {
-    const ymd = parseEventYmd(ev.date)
-    if (ymd) days.add(ymd)
-  }
-
-  const sorted = [...days].sort()
-  if (sorted.length <= 1) return sorted
-
-  return enumerateDays(sorted[0], sorted[sorted.length - 1])
+  return ensureMinimumChartDays(dayLabels)
 }
 
 function formatAxisLabel(ymd: string): string {
@@ -106,6 +124,7 @@ export function buildBrevoTrackingChartOption(
 
   const labels = resolveChartDayLabels(filtered, range)
   const dayIndex = new Map(labels.map((d, i) => [d, i]))
+  const useSmoothLines = labels.length >= 3
 
   const seriesTypes =
     selectedEventTypes.length > 0
@@ -134,7 +153,7 @@ export function buildBrevoTrackingChartOption(
       ? seriesTypes.map((type) => ({
           name: type,
           type: 'line',
-          smooth: true,
+          smooth: useSmoothLines,
           showSymbol: labels.length <= 31,
           symbolSize: 6,
           lineStyle: { width: 2 },
@@ -145,7 +164,7 @@ export function buildBrevoTrackingChartOption(
           {
             name: 'Events',
             type: 'line',
-            smooth: true,
+            smooth: useSmoothLines,
             showSymbol: labels.length <= 31,
             symbolSize: 6,
             lineStyle: { width: 2 },

@@ -8,6 +8,7 @@ import {
   TooltipComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
+import type { BrevoTrackingDateRange } from '~/composables/useBrevoTrackingDateRange'
 import type { MarketingAnalyticsTimeseriesPoint } from '~/types/marketingAnalytics'
 import { buildMarketingAnalyticsChartOption } from '~/utils/marketingAnalyticsChart'
 
@@ -15,10 +16,13 @@ use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent
 
 const props = defineProps<{
   points: MarketingAnalyticsTimeseriesPoint[]
+  dateRange?: BrevoTrackingDateRange
   loading?: boolean
 }>()
 
-const chartOption = computed(() => buildMarketingAnalyticsChartOption(props.points))
+const chartOption = computed(() =>
+  buildMarketingAnalyticsChartOption(props.points, props.dateRange)
+)
 
 const hasChartData = computed(() =>
   props.points.some(
