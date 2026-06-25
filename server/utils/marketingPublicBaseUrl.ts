@@ -1,6 +1,6 @@
 /** Public marketing app origin (no trailing slash). Source: `runtimeConfig.public.marketingBaseUrl` in nuxt.config. */
 export function getMarketingPublicBaseUrl(): string {
-  let raw = ''
+  let raw: string
   try {
     const config = useRuntimeConfig()
     raw = String(config.public.marketingBaseUrl ?? '')

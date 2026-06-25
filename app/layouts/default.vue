@@ -102,10 +102,6 @@ function toggleSidebarCompact() {
   sidebarCompact.value = !sidebarCompact.value
 }
 
-function openMobileDrawer() {
-  sidebarCompact.value = false
-}
-
 function collapseSidebarIfMobileExpanded() {
   if (!import.meta.client) return
   if (sidebarCompact.value) return

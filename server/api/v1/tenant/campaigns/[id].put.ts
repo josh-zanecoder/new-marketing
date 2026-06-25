@@ -2,7 +2,6 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import type { ContactModel } from '@server/types/tenant/contact.model'
-import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type {
   ManualRecipientInsert,
   ManualRecipientInsertManyCast,
