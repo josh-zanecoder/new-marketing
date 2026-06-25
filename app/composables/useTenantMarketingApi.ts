@@ -191,6 +191,32 @@ export function useTenantMarketingApi() {
     )
   }
 
+  async function updateContact(
+    contactId: string,
+    body: {
+      firstName?: string
+      lastName?: string
+      email: string
+      phone?: string
+      company?: string
+      contactType?: string | string[]
+      channel?: string
+      status?: string
+      stage?: string
+      address?: {
+        street?: string
+        city?: string
+        state?: string
+        county?: string
+      }
+    }
+  ) {
+    return $fetch<{ ok: boolean; contact: { id: string; firstName: string; lastName: string; email: string } }>(
+      `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}`,
+      tenantFetchInit({ method: 'PATCH', body, timeout: 30000 })
+    )
+  }
+
   async function fetchEmailTemplates() {
     return $fetch<{ templates: TenantEmailTemplateRow[] }>(
       '/api/v1/tenant/email-templates',
@@ -291,6 +317,7 @@ export function useTenantMarketingApi() {
     fetchRecipientListById,
     fetchDynamicVariables,
     createContact,
+    updateContact,
     fetchEmailTemplates,
     fetchTenantMe,
     fetchDashboard,

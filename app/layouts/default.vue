@@ -338,6 +338,7 @@ function navLinkLayoutClass(compact: boolean) {
         <slot />
       </div>
     </main>
+    <UiAppToastHost />
   </div>
 </template>
 
