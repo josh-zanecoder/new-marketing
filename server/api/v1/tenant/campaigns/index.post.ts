@@ -13,6 +13,7 @@ import {
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
+import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -24,6 +25,8 @@ export default defineEventHandler(async (event) => {
     recipientsListId?: string
     /** Contact `_id` strings (manual audience). */
     recipientsManual?: string[]
+    /** Link an existing library template without creating a duplicate. */
+    emailTemplateId?: string
     templateHtml?: string
     templateHtmlSource?: 'editor' | 'upload'
     /** When true, the design also appears in Saved templates. Defaults to false when omitted. */
@@ -39,19 +42,15 @@ export default defineEventHandler(async (event) => {
 
   let emailTemplateId: string | undefined
 
-  if (body.templateHtml) {
-    const htmlSource =
-      body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
-    const saveToLibrary = body.saveHtmlToLibrary === true
-    const template = await new EmailTemplate({
-      name: `${body.name} - Template`,
-      subject: body.subject?.trim() || body.name.trim(),
-      htmlTemplate: body.templateHtml,
-      htmlSource,
-      saveToLibrary
-    }).save()
-    emailTemplateId = template._id.toString()
-  }
+  const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
+    campaignName: body.name.trim(),
+    subject: body.subject,
+    emailTemplateId: body.emailTemplateId,
+    templateHtml: body.templateHtml,
+    templateHtmlSource: body.templateHtmlSource,
+    saveHtmlToLibrary: body.saveHtmlToLibrary
+  })
+  emailTemplateId = templateResult.emailTemplateId
 
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''

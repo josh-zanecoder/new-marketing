@@ -644,6 +644,7 @@ import type { CampaignContactPickerRow, TenantContactTypeOption } from '~/types/
 import { storeToRefs } from 'pinia'
 import { useCampaignStore } from '~/store/campaignStore'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
+import { buildCampaignTemplatePersistFields } from '~~/shared/buildCampaignTemplatePersistFields'
 import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
 
 const campaignStore = useCampaignStore()
@@ -710,6 +711,7 @@ function onChangeDesignConfirmed() {
 }
 const returnCampaignId = ref<string | null>(null)
 const savedTemplateHtml = ref<string | null>(null)
+const templateDesignModified = ref(false)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
@@ -1119,6 +1121,7 @@ function applyTemplateFromQuery(): void {
   if (!template) return
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
+  templateDesignModified.value = false
   const fromTemplate = template.subject?.trim()
   if (fromTemplate) {
     form.value.subject = fromTemplate
@@ -1140,6 +1143,7 @@ async function loadFromEditorReturn() {
   const campaignId = route.query.campaignId as string
   const fromEditor = route.query.fromEditor
   if (!campaignId || fromEditor !== '1') return
+  templateDesignModified.value = true
   returnCampaignId.value = campaignId
   if (typeof window !== 'undefined') {
     const template = window.sessionStorage.getItem(`campaign-template-${campaignId}`)
@@ -1442,8 +1446,14 @@ function removeManualRecipientById(contactId: string) {
   manualRecipientLabels.value = rest
 }
 
+function campaignDesignIsReady(): boolean {
+  if (savedTemplateHtml.value) return true
+  return form.value.templateMode === 'existing' && Boolean(form.value.selectedTemplateId)
+}
+
 function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   designModalOpen.value = false
+  templateDesignModified.value = true
   form.value.templateMode = 'upload'
   form.value.selectedTemplateId = ''
   form.value.saveHtmlToLibrary = false
@@ -1461,6 +1471,7 @@ function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
 
 function handleCreateFromScratch() {
   designModalOpen.value = false
+  templateDesignModified.value = true
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
   form.value.saveHtmlToLibrary = false
@@ -1476,6 +1487,7 @@ function handleCreateFromScratch() {
 
 function handleUseTemplate(template: ExistingTemplateOption) {
   designModalOpen.value = false
+  templateDesignModified.value = false
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
   form.value.saveHtmlToLibrary = false
@@ -1560,6 +1572,14 @@ async function persistSavedCampaign(): Promise<string> {
     ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
     : []
 
+  const templateFields = buildCampaignTemplatePersistFields({
+    templateMode: form.value.templateMode,
+    selectedTemplateId: form.value.selectedTemplateId,
+    templateDesignModified: templateDesignModified.value,
+    savedTemplateHtml: savedTemplateHtml.value,
+    saveHtmlToLibrary: form.value.saveHtmlToLibrary
+  })
+
   const body = {
     name: form.value.name.trim(),
     senderName: form.value.senderName,
@@ -1568,9 +1588,7 @@ async function persistSavedCampaign(): Promise<string> {
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     recipientsManual,
-    templateHtml: savedTemplateHtml.value!,
-    templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
-    saveHtmlToLibrary: form.value.saveHtmlToLibrary
+    ...templateFields
   }
 
   const res = await marketingApi.createCampaign(body)
@@ -1601,7 +1619,7 @@ function handleOpenScheduleWizard() {
     return
   }
   applyStoredOrSelectedTemplate()
-  if (!savedTemplateHtml.value) {
+  if (!campaignDesignIsReady()) {
     saveError.value = 'Complete the email design before scheduling.'
     return
   }
@@ -1626,7 +1644,7 @@ async function confirmScheduleFromWizard() {
     return
   }
   applyStoredOrSelectedTemplate()
-  if (!savedTemplateHtml.value) {
+  if (!campaignDesignIsReady()) {
     saveError.value = 'Complete the email design before scheduling.'
     return
   }
@@ -1681,7 +1699,7 @@ async function handleSendFromWizard() {
   }
   try {
     applyStoredOrSelectedTemplate()
-    if (!savedTemplateHtml.value) {
+    if (!campaignDesignIsReady()) {
       saveError.value = 'Complete the email design before sending.'
       return
     }
@@ -1750,7 +1768,7 @@ async function handleCreate() {
   try {
     applyStoredOrSelectedTemplate()
 
-    if (!savedTemplateHtml.value) {
+    if (!campaignDesignIsReady()) {
       saveError.value = 'Add an email design before saving.'
       return
     }
@@ -1761,7 +1779,7 @@ async function handleCreate() {
       clearCampaignSessionStorage()
       primeCampaignCacheAfterSave(savedId)
       void campaignStore.fetchCampaigns()
-      await navigateTo('/tenant/campaigns')
+      await navigateTo(`/tenant/campaigns/${savedId}`)
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)
       isSaving.value = false

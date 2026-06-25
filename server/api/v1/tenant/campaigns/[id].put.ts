@@ -19,6 +19,7 @@ import {
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
+import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event) => {
     recipientsType?: 'manual' | 'list'
     recipientsListId?: string
     recipientsManual?: string[]
+    emailTemplateId?: string
     templateHtml?: string
     templateHtmlSource?: 'editor' | 'upload'
     saveHtmlToLibrary?: boolean
@@ -58,33 +60,19 @@ export default defineEventHandler(async (event) => {
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''
 
-  const saveToLibrary = body.saveHtmlToLibrary === true
+  const saveHtmlToLibrary = body.saveHtmlToLibrary === true
 
-  if (body.templateHtml && campaign.emailTemplate) {
-    const htmlSource =
-      body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
-    await (EmailTemplate as EmailTemplateModel).updateOne(
-      { _id: campaign.emailTemplate },
-      {
-        $set: {
-          htmlTemplate: body.templateHtml,
-          htmlSource,
-          subject: body.subject?.trim() || campaign.subject || body.name.trim(),
-          saveToLibrary
-        }
-      }
-    )
-  } else if (body.templateHtml) {
-    const htmlSource =
-      body.templateHtmlSource === 'upload' ? 'upload' : 'editor'
-    const template = await new EmailTemplate({
-      name: `${body.name} - Template`,
-      subject: body.subject?.trim() || body.name.trim(),
-      htmlTemplate: body.templateHtml,
-      htmlSource,
-      saveToLibrary
-    }).save()
-    campaign.emailTemplate = template._id
+  const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
+    campaignName: body.name.trim(),
+    subject: body.subject,
+    emailTemplateId: body.emailTemplateId,
+    templateHtml: body.templateHtml,
+    templateHtmlSource: body.templateHtmlSource,
+    saveHtmlToLibrary,
+    currentEmailTemplateId: campaign.emailTemplate
+  })
+  if (templateResult.emailTemplateId) {
+    campaign.emailTemplate = new mongoose.Types.ObjectId(templateResult.emailTemplateId)
   }
 
   const auth = event.context.auth

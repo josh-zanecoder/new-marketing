@@ -106,6 +106,10 @@ function makeCampaignHref(templateId: string): string {
   return `/tenant/campaigns/add?templateId=${encodeURIComponent(templateId)}`
 }
 
+function editTemplateHref(templateId: string): string {
+  return `/tenant/email-templates/add?templateId=${encodeURIComponent(templateId)}`
+}
+
 function openPreview(template: EmailTemplateListRow) {
   previewTemplate.value = template
   previewOpen.value = true
@@ -140,14 +144,22 @@ onMounted(() => {
 
 <template>
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
-    <header>
-      <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Content</p>
-      <h1 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
-        Email templates
-      </h1>
-      <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
-        Browse saved designs, preview them full size, and start a campaign from any template.
-      </p>
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Content</p>
+        <h1 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+          Email templates
+        </h1>
+        <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+          Create templates by pasting or uploading HTML, preview them full size, and start a campaign from any template.
+        </p>
+      </div>
+      <NuxtLink
+        to="/tenant/email-templates/add"
+        class="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+      >
+        Create template
+      </NuxtLink>
     </header>
 
     <div
@@ -158,22 +170,24 @@ onMounted(() => {
       {{ loadError }}
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3">
-      <div class="relative min-w-0 w-full">
+    <div class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
+      <div class="min-w-0 flex-1">
         <label class="sr-only" for="email-templates-search">Search templates</label>
-        <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          id="email-templates-search"
-          v-model="searchQuery"
-          type="search"
-          autocomplete="off"
-          placeholder="Search by name or subject…"
-          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
-        >
+        <div class="relative">
+          <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            id="email-templates-search"
+            v-model="searchQuery"
+            type="search"
+            autocomplete="off"
+            placeholder="Search by name or subject…"
+            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
+          >
+        </div>
       </div>
-      <div class="grid min-w-0 grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:flex lg:items-stretch">
+      <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:shrink-0 lg:items-center">
         <TenantFilterSelect
           id="email-templates-subject-filter"
           v-model="subjectFilter"
@@ -218,8 +232,14 @@ onMounted(() => {
         No templates yet
       </h3>
       <p class="mt-2 max-w-sm text-sm text-slate-500">
-        Save a design from a campaign or sync templates from CRM to see them here.
+        Paste or upload HTML to create your first template.
       </p>
+      <NuxtLink
+        to="/tenant/email-templates/add"
+        class="mt-6 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+      >
+        Create template
+      </NuxtLink>
     </div>
 
     <div
@@ -289,6 +309,12 @@ onMounted(() => {
                 <Maximize2 class="h-4 w-4" aria-hidden="true" />
                 Preview
               </button>
+              <NuxtLink
+                :to="editTemplateHref(template.id)"
+                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
+              >
+                Edit
+              </NuxtLink>
               <NuxtLink
                 :to="makeCampaignHref(template.id)"
                 class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 sm:w-auto"

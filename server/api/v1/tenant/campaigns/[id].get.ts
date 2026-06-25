@@ -118,6 +118,7 @@ export default defineEventHandler(async (event) => {
         : undefined,
       recipients,
       emailTemplate,
+      emailTemplateId: linkedTemplate ? String(campaign.emailTemplate) : undefined,
       templateHtml,
       templateHtmlSource,
       saveHtmlToLibrary,
