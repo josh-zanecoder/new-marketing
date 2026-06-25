@@ -59,37 +59,49 @@ export function buildCampaignCreatorReplyTo(
 
 /**
  * Per-recipient From display name: contact CRM account owner (`metadata.owner*`),
+ * then tenant dynamic-variable fallbacks for `user.firstName` / `user.lastName`,
  * then the operator who created/triggered the send, then campaign stored sender name.
  */
 export function buildSenderFromContactOwner(
   contact: ContactLean | null | undefined,
   campaignSender: { name?: string; email?: string },
-  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null
+  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null,
+  variableFallback?: UserMergeSnapshot | null
 ): { name: string; email: string } {
   const email = String(campaignSender.email ?? '').trim().toLowerCase()
   const owner = userMergeSnapshotFromContactOwner(contact)
   const ownerName = replyToNameFromUserSnapshot(owner)
+  const dynamicName = replyToNameFromUserSnapshot(variableFallback)
   const operatorName = replyToNameFromUserSnapshot(operatorFallback)
   const storedName = String(campaignSender.name ?? '').trim() || email
-  const name = (ownerName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
+  const name = (ownerName || dynamicName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
   return { name, email }
 }
 
 /**
  * Per-recipient Reply-To: contact CRM account owner (`metadata.owner*`),
+ * then tenant dynamic-variable fallbacks for `user.email` / name fields,
  * then the operator who created/triggered the send.
  */
 export function buildReplyToFromContactOwner(
   contact: ContactLean | null | undefined,
-  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null
+  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null,
+  variableFallback?: UserMergeSnapshot | null
 ): CampaignReplyTo | undefined {
   const owner = userMergeSnapshotFromContactOwner(contact)
-  const operator = mergeUserSnapshotsForEmail(operatorFallback)
   const ownerEmail = owner?.email?.trim().toLowerCase()
   if (ownerEmail?.includes('@')) {
     const name = replyToNameFromUserSnapshot(owner) || ownerEmail
     return normalizeReplyTo({ email: ownerEmail, name })
   }
+
+  const dynamicEmail = variableFallback?.email?.trim().toLowerCase()
+  if (dynamicEmail?.includes('@')) {
+    const name = replyToNameFromUserSnapshot(variableFallback) || dynamicEmail
+    return normalizeReplyTo({ email: dynamicEmail, name })
+  }
+
+  const operator = mergeUserSnapshotsForEmail(operatorFallback)
   const operatorEmail = operator?.email?.trim().toLowerCase()
   if (operatorEmail?.includes('@')) {
     const name = replyToNameFromUserSnapshot(operator) || operatorEmail

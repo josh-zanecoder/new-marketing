@@ -24,6 +24,7 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
+import { userMergeSnapshotFromDynamicVariableFallbacks } from '../utils/emailMerge/userFieldFallbacksFromDynamicBindings'
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
@@ -712,6 +713,7 @@ export async function processBatch(
     }
 
     const operatorUser = campaign.mergeUserSnapshot
+    const variableFallback = userMergeSnapshotFromDynamicVariableFallbacks(dynamicVariableBindings)
     const userForTag =
       operatorUser?.email?.trim() ||
       [operatorUser?.firstName, operatorUser?.lastName].filter(Boolean).join(' ').trim() ||
@@ -730,7 +732,7 @@ export async function processBatch(
       if (contact?.isUnsubscribe === true) {
         return {
           row: r,
-          sender: buildSenderFromContactOwner(contact, campaign.sender, operatorUser),
+          sender: buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback),
           version: { to: [{ email: r.email }], subject: '', htmlContent: '' },
           failed: 'Contact unsubscribed'
         }
@@ -757,8 +759,8 @@ export async function processBatch(
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)
-      const replyTo = buildReplyToFromContactOwner(contact, operatorUser)
-      const sender = buildSenderFromContactOwner(contact, campaign.sender, operatorUser)
+      const replyTo = buildReplyToFromContactOwner(contact, operatorUser, variableFallback)
+      const sender = buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback)
       return {
         row: r,
         sender,
