@@ -1,6 +1,6 @@
 const US_PHONE_DIGITS = 10
 
-function usPhoneDigits(input: string | number): string {
+export function usPhoneDigits(input: string | number): string {
   const digits = String(input).replace(/\D/g, '')
   if (digits.length === US_PHONE_DIGITS + 1 && digits.startsWith('1')) {
     return digits.slice(1)

@@ -62,8 +62,8 @@
       {{ subscriptionActionError }}
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3">
-      <div class="min-w-0 w-full">
+    <div class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
+      <div class="min-w-0 flex-1">
         <label class="sr-only" for="contacts-search">Search contacts</label>
         <div class="relative">
           <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -79,21 +79,21 @@
           >
         </div>
       </div>
-      <div class="grid min-w-0 grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:flex lg:items-stretch">
-      <TenantFilterSelect
-        id="contacts-subscription-filter"
-        v-model="subscriptionFilter"
-        label="Subscription"
-        :options="subscriptionFilterSelectOptions"
-        class="w-full shrink-0 lg:w-[14rem]"
-      />
-      <TenantFilterSelect
-        id="contacts-kind-filter"
-        v-model="contactTypeFilter"
-        label="Contact type"
-        :options="contactTypeSelectOptions"
-        class="w-full shrink-0 lg:w-[14rem]"
-      />
+      <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:shrink-0 lg:items-center">
+        <TenantFilterSelect
+          id="contacts-subscription-filter"
+          v-model="subscriptionFilter"
+          label="Subscription"
+          :options="subscriptionFilterSelectOptions"
+          class="w-full shrink-0 lg:w-[14rem]"
+        />
+        <TenantFilterSelect
+          id="contacts-kind-filter"
+          v-model="contactTypeFilter"
+          label="Contact type"
+          :options="contactTypeSelectOptions"
+          class="w-full shrink-0 lg:w-[14rem]"
+        />
       </div>
     </div>
 
@@ -150,13 +150,22 @@
                 {{ row.company }}
               </p>
             </div>
-            <button
-              type="button"
-              class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              @click="openContactDetail(row.id)"
-            >
-              View
-            </button>
+            <div class="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                @click="openEditContactModal(row.id)"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                @click="openContactDetail(row.id)"
+              >
+                View
+              </button>
+            </div>
           </div>
 
           <div v-if="row.contactType?.length" class="mt-3 flex flex-wrap gap-1.5">
@@ -245,7 +254,7 @@
                 scope="col"
                 class="whitespace-nowrap px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pr-6 sm:pl-4"
               >
-                View
+                Actions
               </th>
             </tr>
           </thead>
@@ -316,13 +325,22 @@
                 {{ row.company || '—' }}
               </td>
               <td class="whitespace-nowrap px-4 py-4 text-right sm:pr-6 sm:pl-4">
-                <button
-                  type="button"
-                  class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                  @click="openContactDetail(row.id)"
-                >
-                  View
-                </button>
+                <div class="inline-flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    @click="openEditContactModal(row.id)"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    @click="openContactDetail(row.id)"
+                  >
+                    View
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -381,88 +399,182 @@
           @click="closeContactDetail"
         />
         <div
-          class="relative flex max-h-[min(92vh,840px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-slate-50 shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
+          class="relative flex max-h-[min(92dvh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
         >
-          <div class="shrink-0 border-b border-slate-200/80 bg-white px-4 py-4 sm:px-8 sm:py-6">
-            <div class="flex items-start justify-between gap-3 sm:gap-4">
-              <div class="flex min-w-0 items-start gap-3 sm:gap-4">
-                <div
-                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-semibold text-white shadow-md shadow-indigo-500/25 sm:h-14 sm:w-14 sm:text-lg"
-                  aria-hidden="true"
-                >
-                  {{ contactDetailInitials }}
-                </div>
-                <div class="min-w-0">
-                  <h2 id="contact-detail-title" class="text-lg font-semibold tracking-tight text-slate-900 sm:text-2xl">
-                    {{ viewContactDetail?.name || 'Contact details' }}
-                  </h2>
-                  <p v-if="viewContactDetail?.email" class="mt-1 truncate text-sm text-slate-600">
-                    {{ viewContactDetail.email }}
-                  </p>
-                  <div v-if="viewContactDetail && !viewContactLoading" class="mt-3 flex flex-wrap items-center gap-2">
-                    <span
-                      class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset"
-                      :class="viewContactDetail.is_unsubscribe
-                        ? 'bg-amber-50 text-amber-800 ring-amber-200/80'
-                        : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'"
-                    >
-                      {{ viewContactDetail.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
-                    </span>
-                    <span
-                      v-for="(label, idx) in viewContactDetail.contactTypeLabels"
-                      :key="`${viewContactDetail.id}-type-${idx}`"
-                      class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset"
-                      :class="typeKeyBadgeClass(viewContactDetail.contactType?.[idx] ?? '')"
-                    >
-                      {{ label }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:h-auto sm:w-auto sm:px-3.5 sm:py-2 sm:text-sm sm:font-semibold"
-                aria-label="Close contact details"
-                @click="closeContactDetail"
-              >
-                <svg class="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span class="hidden sm:inline">Close</span>
-              </button>
-            </div>
+          <div
+            class="flex shrink-0 justify-center pt-2.5 sm:hidden"
+            aria-hidden="true"
+          >
+            <span class="h-1 w-10 rounded-full bg-slate-200" />
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
-            <div v-if="viewContactLoading" class="flex items-center justify-center py-16">
-              <p class="text-sm font-medium text-slate-500">
-                Loading contact…
-              </p>
+          <div v-if="viewContactLoading" class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+              <svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
             </div>
-            <p v-else-if="viewContactError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-              {{ viewContactError }}
+            <p class="text-sm font-medium text-slate-500">
+              Loading contact…
             </p>
-            <template v-else-if="viewContactDetail">
-              <div class="grid gap-5 lg:grid-cols-2">
-                <section
-                  v-for="section in contactDetailSections"
-                  :key="section.title"
-                  class="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] sm:p-5"
-                  :class="section.fullWidth ? 'lg:col-span-2' : ''"
-                >
-                  <div class="mb-4 border-b border-slate-100 pb-3">
-                    <h3 class="text-sm font-semibold text-slate-900">
-                      {{ section.title }}
-                    </h3>
-                    <p v-if="section.description" class="mt-0.5 text-xs text-slate-500">
-                      {{ section.description }}
-                    </p>
-                  </div>
+          </div>
+
+          <template v-else-if="viewContactError">
+            <div class="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+              </div>
+              <p class="max-w-sm text-sm text-red-700" role="alert">
+                {{ viewContactError }}
+              </p>
+              <button
+                type="button"
+                class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                @click="closeContactDetail"
+              >
+                Close
+              </button>
+            </div>
+          </template>
+
+          <template v-else-if="viewContactDetail">
+            <div class="shrink-0 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 px-4 py-5 sm:px-6">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-start gap-4">
                   <div
-                    v-if="section.title === 'Account owner'"
-                    class="mb-5 flex items-center gap-4 border-b border-slate-100 pb-4"
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-semibold text-white shadow-md shadow-indigo-500/20"
+                    aria-hidden="true"
                   >
-                    <div class="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-slate-100 ring-2 ring-slate-200/80 shadow-sm">
+                    {{ contactDetailInitials }}
+                  </div>
+                  <div class="min-w-0 pt-0.5">
+                    <h2 id="contact-detail-title" class="truncate text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                      {{ viewContactDetail.name || 'Contact details' }}
+                    </h2>
+                    <p v-if="viewContactDetail.company" class="mt-1 truncate text-sm text-slate-500">
+                      {{ viewContactDetail.company }}
+                    </p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset"
+                        :class="viewContactDetail.is_unsubscribe
+                          ? 'bg-amber-50 text-amber-800 ring-amber-200/80'
+                          : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'"
+                      >
+                        {{ viewContactDetail.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
+                      </span>
+                      <span
+                        v-for="(label, idx) in viewContactDetail.contactTypeLabels"
+                        :key="`${viewContactDetail.id}-type-${idx}`"
+                        class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset"
+                        :class="typeKeyBadgeClass(viewContactDetail.contactType?.[idx] ?? '')"
+                      >
+                        {{ label }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-600 backdrop-blur-sm transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  aria-label="Close contact details"
+                  @click="closeContactDetail"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-2 sm:grid-cols-2">
+                <a
+                  v-if="viewContactDetail.email"
+                  :href="`mailto:${viewContactDetail.email}`"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-indigo-200 hover:bg-white"
+                >
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Email</span>
+                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-indigo-700">{{ viewContactDetail.email }}</span>
+                  </span>
+                </a>
+                <a
+                  v-if="viewContactDetail.phone"
+                  :href="`tel:${viewContactDetail.phone}`"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-indigo-200 hover:bg-white"
+                >
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Phone</span>
+                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-indigo-700">{{ formatUsPhoneNumber(viewContactDetail.phone) }}</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+              <div class="space-y-4">
+                <section class="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 sm:p-5">
+                  <h3 class="text-sm font-semibold text-slate-900">
+                    CRM details
+                  </h3>
+                  <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div v-if="hasDetailValue(viewContactDetail.status)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Status</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ viewContactDetail.status }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewContactDetail.stage)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Stage</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ viewContactDetail.stage }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewContactDetail.channel)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Channel</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ viewContactDetail.channel }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewContactDetail.firstName) || hasDetailValue(viewContactDetail.lastName)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Full name</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">
+                        {{ [viewContactDetail.firstName, viewContactDetail.lastName].filter(Boolean).join(' ') || '—' }}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
+                  <h3 class="text-sm font-semibold text-slate-900">
+                    Address
+                  </h3>
+                  <p v-if="contactDetailAddressFormatted" class="mt-3 text-sm leading-relaxed text-slate-700">
+                    {{ contactDetailAddressFormatted }}
+                  </p>
+                  <p v-else class="mt-3 text-sm text-slate-400">
+                    No address on file
+                  </p>
+                </section>
+
+                <section
+                  v-if="contactDetailHasOwner"
+                  class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5"
+                >
+                  <h3 class="text-sm font-semibold text-slate-900">
+                    Account owner
+                  </h3>
+                  <p class="mt-0.5 text-xs text-slate-500">
+                    Used for email merge tokens and reply-to
+                  </p>
+                  <div class="mt-4 flex items-center gap-4">
+                    <div class="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200/80">
                       <img
                         v-if="ownerAvatarUrl && !ownerAvatarLoadFailed"
                         :src="ownerAvatarUrl"
@@ -472,60 +584,75 @@
                       >
                       <div
                         v-else
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-semibold text-white"
+                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white"
                         aria-hidden="true"
                       >
                         {{ ownerDetailInitials }}
                       </div>
                     </div>
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-1">
                       <p class="truncate font-semibold text-slate-900">
                         {{ ownerDisplayName }}
                       </p>
-                      <p v-if="ownerEmailDisplay" class="truncate text-sm text-slate-500">
+                      <p v-if="ownerEmailDisplay" class="mt-0.5 truncate text-sm text-slate-500">
                         {{ ownerEmailDisplay }}
+                      </p>
+                      <p v-if="ownerPhoneDisplay" class="mt-0.5 text-sm text-slate-600">
+                        {{ ownerPhoneDisplay }}
                       </p>
                     </div>
                   </div>
-                  <dl
-                    class="grid gap-x-6 gap-y-4"
-                    :class="section.columns === 1 ? 'grid-cols-1' : 'sm:grid-cols-2'"
-                  >
-                    <div
-                      v-for="field in section.fields"
-                      :key="`${section.title}-${field.label}`"
-                      :class="field.span === 2 ? 'sm:col-span-2' : ''"
-                    >
-                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-500">
-                        {{ field.label }}
-                      </dt>
-                      <dd
-                        class="mt-1 break-words text-[0.9375rem] leading-snug text-slate-900"
-                        :class="field.mono ? 'font-mono text-[0.8125rem] text-slate-800' : ''"
-                      >
-                        {{ field.value }}
-                      </dd>
-                    </div>
-                  </dl>
                 </section>
-              </div>
 
-              <section
-                v-if="viewContactDetail.contactProfile"
-                class="mt-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02]"
-              >
-                <div class="mb-4 border-b border-slate-100 pb-3">
+                <section
+                  v-if="viewContactDetail.contactProfile"
+                  class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5"
+                >
                   <h3 class="text-sm font-semibold text-slate-900">
                     Contact profile
                   </h3>
                   <p class="mt-0.5 text-xs text-slate-500">
                     Structured segment type and subtypes
                   </p>
-                </div>
-                <pre class="overflow-x-auto rounded-xl bg-slate-950 px-4 py-3 text-[0.8125rem] leading-relaxed text-slate-100">{{ formatJson(viewContactDetail.contactProfile) }}</pre>
-              </section>
-            </template>
-          </div>
+                  <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 px-4 py-3 text-[0.8125rem] leading-relaxed text-slate-100">{{ formatJson(viewContactDetail.contactProfile) }}</pre>
+                </section>
+
+                <section class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/40 px-4 py-3 sm:px-5">
+                  <dl class="grid gap-3 sm:grid-cols-3">
+                    <div v-if="viewContactDetail.createdAt">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Created</dt>
+                      <dd class="mt-1 text-xs font-medium text-slate-600">{{ formatDate(viewContactDetail.createdAt) }}</dd>
+                    </div>
+                    <div v-if="viewContactDetail.updatedAt">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Updated</dt>
+                      <dd class="mt-1 text-xs font-medium text-slate-600">{{ formatDate(viewContactDetail.updatedAt) }}</dd>
+                    </div>
+                    <div v-if="viewContactDetail.source">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Source</dt>
+                      <dd class="mt-1 text-xs font-medium text-slate-600">{{ viewContactDetail.source }}</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </div>
+
+            <div class="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 sm:order-2 sm:w-auto"
+                @click="editFromContactDetail"
+              >
+                Edit contact
+              </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 sm:order-1 sm:w-auto"
+                @click="closeContactDetail"
+              >
+                Close
+              </button>
+            </div>
+          </template>
         </div>
       </div>
     </Teleport>
@@ -536,12 +663,12 @@
         class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4 lg:p-6"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="add-contact-title"
+        aria-labelledby="contact-form-title"
       >
         <div
           class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
           aria-hidden="true"
-          @click="closeAddContactModal"
+          @click="closeContactFormModal"
         />
         <div
           class="relative flex max-h-[min(92dvh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
@@ -555,19 +682,21 @@
           </div>
           <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-5">
             <div class="min-w-0">
-              <h2 id="add-contact-title" class="text-base font-semibold text-slate-900 sm:text-lg">
-                Add contact
+              <h2 id="contact-form-title" class="text-base font-semibold text-slate-900 sm:text-lg">
+                {{ contactFormMode === 'edit' ? 'Edit contact' : 'Add contact' }}
               </h2>
               <p class="mt-1 text-xs text-slate-500 sm:text-sm">
-                Create a contact manually in your tenant database.
+                {{ contactFormMode === 'edit'
+                  ? 'Update contact details in your tenant database.'
+                  : 'Create a contact manually in your tenant database.' }}
               </p>
             </div>
             <button
               type="button"
               class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:h-auto sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:shadow-none"
-              aria-label="Close add contact form"
-              :disabled="addContactSubmitting"
-              @click="closeAddContactModal"
+              :aria-label="contactFormMode === 'edit' ? 'Close edit contact form' : 'Close add contact form'"
+              :disabled="addContactSubmitting || contactFormLoading"
+              @click="closeContactFormModal"
             >
               <svg class="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -575,7 +704,16 @@
               <span class="hidden text-sm font-semibold text-slate-600 sm:inline">Close</span>
             </button>
           </div>
-          <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submitAddContact">
+          <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submitContactForm">
+            <div
+              v-if="contactFormLoading"
+              class="flex min-h-0 flex-1 items-center justify-center px-4 py-12 sm:px-6"
+            >
+              <p class="text-sm font-medium text-slate-500">
+                Loading contact…
+              </p>
+            </div>
+            <template v-else>
             <div class="tenant-add-contact-form min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-4 sm:px-6 sm:py-5">
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div>
@@ -636,34 +774,27 @@
               >
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
-              <div :class="contactTypeFilterOptions.length ? '' : 'min-[480px]:col-span-2'">
+              <div :class="addContactTypeOptions.length ? '' : 'min-[480px]:col-span-2'">
                 <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
-                <select
+                <input
                   id="add-contact-channel"
                   v-model="addContactForm.channel"
-                  :class="`${ADD_CONTACT_INPUT_CLASS} cursor-pointer appearance-none`"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="e.g. email"
+                  :class="ADD_CONTACT_INPUT_CLASS"
                 >
-                  <option
-                    v-for="opt in CONTACT_CHANNEL_OPTIONS"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
               </div>
-              <div v-if="contactTypeFilterOptions.length">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-type">Contact type</label>
+              <div v-if="addContactTypeOptions.length">
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-type">Contact type <span class="text-red-600">*</span></label>
                 <select
                   id="add-contact-type"
                   v-model="addContactForm.contactType"
+                  required
                   :class="`${ADD_CONTACT_INPUT_CLASS} cursor-pointer appearance-none`"
                 >
-                  <option value="">
-                    Default type
-                  </option>
                   <option
-                    v-for="opt in contactTypeFilterOptions"
+                    v-for="opt in addContactTypeOptions"
                     :key="opt.key"
                     :value="opt.key"
                   >
@@ -699,13 +830,16 @@
                 Address
               </legend>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
-                <div class="tenant-place-autocomplete-field sm:col-span-4">
+                <div class="sm:col-span-4">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
-                  <div
+                  <input
                     id="add-contact-street"
-                    ref="addContactStreetHostRef"
-                    class="tenant-place-autocomplete-host w-full"
-                  />
+                    v-model="addContactForm.addressStreet"
+                    type="text"
+                    autocomplete="street-address"
+                    placeholder="123 Main Street"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
                 </div>
                 <div class="sm:col-span-2">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-unit">Unit</label>
@@ -769,19 +903,24 @@
               <button
                 type="submit"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:order-2 sm:w-auto"
-                :disabled="addContactSubmitting"
+                :disabled="addContactSubmitting || contactFormLoading"
               >
-                {{ addContactSubmitting ? 'Saving…' : 'Add contact' }}
+                {{ addContactSubmitting
+                  ? 'Saving…'
+                  : contactFormMode === 'edit'
+                    ? 'Save changes'
+                    : 'Add contact' }}
               </button>
               <button
                 type="button"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 sm:order-1 sm:w-auto"
-                :disabled="addContactSubmitting"
-                @click="closeAddContactModal"
+                :disabled="addContactSubmitting || contactFormLoading"
+                @click="closeContactFormModal"
               >
                 Cancel
               </button>
             </div>
+            </template>
           </form>
         </div>
       </div>
@@ -791,7 +930,7 @@
 
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
-import { joinContactStreetParts, normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { joinContactStreetParts, normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
@@ -809,8 +948,12 @@ function typeKeyBadgeClass(kind: string): string {
 const PAGE_SIZE = 25
 
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 
 const addContactOpen = ref(false)
+const contactFormMode = ref<'add' | 'edit'>('add')
+const editingContactId = ref('')
+const contactFormLoading = ref(false)
 let contactModalEscListener: ((e: KeyboardEvent) => void) | null = null
 const addContactSubmitting = ref(false)
 const addContactError = ref('')
@@ -821,7 +964,7 @@ const addContactForm = ref({
   phone: '',
   company: '',
   contactType: '',
-  channel: 'email',
+  channel: '',
   status: '',
   stage: '',
   addressStreet: '',
@@ -831,37 +974,36 @@ const addContactForm = ref({
   addressCounty: ''
 })
 
-const addContactStreetHostRef = ref<HTMLElement | null>(null)
-const { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener } = useGoogleAddressAutocomplete(
-  addContactForm as Ref<Record<string, unknown>>,
-  {
-    street: 'addressStreet',
-    city: 'addressCity',
-    state: 'addressState',
-    county: 'addressCounty',
-    unit: 'addressUnit'
-  }
-)
 
 const ADD_CONTACT_INPUT_CLASS =
   'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20'
 
-const CONTACT_CHANNEL_OPTIONS = [
-  { value: 'email', label: 'Email' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'linkedin', label: 'LinkedIn' }
-] as const
+function extractContactFormErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    if ('data' in error) {
+      const data = (error as { data?: { message?: string; statusMessage?: string } }).data
+      const message = data?.message ?? data?.statusMessage
+      if (message) return String(message)
+    }
+    if ('statusMessage' in error) {
+      return String((error as { statusMessage?: string }).statusMessage)
+    }
+    if ('message' in error) {
+      return String((error as { message?: string }).message)
+    }
+  }
+  return fallback
+}
 
-function openAddContactModal() {
-  addContactError.value = ''
-  addContactForm.value = {
+function emptyContactForm() {
+  return {
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
     company: '',
     contactType: '',
-    channel: 'email',
+    channel: '',
     status: '',
     stage: '',
     addressStreet: '',
@@ -870,95 +1012,172 @@ function openAddContactModal() {
     addressState: '',
     addressCounty: ''
   }
+}
+
+function populateContactFormFromDetail(contact: TenantContactDetail) {
+  addContactForm.value = {
+    firstName: contact.firstName ?? '',
+    lastName: contact.lastName ?? '',
+    email: contact.email ?? '',
+    phone: contact.phone ?? '',
+    company: contact.company ?? '',
+    contactType: contact.contactType?.[0] ?? defaultAddContactType(),
+    channel: contact.channel ?? '',
+    status: contact.status ?? '',
+    stage: contact.stage ?? '',
+    addressStreet: contact.address?.street ?? '',
+    addressUnit: '',
+    addressCity: contact.address?.city ?? '',
+    addressState: contact.address?.state ?? '',
+    addressCounty: contact.address?.county ?? ''
+  }
+}
+
+function buildContactFormBody(email: string) {
+  const body: {
+    firstName?: string
+    lastName?: string
+    email: string
+    phone?: string
+    company?: string
+    contactType?: string
+    channel?: string
+    status?: string
+    stage?: string
+    address?: {
+      street?: string
+      city?: string
+      state?: string
+      county?: string
+    }
+  } = {
+    firstName: addContactForm.value.firstName.trim(),
+    lastName: addContactForm.value.lastName.trim(),
+    email
+  }
+  const phone = addContactForm.value.phone.trim()
+  const company = addContactForm.value.company.trim()
+  const contactType = addContactForm.value.contactType.trim()
+  const channel = addContactForm.value.channel.trim()
+  const status = addContactForm.value.status.trim()
+  const stage = addContactForm.value.stage.trim()
+  if (phone) body.phone = phone
+  if (company) body.company = company
+  if (contactType) body.contactType = contactType
+  if (channel) body.channel = channel
+  if (status) body.status = status
+  if (stage) body.stage = stage
+  body.address = {
+    street: joinContactStreetParts(
+      addContactForm.value.addressStreet,
+      addContactForm.value.addressUnit
+    ),
+    city: addContactForm.value.addressCity.trim(),
+    state: addContactForm.value.addressState.trim(),
+    county: normalizeContactCounty(addContactForm.value.addressCounty)
+  }
+  return body
+}
+
+function showContactFormError(message: string) {
+  addContactError.value = message
+  if (message.toLowerCase().includes('email already exists')) {
+    toast.error('A contact with this email already exists.')
+  } else if (message.toLowerCase().includes('phone number already exists')) {
+    toast.error('A contact with this phone number already exists.')
+  } else {
+    toast.error(message)
+  }
+}
+
+function openAddContactModal() {
+  contactFormMode.value = 'add'
+  editingContactId.value = ''
+  contactFormLoading.value = false
+  addContactError.value = ''
+  addContactForm.value = {
+    ...emptyContactForm(),
+    contactType: defaultAddContactType()
+  }
   addContactOpen.value = true
 }
 
-function closeAddContactModal() {
-  if (addContactSubmitting.value) return
-  clearGoogleAutocompleteListener()
+async function openEditContactModal(contactId: string) {
+  contactFormMode.value = 'edit'
+  editingContactId.value = contactId
+  contactFormLoading.value = true
+  addContactError.value = ''
+  addContactForm.value = emptyContactForm()
+  addContactOpen.value = true
+  try {
+    const res = await $fetch<{ contact: TenantContactDetail }>(
+      `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}`,
+      {
+        credentials: 'include',
+        ...serverAuthHeaders()
+      }
+    )
+    populateContactFormFromDetail({
+      ...res.contact,
+      contactType: Array.isArray(res.contact.contactType) ? res.contact.contactType : [],
+      contactTypeLabels: Array.isArray(res.contact.contactTypeLabels)
+        ? res.contact.contactTypeLabels
+        : [],
+      primaryTypeLabel: res.contact.primaryTypeLabel ?? '—',
+      is_unsubscribe: res.contact.is_unsubscribe === true,
+      metadata:
+        res.contact.metadata && typeof res.contact.metadata === 'object'
+          ? res.contact.metadata
+          : {}
+    })
+  } catch (e: unknown) {
+    const message = extractContactFormErrorMessage(e, 'Failed to load contact')
+    addContactError.value = message
+    toast.error(message)
+    addContactOpen.value = false
+  } finally {
+    contactFormLoading.value = false
+  }
+}
+
+function closeContactFormModal() {
+  if (addContactSubmitting.value || contactFormLoading.value) return
   addContactOpen.value = false
+  editingContactId.value = ''
+  contactFormMode.value = 'add'
   addContactError.value = ''
 }
 
-watch(
-  [addContactOpen, addContactStreetHostRef],
-  async ([open, host]) => {
-    if (!open) {
-      clearGoogleAutocompleteListener()
-      return
-    }
-    if (!host) return
-    await nextTick()
-    await initGoogleAddressAutocomplete(addContactStreetHostRef, true, {
-      placeholder: '123 Main Street',
-      regionCodes: ['us']
-    })
-  },
-  { flush: 'post' }
-)
-
-async function submitAddContact() {
+async function submitContactForm() {
   const email = addContactForm.value.email.trim()
   if (!email) {
     addContactError.value = 'Email is required.'
+    toast.error('Email is required.')
+    return
+  }
+  if (addContactTypeOptions.value.length && !addContactForm.value.contactType.trim()) {
+    addContactError.value = 'Contact type is required.'
+    toast.error('Please select a contact type.')
     return
   }
   addContactSubmitting.value = true
   addContactError.value = ''
   try {
-    const body: {
-      firstName?: string
-      lastName?: string
-      email: string
-      phone?: string
-      company?: string
-      contactType?: string
-      channel?: string
-      status?: string
-      stage?: string
-      address?: {
-        street?: string
-        city?: string
-        state?: string
-        county?: string
-      }
-    } = {
-      firstName: addContactForm.value.firstName.trim(),
-      lastName: addContactForm.value.lastName.trim(),
-      email
+    const body = buildContactFormBody(email)
+    if (contactFormMode.value === 'edit') {
+      await marketingApi.updateContact(editingContactId.value, body)
+      toast.success('Contact updated successfully.')
+    } else {
+      await marketingApi.createContact(body)
+      toast.success('Contact added successfully.')
     }
-    const phone = addContactForm.value.phone.trim()
-    const company = addContactForm.value.company.trim()
-    const contactType = addContactForm.value.contactType.trim()
-    const channel = addContactForm.value.channel.trim()
-    const status = addContactForm.value.status.trim()
-    const stage = addContactForm.value.stage.trim()
-    if (phone) body.phone = phone
-    if (company) body.company = company
-    if (contactType) body.contactType = contactType
-    if (channel) body.channel = channel
-    if (status) body.status = status
-    if (stage) body.stage = stage
-    const address = {
-      street: joinContactStreetParts(
-        addContactForm.value.addressStreet,
-        addContactForm.value.addressUnit
-      ),
-      city: addContactForm.value.addressCity.trim(),
-      state: addContactForm.value.addressState.trim(),
-      county: normalizeContactCounty(addContactForm.value.addressCounty)
-    }
-    if (address.street || address.city || address.state || address.county) {
-      body.address = address
-    }
-    await marketingApi.createContact(body)
     addContactOpen.value = false
+    editingContactId.value = ''
+    contactFormMode.value = 'add'
     await load()
   } catch (e: unknown) {
-    addContactError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to add contact')
-        : 'Failed to add contact'
+    const fallback = contactFormMode.value === 'edit' ? 'Failed to update contact' : 'Failed to add contact'
+    showContactFormError(extractContactFormErrorMessage(e, fallback))
   } finally {
     addContactSubmitting.value = false
   }
@@ -991,6 +1210,17 @@ const viewContactLoading = ref(false)
 const viewContactError = ref('')
 const viewContactDetail = ref<TenantContactDetail | null>(null)
 const ownerAvatarLoadFailed = ref(false)
+
+const addContactTypeOptions = computed(() => {
+  const api = data.value?.contactTypes ?? []
+  return [...api]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+    .map((t) => ({ key: t.key, label: t.label }))
+})
+
+function defaultAddContactType(): string {
+  return addContactTypeOptions.value[0]?.key ?? ''
+}
 
 const KIND_FILTER_NONE = '__none__'
 
@@ -1154,19 +1384,10 @@ function formatDetailValue(value: unknown): string {
   return formatJson(value)
 }
 
-type ContactDetailField = {
-  label: string
-  value: string
-  mono?: boolean
-  span?: number
-}
-
-type ContactDetailSection = {
-  title: string
-  description?: string
-  fields: ContactDetailField[]
-  columns?: 1 | 2
-  fullWidth?: boolean
+function hasDetailValue(value: unknown): boolean {
+  if (value == null) return false
+  const formatted = typeof value === 'string' ? value.trim() : formatDetailValue(value)
+  return formatted !== '' && formatted !== '—'
 }
 
 const contactDetailInitials = computed(() => {
@@ -1212,77 +1433,43 @@ const ownerDetailInitials = computed(() => {
   return ownerEmailDisplay.value?.charAt(0)?.toUpperCase() || '?'
 })
 
-const contactDetailSections = computed((): ContactDetailSection[] => {
-  const c = viewContactDetail.value
-  if (!c) return []
-
-  const typeLabel = c.contactTypeLabels?.length
-    ? c.contactTypeLabels.join(', ')
-    : formatDetailValue(c.primaryTypeLabel)
-
-  const meta = c.metadata && typeof c.metadata === 'object' ? c.metadata : {}
-  const ownerFields: ContactDetailField[] = [
-    { label: 'Owner email', value: formatDetailValue(meta.ownerEmail) },
-    { label: 'Owner first name', value: formatDetailValue(meta.ownerFirstName) },
-    { label: 'Owner last name', value: formatDetailValue(meta.ownerLastName) },
-    { label: 'Owner phone', value: meta.ownerPhone ? formatUsPhoneNumber(String(meta.ownerPhone)) : '—' }
-  ].filter((f) => f.value !== '—')
-
-  const hasOwnerAvatar =
-    typeof meta.ownerAvatarUrl === 'string' && meta.ownerAvatarUrl.trim().length > 0
-
-  const sections: ContactDetailSection[] = [
-    {
-      title: 'Contact',
-      description: 'Primary person and company details',
-      fields: [
-        { label: 'First name', value: formatDetailValue(c.firstName) },
-        { label: 'Last name', value: formatDetailValue(c.lastName) },
-        { label: 'Email', value: formatDetailValue(c.email) },
-        { label: 'Phone', value: c.phone ? formatUsPhoneNumber(c.phone) : '—' },
-        { label: 'Company', value: formatDetailValue(c.company), span: 2 },
-        { label: 'Channel', value: formatDetailValue(c.channel) },
-        { label: 'Subscription', value: c.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }
-      ]
-    },
-    {
-      title: 'CRM status',
-      description: 'Pipeline and segmentation from sync',
-      fields: [
-        { label: 'Status', value: formatDetailValue(c.status) },
-        { label: 'Stage', value: formatDetailValue(c.stage) },
-        { label: 'Contact types', value: typeLabel, span: 2 }
-      ]
-    },
-    {
-      title: 'Address',
-      fields: [
-        { label: 'Street', value: formatDetailValue(c.address?.street), span: 2 },
-        { label: 'City', value: formatDetailValue(c.address?.city) },
-        { label: 'State', value: formatDetailValue(c.address?.state) },
-        { label: 'County', value: formatDetailValue(normalizeContactCounty(c.address?.county)), span: 2 }
-      ]
-    },
-    {
-      title: 'Timestamps',
-      fields: [
-        { label: 'Created', value: c.createdAt ? formatDate(c.createdAt) : '—' },
-        { label: 'Updated', value: c.updatedAt ? formatDate(c.updatedAt) : '—' },
-        { label: 'Deleted', value: c.deletedAt ? formatDate(c.deletedAt) : '—' }
-      ]
-    }
-  ]
-
-  if (ownerFields.length || hasOwnerAvatar) {
-    sections.splice(2, 0, {
-      title: 'Account owner',
-      description: 'Owner details used for email merge tokens and reply-to',
-      fields: ownerFields
-    })
-  }
-
-  return sections
+const ownerPhoneDisplay = computed(() => {
+  const phone = ownerMetadata(viewContactDetail.value).ownerPhone
+  if (typeof phone !== 'string' && typeof phone !== 'number') return ''
+  const formatted = formatUsPhoneNumber(String(phone))
+  return formatted || String(phone).trim()
 })
+
+const contactDetailAddressFormatted = computed(() => {
+  const c = viewContactDetail.value
+  if (!c?.address) return ''
+  return formatContactAddress({
+    street: c.address.street,
+    city: c.address.city,
+    state: c.address.state,
+    county: normalizeContactCounty(c.address.county)
+  })
+})
+
+const contactDetailHasOwner = computed(() => {
+  const meta = ownerMetadata(viewContactDetail.value)
+  const hasAvatar =
+    typeof meta.ownerAvatarUrl === 'string' && meta.ownerAvatarUrl.trim().length > 0
+  return Boolean(
+    hasAvatar ||
+      ownerEmailDisplay.value ||
+      ownerPhoneDisplay.value ||
+      hasDetailValue(meta.ownerFirstName) ||
+      hasDetailValue(meta.ownerLastName)
+  )
+})
+
+function editFromContactDetail() {
+  const id = viewContactDetail.value?.id
+  if (!id) return
+  closeContactDetail()
+  void openEditContactModal(id)
+}
 
 async function openContactDetail(contactId: string) {
   viewContactOpen.value = true
@@ -1341,8 +1528,8 @@ watch([addContactOpen, viewContactOpen], ([addOpen, viewOpen]) => {
   if (addOpen || viewOpen) {
     contactModalEscListener = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (addContactOpen.value && !addContactSubmitting.value) {
-        closeAddContactModal()
+      if (addContactOpen.value && !addContactSubmitting.value && !contactFormLoading.value) {
+        closeContactFormModal()
       } else if (viewContactOpen.value) {
         closeContactDetail()
       }
@@ -1433,7 +1620,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  clearGoogleAutocompleteListener()
   if (contactModalEscListener) {
     window.removeEventListener('keydown', contactModalEscListener)
     contactModalEscListener = null
