@@ -28,8 +28,8 @@ import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
-  buildCampaignCreatorReplyTo,
-  buildReplyToFromContactOwner
+  buildReplyToFromContactOwner,
+  buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
 import { sendCampaignBatchWithMessageVersions } from './brevo.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
@@ -713,17 +713,16 @@ export async function processBatch(
       }
     }
 
-    const snap = campaign.mergeUserSnapshot
+    const operatorUser = campaign.mergeUserSnapshot
     const userForTag =
-      snap?.email?.trim() ||
-      [snap?.firstName, snap?.lastName].filter(Boolean).join(' ').trim() ||
+      operatorUser?.email?.trim() ||
+      [operatorUser?.firstName, operatorUser?.lastName].filter(Boolean).join(' ').trim() ||
       undefined
-
-    const creatorReplyTo = buildCampaignCreatorReplyTo(campaign)
 
     type Prepared = {
       row: CampaignRecipientLean
       version: CampaignBatchMessageVersion
+      sender: { name: string; email: string }
       failed?: string
     }
 
@@ -731,7 +730,12 @@ export async function processBatch(
       const emailKey = normalizeMarketingEmail(r.email)
       const contact = emailKey ? contactByEmail.get(emailKey) : undefined
       if (contact?.isUnsubscribe === true) {
-        return { row: r, version: { to: [{ email: r.email }], subject: '', htmlContent: '' }, failed: 'Contact unsubscribed' }
+        return {
+          row: r,
+          sender: buildSenderFromContactOwner(contact, campaign.sender, operatorUser),
+          version: { to: [{ email: r.email }], subject: '', htmlContent: '' },
+          failed: 'Contact unsubscribed'
+        }
       }
       const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
       applyDefaultUnsubscribeMergeValue(mergeRoot, {
@@ -756,9 +760,11 @@ export async function processBatch(
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)
-      const replyTo = buildReplyToFromContactOwner(contact, creatorReplyTo)
+      const replyTo = buildReplyToFromContactOwner(contact, operatorUser)
+      const sender = buildSenderFromContactOwner(contact, campaign.sender, operatorUser)
       return {
         row: r,
+        sender,
         version: {
           to: [{ email: r.email, ...(name ? { name } : {}) }],
           subject: subjectRendered,
@@ -772,23 +778,59 @@ export async function processBatch(
     processedInBatch = pending.length
 
     const toSend = prepared.filter((p) => !p.failed)
-    const idempotencyKey = campaignBatchBrevoIdempotencyKey({
-      campaignId,
-      sendRunId: options.sendRunId,
-      page: options.page,
-      recipientRowIds: toSend.map((p) => String(p.row._id))
-    })
 
-    const batchResult = await sendCampaignBatchWithMessageVersions({
-      sender: campaign.sender,
-      messageVersions: toSend.map((p) => p.version),
-      tags: [`campaign:${campaignId}`],
-      idempotencyKey,
-      ...(tenantDbNameForTags && brevoTenantTagValue
-        ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
-        : {}),
-      ...(userForTag ? { user: userForTag } : {})
-    })
+    function senderGroupKey(sender: { name: string; email: string }): string {
+      return `${sender.email.trim().toLowerCase()}|${sender.name.trim()}`
+    }
+
+    function batchGroupKey(p: Prepared): string {
+      const rt = p.version.replyTo
+      if (rt?.email?.includes('@')) {
+        return `reply|${rt.email.trim().toLowerCase()}|${rt.name.trim()}`
+      }
+      return `sender|${senderGroupKey(p.sender)}`
+    }
+
+    const senderGroups = new Map<string, Prepared[]>()
+    for (const p of toSend) {
+      const key = batchGroupKey(p)
+      const group = senderGroups.get(key)
+      if (group) group.push(p)
+      else senderGroups.set(key, [p])
+    }
+
+    const messageIdsByRowId = new Map<string, string | null>()
+    let batchError: string | undefined
+
+    for (const [, group] of senderGroups) {
+      const idempotencyKey = campaignBatchBrevoIdempotencyKey({
+        campaignId,
+        sendRunId: options.sendRunId,
+        page: options.page,
+        recipientRowIds: group.map((p) => String(p.row._id))
+      })
+
+      const batchResult = await sendCampaignBatchWithMessageVersions({
+        sender: group[0]!.sender,
+        messageVersions: group.map((p) => p.version),
+        tags: [`campaign:${campaignId}`],
+        idempotencyKey,
+        ...(tenantDbNameForTags && brevoTenantTagValue
+          ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
+          : {}),
+        ...(userForTag ? { user: userForTag } : {})
+      })
+
+      if (batchResult.error && !batchError) batchError = batchResult.error
+
+      for (let i = 0; i < group.length; i++) {
+        const p = group[i]
+        if (!p) continue
+        messageIdsByRowId.set(String(p.row._id), batchResult.messageIds[i] ?? null)
+      }
+    }
+
+    const batchResult = { error: batchError }
 
     const ops: Parameters<CampaignRecipientModel['bulkWrite']>[0] = []
 
@@ -813,10 +855,8 @@ export async function processBatch(
         })
       }
     } else {
-      for (let i = 0; i < toSend.length; i++) {
-        const p = toSend[i]
-        if (!p) continue
-        const raw = batchResult.messageIds[i]
+      for (const p of toSend) {
+        const raw = messageIdsByRowId.get(String(p.row._id))
         const trimmed = raw && String(raw).trim() ? String(raw).trim() : ''
         if (trimmed) {
           ops.push({

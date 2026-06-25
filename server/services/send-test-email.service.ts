@@ -19,11 +19,12 @@ import {
   fetchEnabledEmailDynamicVariableBindings
 } from '../utils/emailMerge/composeMergeRoot'
 import {
-  tenantUserFieldsFromAuth
+  tenantUserFieldsFromAuth,
+  mergeUserSnapshotsForEmail
 } from '../utils/emailMerge/tenantUserFromAuth'
 import {
-  buildCampaignReplyTo,
-  replyToNameFromUserSnapshot
+  buildReplyToFromContactOwner,
+  buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
 import { getUnsubscribePageUrl } from '@server/utils/unsubscribePageUrl'
 import { sendEmail } from './brevo.service'
@@ -93,14 +94,6 @@ function crmAppUrlFromAuth(auth: unknown): string | undefined {
   return typeof raw === 'string' && raw.trim() ? raw.trim().replace(/\/+$/, '') : undefined
 }
 
-function replyToFromSessionUser(auth: unknown): { email: string; name: string } | undefined {
-  const snap = tenantUserFieldsFromAuth(auth)
-  const email = snap?.email?.trim().toLowerCase()
-  if (!email?.includes('@')) return undefined
-  const name = replyToNameFromUserSnapshot(snap) || email
-  return { email, name }
-}
-
 export async function sendCampaignTestEmail(
   conn: Connection,
   auth: unknown,
@@ -149,18 +142,19 @@ export async function sendCampaignTestEmail(
 
     templateHtml = await resolveCampaignTemplateHtml(EmailTemplate as EmailTemplateModel, campaign)
     subject = String(campaign.subject ?? '').trim()
-    sender = {
-      name: String(campaign.sender?.name ?? '').trim(),
-      email: String(campaign.sender?.email ?? '').trim()
-    }
     if (!templateHtml) {
       throw createError({ statusCode: 400, message: 'Campaign has no email design' })
     }
-    if (!sender.email) {
+    if (!String(campaign.sender?.email ?? '').trim()) {
       throw createError({ statusCode: 400, message: 'Campaign has no sender email' })
     }
 
     const contact = await previewContactForSavedCampaign(conn, campaignId)
+    const operatorFallback = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
+    sender = buildSenderFromContactOwner(contact ?? null, {
+      name: String(campaign.sender?.name ?? '').trim(),
+      email: String(campaign.sender?.email ?? '').trim()
+    }, operatorFallback)
     mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
@@ -169,15 +163,12 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    replyTo = buildCampaignReplyTo({ campaign, sessionUser: authSnap })
+    replyTo = buildReplyToFromContactOwner(contact, operatorFallback)
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
     subject = String(input.subject ?? '').trim()
-    sender = {
-      name: String(input.senderName ?? '').trim(),
-      email: String(input.senderEmail ?? '').trim()
-    }
+    const senderEmail = String(input.senderEmail ?? '').trim()
     const recipientsType = input.recipientsType
     if (!templateHtml) {
       throw createError({ statusCode: 400, message: 'templateHtml is required for draft test sends' })
@@ -185,7 +176,7 @@ export async function sendCampaignTestEmail(
     if (!subject) {
       throw createError({ statusCode: 400, message: 'subject is required for draft test sends' })
     }
-    if (!sender.email) {
+    if (!senderEmail) {
       throw createError({ statusCode: 400, message: 'senderEmail is required for draft test sends' })
     }
     if (recipientsType !== 'list' && recipientsType !== 'manual') {
@@ -212,7 +203,11 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    replyTo = replyToFromSessionUser(auth)
+    sender = buildSenderFromContactOwner(contact ?? null, {
+      name: String(input.senderName ?? '').trim(),
+      email: senderEmail
+    }, authSnap)
+    replyTo = buildReplyToFromContactOwner(contact, authSnap)
   }
 
   const cur = mergeRoot.recipient

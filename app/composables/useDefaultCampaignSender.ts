@@ -2,6 +2,7 @@ import {
   DEFAULT_CAMPAIGN_SENDER_EMAIL,
   DEFAULT_CAMPAIGN_SENDER_NAME
 } from '~~/shared/defaultCampaignSender'
+import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
 
 export type TenantMeCampaignSender = {
   defaultCampaignSenderName?: string
@@ -25,6 +26,8 @@ export function useDefaultCampaignSender() {
   const defaultSenderEmail = ref(DEFAULT_CAMPAIGN_SENDER_EMAIL)
   const loaded = ref(false)
 
+  const senderDisplayName = computed(() => CONTACT_OWNER_SENDER_LABEL)
+
   async function loadDefaultCampaignSender() {
     try {
       const res = await marketingApi.fetchTenantMe()
@@ -42,5 +45,5 @@ export function useDefaultCampaignSender() {
     }
   }
 
-  return { defaultSenderName, defaultSenderEmail, loaded, loadDefaultCampaignSender }
+  return { defaultSenderName, defaultSenderEmail, senderDisplayName, loaded, loadDefaultCampaignSender }
 }

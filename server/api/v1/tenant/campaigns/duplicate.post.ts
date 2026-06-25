@@ -11,8 +11,12 @@ import type {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
-import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
-import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
+import {
+  isRegisteredTenantAuthContext,
+  tenantOwnershipFieldsFromAuth
+} from '@server/tenant/registry-auth'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 export default defineEventHandler(async (event) => {
@@ -52,12 +56,23 @@ export default defineEventHandler(async (event) => {
   const mergeSnap =
     tenantUserFieldsFromAuth(event.context.auth) ?? source.mergeUserSnapshot
 
+  const auth = event.context.auth
+  const registryConn = await getRegistryConnection()
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
+      ? auth.dbName
+      : ''
+  const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
+  const senderName = senderDefaults.name
+
   const ownership = tenantOwnershipFieldsFromAuth(event.context.auth)
-  const replyTo = campaignReplyToFromAuth(event.context.auth)
 
   const newCampaign = await new Campaign({
     name: `${source.name} (copy)`,
-    sender: source.sender,
+    sender: {
+      name: senderName,
+      email: source.sender?.email?.trim() || senderDefaults.email
+    },
     recipientsType: source.recipientsType,
     recipientsListId: source.recipientsListId || '',
     emailTemplate: emailTemplateId,
@@ -65,7 +80,6 @@ export default defineEventHandler(async (event) => {
     status: 'Draft',
     clientId: '',
     ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {}),
-    ...(replyTo ? { replyTo } : {}),
     ...ownership
   }).save()
 
