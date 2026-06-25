@@ -47,6 +47,7 @@ const props = withDefaults(
     hideCampaignColumn?: boolean
   }>(),
   {
+    campaignId: undefined,
     panelHint: '',
     cardClass:
       'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]',

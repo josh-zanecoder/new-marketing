@@ -131,9 +131,9 @@ export async function sendCampaignTestEmail(
   const authSnap = tenantUserFieldsFromAuth(auth)
 
   const campaignId = String(input.campaignId ?? '').trim()
-  let subject = ''
-  let templateHtml = ''
-  let sender = { name: '', email: '' }
+  let subject: string
+  let templateHtml: string
+  let sender: { name: string; email: string }
   let mergeRoot: Record<string, unknown>
   let replyTo: { email: string; name: string } | undefined
   let campaignTag: string | undefined

@@ -40,8 +40,6 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailTemplate, ManualRecipient, Contact } = getTenantClientModels(conn)
 
-  let emailTemplateId: string | undefined
-
   const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
     campaignName: body.name.trim(),
     subject: body.subject,
@@ -50,7 +48,7 @@ export default defineEventHandler(async (event) => {
     templateHtmlSource: body.templateHtmlSource,
     saveHtmlToLibrary: body.saveHtmlToLibrary
   })
-  emailTemplateId = templateResult.emailTemplateId
+  const emailTemplateId = templateResult.emailTemplateId
 
   const recipientsType = body.recipientsType || 'manual'
   const recipientsListId = body.recipientsListId || ''

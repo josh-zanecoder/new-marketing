@@ -20,7 +20,6 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
-import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 
 type MergeRootBody =
   | { campaignId: string }

@@ -661,7 +661,7 @@ export async function processBatch(
     pending.map((r) => String(r._id))
   )
 
-  let processedInBatch = 0
+  let processedInBatch: number
 
   logSend('batchStart', {
     campaignId,
