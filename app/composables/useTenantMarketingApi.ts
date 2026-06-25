@@ -29,6 +29,7 @@ export interface TenantCampaignDetail {
     error?: string
   }>
   emailTemplate?: { name: string; html: string }
+  emailTemplateId?: string
   templateHtml?: string | null
   /** `upload` = raw HTML file; `editor` = GrapesJS */
   templateHtmlSource?: 'editor' | 'upload'
@@ -224,6 +225,44 @@ export function useTenantMarketingApi() {
     )
   }
 
+  async function fetchEmailTemplateById(templateId: string) {
+    return $fetch<{ template: TenantEmailTemplateRow & { htmlSource?: 'editor' | 'upload' } }>(
+      `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
+      tenantFetchInit()
+    )
+  }
+
+  async function createEmailTemplate(body: {
+    name: string
+    subject: string
+    htmlTemplate: string
+    description?: string
+    htmlSource?: 'editor' | 'upload'
+    saveToLibrary?: boolean
+  }) {
+    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+      '/api/v1/tenant/email-templates',
+      tenantFetchInit({ method: 'POST', body, timeout: 30000 })
+    )
+  }
+
+  async function updateEmailTemplate(
+    templateId: string,
+    body: {
+      name?: string
+      subject?: string
+      htmlTemplate?: string
+      description?: string
+      htmlSource?: 'editor' | 'upload'
+      saveToLibrary?: boolean
+    }
+  ) {
+    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+      `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
+      tenantFetchInit({ method: 'PUT', body, timeout: 30000 })
+    )
+  }
+
   async function fetchTenantMe() {
     return $fetch<unknown>('/api/v1/tenant/me', tenantFetchInit())
   }
@@ -319,6 +358,9 @@ export function useTenantMarketingApi() {
     createContact,
     updateContact,
     fetchEmailTemplates,
+    fetchEmailTemplateById,
+    createEmailTemplate,
+    updateEmailTemplate,
     fetchTenantMe,
     fetchDashboard,
     fetchSendCampaignStatus,

@@ -63,6 +63,8 @@ function logEditorCrash(stage: string, details?: unknown) {
     stage,
     route: typeof route.fullPath === 'string' ? route.fullPath : '',
     campaignId: campaignId.value || null,
+    templateId: standaloneTemplateId.value || null,
+    standalone: isStandalone.value,
     builderId: builderId.value || null,
     tenantId: resolvedTenantId.value || null,
     details
@@ -91,8 +93,14 @@ function queryParamString(q: unknown): string {
 const htmlFromUrl = computed(() => queryParamString(route.query.html))
 const builderId = computed(() => queryParamString(route.query.builderId))
 const campaignId = computed(() => queryParamString(route.query.campaignId))
+const standaloneTemplateId = computed(() => queryParamString(route.query.templateId))
+const isStandalone = computed(() => queryParamString(route.query.standalone) === '1')
 const tenantIdFromQuery = computed(() => queryParamString(route.query.tenantId))
 const resolvedTenantId = ref('')
+const standaloneName = ref('')
+const standaloneSubject = ref('')
+const standaloneSaving = ref(false)
+const standaloneSaveError = ref('')
 
 function pickTenantId(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return ''
@@ -110,6 +118,68 @@ function pickTenantId(payload: unknown): string {
     if (typeof nested === 'string' && nested.trim()) return nested.trim()
   }
   return ''
+}
+
+async function loadStandaloneTemplateHtml(): Promise<string | null> {
+  const tid = standaloneTemplateId.value
+  if (!tid || !/^[a-f0-9]{24}$/i.test(tid)) return null
+  try {
+    const res = await marketingApi.fetchEmailTemplateById(tid)
+    standaloneName.value = res.template.name?.trim() ?? ''
+    standaloneSubject.value = res.template.subject?.trim() ?? ''
+    return res.template.htmlTemplate?.trim() || null
+  } catch {
+    return null
+  }
+}
+
+function initStandaloneMetaFromQuery() {
+  if (!isStandalone.value) return
+  const nameFromQuery = queryParamString(route.query.name)
+  const subjectFromQuery = queryParamString(route.query.subject)
+  if (nameFromQuery && !standaloneName.value) standaloneName.value = nameFromQuery
+  if (subjectFromQuery && !standaloneSubject.value) standaloneSubject.value = subjectFromQuery
+}
+
+async function saveStandaloneAndExit() {
+  if (!editorRef.value || standaloneSaving.value) return
+  standaloneSaveError.value = ''
+  initStandaloneMetaFromQuery()
+
+  const name = standaloneName.value.trim()
+  const subject = standaloneSubject.value.trim()
+  if (!name || !subject) {
+    standaloneSaveError.value = 'Template name and subject are required.'
+    return
+  }
+
+  standaloneSaving.value = true
+  try {
+    const fullHtml = getEditorExportHtml(editorRef.value)
+    const tid = standaloneTemplateId.value
+    if (tid && /^[a-f0-9]{24}$/i.test(tid)) {
+      await marketingApi.updateEmailTemplate(tid, {
+        name,
+        subject,
+        htmlTemplate: fullHtml,
+        htmlSource: 'editor',
+        saveToLibrary: true
+      })
+    } else {
+      await marketingApi.createEmailTemplate({
+        name,
+        subject,
+        htmlTemplate: fullHtml,
+        htmlSource: 'editor',
+        saveToLibrary: true
+      })
+    }
+    await navigateTo('/tenant/email-templates')
+  } catch {
+    standaloneSaveError.value = 'Failed to save template. Please try again.'
+  } finally {
+    standaloneSaving.value = false
+  }
 }
 
 async function resolveTenantId() {
@@ -376,8 +446,12 @@ watch(tenantIdFromQuery, () => {
   resolveTenantId().then(loadDynamicVariables)
 })
 
-watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
+let htmlResolveToken = 0
+
+watch([isMounted, htmlFromUrl, builderId, campaignId, standaloneTemplateId, isStandalone], async () => {
   if (!isMounted.value) return
+  const token = ++htmlResolveToken
+  initStandaloneMetaFromQuery()
 
   let resolved: string | null = null
 
@@ -408,6 +482,12 @@ watch([isMounted, htmlFromUrl, builderId, campaignId], () => {
     } catch {
       /* sessionStorage blocked or unavailable */
     }
+  }
+
+  if (!resolved && isStandalone.value && standaloneTemplateId.value) {
+    const fetched = await loadStandaloneTemplateHtml()
+    if (token !== htmlResolveToken) return
+    resolved = fetched
   }
 
   initialHtml.value = resolved
@@ -479,6 +559,10 @@ watch([isMounted, htmlReady], async () => {
 
     editor.Commands.add('save-and-exit', {
       run: () => {
+        if (isStandalone.value) {
+          void saveStandaloneAndExit()
+          return
+        }
         try {
           const fullHtml = getEditorExportHtml(editor)
           let targetId = campaignId.value
@@ -610,6 +694,10 @@ onBeforeUnmount(() => {
 })
 
 function handleSaveAndExit() {
+  if (isStandalone.value) {
+    void saveStandaloneAndExit()
+    return
+  }
   if (!editorRef.value) return
   try {
     const fullHtml = getEditorExportHtml(editorRef.value)
@@ -646,23 +734,42 @@ function handleSaveAndExit() {
     </div>
     <div v-else class="flex h-screen flex-col">
       <div
-        class="flex shrink-0 items-center justify-end gap-2 border-b border-slate-200 bg-slate-800 px-4 py-2.5"
+        class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-slate-800 px-4 py-2.5"
       >
-        <button
-          v-if="campaignId && /^[a-f0-9]{24}$/i.test(campaignId)"
-          type="button"
-          class="rounded-lg border border-slate-500 bg-transparent px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          @click="openMergePreview"
-        >
-          Preview with merge data
-        </button>
-        <button
-          type="button"
-          class="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100"
-          @click="handleSaveAndExit"
-        >
-          Save and exit
-        </button>
+        <div class="min-w-0">
+          <NuxtLink
+            v-if="isStandalone"
+            to="/tenant/email-templates"
+            class="text-sm font-medium text-slate-300 hover:text-white"
+          >
+            ← Templates
+          </NuxtLink>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <p
+            v-if="standaloneSaveError"
+            class="max-w-xs truncate text-sm text-red-300"
+            role="alert"
+          >
+            {{ standaloneSaveError }}
+          </p>
+          <button
+            v-if="campaignId && /^[a-f0-9]{24}$/i.test(campaignId)"
+            type="button"
+            class="rounded-lg border border-slate-500 bg-transparent px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            @click="openMergePreview"
+          >
+            Preview with merge data
+          </button>
+          <button
+            type="button"
+            class="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="standaloneSaving"
+            @click="handleSaveAndExit"
+          >
+            {{ isStandalone ? (standaloneSaving ? 'Saving…' : 'Save template') : 'Save and exit' }}
+          </button>
+        </div>
       </div>
       <Teleport to="body">
         <div
