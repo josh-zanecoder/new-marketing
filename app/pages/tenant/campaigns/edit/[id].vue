@@ -75,7 +75,7 @@
         </div>
 
         <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
-        <!-- Sender (read-only; values from account defaults or existing campaign) -->
+        <!-- Sender (read-only; From name is each contact's CRM account owner at send time) -->
         <div class="border-b border-slate-100 last:border-b-0">
           <div class="flex w-full items-center gap-4 px-5 py-4 sm:px-6 sm:py-5">
             <div

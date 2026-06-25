@@ -13,7 +13,6 @@ import {
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
-import { campaignReplyToFromAuth } from '@server/utils/email/replyToFromContactMetadata'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 
 export default defineEventHandler(async (event) => {
@@ -100,9 +99,6 @@ export default defineEventHandler(async (event) => {
   }
   if (emailTemplateId) campaignData.emailTemplate = emailTemplateId
   if (mergeSnap) campaignData.mergeUserSnapshot = mergeSnap
-
-  const replyTo = campaignReplyToFromAuth(event.context.auth)
-  if (replyTo) campaignData.replyTo = replyTo
 
   Object.assign(campaignData, tenantOwnershipFieldsFromAuth(event.context.auth))
 

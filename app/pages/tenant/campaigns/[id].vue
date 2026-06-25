@@ -4,6 +4,7 @@ import type { Campaign } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
@@ -670,7 +671,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Sender</dt>
                     <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
-                      {{ campaign.sender?.name }} &lt;{{ campaign.sender?.email }}&gt;
+                      {{ CONTACT_OWNER_SENDER_LABEL }} &lt;{{ campaign.sender?.email }}&gt;
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">

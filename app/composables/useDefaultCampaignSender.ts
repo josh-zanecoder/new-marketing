@@ -2,7 +2,7 @@ import {
   DEFAULT_CAMPAIGN_SENDER_EMAIL,
   DEFAULT_CAMPAIGN_SENDER_NAME
 } from '~~/shared/defaultCampaignSender'
-import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
+import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
 
 export type TenantMeCampaignSender = {
   defaultCampaignSenderName?: string
@@ -27,18 +27,7 @@ export function useDefaultCampaignSender() {
   const defaultSenderEmail = ref(DEFAULT_CAMPAIGN_SENDER_EMAIL)
   const loaded = ref(false)
 
-  const senderDisplayName = computed(() => {
-    const u = authUser.value
-    if (u?.authType === 'apiKey') {
-      const fromUser = formatPersonDisplayName({
-        firstName: u.firstName,
-        lastName: u.lastName,
-        name: u.name
-      })
-      if (fromUser) return fromUser
-    }
-    return defaultSenderName.value
-  })
+  const senderDisplayName = computed(() => CONTACT_OWNER_SENDER_LABEL)
 
   async function loadDefaultCampaignSender() {
     try {

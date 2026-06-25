@@ -11,7 +11,6 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
-import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import {
   isRegisteredTenantAuthContext,
   tenantCreatedByFromAuth
@@ -90,8 +89,6 @@ export default defineEventHandler(async (event) => {
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
   campaign.subject = body.subject?.trim() || ''
-  const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
-  if (mergeSnap) campaign.set('mergeUserSnapshot', mergeSnap)
   const editorId = tenantCreatedByFromAuth(event.context.auth)
   if (editorId) campaign.set('updatedBy', editorId)
   await campaign.save()

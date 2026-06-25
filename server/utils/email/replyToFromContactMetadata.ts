@@ -12,6 +12,7 @@ import {
 import type { UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
 
 const BREVO_REPLY_TO_NAME_MAX = 70
+const BREVO_SENDER_NAME_MAX = 70
 
 function normalizeReplyTo(replyTo: CampaignReplyTo): CampaignReplyTo {
   return {
@@ -57,20 +58,44 @@ export function buildCampaignCreatorReplyTo(
 }
 
 /**
+ * Per-recipient From display name: contact CRM account owner (`metadata.owner*`),
+ * then the operator who created/triggered the send, then campaign stored sender name.
+ */
+export function buildSenderFromContactOwner(
+  contact: ContactLean | null | undefined,
+  campaignSender: { name?: string; email?: string },
+  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null
+): { name: string; email: string } {
+  const email = String(campaignSender.email ?? '').trim().toLowerCase()
+  const owner = userMergeSnapshotFromContactOwner(contact)
+  const ownerName = replyToNameFromUserSnapshot(owner)
+  const operatorName = replyToNameFromUserSnapshot(operatorFallback)
+  const storedName = String(campaignSender.name ?? '').trim() || email
+  const name = (ownerName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
+  return { name, email }
+}
+
+/**
  * Per-recipient Reply-To: contact CRM account owner (`metadata.owner*`),
- * then campaign creator.
+ * then the operator who created/triggered the send.
  */
 export function buildReplyToFromContactOwner(
   contact: ContactLean | null | undefined,
-  creatorFallback: CampaignReplyTo | undefined
+  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null
 ): CampaignReplyTo | undefined {
   const owner = userMergeSnapshotFromContactOwner(contact)
+  const operator = mergeUserSnapshotsForEmail(operatorFallback)
   const ownerEmail = owner?.email?.trim().toLowerCase()
   if (ownerEmail?.includes('@')) {
     const name = replyToNameFromUserSnapshot(owner) || ownerEmail
     return normalizeReplyTo({ email: ownerEmail, name })
   }
-  return creatorFallback
+  const operatorEmail = operator?.email?.trim().toLowerCase()
+  if (operatorEmail?.includes('@')) {
+    const name = replyToNameFromUserSnapshot(operator) || operatorEmail
+    return normalizeReplyTo({ email: operatorEmail, name })
+  }
+  return undefined
 }
 
 /**

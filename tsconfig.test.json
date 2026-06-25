@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@server/*": ["./server/*"],
+      "~~/*": ["./*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["server/**/*.test.ts", "vitest.config.ts"]
+}
