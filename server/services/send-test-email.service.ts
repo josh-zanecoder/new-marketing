@@ -22,6 +22,7 @@ import {
   tenantUserFieldsFromAuth,
   mergeUserSnapshotsForEmail
 } from '../utils/emailMerge/tenantUserFromAuth'
+import { userMergeSnapshotFromDynamicVariableFallbacks } from '../utils/emailMerge/userFieldFallbacksFromDynamicBindings'
 import {
   buildReplyToFromContactOwner,
   buildSenderFromContactOwner
@@ -122,6 +123,7 @@ export async function sendCampaignTestEmail(
     return pageUrl ? `${pageUrl}?token=preview` : undefined
   })()
   const authSnap = tenantUserFieldsFromAuth(auth)
+  const variableFallback = userMergeSnapshotFromDynamicVariableFallbacks(dynamicVariableBindings)
 
   const campaignId = String(input.campaignId ?? '').trim()
   let subject: string
@@ -154,7 +156,7 @@ export async function sendCampaignTestEmail(
     sender = buildSenderFromContactOwner(contact ?? null, {
       name: String(campaign.sender?.name ?? '').trim(),
       email: String(campaign.sender?.email ?? '').trim()
-    }, operatorFallback)
+    }, operatorFallback, variableFallback)
     mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
@@ -163,7 +165,7 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    replyTo = buildReplyToFromContactOwner(contact, operatorFallback)
+    replyTo = buildReplyToFromContactOwner(contact, operatorFallback, variableFallback)
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
@@ -206,8 +208,8 @@ export async function sendCampaignTestEmail(
     sender = buildSenderFromContactOwner(contact ?? null, {
       name: String(input.senderName ?? '').trim(),
       email: senderEmail
-    }, authSnap)
-    replyTo = buildReplyToFromContactOwner(contact, authSnap)
+    }, authSnap, variableFallback)
+    replyTo = buildReplyToFromContactOwner(contact, authSnap, variableFallback)
   }
 
   const cur = mergeRoot.recipient
