@@ -257,7 +257,7 @@ async function saveTemplate() {
     <header>
       <NuxtLink
         to="/tenant/email-templates"
-        class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+        class="text-sm font-medium text-primary-600 hover:text-primary-700"
       >
         ← Back to templates
       </NuxtLink>
@@ -270,7 +270,7 @@ async function saveTemplate() {
     </header>
 
     <div v-if="loading" class="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">
-      <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+      <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-primary-600" />
     </div>
 
     <form
@@ -290,7 +290,7 @@ async function saveTemplate() {
         </div>
 
         <div v-if="dynamicVariablesPending" class="flex items-center justify-center px-4 py-10">
-          <div class="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+          <div class="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-primary-600" />
         </div>
 
         <div v-else-if="dynamicVariablesError" class="px-4 py-6 text-sm text-red-600">
@@ -310,13 +310,13 @@ async function saveTemplate() {
               <li v-for="v in groupedDynamicVariables.recipient" :key="v.id ?? v.key">
                 <button
                   type="button"
-                  class="group flex w-full flex-col rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-indigo-100 hover:bg-indigo-50/60"
+                  class="group flex w-full flex-col rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary-100 hover:bg-primary-50/60"
                   @click="insertVariable(v)"
                 >
-                  <span class="text-sm font-medium text-slate-800 group-hover:text-indigo-900">
+                  <span class="text-sm font-medium text-slate-800 group-hover:text-primary-900">
                     {{ v.label || v.key }}
                   </span>
-                  <span class="mt-0.5 font-mono text-[11px] text-indigo-700/90">{{ tokenFor(v) }}</span>
+                  <span class="mt-0.5 font-mono text-[11px] text-primary-700/90">{{ tokenFor(v) }}</span>
                   <span class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                     {{ scopeLabel(v) }}
                   </span>
@@ -333,13 +333,13 @@ async function saveTemplate() {
               <li v-for="v in groupedDynamicVariables.user" :key="v.id ?? v.key">
                 <button
                   type="button"
-                  class="group flex w-full flex-col rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-indigo-100 hover:bg-indigo-50/60"
+                  class="group flex w-full flex-col rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-primary-100 hover:bg-primary-50/60"
                   @click="insertVariable(v)"
                 >
-                  <span class="text-sm font-medium text-slate-800 group-hover:text-indigo-900">
+                  <span class="text-sm font-medium text-slate-800 group-hover:text-primary-900">
                     {{ v.label || v.key }}
                   </span>
-                  <span class="mt-0.5 font-mono text-[11px] text-indigo-700/90">{{ tokenFor(v) }}</span>
+                  <span class="mt-0.5 font-mono text-[11px] text-primary-700/90">{{ tokenFor(v) }}</span>
                   <span class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                     {{ scopeLabel(v) }}
                   </span>
@@ -360,7 +360,7 @@ async function saveTemplate() {
             type="text"
             required
             placeholder="e.g. Monthly newsletter"
-            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
           >
         </div>
         <div>
@@ -372,7 +372,7 @@ async function saveTemplate() {
             type="text"
             required
             placeholder="e.g. Your monthly update"
-            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
             @focus="lastFocusedField = 'subject'"
           >
         </div>
@@ -381,7 +381,7 @@ async function saveTemplate() {
       <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div
           class="border-b border-slate-100 px-4 py-4 sm:px-6"
-          :class="uploadDragOver ? 'bg-indigo-50/50' : 'bg-slate-50/80'"
+          :class="uploadDragOver ? 'bg-primary-50/50' : 'bg-slate-50/80'"
           @dragover="onDragOver"
           @dragleave="onDragLeave"
           @drop="onDrop"
@@ -402,7 +402,7 @@ async function saveTemplate() {
               >
               <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
                 :disabled="uploadPending"
                 @click="onBrowseClick"
               >
@@ -437,7 +437,7 @@ async function saveTemplate() {
             <textarea
               ref="htmlTextareaRef"
               v-model="htmlContent"
-              class="min-h-[240px] flex-1 resize-none border-0 bg-slate-950 px-4 py-4 font-mono text-[13px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40"
+              class="min-h-[240px] flex-1 resize-none border-0 bg-slate-950 px-4 py-4 font-mono text-[13px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500/40"
               placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"
               spellcheck="false"
               :disabled="uploadPending"
@@ -474,7 +474,7 @@ async function saveTemplate() {
         </NuxtLink>
         <button
           type="submit"
-          class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex items-center justify-center rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/20 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="saving || uploadPending || !htmlContent.trim()"
         >
           {{ saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Save template') }}

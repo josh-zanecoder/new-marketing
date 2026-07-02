@@ -1,7 +1,7 @@
 /** Deterministic Tailwind badge classes for arbitrary contact-type keys (no hardcoded triad). */
 const PALETTE = [
   'bg-emerald-50 text-emerald-800 ring-emerald-200/80',
-  'bg-indigo-50 text-indigo-800 ring-indigo-200/80',
+  'bg-primary-50 text-primary-800 ring-primary-200/80',
   'bg-violet-50 text-violet-800 ring-violet-200/80',
   'bg-amber-50 text-amber-900 ring-amber-200/70',
   'bg-sky-50 text-sky-900 ring-sky-200/80',

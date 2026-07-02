@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
         <slot name="actions" />
         <button
           type="button"
-          class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
+          class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto"
           @click="openPreviewModal"
         >
           <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
 
     <button
       type="button"
-      class="group relative block w-full overflow-hidden bg-[#f8f4ef] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+      class="group relative block w-full overflow-hidden bg-[#f8f4ef] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
       :aria-label="'Open full email preview. Subject: ' + subjectDisplay"
       @click="openPreviewModal"
     >
@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         />
         <span
-          class="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 transition-colors group-hover:text-indigo-600 sm:bottom-4 sm:text-sm"
+          class="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 transition-colors group-hover:text-primary-600 sm:bottom-4 sm:text-sm"
         >
           <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

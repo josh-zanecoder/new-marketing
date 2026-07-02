@@ -86,7 +86,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div class="min-w-0 flex-1">
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 sm:text-xs">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-primary-600 sm:text-xs">
               Preview
             </p>
             <h2 id="email-template-preview-title" class="mt-0.5 truncate text-base font-semibold text-slate-900 sm:text-lg">
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
           <NuxtLink
             v-if="campaignHref"
             :to="campaignHref"
-            class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:order-2 sm:w-auto"
+            class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:order-2 sm:w-auto"
             @click="emit('close')"
           >
             <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />

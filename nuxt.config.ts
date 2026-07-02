@@ -13,6 +13,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/eslint'],
+  tailwindcss: {
+    cssPath: '~/assets/css/main.css',
+    configPath: 'tailwind.config.ts',
+  },
   runtimeConfig: {
     /** Registry cluster URI; `server/lib/mongoose.ts` reads via `useRuntimeConfig()` first. */
     mongodbUri: process.env.MONGODB_URI || '',

@@ -43,6 +43,23 @@ export type RecipientFilterContactProfilePropertyTypeValue =
 
 export type RecipientFilterRelationshipPartnerPropertyTypeValue =
   (typeof recipientFilterRelationshipPartnerPropertyTypeOptions)[number]['value']
+
+/** Shared table classes for filter tabs (used in admin tenant detail slots). */
+export const recipientFiltersTableWrapClass =
+  'rf-table-card overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]'
+
+export const recipientFiltersTableClass = 'rf-table rf-table--wide w-full border-collapse text-left text-sm text-slate-900'
+
+export const recipientFiltersTableClassCompact = 'rf-table rf-table--compact w-full border-collapse text-left text-sm text-slate-900'
+
+export const recipientFiltersTableClassTenants =
+  'rf-table rf-table--tenants w-full border-collapse text-left text-sm text-slate-900'
+
+export const recipientFiltersThActionsClass = 'rf-table__th rf-table__th--actions'
+
+export const recipientFiltersTdActionsClass = 'rf-table__td rf-table__td--actions'
+
+export { TENANT_TAB_CELL_CHAR_LIMIT, truncateTabCellText } from '~/utils/truncateTabCellText'
 </script>
 
 <template>
@@ -138,7 +155,7 @@ const activeTab = ref<'contactTypes' | 'recipientFilters'>('recipientFilters')
 .rf-content {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 0;
 }
 
 .rf-subtabs {
@@ -166,9 +183,9 @@ const activeTab = ref<'contactTypes' | 'recipientFilters'>('recipientFilters')
 }
 
 .rf-subtabs__btn--active {
-  border-color: #c7d2fe;
-  border-bottom-color: #4f46e5;
-  color: #4338ca;
-  background: #eef2ff;
+  border-color: #bfdbfe;
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 </style>

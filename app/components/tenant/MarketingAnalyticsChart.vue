@@ -56,7 +56,7 @@ const hasChartData = computed(() =>
         class="flex h-56 items-center justify-center sm:h-96"
       >
         <div class="flex flex-col items-center gap-3">
-          <div class="h-9 w-9 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-600" />
+          <div class="h-9 w-9 animate-spin rounded-full border-2 border-zinc-200 border-t-primary-600" />
           <p class="text-sm text-zinc-500">
             Loading chart…
           </p>
@@ -75,7 +75,7 @@ const hasChartData = computed(() =>
           v-else
           class="flex flex-col items-center px-4 py-12 text-center sm:px-6 sm:py-20"
         >
-          <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
+          <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-500">
             <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3v18h18M7 16l4-4 4 4 6-8" />
             </svg>
