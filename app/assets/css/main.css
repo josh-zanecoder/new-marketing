@@ -1,0 +1,123 @@
+@import './tokens.css';
+@import './filter-tables.css';
+
+@tailwind base;
+@tailwind components;
+
+@layer components {
+  .container {
+    @apply max-w-screen-xl mx-auto px-4;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-md text-sm font-medium cursor-pointer transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 text-gray-900 border border-gray-300 hover:bg-gray-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-500 text-white hover:bg-red-600;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .card {
+    @apply bg-white rounded-card p-6 shadow-card border border-slate-200;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-input text-sm transition-colors duration-200 focus:outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-600/10;
+  }
+
+  .label {
+    @apply block mb-2 text-sm font-medium text-gray-900;
+  }
+
+  /* ── CRM-aligned marketing surfaces ── */
+  .main-canvas {
+    background-color: var(--page-bg-alt);
+  }
+
+  .surface-card {
+    @apply rounded-card border border-slate-200 bg-white shadow-card;
+  }
+
+  .stat-tile {
+    @apply rounded-card border border-slate-200 bg-white p-5 shadow-card transition-shadow duration-200 hover:shadow-md;
+  }
+
+  .page-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-primary-600;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl;
+  }
+
+  .page-lead {
+    @apply text-sm text-slate-500;
+  }
+
+  .btn-cta {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-cta transition-all duration-200 hover:bg-primary-700 hover:shadow-cta-hover hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-outline {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .modal-footer {
+    @apply mt-2 flex shrink-0 flex-wrap justify-end gap-3 border-t border-slate-100 pt-4;
+  }
+
+  .btn-modal-cancel {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50;
+  }
+
+  .btn-modal-submit {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:opacity-50;
+  }
+
+  .nav-item {
+    @apply flex min-h-[2.75rem] items-center gap-3 rounded-nav-item px-3 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600;
+  }
+
+  .nav-item-active {
+    @apply !bg-primary-600 !text-white shadow-md shadow-primary-600/20 hover:!bg-primary-700 hover:!text-white [&_span]:!text-white [&_svg]:!text-white;
+  }
+
+  .nav-item-icon {
+    @apply h-5 w-5 shrink-0 text-slate-400 transition-colors;
+  }
+
+  .nav-item:hover .nav-item-icon {
+    @apply text-slate-600;
+  }
+
+  .nav-item.router-link-active .nav-item-icon {
+    @apply !text-white;
+  }
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply m-0 p-0 text-gray-900 leading-relaxed antialiased;
+    font-family: var(--font-family-sans);
+    background-color: var(--color-background, #f1f5f9);
+    color: var(--color-text, #111827);
+  }
+}
+
+@tailwind utilities;

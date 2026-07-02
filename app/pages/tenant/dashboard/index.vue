@@ -38,7 +38,7 @@ const statCards = computed((): StatCard[] => {
       id: 'total-campaigns',
       label: 'Total campaigns',
       value: loading ? '…' : formatInt(s?.totalCampaigns ?? 0),
-      cardClass: 'border-slate-200/80 bg-white',
+      cardClass: 'border-slate-200 bg-white',
       iconBgClass: 'bg-slate-100',
       iconClass: 'text-slate-600'
     },
@@ -46,17 +46,17 @@ const statCards = computed((): StatCard[] => {
       id: 'sent-month',
       label: 'Emails sent this month',
       value: loading ? '…' : formatInt(s?.sentThisMonth ?? 0),
-      cardClass: 'border-indigo-100/90 bg-gradient-to-br from-indigo-50/80 to-white',
-      iconBgClass: 'bg-indigo-100',
-      iconClass: 'text-indigo-600'
+      cardClass: 'border-slate-200 bg-white',
+      iconBgClass: 'bg-primary-50',
+      iconClass: 'text-primary-600'
     },
     {
       id: 'scheduled',
       label: 'Scheduled',
       value: loading ? '…' : formatInt(s?.scheduledCampaigns ?? 0),
       hint: 'Campaigns waiting to send',
-      cardClass: 'border-sky-100/80 bg-gradient-to-br from-sky-50/60 to-white',
-      iconBgClass: 'bg-sky-100',
+      cardClass: 'border-slate-200 bg-white',
+      iconBgClass: 'bg-sky-50',
       iconClass: 'text-sky-600'
     },
     {
@@ -64,7 +64,7 @@ const statCards = computed((): StatCard[] => {
       label: 'Delivery rate',
       value: loading ? '…' : formatPercent(s?.deliveryRatePercent ?? null),
       hint: deliveryHint,
-      cardClass: 'border-emerald-100/80 bg-gradient-to-br from-emerald-50/60 to-white',
+      cardClass: 'border-emerald-200 bg-emerald-50/40',
       iconBgClass: 'bg-emerald-100',
       iconClass: 'text-emerald-600'
     }
@@ -118,16 +118,16 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Overview</p>
-        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+        <p class="page-eyebrow">Overview</p>
+        <h1 class="page-title">
           Dashboard
         </h1>
-        <p class="text-sm text-slate-500">Your marketing activity at a glance</p>
+        <p class="page-lead">Your marketing activity at a glance</p>
       </div>
       <div class="flex items-center gap-2 sm:shrink-0">
         <NuxtLink
           to="/tenant/campaigns/add"
-          class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700"
+          class="btn-cta"
         >
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -136,7 +136,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
         </NuxtLink>
         <button
           type="button"
-          class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 disabled:pointer-events-none disabled:opacity-50"
+          class="btn-outline"
           :disabled="pending"
           @click="() => refresh()"
         >
@@ -176,7 +176,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
         <div
           v-for="n in 4"
           :key="n"
-          class="animate-pulse rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5"
+          class="animate-pulse stat-tile"
         >
           <div class="h-10 w-10 rounded-xl bg-slate-100" />
           <div class="mt-4 h-3.5 w-24 rounded bg-slate-100" />
@@ -188,7 +188,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
         <article
           v-for="card in statCards"
           :key="card.id"
-          class="rounded-2xl border p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-5"
+          class="stat-tile"
           :class="card.cardClass"
         >
           <div class="flex items-start justify-between gap-3">
@@ -266,7 +266,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
           <p
             class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-slate-900 sm:mt-2 sm:text-3xl"
             :class="{
-              'text-indigo-600': card.id === 'sent-month',
+              'text-primary-600': card.id === 'sent-month',
               'text-emerald-600': card.id === 'delivery-rate' && card.value !== '—'
             }"
           >
@@ -281,7 +281,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
 
     <section
       aria-label="Audience summary"
-      class="rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04]"
+      class="surface-card overflow-hidden"
     >
       <div v-if="pending" class="px-4 py-4 text-sm text-slate-400 sm:px-6">Loading audience…</div>
       <div
@@ -293,7 +293,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
           class="group flex items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50/90 sm:px-6"
         >
           <div
-            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 transition-colors group-hover:bg-primary-100"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -308,7 +308,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
             <p class="text-lg font-semibold tabular-nums text-slate-900">
               {{ formatInt(stats?.recipientLists ?? 0) }}
             </p>
-            <p class="text-xs font-medium text-indigo-600 group-hover:text-indigo-700">Recipient lists</p>
+            <p class="text-xs font-medium text-primary-600 group-hover:text-primary-700">Recipient lists</p>
           </div>
         </NuxtLink>
 
@@ -332,7 +332,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
             <p class="text-lg font-semibold tabular-nums text-slate-900">
               {{ formatInt(stats?.contacts ?? 0) }}
             </p>
-            <p class="text-xs font-medium text-indigo-600 group-hover:text-indigo-700">Contacts</p>
+            <p class="text-xs font-medium text-primary-600 group-hover:text-primary-700">Contacts</p>
           </div>
         </NuxtLink>
 
@@ -361,7 +361,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
 
     <section
       aria-label="Recent campaigns"
-      class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+      class="surface-card overflow-hidden"
     >
       <div
         class="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5"
@@ -372,7 +372,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
         </div>
         <NuxtLink
           to="/tenant/campaigns"
-          class="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+          class="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary-600 transition-colors hover:text-primary-700"
         >
           View all
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -390,7 +390,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
 
       <div v-else-if="recentCampaigns.length === 0" class="px-4 py-10 text-center sm:px-6 sm:py-14">
         <div
-          class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"
+          class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-50 text-primary-600"
         >
           <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -405,7 +405,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
         <p class="mt-1 text-sm text-slate-500">Create your first campaign to start sending.</p>
         <NuxtLink
           to="/tenant/campaigns/add"
-          class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
+          class="mt-5 btn-cta w-full sm:w-auto"
         >
           Create your first campaign
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

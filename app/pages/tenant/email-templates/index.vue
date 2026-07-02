@@ -146,7 +146,7 @@ onMounted(() => {
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Content</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Content</p>
         <h1 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Email templates
         </h1>
@@ -156,7 +156,7 @@ onMounted(() => {
       </div>
       <NuxtLink
         to="/tenant/email-templates/add"
-        class="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700"
+        class="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700"
       >
         Create template
       </NuxtLink>
@@ -183,7 +183,7 @@ onMounted(() => {
             type="search"
             autocomplete="off"
             placeholder="Search by name or subject…"
-            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
+            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:py-3.5 sm:text-[0.9375rem]"
           >
         </div>
       </div>
@@ -223,7 +223,7 @@ onMounted(() => {
       v-else-if="!templates.length"
       class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm sm:px-6 sm:py-20"
     >
-      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
         <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
@@ -236,7 +236,7 @@ onMounted(() => {
       </p>
       <NuxtLink
         to="/tenant/email-templates/add"
-        class="mt-6 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+        class="mt-6 inline-flex items-center justify-center rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
       >
         Create template
       </NuxtLink>
@@ -303,7 +303,7 @@ onMounted(() => {
             <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
-                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
+                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto"
                 @click="openPreview(template)"
               >
                 <Maximize2 class="h-4 w-4" aria-hidden="true" />
@@ -311,13 +311,13 @@ onMounted(() => {
               </button>
               <NuxtLink
                 :to="editTemplateHref(template.id)"
-                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:w-auto"
+                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto"
               >
                 Edit
               </NuxtLink>
               <NuxtLink
                 :to="makeCampaignHref(template.id)"
-                class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 sm:w-auto"
+                class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 sm:w-auto"
               >
                 <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />
                 Make campaign

@@ -120,7 +120,7 @@ onUnmounted(() => {
             class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition hover:bg-zinc-50"
             :class="
               !selectedCampaignId
-                ? 'bg-indigo-50 font-semibold text-indigo-900'
+                ? 'bg-primary-50 font-semibold text-primary-900'
                 : 'font-medium text-zinc-700'
             "
             role="option"
@@ -130,7 +130,7 @@ onUnmounted(() => {
             All campaigns
             <svg
               v-if="!selectedCampaignId"
-              class="h-4 w-4 shrink-0 text-indigo-700"
+              class="h-4 w-4 shrink-0 text-primary-700"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -151,7 +151,7 @@ onUnmounted(() => {
             class="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-zinc-50"
             :class="
               selectedCampaignId === campaign.id
-                ? 'bg-indigo-50 font-semibold text-indigo-900'
+                ? 'bg-primary-50 font-semibold text-primary-900'
                 : 'font-medium text-zinc-700'
             "
             role="option"
@@ -161,7 +161,7 @@ onUnmounted(() => {
             <span class="min-w-0 truncate">{{ campaign.name }}</span>
             <svg
               v-if="selectedCampaignId === campaign.id"
-              class="h-4 w-4 shrink-0 text-indigo-700"
+              class="h-4 w-4 shrink-0 text-primary-700"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

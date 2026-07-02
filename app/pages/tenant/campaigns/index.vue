@@ -298,17 +298,17 @@ onUnmounted(() => {
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Outreach</p>
-        <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+        <p class="page-eyebrow">Outreach</p>
+        <h1 class="page-title">
           Campaigns
         </h1>
-        <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+        <p class="page-lead max-w-2xl sm:text-[0.9375rem] sm:leading-relaxed">
           Create sends, track draft and delivery status, and manage campaigns from one place.
         </p>
       </div>
       <NuxtLink
         to="/tenant/campaigns/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
+        class="btn-cta group self-start"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -352,7 +352,7 @@ onUnmounted(() => {
       <div
         v-for="n in 5"
         :key="n"
-        class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:px-6 sm:py-5"
+        class="rounded-card border border-slate-200 bg-white px-4 py-4 shadow-card sm:px-6 sm:py-5"
       >
         <div class="flex items-start gap-3 sm:gap-4">
           <div class="min-w-0 flex-1 space-y-3">
@@ -398,7 +398,7 @@ onUnmounted(() => {
           type="search"
           autocomplete="off"
           placeholder="Search campaigns…"
-          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
+          class="input !rounded-input-lg bg-slate-50 py-3 pl-11 pr-4 focus:bg-white sm:py-3.5 sm:text-[0.9375rem]"
         >
       </div>
       <TenantFilterSelect
@@ -415,7 +415,7 @@ onUnmounted(() => {
       class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-14 text-center shadow-sm shadow-slate-900/[0.03] sm:px-6 sm:py-20"
     >
       <div
-        class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
+        class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100"
       >
         <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -430,7 +430,7 @@ onUnmounted(() => {
       <NuxtLink
         v-if="!campaigns.length"
         to="/tenant/campaigns/add"
-        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
+        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:w-auto"
       >
         Create campaign
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -443,11 +443,11 @@ onUnmounted(() => {
       <article
         v-for="c in paginatedCampaigns"
         :key="c.id"
-        class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:px-6 sm:py-5"
+        class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-primary-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:px-6 sm:py-5"
       >
         <NuxtLink
           :to="`/tenant/campaigns/${c.id}`"
-          class="block min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
+          class="block min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:ring-offset-2"
         >
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="min-w-0 truncate text-[15px] font-semibold leading-snug text-slate-900 sm:text-base">
@@ -474,7 +474,7 @@ onUnmounted(() => {
           <NuxtLink
             v-if="c.status === 'Draft'"
             :to="`/tenant/campaigns/edit/${c.id}`"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/25"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/25"
             title="Edit campaign"
             aria-label="Edit campaign"
             @click.stop
@@ -486,7 +486,7 @@ onUnmounted(() => {
           <button
             v-if="canSendDraft(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Send campaign"
             @click.stop="handleSend(c)"
@@ -498,7 +498,7 @@ onUnmounted(() => {
           <button
             v-if="canSendScheduled(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-primary-600 transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!!sendingCampaignId || scheduleBusy"
             title="Send now"
             @click.stop="handleSend(c)"
@@ -534,7 +534,7 @@ onUnmounted(() => {
           <button
             v-if="canDuplicateCampaign(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-indigo-500/25"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/25"
             title="Duplicate campaign"
             @click.stop="openDuplicateModal(c)"
           >
@@ -569,7 +569,7 @@ onUnmounted(() => {
         >
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
@@ -582,7 +582,7 @@ onUnmounted(() => {
           </span>
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
@@ -663,7 +663,7 @@ onUnmounted(() => {
             id="schedule-list-datetime"
             v-model="scheduleLocal"
             type="datetime-local"
-            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
           >
           <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
             {{ scheduleError }}
@@ -679,7 +679,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
+              class="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:opacity-50 sm:w-auto"
               :disabled="scheduleBusy"
               @click="confirmScheduleFromList"
             >

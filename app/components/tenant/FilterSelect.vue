@@ -36,9 +36,9 @@ const selectedLabel = computed(() => {
 
 const triggerClass = computed(() => {
   if (props.variant === 'field') {
-    return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-left text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
+    return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-left text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
   }
-  return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-left text-[0.9375rem] font-medium text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
+  return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-left text-[0.9375rem] font-medium text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
 })
 
 function updatePanelPosition() {
@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
           :key="`${option.value}-${option.label}`"
           type="button"
           class="flex w-full min-w-0 items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-          :class="model === option.value ? 'bg-indigo-50/80 font-semibold text-indigo-900' : 'font-medium text-slate-800'"
+          :class="model === option.value ? 'bg-primary-50/80 font-semibold text-primary-900' : 'font-medium text-slate-800'"
           role="option"
           :aria-selected="model === option.value"
           :disabled="disabled"
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
           <span class="min-w-0 truncate">{{ option.label }}</span>
           <svg
             v-if="model === option.value"
-            class="h-4 w-4 shrink-0 text-indigo-600"
+            class="h-4 w-4 shrink-0 text-primary-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
