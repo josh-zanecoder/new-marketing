@@ -28,7 +28,7 @@ gmp-place-autocomplete.tenant-place-autocomplete {
   color-scheme: light;
 }
 
-/* Match focus:border-indigo-300 focus:ring-[3px] focus:ring-indigo-500/20 */
+/* Match focus:border-primary-300 focus:ring-[3px] focus:ring-primary-500/20 */
 gmp-place-autocomplete.tenant-place-autocomplete:focus-within {
   border-color: rgb(165 180 252);
   box-shadow:

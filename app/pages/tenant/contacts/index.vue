@@ -2,7 +2,7 @@
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audience</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Audience</p>
         <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Contacts
         </h1>
@@ -12,7 +12,7 @@
       </div>
       <button
         type="button"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:px-5"
         @click="openAddContactModal"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -75,7 +75,7 @@
             type="search"
             autocomplete="off"
             placeholder="Search name, email, company…"
-            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
+            class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:py-3.5 sm:text-[0.9375rem]"
           >
         </div>
       </div>
@@ -118,7 +118,7 @@
       class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-20 text-center shadow-sm shadow-slate-900/[0.03] sm:py-24"
     >
       <div
-        class="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
+        class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100"
       >
         <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -153,14 +153,14 @@
             <div class="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                 @click="openEditContactModal(row.id)"
               >
                 Edit
               </button>
               <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                 @click="openContactDetail(row.id)"
               >
                 View
@@ -192,7 +192,7 @@
               <button
                 type="button"
                 role="switch"
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
                 :class="!row.is_unsubscribe ? 'bg-emerald-600' : 'bg-slate-300'"
                 :aria-checked="!row.is_unsubscribe"
                 :aria-label="row.is_unsubscribe ? 'Subscribe contact' : 'Unsubscribe contact'"
@@ -297,7 +297,7 @@
                   <button
                     type="button"
                     role="switch"
-                    class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
                     :class="!row.is_unsubscribe ? 'bg-emerald-600' : 'bg-slate-300'"
                     :aria-checked="!row.is_unsubscribe"
                     :aria-label="row.is_unsubscribe ? 'Subscribe contact' : 'Unsubscribe contact'"
@@ -328,14 +328,14 @@
                 <div class="inline-flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                     @click="openEditContactModal(row.id)"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                     @click="openContactDetail(row.id)"
                   >
                     View
@@ -362,7 +362,7 @@
         >
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
@@ -375,7 +375,7 @@
           </span>
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
@@ -409,7 +409,7 @@
           </div>
 
           <div v-if="viewContactLoading" class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600">
               <svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -441,11 +441,11 @@
           </template>
 
           <template v-else-if="viewContactDetail">
-            <div class="shrink-0 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 px-4 py-5 sm:px-6">
+            <div class="shrink-0 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-primary-50/40 px-4 py-5 sm:px-6">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex min-w-0 items-start gap-4">
                   <div
-                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-semibold text-white shadow-md shadow-indigo-500/20"
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-violet-600 text-lg font-semibold text-white shadow-md shadow-primary-500/20"
                     aria-hidden="true"
                   >
                     {{ contactDetailInitials }}
@@ -479,7 +479,7 @@
                 </div>
                 <button
                   type="button"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-600 backdrop-blur-sm transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-600 backdrop-blur-sm transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                   aria-label="Close contact details"
                   @click="closeContactDetail"
                 >
@@ -493,22 +493,22 @@
                 <a
                   v-if="viewContactDetail.email"
                   :href="`mailto:${viewContactDetail.email}`"
-                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-indigo-200 hover:bg-white"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-primary-200 hover:bg-white"
                 >
-                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </span>
                   <span class="min-w-0">
                     <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Email</span>
-                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-indigo-700">{{ viewContactDetail.email }}</span>
+                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-primary-700">{{ viewContactDetail.email }}</span>
                   </span>
                 </a>
                 <a
                   v-if="viewContactDetail.phone"
                   :href="`tel:${viewContactDetail.phone}`"
-                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-indigo-200 hover:bg-white"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:border-primary-200 hover:bg-white"
                 >
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -517,7 +517,7 @@
                   </span>
                   <span class="min-w-0">
                     <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Phone</span>
-                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-indigo-700">{{ formatUsPhoneNumber(viewContactDetail.phone) }}</span>
+                    <span class="block truncate text-sm font-medium text-slate-900 group-hover:text-primary-700">{{ formatUsPhoneNumber(viewContactDetail.phone) }}</span>
                   </span>
                 </a>
               </div>
@@ -584,7 +584,7 @@
                       >
                       <div
                         v-else
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white"
+                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500 to-violet-600 text-sm font-semibold text-white"
                         aria-hidden="true"
                       >
                         {{ ownerDetailInitials }}
@@ -639,7 +639,7 @@
             <div class="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
               <button
                 type="button"
-                class="inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-700 sm:order-2 sm:w-auto"
+                class="inline-flex w-full items-center justify-center rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/20 transition-colors hover:bg-primary-700 sm:order-2 sm:w-auto"
                 @click="editFromContactDetail"
               >
                 Edit contact
@@ -693,7 +693,7 @@
             </div>
             <button
               type="button"
-              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:h-auto sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:shadow-none"
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:h-auto sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:shadow-none"
               :aria-label="contactFormMode === 'edit' ? 'Close edit contact form' : 'Close add contact form'"
               :disabled="addContactSubmitting || contactFormLoading"
               @click="closeContactFormModal"
@@ -902,7 +902,7 @@
             >
               <button
                 type="submit"
-                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:order-2 sm:w-auto"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:opacity-50 sm:order-2 sm:w-auto"
                 :disabled="addContactSubmitting || contactFormLoading"
               >
                 {{ addContactSubmitting
@@ -976,7 +976,7 @@ const addContactForm = ref({
 
 
 const ADD_CONTACT_INPUT_CLASS =
-  'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20'
+  'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20'
 
 function extractContactFormErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {

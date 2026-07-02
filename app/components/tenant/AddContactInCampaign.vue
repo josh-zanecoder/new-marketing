@@ -51,7 +51,7 @@
             type="search"
             autocomplete="off"
             placeholder="Search by name or email…"
-            class="min-w-0 w-full flex-1 rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:min-w-[12rem] sm:basis-[14rem]"
+            class="min-w-0 w-full flex-1 rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:min-w-[12rem] sm:basis-[14rem]"
           >
           <div class="grid grid-cols-1 gap-2 min-[420px]:grid-cols-[1fr_auto] sm:contents">
             <div class="relative min-w-0 sm:min-w-[11rem]">
@@ -59,7 +59,7 @@
               <select
                 id="modal-contact-type"
                 v-model="typeFilter"
-                class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+                class="w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-sm text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
               >
                 <option value="all">
                   All types
@@ -84,7 +84,7 @@
             </div>
             <button
               type="button"
-              class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition hover:border-indigo-200 hover:bg-indigo-50/80 disabled:opacity-50 min-[420px]:w-auto sm:ml-auto"
+              class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition hover:border-primary-200 hover:bg-primary-50/80 disabled:opacity-50 min-[420px]:w-auto sm:ml-auto"
               :disabled="pending"
               @click="$emit('refresh')"
             >
@@ -151,7 +151,7 @@
                 </div>
                 <button
                   type="button"
-                  class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/80 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5 sm:text-xs"
+                  class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-primary-200 hover:bg-primary-50/80 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5 sm:text-xs"
                   :disabled="isSelected(c.id)"
                   @click="emit('addContact', c)"
                 >
@@ -165,7 +165,7 @@
         <div class="shrink-0 border-t border-slate-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:pb-3">
           <button
             type="button"
-            class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition hover:bg-indigo-700 sm:ml-auto sm:w-auto"
+            class="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition hover:bg-primary-700 sm:ml-auto sm:w-auto"
             @click="close"
           >
             Done

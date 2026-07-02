@@ -6,7 +6,7 @@ definePageMeta({ layout: 'default' })
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 sm:space-y-8">
     <header>
       <div class="min-w-0 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+        <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">
           Insights
         </p>
         <h1 class="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl lg:text-3xl">

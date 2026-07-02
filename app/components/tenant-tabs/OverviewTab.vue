@@ -1,30 +1,24 @@
 <template>
-  <div
-    class="w-full rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm ring-1 ring-slate-900/5 sm:p-8"
-  >
+  <div class="surface-card w-full p-6 sm:p-8">
     <dl class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <div
-        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
-      >
-        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      <div class="overview-identity-field">
+        <dt class="overview-field-label">
           Email
         </dt>
-        <dd class="mt-2 break-words text-sm font-medium text-slate-900">
+        <dd class="overview-field-value">
           {{ tenant.email || '—' }}
         </dd>
       </div>
 
-      <div
-        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
-      >
-        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      <div class="overview-identity-field">
+        <dt class="overview-field-label">
           CRM URL
         </dt>
-        <dd class="mt-2 min-w-0 text-sm font-medium">
+        <dd class="overview-field-value min-w-0">
           <a
             v-if="tenant.crmAppUrl"
             :href="tenant.crmAppUrl"
-            class="break-all text-indigo-600 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-700"
+            class="overview-field-link"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -138,3 +132,47 @@ function formatCreatedAt(iso: string): string {
   }
 }
 </script>
+
+<style scoped>
+.overview-identity-field {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-slate);
+  background: #fff;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base);
+}
+
+.overview-identity-field:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.overview-field-label {
+  font-size: var(--font-size-base-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.overview-field-value {
+  margin-top: 0.625rem;
+  word-break: break-word;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  color: var(--text-heading);
+}
+
+.overview-field-link {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+  color: var(--color-primary);
+  transition: color var(--transition-fast);
+}
+
+.overview-field-link:hover {
+  color: var(--primary-700);
+}
+</style>

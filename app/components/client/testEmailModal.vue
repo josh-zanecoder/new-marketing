@@ -56,7 +56,7 @@ function onRecipientInput(event: Event) {
           type="email"
           autocomplete="email"
           placeholder="you@example.com"
-          class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+          class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
           :disabled="sending"
           @input="onRecipientInput"
         >
@@ -65,12 +65,12 @@ function onRecipientInput(event: Event) {
         </p>
         <div
           v-if="sending"
-          class="mt-4 flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 text-sm text-indigo-900"
+          class="mt-4 flex items-center gap-3 rounded-xl border border-primary-100 bg-primary-50/80 px-4 py-3 text-sm text-primary-900"
           role="status"
           aria-live="polite"
         >
           <svg
-            class="h-5 w-5 shrink-0 animate-spin text-indigo-600"
+            class="h-5 w-5 shrink-0 animate-spin text-primary-600"
             fill="none"
             viewBox="0 0 24 24"
             aria-hidden="true"
@@ -95,7 +95,7 @@ function onRecipientInput(event: Event) {
           </button>
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="sending"
             @click="emit('send')"
           >

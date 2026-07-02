@@ -247,7 +247,7 @@ onUnmounted(() => {
                     <input
                       v-model="saveHtmlToLibrary"
                       type="checkbox"
-                      class="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/30"
+                      class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
                     >
                     <span class="text-sm font-medium text-slate-700">Save to library</span>
                   </label>
@@ -290,7 +290,7 @@ onUnmounted(() => {
                   <textarea
                     id="upload-paste-html"
                     v-model="uploadPasteHtml"
-                    class="min-h-[min(36dvh,320px)] flex-1 resize-none border-0 bg-slate-950 px-3 py-3 font-mono text-[12px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500/40 sm:px-4 sm:py-4 sm:text-[13px] lg:min-h-0"
+                    class="min-h-[min(36dvh,320px)] flex-1 resize-none border-0 bg-slate-950 px-3 py-3 font-mono text-[12px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500/40 sm:px-4 sm:py-4 sm:text-[13px] lg:min-h-0"
                     placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"
                     spellcheck="false"
                     :disabled="uploadPending"
@@ -301,7 +301,7 @@ onUnmounted(() => {
                       <li
                         v-for="tag in mergeTagHints"
                         :key="tag"
-                        class="rounded-md bg-indigo-50 px-2 py-0.5 font-mono text-[11px] text-indigo-800 ring-1 ring-indigo-100"
+                        class="rounded-md bg-primary-50 px-2 py-0.5 font-mono text-[11px] text-primary-800 ring-1 ring-primary-100"
                       >
                         {{ tag }}
                       </li>
@@ -343,7 +343,7 @@ onUnmounted(() => {
               </div>
               <header class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
                 <div class="min-w-0">
-                  <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 sm:text-xs">
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-primary-600 sm:text-xs">
                     Design
                   </p>
                   <h2 id="email-templates-modal-title" class="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
@@ -376,7 +376,7 @@ onUnmounted(() => {
                       <input
                         v-model="saveHtmlToLibrary"
                         type="checkbox"
-                        class="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/30"
+                        class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
                       >
                       <span class="text-sm font-medium text-slate-700">
                         Save HTML to template library
@@ -407,13 +407,13 @@ onUnmounted(() => {
 
                     <div
                       class="rounded-2xl border border-dashed p-4 transition-colors sm:p-5"
-                      :class="uploadDragOver ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200/90 bg-slate-50/50'"
+                      :class="uploadDragOver ? 'border-primary-400 bg-primary-50/50' : 'border-slate-200/90 bg-slate-50/50'"
                       @dragover="onDragOver"
                       @dragleave="onDragLeave"
                       @drop="onDrop"
                     >
                       <div class="flex items-start gap-3">
-                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm sm:h-12 sm:w-12">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-white shadow-sm sm:h-12 sm:w-12">
                           <svg class="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
@@ -434,7 +434,7 @@ onUnmounted(() => {
                           <div class="mt-3 flex flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap">
                             <button
                               type="button"
-                              class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 min-[400px]:w-auto min-[400px]:py-2"
+                              class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50 min-[400px]:w-auto min-[400px]:py-2"
                               :disabled="uploadPending"
                               @click="onBrowseClick"
                             >
@@ -470,7 +470,7 @@ onUnmounted(() => {
                   </div>
 
                   <div v-if="pending" class="mt-4 flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-14 text-sm text-slate-500">
-                    <svg class="h-5 w-5 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+                    <svg class="h-5 w-5 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
@@ -492,7 +492,7 @@ onUnmounted(() => {
                     <article
                       v-for="t in templates"
                       :key="t.id"
-                      class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06]"
+                      class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] transition-all hover:border-primary-200/80 hover:shadow-md hover:shadow-slate-900/[0.06]"
                     >
                       <div class="border-b border-slate-100 px-3 py-2.5 sm:px-4 sm:py-3">
                         <h4 class="truncate text-sm font-semibold text-slate-900" :title="t.name">
@@ -513,7 +513,7 @@ onUnmounted(() => {
                       <div class="p-3 pt-2">
                         <button
                           type="button"
-                          class="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition-colors group-hover:bg-indigo-600 hover:bg-indigo-600"
+                          class="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition-colors group-hover:bg-primary-600 hover:bg-primary-600"
                           @click="onPick(t)"
                         >
                           Use template

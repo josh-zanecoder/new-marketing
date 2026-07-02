@@ -1,7 +1,7 @@
 <template>
   <section class="min-w-0 p-6">
     <nav class="mb-4 text-sm text-slate-500">
-      <NuxtLink to="/admin/tenants" class="hover:text-indigo-600">
+      <NuxtLink to="/admin/tenants" class="hover:text-primary-600">
         Tenants
       </NuxtLink>
       <span class="mx-1.5">/</span>
@@ -67,525 +67,730 @@
         </div>
 
         <template #contact-types>
-          <div class="filters-split">
-            <aside class="filter-form-card">
-              <h2 class="filter-form-title">
-                Contact types
-              </h2>
-              <form class="filter-form" @submit.prevent="saveContactType">
-                <div class="field">
-                  <label for="ct-key">Key</label>
-                  <input id="ct-key" v-model="contactTypeForm.key" type="text" required class="field-input" placeholder="e.g. prospect">
-                </div>
-                <div class="field">
-                  <label for="ct-label">Label</label>
-                  <input id="ct-label" v-model="contactTypeForm.label" type="text" required class="field-input" placeholder="e.g. Prospect">
-                </div>
-                <label class="toggle-row">
-                  <input v-model="contactTypeForm.enabled" type="checkbox" class="toggle-check">
-                  <span class="toggle-label">Enabled</span>
-                </label>
-                <p v-if="contactTypeFormError" class="form-error">{{ contactTypeFormError }}</p>
-                <div class="form-actions">
-                  <button type="submit" class="btn-primary" :disabled="contactTypeSaving">
-                    {{ contactTypeSaving ? 'Saving…' : contactTypeEditingId ? 'Update type' : 'Add type' }}
-                  </button>
-                  <button v-if="contactTypeEditingId" type="button" class="btn-secondary" @click="resetContactTypeForm">
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </aside>
-
-            <div class="filters-table-wrap">
-              <div class="filters-table-head">
-                <div>
-                  <h2 class="filters-table-title">
-                    Existing contact types
-                  </h2>
-                  <p class="filters-table-sub">
-                    {{ contactTypes.length }} {{ contactTypes.length === 1 ? 'type' : 'types' }} for this tenant
-                  </p>
-                </div>
-                <span v-if="contactTypesPending" class="filters-loading">Loading…</span>
+          <div class="min-w-0 space-y-5">
+            <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div class="min-w-0 space-y-1">
+                <h2 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                  Contact types
+                </h2>
+                <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+                  Define keys and labels used when building recipient filters for this tenant.
+                </p>
+                <p class="text-sm text-slate-400">
+                  {{ contactTypes.length }} {{ contactTypes.length === 1 ? 'type' : 'types' }}
+                </p>
               </div>
+              <div class="flex shrink-0 items-center gap-3 self-start">
+                <span v-if="contactTypesPending" class="text-sm font-medium text-slate-500">Loading…</span>
+                <button
+                  type="button"
+                  class="btn-cta group self-start"
+                  @click="openContactTypeModal"
+                >
+                  <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Contact Type
+                </button>
+              </div>
+            </header>
 
-              <div :class="tenantDataTableWrapClass">
-                <table :class="tenantDataTableClass">
-                  <thead>
-                    <tr>
-                      <th>Key</th>
-                      <th>Label</th>
-                      <th>Status</th>
-                      <th :class="tenantDataThActionsClass" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="contactTypesPending && !contactTypes.length">
-                      <td colspan="4" class="td-empty-state">
-                        Loading contact types…
-                      </td>
-                    </tr>
-                    <template v-else-if="contactTypes.length">
-                      <tr v-for="ct in contactTypes" :key="ct.id">
-                        <td class="td-name">{{ ct.key }}</td>
-                        <td class="td-muted">{{ ct.label }}</td>
-                        <td>
-                          <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
-                        </td>
-                        <td :class="tenantDataTdActionsClass">
-                          <div class="row-actions">
-                            <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              class="btn-row btn-row--danger"
-                              :disabled="contactTypeDeletingId === ct.id"
-                              @click="removeContactType(ct.id)"
-                            >
-                              {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    </template>
-                    <tr v-else>
-                      <td colspan="4" class="td-empty-state">
-                        No contact types yet. Add one first.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div
+              v-if="contactTypesPending && !contactTypes.length"
+              class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-6 py-12 text-center text-sm text-slate-500 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+            >
+              Loading contact types…
+            </div>
+
+            <div
+              v-else-if="!contactTypes.length"
+              class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
+            >
+              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <h3 class="mt-6 text-lg font-semibold tracking-tight text-slate-900">
+                No contact types yet
+              </h3>
+              <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+                Create your first contact type to use in recipient filters.
+              </p>
+              <button
+                type="button"
+                class="btn-cta group mt-6"
+                @click="openContactTypeModal"
+              >
+                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add contact type
+              </button>
+            </div>
+
+            <div
+              v-else
+              :class="tenantDataTableWrapClass"
+            >
+              <table :class="tenantDataTableClassCompact">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Label</th>
+                    <th>Status</th>
+                    <th :class="tenantDataThActionsClass">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="ct in contactTypes" :key="ct.id">
+                    <td class="td-name" :title="ct.key">{{ truncateTabCellText(ct.key) }}</td>
+                    <td class="td-muted" :title="ct.label">{{ truncateTabCellText(ct.label) }}</td>
+                    <td>
+                      <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
+                    </td>
+                    <td :class="tenantDataTdActionsClass">
+                      <div class="row-actions">
+                        <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-row btn-row--danger"
+                          :disabled="contactTypeDeletingId === ct.id"
+                          @click="removeContactType(ct.id)"
+                        >
+                          {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          <Teleport to="body">
+            <div
+              v-if="contactTypeModalOpen"
+              class="filter-modal-backdrop"
+              @click.self="closeContactTypeModal"
+            >
+              <div
+                class="filter-modal"
+                role="dialog"
+                aria-modal="true"
+                :aria-labelledby="contactTypeEditingId ? 'ct-modal-title-edit' : 'ct-modal-title-add'"
+              >
+                <div class="filter-modal__header">
+                  <div>
+                    <h2
+                      :id="contactTypeEditingId ? 'ct-modal-title-edit' : 'ct-modal-title-add'"
+                      class="filter-form-title"
+                    >
+                      {{ contactTypeEditingId ? 'Edit Contact Type' : 'Add Contact Type' }}
+                    </h2>
+                    <p v-if="contactTypeEditingId" class="filter-form-hint">
+                      Update the selected contact type.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="filter-modal__close"
+                    aria-label="Close"
+                    @click="closeContactTypeModal"
+                  >
+                    <svg class="filter-modal__close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <form class="filter-modal__form filter-form" @submit.prevent="saveContactType">
+                  <div class="filter-modal__body">
+                    <div class="field">
+                      <label for="ct-key">Key</label>
+                      <input id="ct-key" v-model="contactTypeForm.key" type="text" required class="field-input" placeholder="e.g. prospect">
+                    </div>
+                    <div class="field">
+                      <label for="ct-label">Label</label>
+                      <input id="ct-label" v-model="contactTypeForm.label" type="text" required class="field-input" placeholder="e.g. Prospect">
+                    </div>
+                    <label class="toggle-row">
+                      <input v-model="contactTypeForm.enabled" type="checkbox" class="toggle-check">
+                      <span class="toggle-label">Enabled</span>
+                    </label>
+                    <p v-if="contactTypeFormError" class="form-error">{{ contactTypeFormError }}</p>
+                  </div>
+                  <div class="filter-modal__footer modal-footer">
+                    <button type="button" class="btn-modal-cancel" @click="closeContactTypeModal">
+                      Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-submit" :disabled="contactTypeSaving">
+                      {{ contactTypeSaving ? 'Saving…' : contactTypeEditingId ? 'Save Changes' : 'Add Contact Type' }}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
+          </Teleport>
           </div>
         </template>
 
         <template #recipient-filters>
-          <div class="filters-split">
-            <aside class="filter-form-card">
-            <h2 class="filter-form-title">
-              {{ editingId ? 'Edit filter' : 'New filter' }}
-            </h2>
-            <p v-if="editingId" class="filter-form-hint">
-              Updating the selected filter. Cancel to create a new one.
-            </p>
-            <form class="filter-form" @submit.prevent="saveFilter">
-              <div class="field">
-                <label for="rf-name">Name</label>
-                <input
-                  id="rf-name"
-                  v-model="form.name"
-                  type="text"
-                  required
-                  class="field-input"
-                  placeholder="e.g. Texas prospects"
-                >
-              </div>
-
-              <div class="field">
-                <label for="rf-contact-type">Contact type</label>
-                <select
-                  id="rf-contact-type"
-                  v-model="form.contactType"
-                  class="field-input"
-                >
-                  <option
-                    v-for="ct in contactTypes"
-                    :key="ct.id"
-                    :value="ct.key"
-                  >
-                    {{ contactTypeSelectLabel(ct) }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="rf-property">Property</label>
-                <select
-                  id="rf-property"
-                  v-model="form.property"
-                  class="field-input"
-                >
-                  <option
-                    v-for="opt in recipientFilterPropertyFieldOptions"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div v-if="form.property === 'address'" class="field">
-                <label for="rf-property-type">Property type</label>
-                <select
-                  id="rf-property-type"
-                  v-model="form.propertyType"
-                  class="field-input"
-                >
-                  <option
-                    v-for="opt in recipientFilterAddressPropertyTypeOptions"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div v-else-if="form.property === 'contact_profile'" class="field">
-                <label for="rf-contact-profile-type">Type or sub type</label>
-                <select
-                  id="rf-contact-profile-type"
-                  v-model="form.propertyType"
-                  class="field-input"
-                >
-                  <option
-                    v-for="opt in recipientFilterContactProfilePropertyTypeOptions"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div v-else-if="form.property === 'relationship_partner'" class="field">
-                <label for="rf-relationship-partner-type">Partner field</label>
-                <select
-                  id="rf-relationship-partner-type"
-                  v-model="form.propertyType"
-                  class="field-input"
-                >
-                  <option
-                    v-for="opt in recipientFilterRelationshipPartnerPropertyTypeOptions"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="rf-property-value">Property value</label>
-                <input
-                  id="rf-property-value"
-                  v-model="form.propertyValue"
-                  type="text"
-                  class="field-input"
-                  placeholder="Optional — e.g. TX or AL, AK, AZ"
-                >
-              </div>
-
-              <label class="toggle-row">
-                <input v-model="form.enabled" type="checkbox" class="toggle-check">
-                <span class="toggle-label">Enabled</span>
-              </label>
-
-              <p v-if="formError" class="form-error">{{ formError }}</p>
-
-              <div class="form-actions">
-                <button
-                  type="submit"
-                  class="btn-primary"
-                  :disabled="saving"
-                >
-                  {{ saving ? 'Saving…' : editingId ? 'Update' : 'Create' }}
-                </button>
-                <button
-                  v-if="editingId"
-                  type="button"
-                  class="btn-secondary"
-                  @click="resetForm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </aside>
-
-          <div class="filters-table-wrap">
-            <div class="filters-table-head">
-              <div>
-                <h2 class="filters-table-title">
-                  Existing filters
+          <div class="min-w-0 space-y-5">
+            <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div class="min-w-0 space-y-1">
+                <h2 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                  Recipient Filters
                 </h2>
-                <p class="filters-table-sub">
-                  {{ filters.length }} {{ filters.length === 1 ? 'filter' : 'filters' }} for this tenant
+                <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+                  Rules that determine which contacts receive campaigns based on type and properties.
+                </p>
+                <p class="text-sm text-slate-400">
+                  {{ filters.length }} {{ filters.length === 1 ? 'filter' : 'filters' }}
                 </p>
               </div>
-              <span v-if="filtersPending" class="filters-loading">Loading…</span>
+              <div class="flex shrink-0 items-center gap-3 self-start">
+                <span v-if="filtersPending" class="text-sm font-medium text-slate-500">Loading…</span>
+                <button
+                  type="button"
+                  class="btn-cta group self-start"
+                  @click="openRecipientFilterModal"
+                >
+                  <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Filter
+                </button>
+              </div>
+            </header>
+
+            <div
+              v-if="filtersPending && !filters.length"
+              class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-6 py-12 text-center text-sm text-slate-500 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+            >
+              Loading filters…
             </div>
 
-            <div :class="tenantDataTableWrapClass">
+            <div
+              v-else-if="!filtersDisplay.length"
+              class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
+            >
+              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </div>
+              <h3 class="mt-6 text-lg font-semibold tracking-tight text-slate-900">
+                No recipient filters yet
+              </h3>
+              <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+                Create your first filter to target contacts by type and property.
+              </p>
+              <button
+                type="button"
+                class="btn-cta group mt-6"
+                @click="openRecipientFilterModal"
+              >
+                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Filter
+              </button>
+            </div>
+
+            <div
+              v-else
+              :class="tenantDataTableWrapClass"
+            >
               <table :class="tenantDataTableClass">
-                <colgroup>
-                  <col class="col-name">
-                  <col class="col-contact">
-                  <col class="col-prop">
-                  <col class="col-ptype">
-                  <col class="col-value">
-                  <col class="col-status">
-                  <col class="col-actions">
-                </colgroup>
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Contact type</th>
                     <th>Property</th>
-                    <th>Property type</th>
+                    <th>Type</th>
                     <th>Values</th>
                     <th>Status</th>
-                    <th :class="tenantDataThActionsClass" />
+                    <th :class="tenantDataThActionsClass">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="filtersPending && !filters.length">
-                    <td colspan="7" class="td-empty-state">
-                      Loading filters…
+                  <tr v-for="f in filtersDisplay" :key="f.id">
+                    <td class="td-name" :title="f.name">{{ f.name }}</td>
+                    <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
+                    <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
+                    <td class="td-muted">
+                      {{
+                        f.property === 'address'
+                          ? addressPropertyTypeLabel(f.propertyType || 'state')
+                          : f.property === 'contact_profile'
+                            ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+                            : f.property === 'relationship_partner'
+                              ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
+                            : '—'
+                      }}
                     </td>
-                  </tr>
-                  <template v-else-if="filtersDisplay.length">
-                    <tr v-for="f in filtersDisplay" :key="f.id">
-                      <td class="td-name">{{ f.name }}</td>
-                      <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
-                      <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
-                      <td class="td-muted">
-                        {{
-                          f.property === 'address'
-                            ? addressPropertyTypeLabel(f.propertyType || 'state')
-                            : f.property === 'contact_profile'
-                              ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
-                              : f.property === 'relationship_partner'
-                                ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
-                              : '—'
-                        }}
-                      </td>
-                      <td class="td-values">
-                        <div
-                          v-if="f.valueTokens.length"
-                          class="value-chip-list"
-                          :class="{ 'value-chip-list--scroll': f.valueTokens.length > 12 }"
-                        >
-                          <span
-                            v-for="(token, i) in f.valueTokens"
-                            :key="i"
-                            class="value-chip"
-                          >{{ formatRegistryLabelForDisplay(token) }}</span>
-                        </div>
-                        <span v-else class="td-muted">—</span>
-                      </td>
-                      <td>
+                    <td class="td-values">
+                      <div
+                        v-if="f.valueTokens.length"
+                        class="value-chip-list"
+                        :class="{ 'value-chip-list--scroll': f.valueTokens.length > 12 }"
+                      >
                         <span
-                          class="status-pill"
-                          :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
-                        >{{ f.enabled ? 'On' : 'Off' }}</span>
-                      </td>
-                      <td :class="tenantDataTdActionsClass">
-                        <div class="row-actions">
-                          <button
-                            type="button"
-                            class="btn-row btn-row--edit"
-                            @click="startEdit(f)"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            class="btn-row btn-row--danger"
-                            :disabled="deletingId === f.id"
-                            @click="removeFilter(f.id)"
-                          >
-                            {{ deletingId === f.id ? '…' : 'Delete' }}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else>
-                    <td colspan="7" class="td-empty-state">
-                      No recipient filters yet. Use the form to add one.
+                          v-for="(token, i) in f.valueTokens"
+                          :key="i"
+                          class="value-chip"
+                        >{{ formatRegistryLabelForDisplay(token) }}</span>
+                      </div>
+                      <span v-else class="td-muted">—</span>
+                    </td>
+                    <td>
+                      <span
+                        class="status-pill"
+                        :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
+                      >{{ f.enabled ? 'On' : 'Off' }}</span>
+                    </td>
+                    <td :class="tenantDataTdActionsClass">
+                      <div class="row-actions">
+                        <button
+                          type="button"
+                          class="btn-row btn-row--edit"
+                          @click="startEdit(f)"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-row btn-row--danger"
+                          :disabled="deletingId === f.id"
+                          @click="removeFilter(f.id)"
+                        >
+                          {{ deletingId === f.id ? '…' : 'Delete' }}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+
+          <Teleport to="body">
+            <div
+              v-if="recipientFilterModalOpen"
+              class="filter-modal-backdrop"
+              @click.self="closeRecipientFilterModal"
+            >
+              <div
+                class="filter-modal filter-modal--wide"
+                role="dialog"
+                aria-modal="true"
+                :aria-labelledby="editingId ? 'rf-modal-title-edit' : 'rf-modal-title-add'"
+              >
+                <div class="filter-modal__header">
+                  <div>
+                    <h2
+                      :id="editingId ? 'rf-modal-title-edit' : 'rf-modal-title-add'"
+                      class="filter-form-title"
+                    >
+                      {{ editingId ? 'Edit Filter' : 'Add Filter' }}
+                    </h2>
+                    <p v-if="editingId" class="filter-form-hint">
+                      Updating the selected filter.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="filter-modal__close"
+                    aria-label="Close"
+                    @click="closeRecipientFilterModal"
+                  >
+                    <svg class="filter-modal__close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <form class="filter-modal__form filter-form" @submit.prevent="saveFilter">
+                  <div class="filter-modal__body">
+                  <div class="field">
+                    <label for="rf-name">Name</label>
+                    <input
+                      id="rf-name"
+                      v-model="form.name"
+                      type="text"
+                      required
+                      class="field-input"
+                      placeholder="e.g. Texas prospects"
+                    >
+                  </div>
+
+                  <div class="field">
+                    <label for="rf-contact-type">Contact type</label>
+                    <select
+                      id="rf-contact-type"
+                      v-model="form.contactType"
+                      class="field-input"
+                    >
+                      <option
+                        v-for="ct in contactTypes"
+                        :key="ct.id"
+                        :value="ct.key"
+                      >
+                        {{ contactTypeSelectLabel(ct) }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="rf-property">Property</label>
+                    <select
+                      id="rf-property"
+                      v-model="form.property"
+                      class="field-input"
+                    >
+                      <option
+                        v-for="opt in recipientFilterPropertyFieldOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div v-if="form.property === 'address'" class="field">
+                    <label for="rf-property-type">Property type</label>
+                    <select
+                      id="rf-property-type"
+                      v-model="form.propertyType"
+                      class="field-input"
+                    >
+                      <option
+                        v-for="opt in recipientFilterAddressPropertyTypeOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div v-else-if="form.property === 'contact_profile'" class="field">
+                    <label for="rf-contact-profile-type">Type or sub type</label>
+                    <select
+                      id="rf-contact-profile-type"
+                      v-model="form.propertyType"
+                      class="field-input"
+                    >
+                      <option
+                        v-for="opt in recipientFilterContactProfilePropertyTypeOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div v-else-if="form.property === 'relationship_partner'" class="field">
+                    <label for="rf-relationship-partner-type">Partner field</label>
+                    <select
+                      id="rf-relationship-partner-type"
+                      v-model="form.propertyType"
+                      class="field-input"
+                    >
+                      <option
+                        v-for="opt in recipientFilterRelationshipPartnerPropertyTypeOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="rf-property-value">Property value</label>
+                    <input
+                      id="rf-property-value"
+                      v-model="form.propertyValue"
+                      type="text"
+                      class="field-input"
+                      placeholder="Optional — e.g. TX or AL, AK, AZ"
+                    >
+                  </div>
+
+                  <label class="toggle-row">
+                    <input v-model="form.enabled" type="checkbox" class="toggle-check">
+                    <span class="toggle-label">Enabled</span>
+                  </label>
+
+                  <p v-if="formError" class="form-error">{{ formError }}</p>
+                  </div>
+
+                  <div class="filter-modal__footer modal-footer">
+                    <button type="button" class="btn-modal-cancel" @click="closeRecipientFilterModal">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn-modal-submit"
+                      :disabled="saving"
+                    >
+                      {{ saving ? 'Saving…' : editingId ? 'Save Changes' : 'Add Filter' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </Teleport>
           </div>
-        </div>
         </template>
       </TenantTabsRecipientFiltersTab>
 
       <TenantTabsDynamicFieldsTab v-show="tab === 'dynamicVariables'">
-        <div class="filters-split">
-          <aside class="filter-form-card">
-            <h2 class="filter-form-title">
-              {{ dynamicEditingId ? 'Edit variable' : 'New variable' }}
-            </h2>
-            <p v-if="dynamicEditingId" class="filter-form-hint">
-              Updating the selected variable. Cancel to create a new one.
-            </p>
-            <form class="filter-form" @submit.prevent="saveDynamicVariable">
-              <div class="field">
-                <label for="dv-key">Key</label>
-                <input id="dv-key" v-model="dynamicForm.key" type="text" required class="field-input" placeholder="e.g. user.firstName">
-              </div>
-
-              <div class="field">
-                <label for="dv-label">Label</label>
-                <input id="dv-label" v-model="dynamicForm.label" type="text" required class="field-input" placeholder="e.g. First name">
-              </div>
-
-              <div class="field">
-                <label for="dv-contact-path">Contact path</label>
-                <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. firstName or address.state">
-              </div>
-
-              <div class="field">
-                <label for="dv-source-type">Variable source</label>
-                <select id="dv-source-type" v-model="dynamicForm.sourceType" class="field-input">
-                  <option value="recipient">Recipient</option>
-                  <option value="user">User</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="dv-description">Description</label>
-                <input id="dv-description" v-model="dynamicForm.description" type="text" class="field-input" placeholder="Optional">
-              </div>
-
-              <div class="field">
-                <label for="dv-fallback">Fallback value</label>
-                <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Used when AE/recipient value is empty">
-                <p class="filter-form-hint">
-                  Per-tenant default when the contact has no AE (or recipient field is blank). Leave empty to show nothing.
-                </p>
-              </div>
-
-              <div class="field">
-                <label for="dv-sort">Sort order</label>
-                <input id="dv-sort" v-model.number="dynamicForm.sortOrder" type="number" class="field-input" min="0" step="1">
-              </div>
-
-              <div class="field">
-                <label>Scopes</label>
-                <div class="flex gap-3">
-                  <label class="toggle-row">
-                    <input
-                      :checked="dynamicForm.scopes.includes('subject')"
-                      type="checkbox"
-                      class="toggle-check"
-                      @change="toggleDynamicScope('subject', ($event.target as HTMLInputElement).checked)"
-                    >
-                    <span class="toggle-label">Subject</span>
-                  </label>
-                  <label class="toggle-row">
-                    <input
-                      :checked="dynamicForm.scopes.includes('body')"
-                      type="checkbox"
-                      class="toggle-check"
-                      @change="toggleDynamicScope('body', ($event.target as HTMLInputElement).checked)"
-                    >
-                    <span class="toggle-label">Body</span>
-                  </label>
-                </div>
-              </div>
-
-              <label class="toggle-row">
-                <input v-model="dynamicForm.enabled" type="checkbox" class="toggle-check">
-                <span class="toggle-label">Enabled</span>
-              </label>
-
-              <label class="toggle-row">
-                <input v-model="dynamicForm.requiredForSend" type="checkbox" class="toggle-check">
-                <span class="toggle-label">Required for send</span>
-              </label>
-
-              <p v-if="dynamicFormError" class="form-error">{{ dynamicFormError }}</p>
-
-              <div class="form-actions">
-                <button type="submit" class="btn-primary" :disabled="dynamicSaving">
-                  {{ dynamicSaving ? 'Saving…' : dynamicEditingId ? 'Update' : 'Create' }}
-                </button>
-                <button v-if="dynamicEditingId" type="button" class="btn-secondary" @click="resetDynamicForm">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </aside>
-
-          <div class="filters-table-wrap">
-            <div class="filters-table-head">
-              <div>
-                <h2 class="filters-table-title">
-                  Existing variables
-                </h2>
-                <p class="filters-table-sub">
-                  {{ dynamicVariables.length }} {{ dynamicVariables.length === 1 ? 'variable' : 'variables' }} for this tenant
-                </p>
-              </div>
-              <span v-if="dynamicPending" class="filters-loading">Loading…</span>
+        <div class="min-w-0 space-y-5">
+          <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div class="min-w-0 space-y-1">
+              <h2 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                Dynamic Variables
+              </h2>
+              <p class="max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
+                Configure template merge fields and map them to contact paths for this tenant.
+              </p>
+              <p class="text-sm text-slate-400">
+                {{ dynamicVariables.length }} {{ dynamicVariables.length === 1 ? 'variable' : 'variables' }}
+              </p>
             </div>
-
-            <div :class="tenantDataTableWrapClass">
-              <table :class="tenantDataTableClass">
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Key</th>
-                    <th>Contact path</th>
-                    <th>Scopes</th>
-                    <th>Fallback</th>
-                    <th>Status</th>
-                    <th :class="tenantDataThActionsClass" />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="dynamicPending && !dynamicVariables.length">
-                    <td colspan="7" class="td-empty-state">
-                      Loading variables…
-                    </td>
-                  </tr>
-                  <template v-else-if="dynamicVariables.length">
-                    <tr v-for="v in dynamicVariables" :key="v.id">
-                      <td class="td-name">{{ v.label }}</td>
-                      <td class="td-muted"><code>{{ v.key }}</code></td>
-                      <td class="td-muted"><code>{{ v.contactPath }}</code></td>
-                      <td class="td-values">
-                        <span v-for="scope in v.scopes" :key="scope" class="value-chip mr-1">{{ scope }}</span>
-                      </td>
-                      <td class="td-muted">{{ v.fallbackValue || '—' }}</td>
-                      <td>
-                        <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
-                      </td>
-                      <td :class="tenantDataTdActionsClass">
-                        <div class="row-actions">
-                          <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            class="btn-row btn-row--danger"
-                            :disabled="dynamicDeletingId === v.id"
-                            @click="removeDynamicVariable(v.id)"
-                          >
-                            {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else>
-                    <td colspan="7" class="td-empty-state">
-                      No dynamic variables yet. Use the form to add one.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="flex shrink-0 items-center gap-3 self-start">
+              <span v-if="dynamicPending" class="text-sm font-medium text-slate-500">Loading…</span>
+              <button
+                type="button"
+                class="btn-cta group self-start"
+                @click="openDynamicVariableModal"
+              >
+                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Dynamic Variable
+              </button>
             </div>
+          </header>
+
+          <div
+            v-if="dynamicPending && !dynamicVariables.length"
+            class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-6 py-12 text-center text-sm text-slate-500 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+          >
+            Loading variables…
           </div>
+
+          <div
+            v-else-if="!dynamicVariables.length"
+            class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
+          >
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
+              <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+            </div>
+            <h3 class="mt-6 text-lg font-semibold tracking-tight text-slate-900">
+              No dynamic variables yet
+            </h3>
+            <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+              Create your first variable to use merge fields in campaign templates.
+            </p>
+            <button
+              type="button"
+              class="btn-cta group mt-6"
+              @click="openDynamicVariableModal"
+            >
+              <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Dynamic Variable
+            </button>
+          </div>
+
+          <div
+            v-else
+            :class="tenantDataTableWrapClass"
+          >
+            <table :class="tenantDataTableClass">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Key</th>
+                  <th>Contact path</th>
+                  <th>Scopes</th>
+                  <th>Fallback</th>
+                  <th>Status</th>
+                  <th :class="tenantDataThActionsClass">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="v in dynamicVariables" :key="v.id">
+                  <td class="td-name" :title="v.label">{{ truncateTabCellText(v.label) }}</td>
+                  <td class="td-muted" :title="v.key"><code>{{ truncateTabCellText(v.key) }}</code></td>
+                  <td class="td-muted" :title="v.contactPath"><code>{{ truncateTabCellText(v.contactPath) }}</code></td>
+                  <td class="td-values">
+                    <span v-for="scope in v.scopes" :key="scope" class="value-chip mr-1">{{ scope }}</span>
+                  </td>
+                  <td class="td-muted" :title="v.fallbackValue || undefined">{{ truncateTabCellText(v.fallbackValue) || '—' }}</td>
+                  <td>
+                    <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
+                  </td>
+                  <td :class="tenantDataTdActionsClass">
+                    <div class="row-actions">
+                      <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-row btn-row--danger"
+                        :disabled="dynamicDeletingId === v.id"
+                        @click="removeDynamicVariable(v.id)"
+                      >
+                        {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <Teleport to="body">
+            <div
+              v-if="dynamicVariableModalOpen"
+              class="filter-modal-backdrop"
+              @click.self="closeDynamicVariableModal"
+            >
+              <div
+                class="filter-modal filter-modal--wide"
+                role="dialog"
+                aria-modal="true"
+                :aria-labelledby="dynamicEditingId ? 'dv-modal-title-edit' : 'dv-modal-title-add'"
+              >
+                <div class="filter-modal__header">
+                  <div>
+                    <h2
+                      :id="dynamicEditingId ? 'dv-modal-title-edit' : 'dv-modal-title-add'"
+                      class="filter-form-title"
+                    >
+                      {{ dynamicEditingId ? 'Edit Dynamic Variable' : 'Add Dynamic Variable' }}
+                    </h2>
+                    <p v-if="dynamicEditingId" class="filter-form-hint">
+                      Updating the selected variable.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-modal-close"
+                    aria-label="Close"
+                    @click="closeDynamicVariableModal"
+                  >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <form class="filter-modal__form filter-form" @submit.prevent="saveDynamicVariable">
+                  <div class="filter-modal__body">
+                  <div class="field">
+                    <label for="dv-key">Key</label>
+                    <input id="dv-key" v-model="dynamicForm.key" type="text" required class="field-input" placeholder="e.g. user.firstName">
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-label">Label</label>
+                    <input id="dv-label" v-model="dynamicForm.label" type="text" required class="field-input" placeholder="e.g. First name">
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-contact-path">Contact path</label>
+                    <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. firstName or address.state">
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-source-type">Variable source</label>
+                    <select id="dv-source-type" v-model="dynamicForm.sourceType" class="field-input">
+                      <option value="recipient">Recipient</option>
+                      <option value="user">User</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-description">Description</label>
+                    <input id="dv-description" v-model="dynamicForm.description" type="text" class="field-input" placeholder="Optional">
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-fallback">Fallback value</label>
+                    <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Used when AE/recipient value is empty">
+                    <p class="filter-form-hint">
+                      Per-tenant default when the contact has no AE (or recipient field is blank). Leave empty to show nothing.
+                    </p>
+                  </div>
+
+                  <div class="field">
+                    <label for="dv-sort">Sort order</label>
+                    <input id="dv-sort" v-model.number="dynamicForm.sortOrder" type="number" class="field-input" min="0" step="1">
+                  </div>
+
+                  <div class="field">
+                    <label>Scopes</label>
+                    <div class="flex gap-3">
+                      <label class="toggle-row">
+                        <input
+                          :checked="dynamicForm.scopes.includes('subject')"
+                          type="checkbox"
+                          class="toggle-check"
+                          @change="toggleDynamicScope('subject', ($event.target as HTMLInputElement).checked)"
+                        >
+                        <span class="toggle-label">Subject</span>
+                      </label>
+                      <label class="toggle-row">
+                        <input
+                          :checked="dynamicForm.scopes.includes('body')"
+                          type="checkbox"
+                          class="toggle-check"
+                          @change="toggleDynamicScope('body', ($event.target as HTMLInputElement).checked)"
+                        >
+                        <span class="toggle-label">Body</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <label class="toggle-row">
+                    <input v-model="dynamicForm.enabled" type="checkbox" class="toggle-check">
+                    <span class="toggle-label">Enabled</span>
+                  </label>
+
+                  <label class="toggle-row">
+                    <input v-model="dynamicForm.requiredForSend" type="checkbox" class="toggle-check">
+                    <span class="toggle-label">Required for send</span>
+                  </label>
+
+                  <p v-if="dynamicFormError" class="form-error">{{ dynamicFormError }}</p>
+                  </div>
+
+                  <div class="filter-modal__footer modal-footer">
+                    <button type="button" class="btn-modal-cancel" @click="closeDynamicVariableModal">
+                      Cancel
+                    </button>
+                    <button type="submit" class="btn-modal-submit" :disabled="dynamicSaving">
+                      {{ dynamicSaving ? 'Saving…' : dynamicEditingId ? 'Save Changes' : 'Add Dynamic Variable' }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </Teleport>
         </div>
       </TenantTabsDynamicFieldsTab>
     </template>
@@ -598,26 +803,26 @@ import {
   recipientFilterContactProfilePropertyTypeOptions,
   recipientFilterPropertyFieldOptions,
   recipientFilterRelationshipPartnerPropertyTypeOptions,
+  recipientFiltersTableWrapClass,
+  recipientFiltersTableClass,
+  recipientFiltersTableClassCompact,
+  recipientFiltersThActionsClass,
+  recipientFiltersTdActionsClass,
   type RecipientFilterAddressPropertyTypeValue,
   type RecipientFilterContactProfilePropertyTypeValue,
   type RecipientFilterPropertyFieldValue,
   type RecipientFilterRelationshipPartnerPropertyTypeValue
 } from '~/components/tenant-tabs/RecipientFiltersTab.vue'
+import { truncateTabCellText } from '~/utils/truncateTabCellText'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 
 definePageMeta({ layout: 'admin' })
 
-const tenantDataTableWrapClass =
-  'filters-table-card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5'
-
-const tenantDataTableClass =
-  'clients-table--filters w-full border-collapse table-fixed text-left text-sm text-slate-900 [&_thead_tr]:border-b [&_thead_tr]:border-slate-100 [&_thead_tr]:bg-slate-50/90 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-slate-500 [&_tbody_tr]:border-t [&_tbody_tr]:border-slate-100 [&_tbody_tr]:text-sm [&_tbody_tr:hover]:bg-slate-50/80 [&_td]:px-4 [&_td]:py-3.5 [&_td]:align-middle'
-
-const tenantDataThActionsClass =
-  'whitespace-nowrap px-4 py-3.5 text-right align-middle text-xs font-semibold uppercase tracking-wide text-slate-500'
-
-const tenantDataTdActionsClass =
-  'whitespace-nowrap px-4 py-3.5 text-right align-middle'
+const tenantDataTableWrapClass = recipientFiltersTableWrapClass
+const tenantDataTableClass = recipientFiltersTableClass
+const tenantDataTableClassCompact = recipientFiltersTableClassCompact
+const tenantDataThActionsClass = recipientFiltersThActionsClass
+const tenantDataTdActionsClass = recipientFiltersTdActionsClass
 
 const route = useRoute()
 const dbName = computed(() =>
@@ -710,10 +915,13 @@ const dynamicEditingId = ref<string | null>(null)
 const dynamicSaving = ref(false)
 const dynamicDeletingId = ref<string | null>(null)
 const dynamicFormError = ref('')
+const dynamicVariableModalOpen = ref(false)
 const contactTypeEditingId = ref<string | null>(null)
 const contactTypeSaving = ref(false)
 const contactTypeDeletingId = ref<string | null>(null)
 const contactTypeFormError = ref('')
+const contactTypeModalOpen = ref(false)
+const recipientFilterModalOpen = ref(false)
 
 const form = reactive({
   name: '',
@@ -939,12 +1147,33 @@ function resetForm() {
   formError.value = ''
 }
 
+function openContactTypeModal() {
+  resetContactTypeForm()
+  contactTypeModalOpen.value = true
+}
+
+function closeContactTypeModal() {
+  contactTypeModalOpen.value = false
+  resetContactTypeForm()
+}
+
+function openRecipientFilterModal() {
+  resetForm()
+  recipientFilterModalOpen.value = true
+}
+
+function closeRecipientFilterModal() {
+  recipientFilterModalOpen.value = false
+  resetForm()
+}
+
 function startEditContactType(ct: ContactTypeRow) {
   contactTypeEditingId.value = ct.id
   contactTypeForm.key = ct.key
   contactTypeForm.label = ct.label
   contactTypeForm.enabled = ct.enabled
   contactTypeFormError.value = ''
+  contactTypeModalOpen.value = true
 }
 
 function resetContactTypeForm() {
@@ -981,6 +1210,7 @@ async function saveContactType() {
       })
     }
     resetContactTypeForm()
+    contactTypeModalOpen.value = false
     await loadContactTypes()
     const first = contactTypes.value[0]
     if (!editingId.value && !form.contactType && first) {
@@ -1034,6 +1264,7 @@ function startEdit(f: FilterRow) {
   editingId.value = f.id
   fillForm(f)
   formError.value = ''
+  recipientFilterModalOpen.value = true
 }
 
 async function saveFilter() {
@@ -1070,6 +1301,7 @@ async function saveFilter() {
       })
     }
     resetForm()
+    recipientFilterModalOpen.value = false
     await loadFilters()
   } catch (e: unknown) {
     const msg =
@@ -1094,10 +1326,21 @@ function toggleDynamicScope(scope: 'subject' | 'body', checked: boolean) {
   dynamicForm.scopes = [...set] as Array<'subject' | 'body'>
 }
 
+function openDynamicVariableModal() {
+  resetDynamicForm()
+  dynamicVariableModalOpen.value = true
+}
+
+function closeDynamicVariableModal() {
+  dynamicVariableModalOpen.value = false
+  resetDynamicForm()
+}
+
 function startEditDynamicVariable(v: DynamicVariableRow) {
   dynamicEditingId.value = v.id
   fillDynamicForm(v)
   dynamicFormError.value = ''
+  dynamicVariableModalOpen.value = true
 }
 
 async function saveDynamicVariable() {
@@ -1137,6 +1380,7 @@ async function saveDynamicVariable() {
       })
     }
     resetDynamicForm()
+    dynamicVariableModalOpen.value = false
     await loadDynamicVariables()
   } catch (e: unknown) {
     const msg =
@@ -1242,26 +1486,6 @@ watch(
   background: #fafaff;
 }
 
-.filters-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.filters-intro {
-  border-radius: 0.875rem;
-  border: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 1rem 1.25rem;
-}
-
-.filters-intro p {
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  color: #475569;
-}
-
 .filters-split {
   display: grid;
   gap: 1.5rem;
@@ -1270,7 +1494,7 @@ watch(
 
 @media (min-width: 1024px) {
   .filters-split {
-    grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr);
+    grid-template-columns: minmax(16rem, 20rem) minmax(32rem, 1fr);
     gap: 1.75rem;
   }
 }
@@ -1311,7 +1535,7 @@ watch(
   gap: 1rem;
 }
 
-.field label {
+.field > label {
   display: block;
   margin-bottom: 0.4rem;
   font-size: 0.8125rem;
@@ -1352,12 +1576,22 @@ watch(
   cursor: pointer;
 }
 
+.field .toggle-row {
+  margin-bottom: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
 .toggle-check {
   width: 1rem;
   height: 1rem;
+  min-width: 1rem;
+  min-height: 1rem;
+  flex-shrink: 0;
+  margin: 0;
   border-radius: 0.25rem;
   border-color: #cbd5e1;
-  accent-color: #4f46e5;
+  accent-color: #2563eb;
 }
 
 .toggle-label {
@@ -1423,191 +1657,72 @@ watch(
   background: #f8fafc;
 }
 
-.filters-table-wrap {
-  min-width: 0;
+.btn-primary--compact {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8125rem;
 }
 
-.filters-table-head {
+.filter-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.65rem;
-}
-
-.filters-table-title {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.filters-table-sub {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  color: #64748b;
-}
-
-.filters-loading {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.filters-table-card {
-  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
-}
-
-.clients-table--filters col.col-name {
-  width: 15%;
-}
-
-.clients-table--filters col.col-contact {
-  width: 11%;
-}
-
-.clients-table--filters col.col-prop {
-  width: 10%;
-}
-
-.clients-table--filters col.col-ptype {
-  width: 10%;
-}
-
-.clients-table--filters col.col-value {
-  width: 28%;
-}
-
-.clients-table--filters col.col-status {
-  width: 8%;
-}
-
-.clients-table--filters col.col-actions {
-  width: 18%;
-}
-
-.clients-table--filters .td-name {
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.clients-table--filters .td-contact {
-  font-size: 0.875rem;
-  color: #334155;
-}
-
-.clients-table--filters .td-muted {
-  font-size: 0.8125rem;
-  color: #64748b;
-}
-
-.clients-table--filters .td-values {
-  vertical-align: top;
-  padding-top: 0.85rem;
-  padding-bottom: 0.85rem;
-}
-
-.value-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.45rem;
-  align-content: flex-start;
-}
-
-.value-chip-list--scroll {
-  max-height: 6.5rem;
-  overflow-y: auto;
-  padding-right: 0.25rem;
-}
-
-.value-chip {
-  display: inline-block;
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.375rem;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #334155;
-  line-height: 1.3;
-}
-
-.status-pill {
-  display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.4);
+  backdrop-filter: blur(4px);
 }
 
-.status-pill--on {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
-}
-
-.status-pill--off {
-  background: #f1f5f9;
-  color: #64748b;
+.filter-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 28rem;
+  max-height: min(90vh, 42rem);
+  overflow: hidden;
+  border-radius: 1rem;
   border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 20px 50px rgb(15 23 42 / 0.18);
 }
 
-.row-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: flex-end;
+.filter-modal--wide {
+  max-width: 32rem;
 }
 
-.btn-row {
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+.filter-modal__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.35rem 0.75rem;
 }
 
-.btn-row--edit {
-  background: #eef2ff;
-  color: #4338ca;
-  border-color: #c7d2fe;
+.filter-modal__form {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
-.btn-row--edit:hover {
-  background: #e0e7ff;
-  color: #3730a3;
+.filter-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1.35rem 0.5rem;
+  -webkit-overflow-scrolling: touch;
 }
 
-.btn-row--danger {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+.filter-modal__footer {
+  flex-shrink: 0;
+  padding: 0 1.35rem 1.35rem;
+  background: #fff;
 }
 
-.btn-row--danger:hover:not(:disabled) {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.btn-row:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.td-empty-state {
-  text-align: center;
-  padding: 2.5rem 1rem !important;
-  font-size: 0.9375rem;
-  color: #64748b;
-  font-style: normal;
+.filter-modal__footer.modal-footer {
+  margin-top: 0;
+  padding-top: 1rem;
 }
 </style>

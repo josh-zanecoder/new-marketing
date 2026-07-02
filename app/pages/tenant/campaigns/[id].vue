@@ -384,10 +384,10 @@ function setCampaignViewTab(tab: CampaignViewTab) {
     <div class="w-full min-w-0 space-y-6 sm:space-y-8">
       <NuxtLink
         to="/tenant/campaigns"
-        class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
+        class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-primary-700"
         @click="campaignStore.fetchCampaigns()"
       >
-        <span class="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm shadow-slate-900/[0.04] transition group-hover:border-indigo-200 group-hover:bg-indigo-50/80 group-hover:text-indigo-700">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm shadow-slate-900/[0.04] transition group-hover:border-primary-200 group-hover:bg-primary-50/80 group-hover:text-primary-700">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
@@ -496,7 +496,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <nav class="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
               <NuxtLink
                 to="/tenant/campaigns"
-                class="font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                class="font-semibold text-primary-600 transition-colors hover:text-primary-700"
                 @click="campaignStore.fetchCampaigns()"
               >
                 Campaigns
@@ -533,11 +533,11 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             />
             <div
               v-else-if="showDetailSendProgress && campaign.status === 'Sending' && !detailSendProgress"
-              class="mt-3 flex items-center gap-2 rounded-xl border border-indigo-200/80 bg-indigo-50/90 px-4 py-3 text-sm font-medium text-indigo-950 shadow-sm ring-1 ring-indigo-100/80"
+              class="mt-3 flex items-center gap-2 rounded-xl border border-primary-200/80 bg-primary-50/90 px-4 py-3 text-sm font-medium text-primary-950 shadow-sm ring-1 ring-primary-100/80"
               role="status"
               aria-live="polite"
             >
-              <svg class="h-4 w-4 shrink-0 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <svg class="h-4 w-4 shrink-0 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
@@ -548,7 +548,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <button
               v-if="campaignForSend && canSendScheduled(campaignForSend)"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="!!sendingCampaignId || scheduleBusy"
               @click="handleSend"
             >
@@ -560,7 +560,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <button
               v-if="campaignForSend && canSendDraft(campaignForSend)"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="!!sendingCampaignId || scheduleBusy"
               @click="handleSend"
             >
@@ -572,7 +572,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <button
               v-if="campaignForSend && canScheduleDraft(campaignForSend)"
               type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="!!sendingCampaignId || scheduleBusy"
               @click="openScheduleModal"
             >
@@ -594,7 +594,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <NuxtLink
               v-if="campaign.status === 'Draft' || campaign.status === 'Failed' || campaign.status === 'Scheduled'"
               :to="`/tenant/campaigns/edit/${campaign.id}`"
-              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:text-[15px]"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:text-[15px]"
             >
               <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -625,7 +625,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:text-[15px]"
             :class="
               campaignViewTab === 'details'
-                ? 'border-indigo-600 text-indigo-900'
+                ? 'border-primary-600 text-primary-900'
                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'details' ? 'page' : undefined"
@@ -638,7 +638,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:text-[15px]"
             :class="
               campaignViewTab === 'tracking'
-                ? 'border-indigo-600 text-indigo-900'
+                ? 'border-primary-600 text-primary-900'
                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             "
             :aria-current="campaignViewTab === 'tracking' ? 'page' : undefined"
@@ -863,7 +863,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             id="schedule-datetime"
             v-model="scheduleLocal"
             type="datetime-local"
-            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
           >
           <p
             v-if="scheduleError"
@@ -883,7 +883,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             </button>
             <button
               type="button"
-              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              class="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:opacity-50"
               :disabled="scheduleBusy"
               @click="confirmSchedule"
             >

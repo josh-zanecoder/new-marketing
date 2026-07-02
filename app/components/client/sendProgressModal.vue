@@ -231,7 +231,7 @@ watch(reportPage, () => {
                   class="rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors sm:text-sm"
                   :class="
                     reportTab === tab.id
-                      ? 'bg-indigo-600 text-white ring-indigo-600'
+                      ? 'bg-primary-600 text-white ring-primary-600'
                       : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
                   "
                   @click="selectTab(tab.id)"
@@ -249,7 +249,7 @@ watch(reportPage, () => {
                   v-model="reportSearch"
                   type="search"
                   placeholder="Search email…"
-                  class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+                  class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
                 >
               </label>
 

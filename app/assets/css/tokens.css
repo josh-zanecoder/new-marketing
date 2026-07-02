@@ -1,0 +1,192 @@
+/**
+ * MortDash CRM — Design Tokens (portable)
+ * Extracted from apps/frontend. Copy into any project and import in your global CSS.
+ * Supports tenant overrides via the same CSS variable names.
+ */
+
+:root {
+  /* ── Brand / Primary (blue) ── */
+  --color-primary: #2563eb;
+  --primary-color: #2563eb;
+  --color-secondary: #6b7280;
+  --color-accent: #10b981;
+
+  /* Primary scale (Tailwind primary-*) */
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+  --primary-950: #172554;
+
+  /* ── Backgrounds ── */
+  --color-background: #f1f5f9;
+  --color-surface: #ffffff;
+  --bg-primary: #ffffff;
+  --bg-secondary: #ffffff;
+  --background-primary: #ffffff;
+  --background-secondary: #f3f4f6;
+  --background-surface: #f9fafb;
+  --background-overlay: rgba(0, 0, 0, 0.5);
+  --page-bg-alt: #f8fafc; /* list views */
+  --page-bg-ratesheet: #f7f7f9;
+
+  /* ── Text ── */
+  --color-text: #111827;
+  --color-text-secondary: #6b7280;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-muted: #64748b; /* slate-500, nav/secondary UI */
+  --text-heading: #0f172a; /* slate-900, page titles */
+  --text-body: #374151; /* gray-700, dialog body */
+  --text-inverse: #ffffff;
+
+  /* ── Borders ── */
+  --color-border: #e5e7eb;
+  --border-color: #e5e7eb;
+  --border-default: #e5e7eb;
+  --border-light: #f3f4f6;
+  --border-dark: #d1d5db;
+  --border-slate: #e2e8f0; /* cards, tables */
+  --border-input: #d1d5db;
+
+  /* ── Buttons ── */
+  --button-primary: #2563eb;
+  --button-primary-hover: #1d4ed8;
+  --button-primary-text: #ffffff;
+  --button-secondary: #6b7280;
+  --button-secondary-hover: #4b5563;
+  --button-secondary-text: #ffffff;
+  --button-danger: #dc2626;
+  --button-danger-hover: #b91c1c;
+  --button-danger-text: #ffffff;
+
+  /* ── Status / Semantic ── */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #dc2626;
+  --success-color: #10b981;
+  --danger-color: #dc2626;
+  --error-color: #dc2626;
+  --status-success: #10b981;
+  --status-success-bg: #d1fae5;
+  --status-warning: #f59e0b;
+  --status-warning-bg: #fef3c7;
+  --status-error: #dc2626;
+  --status-error-bg: #fee2e2;
+  --status-info: #3b82f6;
+  --status-info-bg: #dbeafe;
+  --status-warning-text: #d97706;
+  --status-success-text: #16a34a;
+
+  /* ── Navigation (tenant defaults) ── */
+  --nav-bg: #1f2937;
+  --nav-text: #ffffff;
+  --nav-text-hover: #e5e7eb;
+  --nav-border: #374151;
+  --nav-active: #2563eb;
+
+  /* ── Border radius ── */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.5rem; /* 8px */
+  --radius-lg: 0.75rem; /* 12px */
+  --radius-xl: 1rem; /* 16px — dialogs */
+  --radius-card: 1rem; /* 16px — cards, tables */
+  --radius-button: 0.5rem; /* 8px */
+  --radius-button-lg: 0.75rem; /* 12px — CTA buttons */
+  --radius-input: 0.5rem; /* 8px */
+  --radius-input-lg: 0.625rem; /* 10px — search */
+  --radius-badge: 0.5rem; /* 8px */
+  --radius-nav-item: 0.625rem; /* 10px */
+  --radius-full: 9999px;
+
+  /* ── Spacing scale (used across components) ── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* ── Typography ── */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-size-xs: 0.6875rem; /* 11px — role labels */
+  --font-size-sm: 0.75rem; /* 12px */
+  --font-size-base-sm: 0.8125rem; /* 13px — table headers, badges */
+  --font-size-base: 0.875rem; /* 14px — body, inputs, buttons */
+  --font-size-md: 0.9375rem; /* 15px — dialog body, table cells */
+  --font-size-lg: 1rem; /* 16px */
+  --font-size-xl: 1.125rem; /* 18px — sidebar logo */
+  --font-size-2xl: 1.25rem; /* 20px — dialog titles */
+  --font-size-3xl: 1.5rem; /* 24px — modal headers */
+  --font-size-4xl: 1.875rem; /* 30px — page titles */
+  --font-size-5xl: 2.25rem; /* 36px — hero page titles */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.4;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.6;
+  --letter-spacing-tight: -0.03em;
+  --letter-spacing-snug: -0.02em;
+  --letter-spacing-label: 0.05em; /* uppercase table headers */
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 6px 20px rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-sidebar: 1px 0 0 rgba(0, 0, 0, 0.02);
+  --shadow-nav-active: 0 1px 3px rgba(37, 99, 235, 0.1);
+  --shadow-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  --shadow-focus-ring-blue: 0 0 0 3px rgba(59, 130, 246, 0.1);
+
+  /* ── Z-index scale ── */
+  --z-sidebar: 40;
+  --z-sidebar-mobile: 50;
+  --z-backdrop: 45;
+  --z-mobile-menu: 30;
+  --z-modal: 1000;
+  --z-modal-fullscreen: 10000;
+  --z-dialog: 10002;
+  --z-dropdown-backdrop: 10059;
+  --z-dropdown: 10060;
+
+  /* ── Layout ── */
+  --sidebar-width: 260px;
+  --sidebar-width-collapsed: 72px;
+  --content-max-width: 1280px; /* max-w-screen-xl */
+  --modal-width-sm: 420px;
+  --modal-width-md: 520px;
+  --modal-width-default: 600px;
+  --modal-width-lg: 800px;
+
+  /* ── Transitions ── */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-smooth: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-sidebar: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Slate palette (structural UI) ── */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+}

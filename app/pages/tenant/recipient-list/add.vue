@@ -2,9 +2,9 @@
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <NuxtLink
       to="/tenant/recipient-list"
-      class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-indigo-700"
+      class="group inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-primary-700"
     >
-      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm shadow-slate-900/[0.04] transition group-hover:border-indigo-200 group-hover:bg-indigo-50/80 group-hover:text-indigo-700">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm shadow-slate-900/[0.04] transition group-hover:border-primary-200 group-hover:bg-primary-50/80 group-hover:text-primary-700">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
@@ -13,7 +13,7 @@
     </NuxtLink>
 
     <header class="space-y-1">
-      <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audience</p>
+      <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Audience</p>
       <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
         New recipient list
       </h1>
@@ -87,7 +87,7 @@
                     required
                     maxlength="200"
                     placeholder="e.g. Texas prospects"
-                    class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                    class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:text-[15px]"
                   >
                 </div>
 
@@ -158,11 +158,11 @@
                     role="group"
                     :aria-label="`How to combine condition ${idx} with condition ${idx + 1}`"
                   >
-                    <div class="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-gradient-to-b from-slate-200 via-indigo-200/60 to-slate-200 sm:block sm:-top-4 sm:h-[calc(100%+1rem)]" aria-hidden="true" />
+                    <div class="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-gradient-to-b from-slate-200 via-primary-200/60 to-slate-200 sm:block sm:-top-4 sm:h-[calc(100%+1rem)]" aria-hidden="true" />
                     <div class="relative z-[1] w-full rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-5">
                       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div class="flex items-start gap-2.5 sm:gap-3">
-                          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100/80 sm:h-10 sm:w-10" aria-hidden="true">
+                          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-100/80 sm:h-10 sm:w-10" aria-hidden="true">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                             </svg>
@@ -186,7 +186,7 @@
                             type="button"
                             class="min-h-[2.5rem] flex-1 rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors sm:min-w-[7.5rem] sm:px-4 sm:text-sm"
                             :class="form.criterionJoins[joinSlotBeforeFormRow(idx)] === 'and'
-                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-indigo-200/80'
+                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-primary-200/80'
                               : 'text-slate-600 hover:text-slate-900'"
                             @click="form.criterionJoins[joinSlotBeforeFormRow(idx)] = 'and'"
                           >
@@ -197,7 +197,7 @@
                             type="button"
                             class="min-h-[2.5rem] flex-1 rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors sm:min-w-[7.5rem] sm:px-4 sm:text-sm"
                             :class="form.criterionJoins[joinSlotBeforeFormRow(idx)] === 'or'
-                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-indigo-200/80'
+                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-primary-200/80'
                               : 'text-slate-600 hover:text-slate-900'"
                             @click="form.criterionJoins[joinSlotBeforeFormRow(idx)] = 'or'"
                           >
@@ -212,7 +212,7 @@
                   <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
                     <div class="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-3 sm:items-center sm:gap-3 sm:px-5 sm:py-3.5">
                       <div class="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-[11px] font-bold text-white shadow-sm shadow-indigo-600/25 tabular-nums sm:h-9 sm:w-9 sm:text-xs">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-[11px] font-bold text-white shadow-sm shadow-primary-600/25 tabular-nums sm:h-9 sm:w-9 sm:text-xs">
                           {{ idx + 1 }}
                         </span>
                         <div class="min-w-0">
@@ -270,7 +270,7 @@
                             />
                           </div>
                           <div class="flex items-center justify-start sm:col-span-2 sm:justify-center sm:pb-2">
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-indigo-600/25" title="must equal">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary-600/25" title="must equal">
                               <span aria-hidden="true">=</span>
                               <span>equals</span>
                             </span>
@@ -299,7 +299,7 @@
                               type="text"
                               required
                               maxlength="2000"
-                              class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+                              class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:text-[15px]"
                               :placeholder="propertyValuePlaceholderFor(row)"
                             >
                           </div>
@@ -312,17 +312,17 @@
                 <button
                   v-if="filtersForAudience.length && canAddFilter"
                   type="button"
-                  class="group flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-3 py-3.5 text-sm font-semibold text-slate-800 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-950 sm:gap-3 sm:px-4 sm:py-4 sm:text-[15px]"
+                  class="group flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-3 py-3.5 text-sm font-semibold text-slate-800 transition-colors hover:border-primary-300 hover:bg-primary-50/40 hover:text-primary-950 sm:gap-3 sm:px-4 sm:py-4 sm:text-[15px]"
                   @click="addFilterRow"
                 >
-                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-indigo-600 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700 sm:h-10 sm:w-10">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-primary-600 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors group-hover:border-primary-200 group-hover:bg-primary-50 group-hover:text-primary-700 sm:h-10 sm:w-10">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
                   </span>
                   <span class="min-w-0 text-left">
                     <span class="block">{{ form.filterRows.length ? 'Add another condition' : 'Add a filter condition' }}</span>
-                    <span class="mt-0.5 hidden text-xs font-normal text-slate-500 group-hover:text-indigo-800/90 min-[400px]:block">Stack rules, then connect them with And or Or above</span>
+                    <span class="mt-0.5 hidden text-xs font-normal text-slate-500 group-hover:text-primary-800/90 min-[400px]:block">Stack rules, then connect them with And or Or above</span>
                   </span>
                 </button>
               </div>
@@ -343,14 +343,14 @@
         >
           <button
             type="submit"
-            class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 sm:order-2 sm:w-auto sm:px-8 sm:text-[15px]"
+            class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50 sm:order-2 sm:w-auto sm:px-8 sm:text-[15px]"
             :disabled="saving || !canSubmitPropertyValue || !audienceOptions.length"
           >
             {{ saving ? 'Saving…' : 'Create list' }}
           </button>
           <NuxtLink
             to="/tenant/recipient-list"
-            class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 sm:order-1 sm:w-auto sm:text-[15px]"
+            class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:order-1 sm:w-auto sm:text-[15px]"
             :class="{ 'pointer-events-none opacity-50': saving }"
           >
             Cancel

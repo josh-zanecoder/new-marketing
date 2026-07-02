@@ -2,7 +2,7 @@
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audience</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Audience</p>
         <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
           Recipient lists
         </h1>
@@ -12,7 +12,7 @@
       </div>
       <NuxtLink
         to="/tenant/recipient-list/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:px-5"
+        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:px-5"
       >
         <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -65,7 +65,7 @@
           type="search"
           autocomplete="off"
           placeholder="Search by list name…"
-          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:py-3.5 sm:text-[0.9375rem]"
+          class="w-full rounded-xl border border-slate-200/90 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:py-3.5 sm:text-[0.9375rem]"
         >
       </div>
       <TenantFilterSelect
@@ -109,7 +109,7 @@
       class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
     >
       <div
-        class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
+        class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100"
       >
         <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -124,7 +124,7 @@
       <NuxtLink
         v-if="!data.lists.length"
         to="/tenant/recipient-list/add"
-        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 sm:w-auto"
+        class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:w-auto"
       >
         Create list
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -138,13 +138,13 @@
         <article
           v-for="row in paginatedLists"
           :key="row.id"
-          class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-indigo-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:p-6"
+          class="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-[border-color,box-shadow] hover:border-primary-200/80 hover:shadow-md hover:shadow-slate-900/[0.06] sm:p-6"
         >
           <div class="flex items-start justify-between gap-3 sm:gap-4">
             <div class="min-w-0 flex-1">
               <NuxtLink
                 :to="`/tenant/recipient-list/${row.id}`"
-                class="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/35 focus-visible:ring-offset-2"
+                class="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:ring-offset-2"
               >
                 <h2 class="truncate text-base font-semibold leading-snug text-slate-900">
                   {{ row.name }}
@@ -155,7 +155,7 @@
               </p>
               <p
                 v-if="typeof row.memberCount === 'number'"
-                class="mt-2 text-sm font-semibold tabular-nums tracking-tight text-indigo-600"
+                class="mt-2 text-sm font-semibold tabular-nums tracking-tight text-primary-600"
               >
                 {{ formatRecipientCount(row) }}
               </p>
@@ -163,7 +163,7 @@
             <div class="flex shrink-0 items-center gap-1.5 text-sm font-semibold">
               <NuxtLink
                 :to="makeCampaignHref(row.id)"
-                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 transition-all hover:-translate-y-[1px] hover:bg-indigo-50 hover:text-indigo-700"
+                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary-600 transition-all hover:-translate-y-[1px] hover:bg-primary-50 hover:text-primary-700"
                 aria-label="Make campaign"
               >
                 <Megaphone class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
@@ -173,7 +173,7 @@
               </NuxtLink>
               <NuxtLink
                 :to="`/tenant/recipient-list/edit/${row.id}`"
-                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition-all hover:-translate-y-[1px] hover:bg-slate-100 hover:text-indigo-700"
+                class="group relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition-all hover:-translate-y-[1px] hover:bg-slate-100 hover:text-primary-700"
                 aria-label="Edit list"
               >
                 <Pencil class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
@@ -224,7 +224,7 @@
             </p>
             <NuxtLink
               :to="`/tenant/recipient-list/${row.id}`"
-              class="shrink-0 text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+              class="shrink-0 text-sm font-semibold text-primary-600 transition-colors hover:text-primary-700"
             >
               View
             </NuxtLink>
@@ -247,7 +247,7 @@
         >
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === 1"
             @click="currentPage -= 1"
           >
@@ -260,7 +260,7 @@
           </span>
           <button
             type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
             :disabled="currentPage === totalPages"
             @click="currentPage += 1"
           >
