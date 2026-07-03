@@ -2,33 +2,42 @@
   <Teleport to="body">
     <div
       v-if="props.open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+      class="compact-modal-backdrop"
       @click.self="emit('close')"
     >
-      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200/60">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-lg font-semibold text-slate-900">
+      <div
+        class="compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-tenant-title"
+      >
+        <div class="compact-modal__header">
+          <div class="min-w-0">
+            <h3 id="add-tenant-title" class="compact-modal__title">
               Add tenant
             </h3>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="compact-modal__subtitle">
               Create a new tenant in the registry.
             </p>
           </div>
           <button
             type="button"
-            class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            class="compact-modal__close"
+            aria-label="Close"
             @click="emit('close')"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form class="mt-5 space-y-4" @submit.prevent="handleSubmit">
-          <div class="space-y-2">
-            <label for="tenant-name" class="block text-sm font-medium text-slate-700">Tenant name</label>
+        <form class="compact-modal-form" @submit.prevent="handleSubmit">
+          <div class="compact-modal-field">
+            <label for="tenant-name" class="compact-modal-label">
+              Tenant name
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
             <input
               id="tenant-name"
               v-model="name"
@@ -36,12 +45,15 @@
               autocomplete="organization"
               required
               placeholder="Acme Corp"
-              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              class="compact-modal-input"
             >
           </div>
 
-          <div class="space-y-2">
-            <label for="tenant-email" class="block text-sm font-medium text-slate-700">Contact email</label>
+          <div class="compact-modal-field">
+            <label for="tenant-email" class="compact-modal-label">
+              Contact email
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
             <input
               id="tenant-email"
               v-model="email"
@@ -49,13 +61,13 @@
               autocomplete="email"
               required
               placeholder="client@company.com"
-              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              class="compact-modal-input"
             >
           </div>
 
-          <div class="space-y-2">
-            <label for="tenant-campaign-sender-name" class="block text-sm font-medium text-slate-700">
-              Default campaign sender name <span class="font-normal text-slate-500">(optional)</span>
+          <div class="compact-modal-field">
+            <label for="tenant-campaign-sender-name" class="compact-modal-label">
+              Sender name <span class="compact-modal-label-hint">(optional)</span>
             </label>
             <input
               id="tenant-campaign-sender-name"
@@ -63,13 +75,13 @@
               type="text"
               autocomplete="organization"
               placeholder="Acme Marketing"
-              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              class="compact-modal-input"
             >
           </div>
 
-          <div class="space-y-2">
-            <label for="tenant-campaign-sender-email" class="block text-sm font-medium text-slate-700">
-              Default campaign sender email <span class="font-normal text-slate-500">(optional)</span>
+          <div class="compact-modal-field">
+            <label for="tenant-campaign-sender-email" class="compact-modal-label">
+              Sender email <span class="compact-modal-label-hint">(optional)</span>
             </label>
             <input
               id="tenant-campaign-sender-email"
@@ -77,16 +89,14 @@
               type="email"
               autocomplete="email"
               placeholder="marketing@company.com"
-              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              title="Default From address for new campaigns. Leave empty to use the global fallback."
+              class="compact-modal-input"
             >
-            <p class="text-xs text-slate-500">
-              Used as the default From address when tenants create campaigns. Leave empty to use the global fallback.
-            </p>
           </div>
 
-          <div class="space-y-2">
-            <label for="tenant-crm-url" class="block text-sm font-medium text-slate-700">
-              CRM app URL <span class="font-normal text-slate-500">(optional)</span>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="tenant-crm-url" class="compact-modal-label">
+              CRM app URL <span class="compact-modal-label-hint">(optional)</span>
             </label>
             <input
               id="tenant-crm-url"
@@ -94,21 +104,19 @@
               type="url"
               autocomplete="url"
               placeholder="https://crm.example.com"
-              class="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              title="Used for “Back to CRM” when this tenant opens marketing from their CRM."
+              class="compact-modal-input"
             >
-            <p class="text-xs text-slate-500">
-              Used for “Back to CRM” when this tenant opens marketing from their CRM.
-            </p>
           </div>
 
-          <div v-if="displayError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
           </div>
 
-          <div class="mt-2 flex items-center justify-end gap-3">
+          <div class="compact-modal-footer compact-modal-field--full">
             <button
               type="button"
-              class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              class="btn-modal-cancel"
               :disabled="isSubmitting"
               @click="emit('close')"
             >
@@ -116,23 +124,24 @@
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+              class="btn-modal-submit inline-flex items-center justify-center gap-2"
               :disabled="isSubmitting"
             >
-              <span v-if="isSubmitting" class="inline-flex items-center gap-2">
-                <svg class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 5.523 4.477 10 10 10v-4c-1.45 0-2.792-.464-3.99-1.25z"
-                  />
-                </svg>
-                Adding...
-              </span>
-              <span v-else>
-                Add tenant
-              </span>
+              <svg
+                v-if="isSubmitting"
+                class="h-3.5 w-3.5 shrink-0 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {{ isSubmitting ? 'Adding…' : 'Add tenant' }}
             </button>
           </div>
         </form>
@@ -244,4 +253,3 @@ function handleSubmit() {
   })
 }
 </script>
-

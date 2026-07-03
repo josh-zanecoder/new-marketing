@@ -70,6 +70,10 @@
     @apply inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-cta transition-all duration-200 hover:bg-primary-700 hover:shadow-cta-hover hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:opacity-50;
   }
 
+  .btn-cta--compact {
+    @apply !px-3 !py-1.5 !text-xs sm:!px-5 sm:!py-2.5 sm:!text-sm;
+  }
+
   .btn-outline {
     @apply inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-white hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:opacity-50;
   }

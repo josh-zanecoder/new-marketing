@@ -5,7 +5,7 @@ const props = defineProps<{
   message: string
   confirmText?: string
   cancelText?: string
-  variant?: 'danger' | 'default'
+  variant?: 'danger' | 'default' | 'primary'
   /** When true, actions are disabled and confirm shows a working state (e.g. before redirect). */
   confirmLoading?: boolean
 }>()
@@ -19,6 +19,21 @@ function onBackdropClick() {
   if (props.confirmLoading) return
   emit('cancel')
 }
+
+const cancelButtonClass =
+  'inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50'
+
+const confirmButtonClass = computed(() => {
+  const base =
+    'inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60'
+  if (props.variant === 'danger') {
+    return `${base} rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700`
+  }
+  if (props.variant === 'primary') {
+    return `${base} btn-modal-submit`
+  }
+  return `${base} rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800`
+})
 </script>
 
 <template>
@@ -38,7 +53,12 @@ function onBackdropClick() {
         <div class="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :class="[
+              cancelButtonClass,
+              variant === 'primary'
+                ? 'btn-modal-cancel'
+                : 'rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50'
+            ]"
             :disabled="confirmLoading"
             @click="onBackdropClick"
           >
@@ -47,12 +67,7 @@ function onBackdropClick() {
           <button
             type="button"
             :disabled="confirmLoading"
-            :class="[
-              'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-              variant === 'danger'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-slate-900 text-white hover:bg-slate-800'
-            ]"
+            :class="confirmButtonClass"
             @click="emit('confirm')"
           >
             <svg
