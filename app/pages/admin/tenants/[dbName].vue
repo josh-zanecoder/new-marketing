@@ -1,5 +1,5 @@
 <template>
-  <section class="min-w-0 p-6">
+  <section class="mx-auto min-w-0 max-w-6xl">
     <nav class="mb-4 text-sm text-slate-500">
       <NuxtLink to="/admin/tenants" class="hover:text-primary-600">
         Tenants
@@ -129,46 +129,95 @@
               </button>
             </div>
 
-            <div
-              v-else
-              :class="tenantDataTableWrapClass"
-            >
-              <table :class="tenantDataTableClassCompact">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Label</th>
-                    <th>Status</th>
-                    <th :class="tenantDataThActionsClass">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="ct in contactTypes" :key="ct.id">
-                    <td class="td-name" :title="ct.key">{{ truncateTabCellText(ct.key) }}</td>
-                    <td class="td-muted" :title="ct.label">{{ truncateTabCellText(ct.label) }}</td>
-                    <td>
-                      <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
-                    </td>
-                    <td :class="tenantDataTdActionsClass">
-                      <div class="row-actions">
-                        <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-row btn-row--danger"
-                          :disabled="contactTypeDeletingId === ct.id"
-                          @click="removeContactType(ct.id)"
-                        >
-                          {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-else>
+              <div :class="tenantRecordListClass">
+                <UiRfRecordCard
+                  v-for="ct in contactTypes"
+                  :key="`card-${ct.id}`"
+                >
+                  <template #header>
+                    <h3 class="rf-record-card__title">
+                      {{ ct.label }}
+                    </h3>
+                    <p class="rf-record-card__subtitle">
+                      <code>{{ ct.key }}</code>
+                    </p>
+                  </template>
+                  <template #status>
+                    <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">
+                      {{ ct.enabled ? 'On' : 'Off' }}
+                    </span>
+                  </template>
+
+                  <UiRfRecordField label="Key">
+                    <UiRfTableCellText :text="ct.key" monospace />
+                  </UiRfRecordField>
+                  <UiRfRecordField label="Label">
+                    <UiRfTableCellText :text="ct.label" />
+                  </UiRfRecordField>
+
+                  <template #actions>
+                    <div class="row-actions">
+                      <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-row btn-row--danger"
+                        :disabled="contactTypeDeletingId === ct.id"
+                        @click="removeContactType(ct.id)"
+                      >
+                        {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
+                      </button>
+                    </div>
+                  </template>
+                </UiRfRecordCard>
+              </div>
+
+              <div :class="tenantDataViewTableClass">
+                <div :class="tenantDataTableWrapClass">
+                  <table :class="tenantDataTableClassCompact">
+                    <thead>
+                      <tr>
+                        <th>Key</th>
+                        <th>Label</th>
+                        <th>Status</th>
+                        <th :class="tenantDataThActionsClass">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="ct in contactTypes" :key="`row-${ct.id}`">
+                        <td class="td-name">
+                          <UiRfTableCellText :text="ct.key" />
+                        </td>
+                        <td class="td-muted">
+                          <UiRfTableCellText :text="ct.label" />
+                        </td>
+                        <td>
+                          <span class="status-pill" :class="ct.enabled ? 'status-pill--on' : 'status-pill--off'">{{ ct.enabled ? 'On' : 'Off' }}</span>
+                        </td>
+                        <td :class="tenantDataTdActionsClass">
+                          <div class="row-actions">
+                            <button type="button" class="btn-row btn-row--edit" @click="startEditContactType(ct)">
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-row btn-row--danger"
+                              :disabled="contactTypeDeletingId === ct.id"
+                              @click="removeContactType(ct.id)"
+                            >
+                              {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
           <Teleport to="body">
@@ -206,15 +255,21 @@
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="saveContactType">
+                <form class="filter-modal__form filter-form" @submit.prevent="submitContactTypeForm">
                   <div class="filter-modal__body">
                     <div class="field">
-                      <label for="ct-key">Key</label>
-                      <input id="ct-key" v-model="contactTypeForm.key" type="text" required class="field-input" placeholder="e.g. prospect">
+                      <label for="ct-key">
+                        Key
+                        <span class="field-required" aria-hidden="true">*</span>
+                      </label>
+                      <input id="ct-key" v-model="contactTypeForm.key" type="text" required aria-required="true" class="field-input" placeholder="e.g. prospect">
                     </div>
                     <div class="field">
-                      <label for="ct-label">Label</label>
-                      <input id="ct-label" v-model="contactTypeForm.label" type="text" required class="field-input" placeholder="e.g. Prospect">
+                      <label for="ct-label">
+                        Label
+                        <span class="field-required" aria-hidden="true">*</span>
+                      </label>
+                      <input id="ct-label" v-model="contactTypeForm.label" type="text" required aria-required="true" class="field-input" placeholder="e.g. Prospect">
                     </div>
                     <label class="toggle-row">
                       <input v-model="contactTypeForm.enabled" type="checkbox" class="toggle-check">
@@ -300,82 +355,145 @@
               </button>
             </div>
 
-            <div
-              v-else
-              :class="tenantDataTableWrapClass"
-            >
-              <table :class="tenantDataTableClass">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Contact type</th>
-                    <th>Property</th>
-                    <th>Type</th>
-                    <th>Values</th>
-                    <th>Status</th>
-                    <th :class="tenantDataThActionsClass">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="f in filtersDisplay" :key="f.id">
-                    <td class="td-name" :title="f.name">{{ f.name }}</td>
-                    <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
-                    <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
-                    <td class="td-muted">
-                      {{
-                        f.property === 'address'
-                          ? addressPropertyTypeLabel(f.propertyType || 'state')
-                          : f.property === 'contact_profile'
-                            ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
-                            : f.property === 'relationship_partner'
-                              ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
+            <div v-else>
+              <div :class="tenantRecordListClass">
+                <UiRfRecordCard
+                  v-for="f in filtersDisplay"
+                  :key="`card-${f.id}`"
+                >
+                  <template #header>
+                    <div class="rf-record-card__title">
+                      <UiRfTableCellText
+                        :text="f.name"
+                        :limit="mobileRecordFieldCharLimit"
+                      />
+                    </div>
+                  </template>
+                  <template #status>
+                    <span
+                      class="status-pill"
+                      :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
+                    >
+                      {{ f.enabled ? 'On' : 'Off' }}
+                    </span>
+                  </template>
+
+                  <UiRfRecordField label="Contact type">
+                    {{ contactTypeTableLabel(f.contactType) }}
+                  </UiRfRecordField>
+                  <UiRfRecordField label="Property">
+                    {{ propertyFieldLabel(f.property) }}
+                  </UiRfRecordField>
+                  <UiRfRecordField label="Type">
+                    {{
+                      f.property === 'address'
+                        ? addressPropertyTypeLabel(f.propertyType || 'state')
+                        : f.property === 'contact_profile'
+                          ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+                          : f.property === 'relationship_partner'
+                            ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
                             : '—'
-                      }}
-                    </td>
-                    <td class="td-values">
-                      <div
-                        v-if="f.valueTokens.length"
-                        class="value-chip-list"
-                        :class="{ 'value-chip-list--scroll': f.valueTokens.length > 12 }"
+                    }}
+                  </UiRfRecordField>
+                  <UiRfRecordField label="Values" full-width>
+                    <UiRfTableCellChips
+                      :items="f.valueTokens"
+                      :format-item="formatRegistryLabelForDisplay"
+                    />
+                  </UiRfRecordField>
+
+                  <template #actions>
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="btn-row btn-row--edit"
+                        @click="startEdit(f)"
                       >
-                        <span
-                          v-for="(token, i) in f.valueTokens"
-                          :key="i"
-                          class="value-chip"
-                        >{{ formatRegistryLabelForDisplay(token) }}</span>
-                      </div>
-                      <span v-else class="td-muted">—</span>
-                    </td>
-                    <td>
-                      <span
-                        class="status-pill"
-                        :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
-                      >{{ f.enabled ? 'On' : 'Off' }}</span>
-                    </td>
-                    <td :class="tenantDataTdActionsClass">
-                      <div class="row-actions">
-                        <button
-                          type="button"
-                          class="btn-row btn-row--edit"
-                          @click="startEdit(f)"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-row btn-row--danger"
-                          :disabled="deletingId === f.id"
-                          @click="removeFilter(f.id)"
-                        >
-                          {{ deletingId === f.id ? '…' : 'Delete' }}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-row btn-row--danger"
+                        :disabled="deletingId === f.id"
+                        @click="removeFilter(f.id)"
+                      >
+                        {{ deletingId === f.id ? '…' : 'Delete' }}
+                      </button>
+                    </div>
+                  </template>
+                </UiRfRecordCard>
+              </div>
+
+              <div :class="tenantDataViewTableClass">
+                <div :class="tenantDataTableWrapClass">
+                  <table :class="tenantDataTableClass">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Contact type</th>
+                        <th>Property</th>
+                        <th>Type</th>
+                        <th>Values</th>
+                        <th>Status</th>
+                        <th :class="tenantDataThActionsClass">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="f in filtersDisplay" :key="`row-${f.id}`">
+                        <td class="td-name">
+                          <UiRfTableCellText :text="f.name" />
+                        </td>
+                        <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
+                        <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
+                        <td class="td-muted">
+                          {{
+                            f.property === 'address'
+                              ? addressPropertyTypeLabel(f.propertyType || 'state')
+                              : f.property === 'contact_profile'
+                                ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+                                : f.property === 'relationship_partner'
+                                  ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
+                                  : '—'
+                          }}
+                        </td>
+                        <td class="td-values">
+                          <UiRfTableCellChips
+                            :items="f.valueTokens"
+                            :format-item="formatRegistryLabelForDisplay"
+                          />
+                        </td>
+                        <td>
+                          <span
+                            class="status-pill"
+                            :class="f.enabled ? 'status-pill--on' : 'status-pill--off'"
+                          >{{ f.enabled ? 'On' : 'Off' }}</span>
+                        </td>
+                        <td :class="tenantDataTdActionsClass">
+                          <div class="row-actions">
+                            <button
+                              type="button"
+                              class="btn-row btn-row--edit"
+                              @click="startEdit(f)"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-row btn-row--danger"
+                              :disabled="deletingId === f.id"
+                              @click="removeFilter(f.id)"
+                            >
+                              {{ deletingId === f.id ? '…' : 'Delete' }}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
           <Teleport to="body">
@@ -413,15 +531,19 @@
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="saveFilter">
+                <form class="filter-modal__form filter-form" @submit.prevent="submitFilterForm">
                   <div class="filter-modal__body">
                   <div class="field">
-                    <label for="rf-name">Name</label>
+                    <label for="rf-name">
+                      Name
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
                     <input
                       id="rf-name"
                       v-model="form.name"
                       type="text"
                       required
+                      aria-required="true"
                       class="field-input"
                       placeholder="e.g. Texas prospects"
                     >
@@ -614,54 +736,124 @@
             </button>
           </div>
 
-          <div
-            v-else
-            :class="tenantDataTableWrapClass"
-          >
-            <table :class="tenantDataTableClass">
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Key</th>
-                  <th>Contact path</th>
-                  <th>Scopes</th>
-                  <th>Fallback</th>
-                  <th>Status</th>
-                  <th :class="tenantDataThActionsClass">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="v in dynamicVariables" :key="v.id">
-                  <td class="td-name" :title="v.label">{{ truncateTabCellText(v.label) }}</td>
-                  <td class="td-muted" :title="v.key"><code>{{ truncateTabCellText(v.key) }}</code></td>
-                  <td class="td-muted" :title="v.contactPath"><code>{{ truncateTabCellText(v.contactPath) }}</code></td>
-                  <td class="td-values">
-                    <span v-for="scope in v.scopes" :key="scope" class="value-chip mr-1">{{ scope }}</span>
-                  </td>
-                  <td class="td-muted" :title="v.fallbackValue || undefined">{{ truncateTabCellText(v.fallbackValue) || '—' }}</td>
-                  <td>
-                    <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
-                  </td>
-                  <td :class="tenantDataTdActionsClass">
-                    <div class="row-actions">
-                      <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-row btn-row--danger"
-                        :disabled="dynamicDeletingId === v.id"
-                        @click="removeDynamicVariable(v.id)"
-                      >
-                        {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-else>
+            <div :class="tenantRecordListClass">
+              <UiRfRecordCard
+                v-for="v in dynamicVariables"
+                :key="`card-${v.id}`"
+              >
+                <template #header>
+                  <div class="rf-record-card__title">
+                    <UiRfTableCellText
+                      :text="v.label"
+                      :limit="mobileRecordFieldCharLimit"
+                    />
+                  </div>
+                  <div class="rf-record-card__subtitle">
+                    <UiRfTableCellText
+                      :text="v.key"
+                      monospace
+                      :limit="mobileRecordFieldCharLimit"
+                    />
+                  </div>
+                </template>
+                <template #status>
+                  <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">
+                    {{ v.enabled ? 'On' : 'Off' }}
+                  </span>
+                </template>
+
+                <UiRfRecordField label="Key">
+                  <UiRfTableCellText
+                    :text="v.key"
+                    monospace
+                    :limit="mobileRecordFieldCharLimit"
+                  />
+                </UiRfRecordField>
+                <UiRfRecordField label="Contact path">
+                  <UiRfTableCellText :text="v.contactPath" monospace />
+                </UiRfRecordField>
+                <UiRfRecordField label="Scopes" full-width>
+                  <UiRfTableCellChips :items="v.scopes" />
+                </UiRfRecordField>
+                <UiRfRecordField label="Fallback">
+                  <UiRfTableCellText :text="v.fallbackValue" />
+                </UiRfRecordField>
+
+                <template #actions>
+                  <div class="row-actions">
+                    <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-row btn-row--danger"
+                      :disabled="dynamicDeletingId === v.id"
+                      @click="removeDynamicVariable(v.id)"
+                    >
+                      {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
+                    </button>
+                  </div>
+                </template>
+              </UiRfRecordCard>
+            </div>
+
+            <div :class="tenantDataViewTableClass">
+              <div :class="tenantDataTableWrapClass">
+                <table :class="tenantDataTableClass">
+                  <thead>
+                    <tr>
+                      <th>Label</th>
+                      <th>Key</th>
+                      <th>Contact path</th>
+                      <th>Scopes</th>
+                      <th>Fallback</th>
+                      <th>Status</th>
+                      <th :class="tenantDataThActionsClass">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="v in dynamicVariables" :key="`row-${v.id}`">
+                      <td class="td-name">
+                        <UiRfTableCellText :text="v.label" />
+                      </td>
+                      <td class="td-muted">
+                        <UiRfTableCellText :text="v.key" monospace />
+                      </td>
+                      <td class="td-muted">
+                        <UiRfTableCellText :text="v.contactPath" monospace />
+                      </td>
+                      <td class="td-values">
+                        <UiRfTableCellChips :items="v.scopes" />
+                      </td>
+                      <td class="td-muted">
+                        <UiRfTableCellText :text="v.fallbackValue" />
+                      </td>
+                      <td>
+                        <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
+                      </td>
+                      <td :class="tenantDataTdActionsClass">
+                        <div class="row-actions">
+                          <button type="button" class="btn-row btn-row--edit" @click="startEditDynamicVariable(v)">
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-row btn-row--danger"
+                            :disabled="dynamicDeletingId === v.id"
+                            @click="removeDynamicVariable(v.id)"
+                          >
+                            {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <Teleport to="body">
@@ -699,21 +891,30 @@
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="saveDynamicVariable">
+                <form class="filter-modal__form filter-form" @submit.prevent="submitDynamicVariableForm">
                   <div class="filter-modal__body">
                   <div class="field">
-                    <label for="dv-key">Key</label>
-                    <input id="dv-key" v-model="dynamicForm.key" type="text" required class="field-input" placeholder="e.g. user.firstName">
+                    <label for="dv-key">
+                      Key
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input id="dv-key" v-model="dynamicForm.key" type="text" required aria-required="true" class="field-input" placeholder="e.g. user.firstName">
                   </div>
 
                   <div class="field">
-                    <label for="dv-label">Label</label>
-                    <input id="dv-label" v-model="dynamicForm.label" type="text" required class="field-input" placeholder="e.g. First name">
+                    <label for="dv-label">
+                      Label
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input id="dv-label" v-model="dynamicForm.label" type="text" required aria-required="true" class="field-input" placeholder="e.g. First name">
                   </div>
 
                   <div class="field">
-                    <label for="dv-contact-path">Contact path</label>
-                    <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required class="field-input" placeholder="e.g. firstName or address.state">
+                    <label for="dv-contact-path">
+                      Contact path
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required aria-required="true" class="field-input" placeholder="e.g. firstName or address.state">
                   </div>
 
                   <div class="field">
@@ -730,10 +931,13 @@
                   </div>
 
                   <div class="field">
-                    <label for="dv-fallback">Fallback value</label>
-                    <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" class="field-input" placeholder="Used when AE/recipient value is empty">
+                    <label for="dv-fallback">
+                      Fallback value
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" required aria-required="true" class="field-input" placeholder="e.g. N/A">
                     <p class="filter-form-hint">
-                      Per-tenant default when the contact has no AE (or recipient field is blank). Leave empty to show nothing.
+                      Per-tenant default when the contact has no AE (or recipient field is blank).
                     </p>
                   </div>
 
@@ -803,6 +1007,8 @@ import {
   recipientFilterContactProfilePropertyTypeOptions,
   recipientFilterPropertyFieldOptions,
   recipientFilterRelationshipPartnerPropertyTypeOptions,
+  recipientFiltersRecordListClass,
+  recipientFiltersDataViewTableClass,
   recipientFiltersTableWrapClass,
   recipientFiltersTableClass,
   recipientFiltersTableClassCompact,
@@ -813,11 +1019,15 @@ import {
   type RecipientFilterPropertyFieldValue,
   type RecipientFilterRelationshipPartnerPropertyTypeValue
 } from '~/components/tenant-tabs/RecipientFiltersTab.vue'
-import { truncateTabCellText } from '~/utils/truncateTabCellText'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import { MOBILE_RECORD_FIELD_CHAR_LIMIT } from '~/utils/truncateTabCellText'
 
 definePageMeta({ layout: 'admin' })
 
+const mobileRecordFieldCharLimit = MOBILE_RECORD_FIELD_CHAR_LIMIT
+
+const tenantRecordListClass = recipientFiltersRecordListClass
+const tenantDataViewTableClass = recipientFiltersDataViewTableClass
 const tenantDataTableWrapClass = recipientFiltersTableWrapClass
 const tenantDataTableClass = recipientFiltersTableClass
 const tenantDataTableClassCompact = recipientFiltersTableClassCompact
@@ -1184,11 +1394,29 @@ function resetContactTypeForm() {
   contactTypeFormError.value = ''
 }
 
+function submitContactTypeForm(event: Event) {
+  contactTypeFormError.value = ''
+  const formEl = event.currentTarget as HTMLFormElement
+  if (!formEl.checkValidity()) {
+    formEl.reportValidity()
+    return
+  }
+  saveContactType()
+}
+
 async function saveContactType() {
   contactTypeFormError.value = ''
   const prefix = filtersApiPrefix()
   if (!prefix) {
     contactTypeFormError.value = 'This tenant has no tenant ID in the registry.'
+    return
+  }
+  if (!contactTypeForm.key.trim()) {
+    contactTypeFormError.value = 'Key is required.'
+    return
+  }
+  if (!contactTypeForm.label.trim()) {
+    contactTypeFormError.value = 'Label is required.'
     return
   }
   contactTypeSaving.value = true
@@ -1267,11 +1495,25 @@ function startEdit(f: FilterRow) {
   recipientFilterModalOpen.value = true
 }
 
+function submitFilterForm(event: Event) {
+  formError.value = ''
+  const formEl = event.currentTarget as HTMLFormElement
+  if (!formEl.checkValidity()) {
+    formEl.reportValidity()
+    return
+  }
+  saveFilter()
+}
+
 async function saveFilter() {
   formError.value = ''
   const prefix = filtersApiPrefix()
   if (!prefix) {
     formError.value = 'This tenant has no tenant ID in the registry.'
+    return
+  }
+  if (!form.name.trim()) {
+    formError.value = 'Name is required.'
     return
   }
   saving.value = true
@@ -1343,6 +1585,16 @@ function startEditDynamicVariable(v: DynamicVariableRow) {
   dynamicVariableModalOpen.value = true
 }
 
+function submitDynamicVariableForm(event: Event) {
+  dynamicFormError.value = ''
+  const formEl = event.currentTarget as HTMLFormElement
+  if (!formEl.checkValidity()) {
+    formEl.reportValidity()
+    return
+  }
+  saveDynamicVariable()
+}
+
 async function saveDynamicVariable() {
   dynamicFormError.value = ''
   const prefix = dynamicApiPrefix()
@@ -1350,8 +1602,20 @@ async function saveDynamicVariable() {
     dynamicFormError.value = 'This tenant has no tenant ID in the registry.'
     return
   }
-  if (!dynamicForm.scopes.length) {
-    dynamicFormError.value = 'Select at least one scope.'
+  if (!dynamicForm.key.trim()) {
+    dynamicFormError.value = 'Key is required.'
+    return
+  }
+  if (!dynamicForm.label.trim()) {
+    dynamicFormError.value = 'Label is required.'
+    return
+  }
+  if (!dynamicForm.contactPath.trim()) {
+    dynamicFormError.value = 'Contact path is required.'
+    return
+  }
+  if (!dynamicForm.fallbackValue.trim()) {
+    dynamicFormError.value = 'Fallback value is required.'
     return
   }
   dynamicSaving.value = true
@@ -1365,7 +1629,7 @@ async function saveDynamicVariable() {
       scopes: dynamicForm.scopes,
       enabled: dynamicForm.enabled,
       sortOrder: Number(dynamicForm.sortOrder) || 0,
-      fallbackValue: dynamicForm.fallbackValue,
+      fallbackValue: dynamicForm.fallbackValue.trim(),
       requiredForSend: dynamicForm.requiredForSend
     }
     if (dynamicEditingId.value) {
@@ -1462,17 +1726,34 @@ watch(
   gap: 0.25rem;
   margin-bottom: 1.5rem;
   border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-btn {
   margin-bottom: -1px;
   border-bottom: 2px solid transparent;
-  padding: 0.65rem 1.1rem;
-  font-size: 0.9375rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
   border-radius: 0.5rem 0.5rem 0 0;
   transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .tab-btn {
+    padding: 0.65rem 1.1rem;
+    font-size: 0.9375rem;
+  }
 }
 
 .tab-btn:hover {
@@ -1541,6 +1822,12 @@ watch(
   font-size: 0.8125rem;
   font-weight: 600;
   color: #334155;
+}
+
+.field-required {
+  margin-left: 0.15rem;
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .field-input {
