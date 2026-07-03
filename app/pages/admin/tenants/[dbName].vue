@@ -77,7 +77,13 @@
                   Define keys and labels used when building recipient filters for this tenant.
                 </p>
                 <p class="text-sm text-slate-400">
-                  {{ contactTypes.length }} {{ contactTypes.length === 1 ? 'type' : 'types' }}
+                  <template v-if="contactTypeSearchQuery.trim()">
+                    {{ filteredContactTypes.length }} of {{ contactTypes.length }}
+                    {{ contactTypes.length === 1 ? 'type' : 'types' }}
+                  </template>
+                  <template v-else>
+                    {{ contactTypes.length }} {{ contactTypes.length === 1 ? 'type' : 'types' }}
+                  </template>
                 </p>
               </div>
               <div class="flex shrink-0 items-center gap-3 self-start">
@@ -129,10 +135,38 @@
               </button>
             </div>
 
-            <div v-else>
+            <div v-else class="space-y-3">
+              <div class="relative min-w-0 w-full sm:max-w-md">
+                <label class="sr-only" for="contact-type-search">Search contact types</label>
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  id="contact-type-search"
+                  v-model="contactTypeSearchQuery"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Search by key or label…"
+                  class="w-full rounded-lg border border-slate-200/90 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                >
+              </div>
+
+              <div
+                v-if="!filteredContactTypes.length"
+                class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm shadow-slate-900/[0.03] sm:py-16"
+              >
+                <h3 class="text-lg font-semibold tracking-tight text-slate-900">
+                  No matching contact types
+                </h3>
+                <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+                  Try a different search term.
+                </p>
+              </div>
+
+              <template v-else>
               <div :class="tenantRecordListClass">
                 <UiRfRecordCard
-                  v-for="ct in contactTypes"
+                  v-for="ct in filteredContactTypes"
                   :key="`card-${ct.id}`"
                 >
                   <template #header>
@@ -190,7 +224,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="ct in contactTypes" :key="`row-${ct.id}`">
+                      <tr v-for="ct in filteredContactTypes" :key="`row-${ct.id}`">
                         <td class="td-name">
                           <UiRfTableCellText :text="ct.key" />
                         </td>
@@ -220,6 +254,7 @@
                   </table>
                 </div>
               </div>
+              </template>
             </div>
 
           <Teleport to="body">
@@ -327,7 +362,13 @@
                   Rules that determine which contacts receive campaigns based on type and properties.
                 </p>
                 <p class="text-sm text-slate-400">
-                  {{ filters.length }} {{ filters.length === 1 ? 'filter' : 'filters' }}
+                  <template v-if="recipientFiltersHasActiveFilters">
+                    {{ filteredFiltersDisplay.length }} of {{ filters.length }}
+                    {{ filters.length === 1 ? 'filter' : 'filters' }}
+                  </template>
+                  <template v-else>
+                    {{ filters.length }} {{ filters.length === 1 ? 'filter' : 'filters' }}
+                  </template>
                 </p>
               </div>
               <div class="flex shrink-0 items-center gap-3 self-start">
@@ -353,7 +394,7 @@
             </div>
 
             <div
-              v-else-if="!filtersDisplay.length"
+              v-else-if="!filters.length"
               class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm shadow-slate-900/[0.03] sm:py-20"
             >
               <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-primary-100">
@@ -379,10 +420,56 @@
               </button>
             </div>
 
-            <div v-else>
+            <div v-else class="space-y-3">
+              <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <div class="relative min-w-0 w-full sm:flex-1 sm:max-w-md">
+                  <label class="sr-only" for="recipient-filter-search">Search recipient filters</label>
+                  <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    id="recipient-filter-search"
+                    v-model="recipientFilterSearchQuery"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Search by name, type, property, or value…"
+                    class="w-full rounded-lg border border-slate-200/90 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition-colors focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                  >
+                </div>
+                <TenantFilterSelect
+                  id="recipient-filter-contact-type-filter"
+                  v-model="recipientFilterContactTypeFilter"
+                  label="Filter by contact type"
+                  variant="field"
+                  :options="recipientFilterContactTypeFilterSelectOptions"
+                  class="w-full shrink-0 sm:w-[11.5rem]"
+                />
+                <TenantFilterSelect
+                  id="recipient-filter-property-filter"
+                  v-model="recipientFilterPropertyFilter"
+                  label="Filter by property"
+                  variant="field"
+                  :options="recipientFilterPropertyFilterSelectOptions"
+                  class="w-full shrink-0 sm:w-[11.5rem]"
+                />
+              </div>
+
+              <div
+                v-if="!filteredFiltersDisplay.length"
+                class="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm shadow-slate-900/[0.03] sm:py-16"
+              >
+                <h3 class="text-lg font-semibold tracking-tight text-slate-900">
+                  No matching recipient filters
+                </h3>
+                <p class="mt-2.5 max-w-sm text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+                  {{ recipientFilterNoMatchesHint }}
+                </p>
+              </div>
+
+              <template v-else>
               <div :class="tenantRecordListClass">
                 <UiRfRecordCard
-                  v-for="f in filtersDisplay"
+                  v-for="f in filteredFiltersDisplay"
                   :key="`card-${f.id}`"
                 >
                   <template #header>
@@ -467,7 +554,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="f in filtersDisplay" :key="`row-${f.id}`">
+                      <tr v-for="f in filteredFiltersDisplay" :key="`row-${f.id}`">
                         <td class="td-name">
                           <UiRfTableCellText :text="f.name" ellipsis :lines="2" />
                         </td>
@@ -528,6 +615,7 @@
                   </table>
                 </div>
               </div>
+              </template>
             </div>
 
           <Teleport to="body">
@@ -1214,6 +1302,59 @@ const filtersDisplay = computed(() =>
   }))
 )
 
+const contactTypeSearchQuery = ref('')
+const recipientFilterSearchQuery = ref('')
+const recipientFilterContactTypeFilter = ref('all')
+const recipientFilterPropertyFilter = ref('all')
+
+const filteredContactTypes = computed(() => {
+  const q = contactTypeSearchQuery.value.trim().toLowerCase()
+  if (!q) return contactTypes.value
+  return contactTypes.value.filter((ct) => {
+    const key = String(ct.key ?? '').toLowerCase()
+    const label = String(ct.label ?? '').toLowerCase()
+    return key.includes(q) || label.includes(q)
+  })
+})
+
+const filteredFiltersDisplay = computed(() => {
+  let out = filtersDisplay.value
+  if (recipientFilterContactTypeFilter.value !== 'all') {
+    const ct = recipientFilterContactTypeFilter.value.toLowerCase()
+    out = out.filter((f) => String(f.contactType ?? '').trim().toLowerCase() === ct)
+  }
+  if (recipientFilterPropertyFilter.value !== 'all') {
+    const prop = recipientFilterPropertyFilter.value.toLowerCase()
+    out = out.filter((f) => String(f.property ?? '').trim().toLowerCase() === prop)
+  }
+  const q = recipientFilterSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    out = out.filter((f) => {
+      const blob = [
+        f.name,
+        f.contactType,
+        contactTypeTableLabel(f.contactType),
+        f.property,
+        propertyFieldLabel(f.property),
+        recipientFilterTypeLabel(f),
+        f.propertyValue,
+        ...f.valueTokens
+      ]
+        .join(' ')
+        .toLowerCase()
+      return blob.includes(q)
+    })
+  }
+  return out
+})
+
+const recipientFiltersHasActiveFilters = computed(
+  () =>
+    Boolean(recipientFilterSearchQuery.value.trim()) ||
+    recipientFilterContactTypeFilter.value !== 'all' ||
+    recipientFilterPropertyFilter.value !== 'all'
+)
+
 const editingId = ref<string | null>(null)
 const saving = ref(false)
 const deletingId = ref<string | null>(null)
@@ -1323,6 +1464,94 @@ function contactTypeTableLabel(contactTypeKey: string): string {
   if (lab) return lab
   return formatRegistryLabelForDisplay(contactTypeKey)
 }
+
+/** Contact types present on saved filters plus tenant contact type registry. */
+const recipientFilterContactTypeOptions = computed((): { value: string; label: string }[] => {
+  const seen = new Set<string>()
+  for (const f of filters.value) {
+    const k = String(f.contactType ?? '').trim().toLowerCase()
+    if (k) seen.add(k)
+  }
+  for (const ct of contactTypes.value) {
+    if (ct.enabled === false) continue
+    const k = String(ct.key ?? '').trim().toLowerCase()
+    if (k) seen.add(k)
+  }
+  if (!seen.size) return []
+  const labelByKey = new Map<string, string>()
+  const orderByKey = new Map<string, number>()
+  for (const ct of contactTypes.value) {
+    const k = String(ct.key ?? '').trim().toLowerCase()
+    if (!k) continue
+    labelByKey.set(k, String(ct.label ?? '').trim() || k)
+    orderByKey.set(k, Number(ct.sortOrder ?? 0))
+  }
+  const keys = [...seen]
+  keys.sort((a, b) => {
+    const oa = orderByKey.has(a) ? orderByKey.get(a)! : 9999
+    const ob = orderByKey.has(b) ? orderByKey.get(b)! : 9999
+    if (oa !== ob) return oa - ob
+    return a.localeCompare(b)
+  })
+  return keys.map((value) => ({
+    value,
+    label: labelByKey.get(value) ?? formatRegistryLabelForDisplay(value)
+  }))
+})
+
+/** Distinct property values from saved recipient filters. */
+const recipientFilterPropertyOptions = computed((): { value: string; label: string }[] => {
+  const seen = new Set<string>()
+  for (const f of filters.value) {
+    const p = String(f.property ?? '').trim().toLowerCase()
+    if (p) seen.add(p)
+  }
+  if (!seen.size) return []
+  return [...seen]
+    .sort((a, b) => propertyFieldLabel(a).localeCompare(propertyFieldLabel(b)))
+    .map((value) => ({
+      value,
+      label: propertyFieldLabel(value)
+    }))
+})
+
+const recipientFilterContactTypeFilterSelectOptions = computed(() => [
+  { value: 'all', label: 'All contact types' },
+  ...recipientFilterContactTypeOptions.value
+])
+
+const recipientFilterPropertyFilterSelectOptions = computed(() => [
+  { value: 'all', label: 'All properties' },
+  ...recipientFilterPropertyOptions.value
+])
+
+const recipientFilterNoMatchesHint = computed(() => {
+  const hasSearch = Boolean(recipientFilterSearchQuery.value.trim())
+  const hasContactType = recipientFilterContactTypeFilter.value !== 'all'
+  const hasProperty = recipientFilterPropertyFilter.value !== 'all'
+  if (hasSearch && (hasContactType || hasProperty)) return 'Try a different search or filter.'
+  if (hasSearch) return 'Try a different search term.'
+  if (hasContactType && hasProperty) {
+    return 'No filters match these contact type and property selections.'
+  }
+  if (hasContactType) return 'No filters match this contact type.'
+  if (hasProperty) return 'No filters match this property.'
+  return 'Try a different search or filter.'
+})
+
+watch(recipientFilterContactTypeOptions, (opts) => {
+  if (recipientFilterContactTypeFilter.value === 'all') return
+  if (!opts.some((o) => o.value === recipientFilterContactTypeFilter.value)) {
+    recipientFilterContactTypeFilter.value = 'all'
+  }
+})
+
+watch(recipientFilterPropertyOptions, (opts) => {
+  if (recipientFilterPropertyFilter.value === 'all') return
+  if (!opts.some((o) => o.value === recipientFilterPropertyFilter.value)) {
+    recipientFilterPropertyFilter.value = 'all'
+  }
+})
 
 function tenantByDbUrl() {
   return `/api/v1/admin/tenants/db/${encodeURIComponent(dbName.value)}`
