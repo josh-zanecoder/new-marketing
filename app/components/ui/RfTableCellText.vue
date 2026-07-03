@@ -11,6 +11,7 @@ const props = withDefaults(
     lines?: number
   }>(),
   {
+    text: null,
     limit: TENANT_TAB_CELL_CHAR_LIMIT,
     emptyLabel: '—',
     lines: 1
