@@ -84,10 +84,10 @@
                 <span v-if="contactTypesPending" class="text-sm font-medium text-slate-500">Loading…</span>
                 <button
                   type="button"
-                  class="btn-cta group self-start"
+                  class="btn-cta btn-cta--compact group self-start"
                   @click="openContactTypeModal"
                 >
-                  <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                   </svg>
                   Add Contact Type
@@ -119,10 +119,10 @@
               </p>
               <button
                 type="button"
-                class="btn-cta group mt-6"
+                class="btn-cta btn-cta--compact group mt-6"
                 @click="openContactTypeModal"
               >
-                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
                 Add contact type
@@ -223,61 +223,83 @@
           <Teleport to="body">
             <div
               v-if="contactTypeModalOpen"
-              class="filter-modal-backdrop"
+              class="compact-modal-backdrop"
               @click.self="closeContactTypeModal"
             >
               <div
-                class="filter-modal"
+                class="compact-modal"
                 role="dialog"
                 aria-modal="true"
                 :aria-labelledby="contactTypeEditingId ? 'ct-modal-title-edit' : 'ct-modal-title-add'"
               >
-                <div class="filter-modal__header">
-                  <div>
-                    <h2
+                <div class="compact-modal__header">
+                  <div class="min-w-0">
+                    <h3
                       :id="contactTypeEditingId ? 'ct-modal-title-edit' : 'ct-modal-title-add'"
-                      class="filter-form-title"
+                      class="compact-modal__title"
                     >
                       {{ contactTypeEditingId ? 'Edit Contact Type' : 'Add Contact Type' }}
-                    </h2>
-                    <p v-if="contactTypeEditingId" class="filter-form-hint">
+                    </h3>
+                    <p v-if="contactTypeEditingId" class="compact-modal__subtitle">
                       Update the selected contact type.
                     </p>
                   </div>
                   <button
                     type="button"
-                    class="filter-modal__close"
+                    class="compact-modal__close"
                     aria-label="Close"
                     @click="closeContactTypeModal"
                   >
-                    <svg class="filter-modal__close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="submitContactTypeForm">
-                  <div class="filter-modal__body">
-                    <div class="field">
-                      <label for="ct-key">
-                        Key
-                        <span class="field-required" aria-hidden="true">*</span>
-                      </label>
-                      <input id="ct-key" v-model="contactTypeForm.key" type="text" required aria-required="true" class="field-input" placeholder="e.g. prospect">
-                    </div>
-                    <div class="field">
-                      <label for="ct-label">
-                        Label
-                        <span class="field-required" aria-hidden="true">*</span>
-                      </label>
-                      <input id="ct-label" v-model="contactTypeForm.label" type="text" required aria-required="true" class="field-input" placeholder="e.g. Prospect">
-                    </div>
+                <form class="compact-modal-form" @submit.prevent="submitContactTypeForm">
+                  <div class="compact-modal-field">
+                    <label for="ct-key" class="compact-modal-label">
+                      Key
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="ct-key"
+                      v-model="contactTypeForm.key"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input compact-modal-input--mono"
+                      placeholder="e.g. prospect"
+                    >
+                  </div>
+
+                  <div class="compact-modal-field">
+                    <label for="ct-label" class="compact-modal-label">
+                      Label
+                      <span class="field-required" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="ct-label"
+                      v-model="contactTypeForm.label"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input"
+                      placeholder="e.g. Prospect"
+                    >
+                  </div>
+
+                  <div class="compact-modal-field compact-modal-field--full compact-modal-toggles">
                     <label class="toggle-row">
                       <input v-model="contactTypeForm.enabled" type="checkbox" class="toggle-check">
                       <span class="toggle-label">Enabled</span>
                     </label>
-                    <p v-if="contactTypeFormError" class="form-error">{{ contactTypeFormError }}</p>
                   </div>
-                  <div class="filter-modal__footer modal-footer">
+
+                  <div v-if="contactTypeFormError" class="compact-modal-error compact-modal-field--full">
+                    {{ contactTypeFormError }}
+                  </div>
+
+                  <div class="compact-modal-footer compact-modal-field--full">
                     <button type="button" class="btn-modal-cancel" @click="closeContactTypeModal">
                       Cancel
                     </button>
@@ -310,10 +332,10 @@
                 <span v-if="filtersPending" class="text-sm font-medium text-slate-500">Loading…</span>
                 <button
                   type="button"
-                  class="btn-cta group self-start"
+                  class="btn-cta btn-cta--compact group self-start"
                   @click="openRecipientFilterModal"
                 >
-                  <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                   </svg>
                   Add Filter
@@ -345,10 +367,10 @@
               </p>
               <button
                 type="button"
-                class="btn-cta group mt-6"
+                class="btn-cta btn-cta--compact group mt-6"
                 @click="openRecipientFilterModal"
               >
-                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
                 Add Filter
@@ -499,42 +521,41 @@
           <Teleport to="body">
             <div
               v-if="recipientFilterModalOpen"
-              class="filter-modal-backdrop"
+              class="compact-modal-backdrop"
               @click.self="closeRecipientFilterModal"
             >
               <div
-                class="filter-modal filter-modal--wide"
+                class="compact-modal"
                 role="dialog"
                 aria-modal="true"
                 :aria-labelledby="editingId ? 'rf-modal-title-edit' : 'rf-modal-title-add'"
               >
-                <div class="filter-modal__header">
-                  <div>
-                    <h2
+                <div class="compact-modal__header">
+                  <div class="min-w-0">
+                    <h3
                       :id="editingId ? 'rf-modal-title-edit' : 'rf-modal-title-add'"
-                      class="filter-form-title"
+                      class="compact-modal__title"
                     >
                       {{ editingId ? 'Edit Filter' : 'Add Filter' }}
-                    </h2>
-                    <p v-if="editingId" class="filter-form-hint">
+                    </h3>
+                    <p v-if="editingId" class="compact-modal__subtitle">
                       Updating the selected filter.
                     </p>
                   </div>
                   <button
                     type="button"
-                    class="filter-modal__close"
+                    class="compact-modal__close"
                     aria-label="Close"
                     @click="closeRecipientFilterModal"
                   >
-                    <svg class="filter-modal__close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="submitFilterForm">
-                  <div class="filter-modal__body">
-                  <div class="field">
-                    <label for="rf-name">
+                <form class="compact-modal-form" @submit.prevent="submitFilterForm">
+                  <div class="compact-modal-field">
+                    <label for="rf-name" class="compact-modal-label">
                       Name
                       <span class="field-required" aria-hidden="true">*</span>
                     </label>
@@ -544,17 +565,17 @@
                       type="text"
                       required
                       aria-required="true"
-                      class="field-input"
+                      class="compact-modal-input"
                       placeholder="e.g. Texas prospects"
                     >
                   </div>
 
-                  <div class="field">
-                    <label for="rf-contact-type">Contact type</label>
+                  <div class="compact-modal-field">
+                    <label for="rf-contact-type" class="compact-modal-label">Contact type</label>
                     <select
                       id="rf-contact-type"
                       v-model="form.contactType"
-                      class="field-input"
+                      class="compact-modal-input"
                     >
                       <option
                         v-for="ct in contactTypes"
@@ -566,12 +587,12 @@
                     </select>
                   </div>
 
-                  <div class="field">
-                    <label for="rf-property">Property</label>
+                  <div class="compact-modal-field">
+                    <label for="rf-property" class="compact-modal-label">Property</label>
                     <select
                       id="rf-property"
                       v-model="form.property"
-                      class="field-input"
+                      class="compact-modal-input"
                     >
                       <option
                         v-for="opt in recipientFilterPropertyFieldOptions"
@@ -583,12 +604,12 @@
                     </select>
                   </div>
 
-                  <div v-if="form.property === 'address'" class="field">
-                    <label for="rf-property-type">Property type</label>
+                  <div v-if="form.property === 'address'" class="compact-modal-field">
+                    <label for="rf-property-type" class="compact-modal-label">Property type</label>
                     <select
                       id="rf-property-type"
                       v-model="form.propertyType"
-                      class="field-input"
+                      class="compact-modal-input"
                     >
                       <option
                         v-for="opt in recipientFilterAddressPropertyTypeOptions"
@@ -600,12 +621,12 @@
                     </select>
                   </div>
 
-                  <div v-else-if="form.property === 'contact_profile'" class="field">
-                    <label for="rf-contact-profile-type">Type or sub type</label>
+                  <div v-else-if="form.property === 'contact_profile'" class="compact-modal-field">
+                    <label for="rf-contact-profile-type" class="compact-modal-label">Type or sub type</label>
                     <select
                       id="rf-contact-profile-type"
                       v-model="form.propertyType"
-                      class="field-input"
+                      class="compact-modal-input"
                     >
                       <option
                         v-for="opt in recipientFilterContactProfilePropertyTypeOptions"
@@ -617,12 +638,12 @@
                     </select>
                   </div>
 
-                  <div v-else-if="form.property === 'relationship_partner'" class="field">
-                    <label for="rf-relationship-partner-type">Partner field</label>
+                  <div v-else-if="form.property === 'relationship_partner'" class="compact-modal-field">
+                    <label for="rf-relationship-partner-type" class="compact-modal-label">Partner field</label>
                     <select
                       id="rf-relationship-partner-type"
                       v-model="form.propertyType"
-                      class="field-input"
+                      class="compact-modal-input"
                     >
                       <option
                         v-for="opt in recipientFilterRelationshipPartnerPropertyTypeOptions"
@@ -634,26 +655,32 @@
                     </select>
                   </div>
 
-                  <div class="field">
-                    <label for="rf-property-value">Property value</label>
+                  <div class="compact-modal-field compact-modal-field--full">
+                    <label for="rf-property-value" class="compact-modal-label">
+                      Property value
+                      <span class="compact-modal-label-hint">(optional)</span>
+                    </label>
                     <input
                       id="rf-property-value"
                       v-model="form.propertyValue"
                       type="text"
-                      class="field-input"
-                      placeholder="Optional — e.g. TX or AL, AK, AZ"
+                      class="compact-modal-input"
+                      placeholder="e.g. TX or AL, AK, AZ"
                     >
                   </div>
 
-                  <label class="toggle-row">
-                    <input v-model="form.enabled" type="checkbox" class="toggle-check">
-                    <span class="toggle-label">Enabled</span>
-                  </label>
-
-                  <p v-if="formError" class="form-error">{{ formError }}</p>
+                  <div class="compact-modal-field compact-modal-field--full compact-modal-toggles">
+                    <label class="toggle-row">
+                      <input v-model="form.enabled" type="checkbox" class="toggle-check">
+                      <span class="toggle-label">Enabled</span>
+                    </label>
                   </div>
 
-                  <div class="filter-modal__footer modal-footer">
+                  <div v-if="formError" class="compact-modal-error compact-modal-field--full">
+                    {{ formError }}
+                  </div>
+
+                  <div class="compact-modal-footer compact-modal-field--full">
                     <button type="button" class="btn-modal-cancel" @click="closeRecipientFilterModal">
                       Cancel
                     </button>
@@ -691,10 +718,10 @@
               <span v-if="dynamicPending" class="text-sm font-medium text-slate-500">Loading…</span>
               <button
                 type="button"
-                class="btn-cta group self-start"
+                class="btn-cta btn-cta--compact group self-start"
                 @click="openDynamicVariableModal"
               >
-                <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
                 Add Dynamic Variable
@@ -726,10 +753,10 @@
             </p>
             <button
               type="button"
-              class="btn-cta group mt-6"
+              class="btn-cta btn-cta--compact group mt-6"
               @click="openDynamicVariableModal"
             >
-              <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
               Add Dynamic Variable
@@ -859,30 +886,30 @@
           <Teleport to="body">
             <div
               v-if="dynamicVariableModalOpen"
-              class="filter-modal-backdrop"
+              class="compact-modal-backdrop"
               @click.self="closeDynamicVariableModal"
             >
               <div
-                class="filter-modal filter-modal--wide"
+                class="compact-modal"
                 role="dialog"
                 aria-modal="true"
                 :aria-labelledby="dynamicEditingId ? 'dv-modal-title-edit' : 'dv-modal-title-add'"
               >
-                <div class="filter-modal__header">
-                  <div>
-                    <h2
+                <div class="compact-modal__header">
+                  <div class="min-w-0">
+                    <h3
                       :id="dynamicEditingId ? 'dv-modal-title-edit' : 'dv-modal-title-add'"
-                      class="filter-form-title"
+                      class="compact-modal__title"
                     >
                       {{ dynamicEditingId ? 'Edit Dynamic Variable' : 'Add Dynamic Variable' }}
-                    </h2>
-                    <p v-if="dynamicEditingId" class="filter-form-hint">
+                    </h3>
+                    <p v-if="dynamicEditingId" class="compact-modal__subtitle">
                       Updating the selected variable.
                     </p>
                   </div>
                   <button
                     type="button"
-                    class="btn-modal-close"
+                    class="compact-modal__close"
                     aria-label="Close"
                     @click="closeDynamicVariableModal"
                   >
@@ -891,64 +918,96 @@
                     </svg>
                   </button>
                 </div>
-                <form class="filter-modal__form filter-form" @submit.prevent="submitDynamicVariableForm">
-                  <div class="filter-modal__body">
-                  <div class="field">
-                    <label for="dv-key">
+                <form class="compact-modal-form" @submit.prevent="submitDynamicVariableForm">
+                  <div class="compact-modal-field">
+                    <label for="dv-key" class="compact-modal-label">
                       Key
                       <span class="field-required" aria-hidden="true">*</span>
                     </label>
-                    <input id="dv-key" v-model="dynamicForm.key" type="text" required aria-required="true" class="field-input" placeholder="e.g. user.firstName">
+                    <input
+                      id="dv-key"
+                      v-model="dynamicForm.key"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input compact-modal-input--mono"
+                      placeholder="e.g. user.firstName"
+                    >
                   </div>
 
-                  <div class="field">
-                    <label for="dv-label">
+                  <div class="compact-modal-field">
+                    <label for="dv-label" class="compact-modal-label">
                       Label
                       <span class="field-required" aria-hidden="true">*</span>
                     </label>
-                    <input id="dv-label" v-model="dynamicForm.label" type="text" required aria-required="true" class="field-input" placeholder="e.g. First name">
+                    <input
+                      id="dv-label"
+                      v-model="dynamicForm.label"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input"
+                      placeholder="e.g. First name"
+                    >
                   </div>
 
-                  <div class="field">
-                    <label for="dv-contact-path">
+                  <div class="compact-modal-field">
+                    <label for="dv-contact-path" class="compact-modal-label">
                       Contact path
                       <span class="field-required" aria-hidden="true">*</span>
                     </label>
-                    <input id="dv-contact-path" v-model="dynamicForm.contactPath" type="text" required aria-required="true" class="field-input" placeholder="e.g. firstName or address.state">
+                    <input
+                      id="dv-contact-path"
+                      v-model="dynamicForm.contactPath"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input compact-modal-input--mono"
+                      placeholder="e.g. firstName"
+                    >
                   </div>
 
-                  <div class="field">
-                    <label for="dv-source-type">Variable source</label>
-                    <select id="dv-source-type" v-model="dynamicForm.sourceType" class="field-input">
+                  <div class="compact-modal-field">
+                    <label for="dv-source-type" class="compact-modal-label">Variable source</label>
+                    <select id="dv-source-type" v-model="dynamicForm.sourceType" class="compact-modal-input">
                       <option value="recipient">Recipient</option>
                       <option value="user">User</option>
                     </select>
                   </div>
 
-                  <div class="field">
-                    <label for="dv-description">Description</label>
-                    <input id="dv-description" v-model="dynamicForm.description" type="text" class="field-input" placeholder="Optional">
+                  <div class="compact-modal-field">
+                    <label for="dv-description" class="compact-modal-label">
+                      Description
+                      <span class="compact-modal-label-hint">(optional)</span>
+                    </label>
+                    <input id="dv-description" v-model="dynamicForm.description" type="text" class="compact-modal-input">
                   </div>
 
-                  <div class="field">
-                    <label for="dv-fallback">
+                  <div class="compact-modal-field">
+                    <label for="dv-sort" class="compact-modal-label">Sort order</label>
+                    <input id="dv-sort" v-model.number="dynamicForm.sortOrder" type="number" class="compact-modal-input" min="0" step="1">
+                  </div>
+
+                  <div class="compact-modal-field compact-modal-field--full">
+                    <label for="dv-fallback" class="compact-modal-label">
                       Fallback value
                       <span class="field-required" aria-hidden="true">*</span>
                     </label>
-                    <input id="dv-fallback" v-model="dynamicForm.fallbackValue" type="text" required aria-required="true" class="field-input" placeholder="e.g. N/A">
-                    <p class="filter-form-hint">
-                      Per-tenant default when the contact has no AE (or recipient field is blank).
-                    </p>
+                    <input
+                      id="dv-fallback"
+                      v-model="dynamicForm.fallbackValue"
+                      type="text"
+                      required
+                      aria-required="true"
+                      class="compact-modal-input"
+                      placeholder="e.g. N/A"
+                      title="Per-tenant default when the contact has no value for this field."
+                    >
                   </div>
 
-                  <div class="field">
-                    <label for="dv-sort">Sort order</label>
-                    <input id="dv-sort" v-model.number="dynamicForm.sortOrder" type="number" class="field-input" min="0" step="1">
-                  </div>
-
-                  <div class="field">
-                    <label>Scopes</label>
-                    <div class="flex gap-3">
+                  <div class="compact-modal-field compact-modal-field--full">
+                    <span class="compact-modal-label">Scopes</span>
+                    <div class="compact-modal-toggles">
                       <label class="toggle-row">
                         <input
                           :checked="dynamicForm.scopes.includes('subject')"
@@ -970,20 +1029,22 @@
                     </div>
                   </div>
 
-                  <label class="toggle-row">
-                    <input v-model="dynamicForm.enabled" type="checkbox" class="toggle-check">
-                    <span class="toggle-label">Enabled</span>
-                  </label>
-
-                  <label class="toggle-row">
-                    <input v-model="dynamicForm.requiredForSend" type="checkbox" class="toggle-check">
-                    <span class="toggle-label">Required for send</span>
-                  </label>
-
-                  <p v-if="dynamicFormError" class="form-error">{{ dynamicFormError }}</p>
+                  <div class="compact-modal-field compact-modal-field--full compact-modal-toggles">
+                    <label class="toggle-row">
+                      <input v-model="dynamicForm.enabled" type="checkbox" class="toggle-check">
+                      <span class="toggle-label">Enabled</span>
+                    </label>
+                    <label class="toggle-row">
+                      <input v-model="dynamicForm.requiredForSend" type="checkbox" class="toggle-check">
+                      <span class="toggle-label">Required for send</span>
+                    </label>
                   </div>
 
-                  <div class="filter-modal__footer modal-footer">
+                  <div v-if="dynamicFormError" class="compact-modal-error compact-modal-field--full">
+                    {{ dynamicFormError }}
+                  </div>
+
+                  <div class="compact-modal-footer compact-modal-field--full">
                     <button type="button" class="btn-modal-cancel" @click="closeDynamicVariableModal">
                       Cancel
                     </button>
@@ -1932,27 +1993,28 @@ watch(
 .toggle-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9375rem;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
   font-weight: 500;
+  line-height: 1.25;
   color: #334155;
   cursor: pointer;
 }
 
 .field .toggle-row {
   margin-bottom: 0;
-  font-size: 0.9375rem;
+  font-size: 0.6875rem;
   font-weight: 500;
 }
 
 .toggle-check {
-  width: 1rem;
-  height: 1rem;
-  min-width: 1rem;
-  min-height: 1rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  min-width: 0.75rem;
+  min-height: 0.75rem;
   flex-shrink: 0;
   margin: 0;
-  border-radius: 0.25rem;
+  border-radius: 0.1875rem;
   border-color: #cbd5e1;
   accent-color: #2563eb;
 }
@@ -2023,69 +2085,5 @@ watch(
 .btn-primary--compact {
   padding: 0.45rem 0.9rem;
   font-size: 0.8125rem;
-}
-
-.filter-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgb(15 23 42 / 0.4);
-  backdrop-filter: blur(4px);
-}
-
-.filter-modal {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 28rem;
-  max-height: min(90vh, 42rem);
-  overflow: hidden;
-  border-radius: 1rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  box-shadow: 0 20px 50px rgb(15 23 42 / 0.18);
-}
-
-.filter-modal--wide {
-  max-width: 32rem;
-}
-
-.filter-modal__header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.35rem 1.35rem 0.75rem;
-}
-
-.filter-modal__form {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-}
-
-.filter-modal__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 1.35rem 0.5rem;
-  -webkit-overflow-scrolling: touch;
-}
-
-.filter-modal__footer {
-  flex-shrink: 0;
-  padding: 0 1.35rem 1.35rem;
-  background: #fff;
-}
-
-.filter-modal__footer.modal-footer {
-  margin-top: 0;
-  padding-top: 1rem;
 }
 </style>

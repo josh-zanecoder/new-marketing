@@ -11,9 +11,12 @@
       </div>
       <button
         type="button"
-        class="btn-cta self-start !px-3.5 !py-2 !text-xs sm:!px-5 sm:!py-2.5 sm:!text-sm"
+        class="btn-cta btn-cta--compact group self-start"
         @click="openAddTenantModal"
       >
+        <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
         Add tenant
       </button>
     </header>
@@ -87,7 +90,7 @@
                   :disabled="isRegenerating === t.dbName"
                   :aria-busy="isRegenerating === t.dbName"
                   aria-label="Regenerate API key"
-                  @click="handleRegenerateKey(t.dbName)"
+                  @click="openRegenerateKeyModal(t.dbName)"
                 >
                   <span
                     v-if="isRegenerating === t.dbName"
@@ -183,7 +186,7 @@
                         :disabled="isRegenerating === t.dbName"
                         :aria-busy="isRegenerating === t.dbName"
                         aria-label="Regenerate API key"
-                        @click="handleRegenerateKey(t.dbName)"
+                        @click="openRegenerateKeyModal(t.dbName)"
                       >
                         <span
                           v-if="isRegenerating === t.dbName"
@@ -238,8 +241,19 @@
       :db-name="crmModalDbName"
       :mode="crmModalContext ?? 'create'"
       :regenerating="!!crmModalDbName && isRegenerating === crmModalDbName"
-      @regenerate="handleCrmModalRegenerate"
+      @regenerate="onCrmModalRegenerateClick"
       @close="closeCrmExternalConnectionModal"
+    />
+
+    <ClientConfirmationModal
+      :open="!!regeneratePending"
+      title="Regenerate API key"
+      :message="regenerateModalMessage"
+      confirm-text="Regenerate"
+      variant="primary"
+      :confirm-loading="regenerateConfirmLoading"
+      @confirm="confirmRegenerateKey"
+      @cancel="cancelRegenerateModal"
     />
   </section>
 </template>
@@ -328,6 +342,54 @@ function openCrmExternalConnectionModal(
   crmModalContext.value = context
 }
 
+type RegenerateContext = 'list' | 'crmModal'
+
+interface RegeneratePending {
+  dbName: string
+  context: RegenerateContext
+}
+
+const regeneratePending = ref<RegeneratePending | null>(null)
+const regenerateConfirmLoading = ref(false)
+
+const regenerateModalMessage = computed(() => {
+  const pending = regeneratePending.value
+  if (!pending) return ''
+  if (pending.context === 'crmModal') {
+    return 'Regenerate the API key for this tenant? The JSON below will update with the new key.'
+  }
+  const tenant = tenants.value.find((t) => t.dbName === pending.dbName)
+  const label = tenant?.name ?? pending.dbName
+  return `Regenerate the API key for “${label}”? Update CRM metadata after copying the new JSON.`
+})
+
+function openRegenerateKeyModal(dbName: string, context: RegenerateContext = 'list') {
+  regeneratePending.value = { dbName, context }
+}
+
+function onCrmModalRegenerateClick() {
+  const dbName = crmModalDbName.value
+  if (!dbName || isRegenerating.value) return
+  openRegenerateKeyModal(dbName, 'crmModal')
+}
+
+function cancelRegenerateModal() {
+  if (regenerateConfirmLoading.value) return
+  regeneratePending.value = null
+}
+
+async function confirmRegenerateKey() {
+  const pending = regeneratePending.value
+  if (!pending || regenerateConfirmLoading.value) return
+  regenerateConfirmLoading.value = true
+  try {
+    await regenerateAndShowCrmConnection(pending.dbName)
+    regeneratePending.value = null
+  } finally {
+    regenerateConfirmLoading.value = false
+  }
+}
+
 async function regenerateAndShowCrmConnection(dbName: string) {
   isRegenerating.value = dbName
   const result = await regenerateTenantApiKey(dbName)
@@ -337,18 +399,6 @@ async function regenerateAndShowCrmConnection(dbName: string) {
   await fetchTenants()
   openCrmExternalConnectionModal(result.crmExternalConnection, 'regenerate', dbName)
   return true
-}
-
-async function handleRegenerateKey(dbName: string) {
-  if (!confirm('Regenerate API key for this tenant? Update CRM metadata after copying the new JSON.')) return
-  await regenerateAndShowCrmConnection(dbName)
-}
-
-async function handleCrmModalRegenerate() {
-  const dbName = crmModalDbName.value
-  if (!dbName || isRegenerating.value) return
-  if (!confirm('Regenerate API key for this tenant? The JSON below will update with the new key.')) return
-  await regenerateAndShowCrmConnection(dbName)
 }
 
 function openEditTenantModal(t: AdminTenantRow) {
