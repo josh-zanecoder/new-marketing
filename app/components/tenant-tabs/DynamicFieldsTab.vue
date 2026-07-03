@@ -1,3 +1,9 @@
+<script lang="ts">
+/** Shared table class for dynamic variables (admin tenant detail). */
+export const dynamicVariablesTableClass =
+  'rf-table rf-table--dynamic-vars w-full border-collapse text-left text-sm text-slate-900'
+</script>
+
 <template>
   <section class="dv-shell">
     <div class="dv-intro">
