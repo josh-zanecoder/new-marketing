@@ -742,3 +742,244 @@
     padding: 0.45rem 0.55rem;
   }
 }
+
+/* Compact admin edit modal (tenant edit, recipient filters, dynamic variables) */
+.compact-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: rgb(15 23 42 / 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.compact-modal {
+  width: 100%;
+  max-width: 32rem;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 20px 50px rgb(15 23 42 / 0.18);
+}
+
+.compact-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem 0.5rem;
+}
+
+.compact-modal__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.compact-modal__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.compact-modal__close {
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  padding: 0.3rem;
+  color: #94a3b8;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.compact-modal__close:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.compact-modal-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.625rem;
+  padding: 0 1rem 1rem;
+}
+
+.compact-modal-field--full {
+  grid-column: 1 / -1;
+}
+
+.compact-modal-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #334155;
+}
+
+.compact-modal-label-hint {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.compact-modal-label .field-required {
+  margin-left: 0.1rem;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.compact-modal-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: #0f172a;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.compact-modal-input--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.compact-modal-input:hover {
+  border-color: #cbd5e1;
+}
+
+.compact-modal-input:focus {
+  outline: none;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgb(99 102 241 / 0.18);
+}
+
+.compact-modal-error {
+  border-radius: 0.5rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #b91c1c;
+}
+
+.compact-modal-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+}
+
+.compact-modal-form label.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #334155;
+  cursor: pointer;
+}
+
+.compact-modal-form .toggle-check {
+  width: 0.75rem;
+  height: 0.75rem;
+  min-width: 0.75rem;
+  min-height: 0.75rem;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 0.1875rem;
+  border-color: #cbd5e1;
+  accent-color: #2563eb;
+}
+
+.compact-modal-form .toggle-label {
+  user-select: none;
+  font-size: inherit;
+  line-height: 1.25;
+}
+
+.compact-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+@media (max-width: 1023px) {
+  .compact-modal-footer {
+    gap: 0.5rem;
+    margin-top: 0.125rem;
+    padding-top: 0.625rem;
+  }
+
+  .compact-modal-footer .btn-modal-cancel,
+  .compact-modal-footer .btn-modal-submit {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8125rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .compact-modal__title {
+    font-size: 1.125rem;
+  }
+
+  .compact-modal__subtitle {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .compact-modal-label {
+    margin-bottom: 0.35rem;
+    font-size: 0.875rem;
+  }
+
+  .compact-modal-input {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  .compact-modal-input--mono {
+    font-size: 0.875rem;
+  }
+
+  .compact-modal-error {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .compact-modal-form label.toggle-row {
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .compact-modal-form .toggle-check {
+    width: 0.875rem;
+    height: 0.875rem;
+    min-width: 0.875rem;
+    min-height: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .compact-modal-form {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-modal-field--full {
+    grid-column: auto;
+  }
+}
