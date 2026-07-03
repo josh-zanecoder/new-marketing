@@ -149,12 +149,14 @@
                     </span>
                   </template>
 
-                  <UiRfRecordField label="Key">
-                    <UiRfTableCellText :text="ct.key" monospace />
-                  </UiRfRecordField>
-                  <UiRfRecordField label="Label">
-                    <UiRfTableCellText :text="ct.label" />
-                  </UiRfRecordField>
+                  <div class="rf-record-field-pair">
+                    <UiRfRecordField label="Key">
+                      <UiRfTableCellText :text="ct.key" monospace />
+                    </UiRfRecordField>
+                    <UiRfRecordField label="Label">
+                      <UiRfTableCellText :text="ct.label" />
+                    </UiRfRecordField>
+                  </div>
 
                   <template #actions>
                     <div class="row-actions">
@@ -400,12 +402,14 @@
                     </span>
                   </template>
 
-                  <UiRfRecordField label="Contact type">
-                    {{ contactTypeTableLabel(f.contactType) }}
-                  </UiRfRecordField>
-                  <UiRfRecordField label="Property">
-                    {{ propertyFieldLabel(f.property) }}
-                  </UiRfRecordField>
+                  <div class="rf-record-field-pair">
+                    <UiRfRecordField label="Contact type">
+                      {{ contactTypeTableLabel(f.contactType) }}
+                    </UiRfRecordField>
+                    <UiRfRecordField label="Property">
+                      {{ propertyFieldLabel(f.property) }}
+                    </UiRfRecordField>
+                  </div>
                   <UiRfRecordField label="Type">
                     {{
                       f.property === 'address'
@@ -455,7 +459,7 @@
                         <th>Contact type</th>
                         <th>Property</th>
                         <th>Type</th>
-                        <th>Values</th>
+                        <th class="rf-table__col-values">Values</th>
                         <th>Status</th>
                         <th :class="tenantDataThActionsClass">
                           Actions
@@ -465,22 +469,30 @@
                     <tbody>
                       <tr v-for="f in filtersDisplay" :key="`row-${f.id}`">
                         <td class="td-name">
-                          <UiRfTableCellText :text="f.name" />
+                          <UiRfTableCellText :text="f.name" ellipsis :lines="2" />
                         </td>
-                        <td class="td-contact">{{ contactTypeTableLabel(f.contactType) }}</td>
-                        <td class="td-muted">{{ propertyFieldLabel(f.property) }}</td>
+                        <td class="td-contact">
+                          <UiRfTableCellText
+                            :text="contactTypeTableLabel(f.contactType)"
+                            ellipsis
+                            :lines="2"
+                          />
+                        </td>
                         <td class="td-muted">
-                          {{
-                            f.property === 'address'
-                              ? addressPropertyTypeLabel(f.propertyType || 'state')
-                              : f.property === 'contact_profile'
-                                ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
-                                : f.property === 'relationship_partner'
-                                  ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
-                                  : '—'
-                          }}
+                          <UiRfTableCellText
+                            :text="propertyFieldLabel(f.property)"
+                            ellipsis
+                            :lines="2"
+                          />
                         </td>
-                        <td class="td-values">
+                        <td class="td-muted">
+                          <UiRfTableCellText
+                            :text="recipientFilterTypeLabel(f)"
+                            ellipsis
+                            :lines="2"
+                          />
+                        </td>
+                        <td class="td-values rf-table__col-values">
                           <UiRfTableCellChips
                             :items="f.valueTokens"
                             :format-item="formatRegistryLabelForDisplay"
@@ -764,7 +776,7 @@
           </div>
 
           <div v-else>
-            <div :class="tenantRecordListClass">
+            <div :class="[tenantRecordListClass, 'rf-record-list--dynamic-vars']">
               <UiRfRecordCard
                 v-for="v in dynamicVariables"
                 :key="`card-${v.id}`"
@@ -773,14 +785,16 @@
                   <div class="rf-record-card__title">
                     <UiRfTableCellText
                       :text="v.label"
-                      :limit="mobileRecordFieldCharLimit"
+                      ellipsis
+                      :lines="2"
                     />
                   </div>
                   <div class="rf-record-card__subtitle">
                     <UiRfTableCellText
                       :text="v.key"
                       monospace
-                      :limit="mobileRecordFieldCharLimit"
+                      ellipsis
+                      :lines="2"
                     />
                   </div>
                 </template>
@@ -794,17 +808,27 @@
                   <UiRfTableCellText
                     :text="v.key"
                     monospace
-                    :limit="mobileRecordFieldCharLimit"
+                    ellipsis
+                    :lines="2"
                   />
                 </UiRfRecordField>
                 <UiRfRecordField label="Contact path">
-                  <UiRfTableCellText :text="v.contactPath" monospace />
+                  <UiRfTableCellText
+                    :text="v.contactPath"
+                    monospace
+                    ellipsis
+                    :lines="2"
+                  />
                 </UiRfRecordField>
                 <UiRfRecordField label="Scopes" full-width>
                   <UiRfTableCellChips :items="v.scopes" />
                 </UiRfRecordField>
                 <UiRfRecordField label="Fallback">
-                  <UiRfTableCellText :text="v.fallbackValue" />
+                  <UiRfTableCellText
+                    :text="v.fallbackValue"
+                    ellipsis
+                    :lines="2"
+                  />
                 </UiRfRecordField>
 
                 <template #actions>
@@ -827,13 +851,13 @@
 
             <div :class="tenantDataViewTableClass">
               <div :class="tenantDataTableWrapClass">
-                <table :class="tenantDataTableClass">
+                <table :class="dynamicVariablesTableClass">
                   <thead>
                     <tr>
                       <th>Label</th>
                       <th>Key</th>
                       <th>Contact path</th>
-                      <th>Scopes</th>
+                      <th class="rf-table__col-values">Scopes</th>
                       <th>Fallback</th>
                       <th>Status</th>
                       <th :class="tenantDataThActionsClass">
@@ -844,19 +868,19 @@
                   <tbody>
                     <tr v-for="v in dynamicVariables" :key="`row-${v.id}`">
                       <td class="td-name">
-                        <UiRfTableCellText :text="v.label" />
+                        <UiRfTableCellText :text="v.label" ellipsis :lines="2" />
                       </td>
                       <td class="td-muted">
-                        <UiRfTableCellText :text="v.key" monospace />
+                        <UiRfTableCellText :text="v.key" monospace ellipsis :lines="2" />
                       </td>
                       <td class="td-muted">
-                        <UiRfTableCellText :text="v.contactPath" monospace />
+                        <UiRfTableCellText :text="v.contactPath" monospace ellipsis :lines="2" />
                       </td>
-                      <td class="td-values">
+                      <td class="td-values rf-table__col-values">
                         <UiRfTableCellChips :items="v.scopes" />
                       </td>
                       <td class="td-muted">
-                        <UiRfTableCellText :text="v.fallbackValue" />
+                        <UiRfTableCellText :text="v.fallbackValue" ellipsis :lines="2" />
                       </td>
                       <td>
                         <span class="status-pill" :class="v.enabled ? 'status-pill--on' : 'status-pill--off'">{{ v.enabled ? 'On' : 'Off' }}</span>
@@ -1091,6 +1115,7 @@ import {
   type RecipientFilterPropertyFieldValue,
   type RecipientFilterRelationshipPartnerPropertyTypeValue
 } from '~/components/tenant-tabs/RecipientFiltersTab.vue'
+import { dynamicVariablesTableClass } from '~/components/tenant-tabs/DynamicFieldsTab.vue'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { MOBILE_RECORD_FIELD_CHAR_LIMIT } from '~/utils/truncateTabCellText'
 
@@ -1272,6 +1297,17 @@ function contactProfilePropertyTypeLabel(value: string): string {
 function relationshipPartnerPropertyTypeLabel(value: string): string {
   const opt = recipientFilterRelationshipPartnerPropertyTypeOptions.find((o) => o.value === value)
   return opt?.label ?? formatRegistryLabelForDisplay(value)
+}
+
+function recipientFilterTypeLabel(f: FilterRow): string {
+  if (f.property === 'address') return addressPropertyTypeLabel(f.propertyType || 'state')
+  if (f.property === 'contact_profile') {
+    return contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
+  }
+  if (f.property === 'relationship_partner') {
+    return relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
+  }
+  return '—'
 }
 
 function contactTypeSelectLabel(ct: ContactTypeRow): string {
