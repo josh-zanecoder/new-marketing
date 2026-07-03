@@ -498,15 +498,7 @@
                     </UiRfRecordField>
                   </div>
                   <UiRfRecordField label="Type">
-                    {{
-                      f.property === 'address'
-                        ? addressPropertyTypeLabel(f.propertyType || 'state')
-                        : f.property === 'contact_profile'
-                          ? contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
-                          : f.property === 'relationship_partner'
-                            ? relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
-                            : '—'
-                    }}
+                    {{ recipientFilterTypeLabel(f) }}
                   </UiRfRecordField>
                   <UiRfRecordField label="Values" full-width>
                     <UiRfTableCellChips
@@ -1191,33 +1183,33 @@ import {
   recipientFilterContactProfilePropertyTypeOptions,
   recipientFilterPropertyFieldOptions,
   recipientFilterRelationshipPartnerPropertyTypeOptions,
-  recipientFiltersRecordListClass,
-  recipientFiltersDataViewTableClass,
-  recipientFiltersTableWrapClass,
-  recipientFiltersTableClass,
-  recipientFiltersTableClassCompact,
-  recipientFiltersThActionsClass,
-  recipientFiltersTdActionsClass,
-  type RecipientFilterAddressPropertyTypeValue,
-  type RecipientFilterContactProfilePropertyTypeValue,
+  resolveRecipientFilterPropertyField,
+  resolveRecipientFilterPropertyType,
   type RecipientFilterPropertyFieldValue,
-  type RecipientFilterRelationshipPartnerPropertyTypeValue
-} from '~/components/tenant-tabs/RecipientFiltersTab.vue'
-import { dynamicVariablesTableClass } from '~/components/tenant-tabs/DynamicFieldsTab.vue'
+  type RecipientFilterPropertyTypeValue
+} from '~/utils/recipientFilterOptions'
+import {
+  propertyFieldLabel,
+  recipientFilterPropertyTypeForSave,
+  recipientFilterTypeLabel
+} from '~/utils/recipientFilterDisplay'
+import {
+  dynamicVariablesTableClass,
+  recipientFiltersDataViewTableClass as tenantDataViewTableClass,
+  recipientFiltersRecordListClass as tenantRecordListClass,
+  recipientFiltersTableClass as tenantDataTableClass,
+  recipientFiltersTableClassCompact as tenantDataTableClassCompact,
+  recipientFiltersTableWrapClass as tenantDataTableWrapClass,
+  recipientFiltersTdActionsClass as tenantDataTdActionsClass,
+  recipientFiltersThActionsClass as tenantDataThActionsClass
+} from '~/utils/tenantFilterTableClasses'
+import { fetchErrorMessage } from '~/utils/fetchErrorMessage'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { MOBILE_RECORD_FIELD_CHAR_LIMIT } from '~/utils/truncateTabCellText'
 
 definePageMeta({ layout: 'admin' })
 
 const mobileRecordFieldCharLimit = MOBILE_RECORD_FIELD_CHAR_LIMIT
-
-const tenantRecordListClass = recipientFiltersRecordListClass
-const tenantDataViewTableClass = recipientFiltersDataViewTableClass
-const tenantDataTableWrapClass = recipientFiltersTableWrapClass
-const tenantDataTableClass = recipientFiltersTableClass
-const tenantDataTableClassCompact = recipientFiltersTableClassCompact
-const tenantDataThActionsClass = recipientFiltersThActionsClass
-const tenantDataTdActionsClass = recipientFiltersTdActionsClass
 
 const route = useRoute()
 const dbName = computed(() =>
@@ -1233,11 +1225,6 @@ interface ContactTypeRow {
   enabled: boolean
   sortOrder: number
 }
-
-type PropertyFieldValue = RecipientFilterPropertyFieldValue
-type AddressPropertyTypeValue = RecipientFilterAddressPropertyTypeValue
-type ContactProfilePropertyTypeValue = RecipientFilterContactProfilePropertyTypeValue
-type RelationshipPartnerPropertyTypeValue = RecipientFilterRelationshipPartnerPropertyTypeValue
 
 interface TenantDetail {
   name: string
@@ -1374,11 +1361,8 @@ const recipientFilterModalOpen = ref(false)
 const form = reactive({
   name: '',
   contactType: '',
-  property: 'none' as PropertyFieldValue,
-  propertyType: 'state' as
-    | AddressPropertyTypeValue
-    | ContactProfilePropertyTypeValue
-    | RelationshipPartnerPropertyTypeValue,
+  property: 'none' as RecipientFilterPropertyFieldValue,
+  propertyType: 'state' as RecipientFilterPropertyTypeValue,
   propertyValue: '',
   enabled: true
 })
@@ -1404,52 +1388,10 @@ const dynamicForm = reactive({
 
 watch(
   () => form.property,
-  (p) => {
-    if (p === 'address') {
-      const ok = recipientFilterAddressPropertyTypeOptions.some((o) => o.value === form.propertyType)
-      if (!ok) form.propertyType = 'state'
-    } else if (p === 'contact_profile') {
-      const ok = recipientFilterContactProfilePropertyTypeOptions.some((o) => o.value === form.propertyType)
-      if (!ok) form.propertyType = 'profile_type'
-    } else if (p === 'relationship_partner') {
-      const ok = recipientFilterRelationshipPartnerPropertyTypeOptions.some(
-        (o) => o.value === form.propertyType
-      )
-      if (!ok) form.propertyType = 'partner_email'
-    }
+  (property) => {
+    form.propertyType = resolveRecipientFilterPropertyType(property, form.propertyType)
   }
 )
-
-function propertyFieldLabel(value: string): string {
-  const opt = recipientFilterPropertyFieldOptions.find((o) => o.value === value)
-  return opt?.label ?? formatRegistryLabelForDisplay(value)
-}
-
-function addressPropertyTypeLabel(value: string): string {
-  const opt = recipientFilterAddressPropertyTypeOptions.find((o) => o.value === value)
-  return opt?.label ?? formatRegistryLabelForDisplay(value)
-}
-
-function contactProfilePropertyTypeLabel(value: string): string {
-  const opt = recipientFilterContactProfilePropertyTypeOptions.find((o) => o.value === value)
-  return opt?.label ?? formatRegistryLabelForDisplay(value)
-}
-
-function relationshipPartnerPropertyTypeLabel(value: string): string {
-  const opt = recipientFilterRelationshipPartnerPropertyTypeOptions.find((o) => o.value === value)
-  return opt?.label ?? formatRegistryLabelForDisplay(value)
-}
-
-function recipientFilterTypeLabel(f: FilterRow): string {
-  if (f.property === 'address') return addressPropertyTypeLabel(f.propertyType || 'state')
-  if (f.property === 'contact_profile') {
-    return contactProfilePropertyTypeLabel(f.propertyType || 'profile_type')
-  }
-  if (f.property === 'relationship_partner') {
-    return relationshipPartnerPropertyTypeLabel(f.propertyType || 'partner_email')
-  }
-  return '—'
-}
 
 function contactTypeSelectLabel(ct: ContactTypeRow): string {
   const lab = String(ct.label ?? '').trim()
@@ -1557,8 +1499,8 @@ function tenantByDbUrl() {
   return `/api/v1/admin/tenants/db/${encodeURIComponent(dbName.value)}`
 }
 
-/** Recipient-filter APIs are keyed by registry tenantId, not URL dbName. */
-function filtersApiPrefix(): string | null {
+/** Tenant-scoped admin APIs are keyed by registry tenantId, not URL dbName. */
+function tenantApiPrefix(): string | null {
   const id = tenant.value?.tenantId
   if (!id) return null
   return `/api/v1/admin/tenants/${encodeURIComponent(id)}`
@@ -1579,7 +1521,7 @@ async function loadTenant() {
 
 async function loadFilters() {
   filtersPending.value = true
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     filters.value = []
     filtersPending.value = false
@@ -1599,7 +1541,7 @@ async function loadFilters() {
 
 async function loadContactTypes() {
   contactTypesPending.value = true
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     contactTypes.value = []
     contactTypesPending.value = false
@@ -1621,15 +1563,9 @@ async function loadContactTypes() {
   }
 }
 
-function dynamicApiPrefix(): string | null {
-  const id = tenant.value?.tenantId
-  if (!id) return null
-  return `/api/v1/admin/tenants/${encodeURIComponent(id)}`
-}
-
 async function loadDynamicVariables() {
   dynamicPending.value = true
-  const prefix = dynamicApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     dynamicVariables.value = []
     dynamicPending.value = false
@@ -1651,35 +1587,8 @@ function fillForm(f: FilterRow) {
   form.name = f.name
   form.enabled = f.enabled
   form.contactType = f.contactType
-  form.property = (recipientFilterPropertyFieldOptions as readonly { value: string }[]).some(
-    (o) => o.value === f.property
-  )
-    ? (f.property as PropertyFieldValue)
-    : 'none'
-  if (form.property === 'address') {
-    const t = f.propertyType
-    form.propertyType = (recipientFilterAddressPropertyTypeOptions as readonly { value: string }[]).some(
-      (o) => o.value === t
-    )
-      ? (t as AddressPropertyTypeValue)
-      : 'state'
-  } else if (form.property === 'contact_profile') {
-    const t = f.propertyType
-    form.propertyType = (recipientFilterContactProfilePropertyTypeOptions as readonly { value: string }[]).some(
-      (o) => o.value === t
-    )
-      ? (t as ContactProfilePropertyTypeValue)
-      : 'profile_type'
-  } else if (form.property === 'relationship_partner') {
-    const t = f.propertyType
-    form.propertyType = (recipientFilterRelationshipPartnerPropertyTypeOptions as readonly {
-      value: string
-    }[]).some((o) => o.value === t)
-      ? (t as RelationshipPartnerPropertyTypeValue)
-      : 'partner_email'
-  } else {
-    form.propertyType = 'state'
-  }
+  form.property = resolveRecipientFilterPropertyField(f.property)
+  form.propertyType = resolveRecipientFilterPropertyType(form.property, f.propertyType)
   form.propertyValue = f.propertyValue ?? ''
 }
 
@@ -1743,7 +1652,7 @@ function submitContactTypeForm(event: Event) {
 
 async function saveContactType() {
   contactTypeFormError.value = ''
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     contactTypeFormError.value = 'This tenant has no tenant ID in the registry.'
     return
@@ -1782,16 +1691,7 @@ async function saveContactType() {
       form.contactType = first.key
     }
   } catch (e: unknown) {
-    const msg =
-      e &&
-      typeof e === 'object' &&
-      'data' in e &&
-      e.data &&
-      typeof e.data === 'object' &&
-      'message' in e.data
-        ? String((e.data as { message?: string }).message)
-        : 'Save failed'
-    contactTypeFormError.value = msg
+    contactTypeFormError.value = fetchErrorMessage(e, 'Save failed')
   } finally {
     contactTypeSaving.value = false
   }
@@ -1844,7 +1744,7 @@ function submitFilterForm(event: Event) {
 
 async function saveFilter() {
   formError.value = ''
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     formError.value = 'This tenant has no tenant ID in the registry.'
     return
@@ -1859,12 +1759,7 @@ async function saveFilter() {
       name: form.name.trim(),
       contactType: form.contactType,
       property: form.property,
-      propertyType:
-        form.property === 'address' ||
-        form.property === 'contact_profile' ||
-        form.property === 'relationship_partner'
-          ? form.propertyType
-          : 'none',
+      propertyType: recipientFilterPropertyTypeForSave(form.property, form.propertyType),
       propertyValue: form.propertyValue,
       enabled: form.enabled
     }
@@ -1883,16 +1778,7 @@ async function saveFilter() {
     recipientFilterModalOpen.value = false
     await loadFilters()
   } catch (e: unknown) {
-    const msg =
-      e &&
-      typeof e === 'object' &&
-      'data' in e &&
-      e.data &&
-      typeof e.data === 'object' &&
-      'message' in e.data
-        ? String((e.data as { message?: string }).message)
-        : 'Save failed'
-    formError.value = msg
+    formError.value = fetchErrorMessage(e, 'Save failed')
   } finally {
     saving.value = false
   }
@@ -1934,7 +1820,7 @@ function submitDynamicVariableForm(event: Event) {
 
 async function saveDynamicVariable() {
   dynamicFormError.value = ''
-  const prefix = dynamicApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) {
     dynamicFormError.value = 'This tenant has no tenant ID in the registry.'
     return
@@ -1984,16 +1870,7 @@ async function saveDynamicVariable() {
     dynamicVariableModalOpen.value = false
     await loadDynamicVariables()
   } catch (e: unknown) {
-    const msg =
-      e &&
-      typeof e === 'object' &&
-      'data' in e &&
-      e.data &&
-      typeof e.data === 'object' &&
-      'message' in e.data
-        ? String((e.data as { message?: string }).message)
-        : 'Save failed'
-    dynamicFormError.value = msg
+    dynamicFormError.value = fetchErrorMessage(e, 'Save failed')
   } finally {
     dynamicSaving.value = false
   }
@@ -2068,7 +1945,7 @@ async function confirmDelete() {
 }
 
 async function removeFilter(id: string) {
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) return
   deletingId.value = id
   try {
@@ -2081,7 +1958,7 @@ async function removeFilter(id: string) {
 }
 
 async function removeContactType(id: string) {
-  const prefix = filtersApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) return
   contactTypeDeletingId.value = id
   try {
@@ -2097,7 +1974,7 @@ async function removeContactType(id: string) {
 }
 
 async function removeDynamicVariable(id: string) {
-  const prefix = dynamicApiPrefix()
+  const prefix = tenantApiPrefix()
   if (!prefix) return
   dynamicDeletingId.value = id
   try {
@@ -2167,188 +2044,5 @@ watch(
   border-bottom-color: #4f46e5;
   color: #4f46e5;
   background: #fafaff;
-}
-
-.filters-split {
-  display: grid;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (min-width: 1024px) {
-  .filters-split {
-    grid-template-columns: minmax(16rem, 20rem) minmax(32rem, 1fr);
-    gap: 1.75rem;
-  }
-}
-
-.filter-form-card {
-  position: relative;
-  border-radius: 1rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  padding: 1.35rem 1.35rem 1.5rem;
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
-}
-
-@media (min-width: 1024px) {
-  .filter-form-card {
-    position: sticky;
-    top: 1.25rem;
-  }
-}
-
-.filter-form-title {
-  margin: 0 0 0.35rem;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.filter-form-hint {
-  margin: 0 0 1rem;
-  font-size: 0.8125rem;
-  color: #64748b;
-  line-height: 1.4;
-}
-
-.filter-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.field > label {
-  display: block;
-  margin-bottom: 0.4rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #334155;
-}
-
-.field-required {
-  margin-left: 0.15rem;
-  color: #dc2626;
-  font-weight: 700;
-}
-
-.field-input {
-  width: 100%;
-  border-radius: 0.625rem;
-  border: 1px solid #e2e8f0;
-  padding: 0.55rem 0.75rem;
-  font-size: 0.9375rem;
-  color: #0f172a;
-  background: #fff;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.field-input:hover {
-  border-color: #cbd5e1;
-}
-
-.field-input:focus {
-  outline: none;
-  border-color: #818cf8;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  line-height: 1.25;
-  color: #334155;
-  cursor: pointer;
-}
-
-.field .toggle-row {
-  margin-bottom: 0;
-  font-size: 0.6875rem;
-  font-weight: 500;
-}
-
-.toggle-check {
-  width: 0.75rem;
-  height: 0.75rem;
-  min-width: 0.75rem;
-  min-height: 0.75rem;
-  flex-shrink: 0;
-  margin: 0;
-  border-radius: 0.1875rem;
-  border-color: #cbd5e1;
-  accent-color: #2563eb;
-}
-
-.toggle-label {
-  user-select: none;
-}
-
-.form-error {
-  margin: 0;
-  font-size: 0.875rem;
-  color: #dc2626;
-}
-
-.form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding-top: 0.25rem;
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.625rem;
-  border: none;
-  background: #0f172a;
-  color: #fff;
-  padding: 0.55rem 1.15rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #1e293b;
-}
-
-.btn-primary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.625rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  padding: 0.55rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.btn-secondary:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-.btn-primary--compact {
-  padding: 0.45rem 0.9rem;
-  font-size: 0.8125rem;
 }
 </style>

@@ -267,7 +267,7 @@ import {
   recipientFiltersTableClassTenants,
   recipientFiltersThActionsClass,
   recipientFiltersTdActionsClass
-} from '~/components/tenant-tabs/RecipientFiltersTab.vue'
+} from '~/utils/tenantFilterTableClasses'
 import type { AdminTenantRow } from '~/types/adminTenant'
 import type { CrmExternalConnectionMetadata } from '~~/shared/types/crmExternalConnection'
 
