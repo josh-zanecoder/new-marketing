@@ -45,6 +45,10 @@ export type RecipientFilterRelationshipPartnerPropertyTypeValue =
   (typeof recipientFilterRelationshipPartnerPropertyTypeOptions)[number]['value']
 
 /** Shared table classes for filter tabs (used in admin tenant detail slots). */
+export const recipientFiltersRecordListClass = 'rf-record-list md:hidden'
+
+export const recipientFiltersDataViewTableClass = 'rf-data-view__table hidden md:block'
+
 export const recipientFiltersTableWrapClass =
   'rf-table-card overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]'
 
@@ -187,5 +191,31 @@ const activeTab = ref<'contactTypes' | 'recipientFilters'>('recipientFilters')
   border-bottom-color: #2563eb;
   color: #1d4ed8;
   background: #eff6ff;
+}
+
+@media (max-width: 425px) {
+  .rf-intro {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .rf-intro__badge {
+    font-size: 0.625rem;
+    padding: 0.12rem 0.4rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .rf-intro__title {
+    font-size: 0.875rem;
+  }
+
+  .rf-intro__text {
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+
+  .rf-subtabs__btn {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.75rem;
+  }
 }
 </style>

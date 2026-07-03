@@ -11,124 +11,209 @@
       </div>
       <button
         type="button"
-        class="btn-cta self-start"
+        class="btn-cta self-start !px-3.5 !py-2 !text-xs sm:!px-5 sm:!py-2.5 sm:!text-sm"
         @click="openAddTenantModal"
       >
         Add tenant
       </button>
     </header>
 
-    <div :class="tenantsTableWrapClass">
-      <table :class="tenantsTableClass">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>CRM URL</th>
-            <th>Campaign sender</th>
-            <th>API key</th>
-            <th>Status</th>
-            <th :class="tenantsThActionsClass">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="tenantsLoading">
-            <td colspan="7" class="td-empty-state">
-              <span class="inline-flex items-center gap-2">
-                <span
-                  class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600"
-                  aria-hidden="true"
-                />
-                Loading tenants…
-              </span>
-            </td>
-          </tr>
-          <template v-else>
-            <tr v-for="t in tenants" :key="t.dbName">
-              <td class="td-name">
+    <div>
+      <div v-if="tenantsLoading" class="rf-record-list__state">
+        <span
+          class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600"
+          aria-hidden="true"
+        />
+        Loading tenants…
+      </div>
+      <div v-else-if="!tenants.length" class="rf-record-list__state">
+        No tenants yet
+      </div>
+      <template v-else>
+        <div :class="tenantsRecordListClass">
+          <UiRfRecordCard
+            v-for="t in tenants"
+            :key="`card-${t.dbName}`"
+          >
+            <template #header>
+              <h2 class="rf-record-card__title">
                 <NuxtLink
-                  class="text-inherit no-underline hover:text-primary-600"
+                  class="rf-record-card__title-link"
                   :to="`/admin/tenants/${encodeURIComponent(t.dbName)}`"
-                  :title="t.name"
                 >
-                  {{ truncateTabCellText(t.name) }}
+                  {{ t.name }}
                 </NuxtLink>
-              </td>
-              <td class="td-muted" :title="t.email || undefined">
-                {{ truncateTabCellText(t.email) || '—' }}
-              </td>
-              <td class="td-muted">
+              </h2>
+            </template>
+            <template #status>
+              <span class="status-pill status-pill--on">{{ t.status }}</span>
+            </template>
+
+            <UiRfRecordField label="Email">
+              <UiRfTableCellText :text="t.email" />
+            </UiRfRecordField>
+            <UiRfRecordField label="CRM URL">
+              <UiRfTableCellText v-if="t.crmAppUrl" :text="t.crmAppUrl" #="{ text }">
                 <a
-                  v-if="t.crmAppUrl"
                   :href="t.crmAppUrl"
                   class="td-link"
                   target="_blank"
                   rel="noopener noreferrer"
-                  :title="t.crmAppUrl"
                 >
-                  {{ truncateTabCellText(t.crmAppUrl) }}
+                  {{ text }}
                 </a>
-                <span v-else>—</span>
-              </td>
-              <td class="td-muted" :title="campaignSenderLabel(t)">
-                {{ truncateTabCellText(campaignSenderLabel(t)) }}
-              </td>
-              <td class="td-muted td-mono" :title="t.apiKeyPrefix || undefined">
-                {{ truncateTabCellText(t.apiKeyPrefix) || '—' }}
-              </td>
-              <td>
-                <span class="status-pill status-pill--on">{{ t.status }}</span>
-              </td>
-              <td :class="tenantsTdActionsClass">
-                <div class="row-actions">
-                  <button
-                    type="button"
-                    class="btn-row btn-row--edit"
-                    @click="openEditTenantModal(t)"
+              </UiRfTableCellText>
+              <span v-else class="text-slate-400">—</span>
+            </UiRfRecordField>
+            <UiRfRecordField label="Campaign sender">
+              <UiRfTableCellText :text="campaignSenderLabel(t)" />
+            </UiRfRecordField>
+            <UiRfRecordField label="API key">
+              <UiRfTableCellText :text="t.apiKeyPrefix" monospace />
+            </UiRfRecordField>
+
+            <template #actions>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="btn-row btn-row--edit"
+                  @click="openEditTenantModal(t)"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="btn-row btn-row--neutral inline-flex items-center gap-1.5"
+                  :disabled="isRegenerating === t.dbName"
+                  :aria-busy="isRegenerating === t.dbName"
+                  aria-label="Regenerate API key"
+                  @click="handleRegenerateKey(t.dbName)"
+                >
+                  <span
+                    v-if="isRegenerating === t.dbName"
+                    class="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600"
+                    aria-hidden="true"
+                  />
+                  <svg
+                    v-else
+                    class="h-3 w-3 shrink-0"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
                   >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-row btn-row--neutral inline-flex items-center gap-1.5"
-                    :disabled="isRegenerating === t.dbName"
-                    :aria-busy="isRegenerating === t.dbName"
-                    @click="handleRegenerateKey(t.dbName)"
-                  >
-                    <span
-                      v-if="isRegenerating === t.dbName"
-                      class="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600"
-                      aria-hidden="true"
+                    <path
+                      fill-rule="evenodd"
+                      d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.312.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31a7 7 0 00-11.713 3.137.75.75 0 001.45.389 5.5 5.5 0 019.201-2.466l.312.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+                      clip-rule="evenodd"
                     />
-                    <svg
-                      v-else
-                      class="h-3 w-3 shrink-0"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fill-rule="evenodd"
-                        d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.312.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31a7 7 0 00-11.713 3.137.75.75 0 001.45.389 5.5 5.5 0 019.201-2.466l.312.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-                        clip-rule="evenodd"
-                      />
-                    </svg>
-                    {{ isRegenerating === t.dbName ? '…' : 'Regenerate' }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="!tenants.length">
-              <td colspan="7" class="td-empty-state">
-                No tenants yet
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
+                  </svg>
+                  {{ isRegenerating === t.dbName ? 'Regenerating…' : 'Regenerate' }}
+                </button>
+              </div>
+            </template>
+          </UiRfRecordCard>
+        </div>
+
+        <div :class="tenantsDataViewTableClass">
+          <div :class="tenantsTableWrapClass">
+            <table :class="tenantsTableClass">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>CRM URL</th>
+                  <th>Campaign sender</th>
+                  <th>API key</th>
+                  <th>Status</th>
+                  <th :class="tenantsThActionsClass">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in tenants" :key="`row-${t.dbName}`">
+                  <td class="td-name">
+                    <UiRfTableCellText :text="t.name" #="{ text }">
+                      <NuxtLink
+                        class="text-inherit no-underline hover:text-primary-600"
+                        :to="`/admin/tenants/${encodeURIComponent(t.dbName)}`"
+                      >
+                        {{ text }}
+                      </NuxtLink>
+                    </UiRfTableCellText>
+                  </td>
+                  <td class="td-muted">
+                    <UiRfTableCellText :text="t.email" />
+                  </td>
+                  <td class="td-muted">
+                    <UiRfTableCellText v-if="t.crmAppUrl" :text="t.crmAppUrl" #="{ text }">
+                      <a
+                        :href="t.crmAppUrl"
+                        class="td-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {{ text }}
+                      </a>
+                    </UiRfTableCellText>
+                    <span v-else>—</span>
+                  </td>
+                  <td class="td-muted">
+                    <UiRfTableCellText :text="campaignSenderLabel(t)" />
+                  </td>
+                  <td class="td-muted td-mono">
+                    <UiRfTableCellText :text="t.apiKeyPrefix" monospace />
+                  </td>
+                  <td>
+                    <span class="status-pill status-pill--on">{{ t.status }}</span>
+                  </td>
+                  <td :class="tenantsTdActionsClass">
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="btn-row btn-row--edit"
+                        @click="openEditTenantModal(t)"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-row btn-row--neutral inline-flex items-center gap-1.5"
+                        :disabled="isRegenerating === t.dbName"
+                        :aria-busy="isRegenerating === t.dbName"
+                        aria-label="Regenerate API key"
+                        @click="handleRegenerateKey(t.dbName)"
+                      >
+                        <span
+                          v-if="isRegenerating === t.dbName"
+                          class="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600"
+                          aria-hidden="true"
+                        />
+                        <svg
+                          v-else
+                          class="h-3 w-3 shrink-0"
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.312.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31a7 7 0 00-11.713 3.137.75.75 0 001.45.389 5.5 5.5 0 019.201-2.466l.312.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+                            clip-rule="evenodd"
+                          />
+                        </svg>
+                        {{ isRegenerating === t.dbName ? '…' : 'Regenerate' }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
     </div>
 
     <TenantAddTenantModal
@@ -162,17 +247,20 @@
 <script setup lang="ts">
 import { useAdminTenantsCreateDb } from '~/composables/admin/tenants/useAdminTenantsCreateDb'
 import {
+  recipientFiltersRecordListClass,
+  recipientFiltersDataViewTableClass,
   recipientFiltersTableWrapClass,
   recipientFiltersTableClassTenants,
   recipientFiltersThActionsClass,
   recipientFiltersTdActionsClass
 } from '~/components/tenant-tabs/RecipientFiltersTab.vue'
-import { truncateTabCellText } from '~/utils/truncateTabCellText'
 import type { AdminTenantRow } from '~/types/adminTenant'
 import type { CrmExternalConnectionMetadata } from '~~/shared/types/crmExternalConnection'
 
 definePageMeta({ layout: 'admin' })
 
+const tenantsRecordListClass = recipientFiltersRecordListClass
+const tenantsDataViewTableClass = recipientFiltersDataViewTableClass
 const tenantsTableWrapClass = recipientFiltersTableWrapClass
 const tenantsTableClass = recipientFiltersTableClassTenants
 const tenantsThActionsClass = recipientFiltersThActionsClass
