@@ -45,9 +45,9 @@ export type RecipientFilterRelationshipPartnerPropertyTypeValue =
   (typeof recipientFilterRelationshipPartnerPropertyTypeOptions)[number]['value']
 
 /** Shared table classes for filter tabs (used in admin tenant detail slots). */
-export const recipientFiltersRecordListClass = 'rf-record-list md:hidden'
+export const recipientFiltersRecordListClass = 'rf-record-list lg:hidden'
 
-export const recipientFiltersDataViewTableClass = 'rf-data-view__table hidden md:block'
+export const recipientFiltersDataViewTableClass = 'rf-data-view__table hidden lg:block'
 
 export const recipientFiltersTableWrapClass =
   'rf-table-card overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]'
