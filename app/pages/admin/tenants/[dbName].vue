@@ -165,7 +165,7 @@
                         type="button"
                         class="btn-row btn-row--danger"
                         :disabled="contactTypeDeletingId === ct.id"
-                        @click="removeContactType(ct.id)"
+                        @click="openDeleteModal('contactType', ct.id)"
                       >
                         {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
                       </button>
@@ -207,7 +207,7 @@
                               type="button"
                               class="btn-row btn-row--danger"
                               :disabled="contactTypeDeletingId === ct.id"
-                              @click="removeContactType(ct.id)"
+                              @click="openDeleteModal('contactType', ct.id)"
                             >
                               {{ contactTypeDeletingId === ct.id ? '…' : 'Delete' }}
                             </button>
@@ -415,7 +415,7 @@
                         type="button"
                         class="btn-row btn-row--danger"
                         :disabled="deletingId === f.id"
-                        @click="removeFilter(f.id)"
+                        @click="openDeleteModal('filter', f.id)"
                       >
                         {{ deletingId === f.id ? '…' : 'Delete' }}
                       </button>
@@ -483,7 +483,7 @@
                               type="button"
                               class="btn-row btn-row--danger"
                               :disabled="deletingId === f.id"
-                              @click="removeFilter(f.id)"
+                              @click="openDeleteModal('filter', f.id)"
                             >
                               {{ deletingId === f.id ? '…' : 'Delete' }}
                             </button>
@@ -789,7 +789,7 @@
                       type="button"
                       class="btn-row btn-row--danger"
                       :disabled="dynamicDeletingId === v.id"
-                      @click="removeDynamicVariable(v.id)"
+                      @click="openDeleteModal('dynamicVariable', v.id)"
                     >
                       {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
                     </button>
@@ -843,7 +843,7 @@
                             type="button"
                             class="btn-row btn-row--danger"
                             :disabled="dynamicDeletingId === v.id"
-                            @click="removeDynamicVariable(v.id)"
+                            @click="openDeleteModal('dynamicVariable', v.id)"
                           >
                             {{ dynamicDeletingId === v.id ? '…' : 'Delete' }}
                           </button>
@@ -998,6 +998,17 @@
         </div>
       </TenantTabsDynamicFieldsTab>
     </template>
+
+    <ClientConfirmationModal
+      :open="!!deletePending"
+      :title="deleteModalTitle"
+      :message="deleteModalMessage"
+      confirm-text="Delete"
+      variant="danger"
+      :confirm-loading="deleteConfirmLoading"
+      @confirm="confirmDelete"
+      @cancel="cancelDeleteModal"
+    />
   </section>
 </template>
 
@@ -1662,10 +1673,77 @@ async function saveDynamicVariable() {
   }
 }
 
+type DeleteKind = 'filter' | 'contactType' | 'dynamicVariable'
+
+interface DeletePending {
+  kind: DeleteKind
+  id: string
+}
+
+const deletePending = ref<DeletePending | null>(null)
+const deleteConfirmLoading = ref(false)
+
+const deleteModalTitle = computed(() => {
+  if (!deletePending.value) return ''
+  const titles: Record<DeleteKind, string> = {
+    filter: 'Delete recipient filter',
+    contactType: 'Delete contact type',
+    dynamicVariable: 'Delete dynamic variable'
+  }
+  return titles[deletePending.value.kind]
+})
+
+const deleteModalMessage = computed(() => {
+  const pending = deletePending.value
+  if (!pending) return ''
+  if (pending.kind === 'filter') {
+    const row = filters.value.find((f) => f.id === pending.id)
+    return row
+      ? `Permanently delete “${row.name}”? This cannot be undone.`
+      : 'Delete this recipient filter? This cannot be undone.'
+  }
+  if (pending.kind === 'contactType') {
+    const row = contactTypes.value.find((ct) => ct.id === pending.id)
+    return row
+      ? `Permanently delete “${row.label}”? This cannot be undone.`
+      : 'Delete this contact type? This cannot be undone.'
+  }
+  const row = dynamicVariables.value.find((v) => v.id === pending.id)
+  return row
+    ? `Permanently delete “${row.label}”? This cannot be undone.`
+    : 'Delete this dynamic variable? This cannot be undone.'
+})
+
+function openDeleteModal(kind: DeleteKind, id: string) {
+  deletePending.value = { kind, id }
+}
+
+function cancelDeleteModal() {
+  if (deleteConfirmLoading.value) return
+  deletePending.value = null
+}
+
+async function confirmDelete() {
+  const pending = deletePending.value
+  if (!pending || deleteConfirmLoading.value) return
+  deleteConfirmLoading.value = true
+  try {
+    if (pending.kind === 'filter') {
+      await removeFilter(pending.id)
+    } else if (pending.kind === 'contactType') {
+      await removeContactType(pending.id)
+    } else {
+      await removeDynamicVariable(pending.id)
+    }
+    deletePending.value = null
+  } finally {
+    deleteConfirmLoading.value = false
+  }
+}
+
 async function removeFilter(id: string) {
   const prefix = filtersApiPrefix()
   if (!prefix) return
-  if (!confirm('Delete this recipient filter?')) return
   deletingId.value = id
   try {
     await $fetch(`${prefix}/recipient-filters/${id}`, { method: 'DELETE' })
@@ -1679,7 +1757,6 @@ async function removeFilter(id: string) {
 async function removeContactType(id: string) {
   const prefix = filtersApiPrefix()
   if (!prefix) return
-  if (!confirm('Delete this contact type?')) return
   contactTypeDeletingId.value = id
   try {
     await $fetch(`${prefix}/contact-types/${id}`, { method: 'DELETE' })
@@ -1696,7 +1773,6 @@ async function removeContactType(id: string) {
 async function removeDynamicVariable(id: string) {
   const prefix = dynamicApiPrefix()
   if (!prefix) return
-  if (!confirm('Delete this dynamic variable?')) return
   dynamicDeletingId.value = id
   try {
     await $fetch(`${prefix}/dynamic-variables/${id}`, { method: 'DELETE' })
