@@ -1,7 +1,24 @@
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import {
+  recipientFilterAddressPropertyTypeOptions,
+  recipientFilterContactProfilePropertyTypeOptions,
+  recipientFilterPropertyFieldOptions,
+  recipientFilterRelationshipPartnerPropertyTypeOptions,
+  recipientFilterPropertyHasTypeField,
+  type RecipientFilterPropertyFieldValue
+} from '~/utils/recipientFilterOptions'
 
 function normalized(raw: string): string {
   return String(raw ?? '').trim().toLowerCase()
+}
+
+function labelFromOptions(
+  options: readonly { value: string; label: string }[],
+  value: string,
+  fallback?: string
+): string {
+  const opt = options.find((o) => o.value === value)
+  return opt?.label ?? formatRegistryLabelForDisplay(fallback ?? value)
 }
 
 export function recipientFilterPropertyLabel(raw: string): string {
@@ -29,4 +46,41 @@ export function recipientCriterionPropertyLabel(raw: string): string {
   if (key === 'related_partner_name') return 'Partner name'
   if (key === 'relationship_partner') return 'Partner'
   return formatRegistryLabelForDisplay(raw)
+}
+
+export function propertyFieldLabel(value: string): string {
+  return labelFromOptions(recipientFilterPropertyFieldOptions, value)
+}
+
+export function addressPropertyTypeLabel(value: string): string {
+  return labelFromOptions(recipientFilterAddressPropertyTypeOptions, value)
+}
+
+export function contactProfilePropertyTypeLabel(value: string): string {
+  return labelFromOptions(recipientFilterContactProfilePropertyTypeOptions, value)
+}
+
+export function relationshipPartnerPropertyTypeLabel(value: string): string {
+  return labelFromOptions(recipientFilterRelationshipPartnerPropertyTypeOptions, value)
+}
+
+export function recipientFilterTypeLabel(filter: {
+  property: string
+  propertyType: string
+}): string {
+  if (!recipientFilterPropertyHasTypeField(filter.property)) return '—'
+  if (filter.property === 'address') {
+    return addressPropertyTypeLabel(filter.propertyType || 'state')
+  }
+  if (filter.property === 'contact_profile') {
+    return contactProfilePropertyTypeLabel(filter.propertyType || 'profile_type')
+  }
+  return relationshipPartnerPropertyTypeLabel(filter.propertyType || 'partner_email')
+}
+
+export function recipientFilterPropertyTypeForSave(
+  property: RecipientFilterPropertyFieldValue,
+  propertyType: string
+): string {
+  return recipientFilterPropertyHasTypeField(property) ? propertyType : 'none'
 }
