@@ -35,14 +35,13 @@ const { data, error, pending, refresh } = useFetch<{ analytics: MarketingAnalyti
   '/api/v1/tracking/analytics',
   {
     query: analyticsQuery,
-    key: fetchKey
+    key: fetchKey,
+    getCachedData: (key, nuxtApp) =>
+      nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]
   }
 )
 
-const { data: campaignsListData } = useFetch<{ campaigns: Array<{ id: string; name: string }> }>(
-  '/api/v1/tenant/campaigns',
-  { key: 'tenant-marketing-analytics-campaigns' }
-)
+const { data: campaignsListData } = useTenantCampaignsList()
 
 const analytics = computed(() => data.value?.analytics)
 const metricCards = computed(() => buildMarketingAnalyticsMetricCards(analytics.value?.summary))

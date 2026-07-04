@@ -1,5 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'default' })
+
+await useBrevoTrackingReport()
 </script>
 
 <template>

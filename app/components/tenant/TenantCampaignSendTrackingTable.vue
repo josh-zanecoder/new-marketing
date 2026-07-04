@@ -13,16 +13,8 @@ const props = defineProps<{
   campaignId: string
 }>()
 
-const query = computed(() => {
-  const c = props.campaignId?.trim()
-  return c ? { campaignId: c } : {}
-})
-
-const fetchKey = computed(() => `tenant-campaign-tracking-table-${props.campaignId.trim()}`)
-
-const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking', {
-  query,
-  key: fetchKey
+const { data, error, pending } = useBrevoTrackingReport({
+  campaignId: () => props.campaignId
 })
 
 const report = computed((): BrevoEventReport | null => {

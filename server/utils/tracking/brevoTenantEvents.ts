@@ -79,3 +79,38 @@ export function filterBrevoEventsForTenant(
     return true
   })
 }
+
+function inputYmdToStartMs(ymd: string): number | null {
+  if (!ymd.trim()) return null
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d).getTime()
+}
+
+function localDayStartMs(iso: string): number {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return NaN
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+export function filterBrevoEventsByDateRange(
+  events: BrevoTrackingEmailEvent[],
+  fromYmd: string | null,
+  toYmd: string | null
+): BrevoTrackingEmailEvent[] {
+  if (!fromYmd && !toYmd) return events
+
+  return events.filter((ev) => {
+    const iso = ev.date
+    if (!iso?.trim()) return !fromYmd && !toYmd
+
+    const day = localDayStartMs(iso)
+    if (Number.isNaN(day)) return true
+
+    const fromMs = fromYmd ? inputYmdToStartMs(fromYmd) : null
+    const toMs = toYmd ? inputYmdToStartMs(toYmd) : null
+    if (fromMs != null && day < fromMs) return false
+    if (toMs != null && day > toMs) return false
+    return true
+  })
+}
