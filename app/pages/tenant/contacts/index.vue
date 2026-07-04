@@ -173,7 +173,7 @@
               v-for="(label, idx) in row.contactTypeLabels"
               :key="`${row.id}-mobile-${row.contactType![idx]}`"
               class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-              :class="typeKeyBadgeClass(row.contactType![idx] ?? '')"
+              :class="contactTypeKeyBadgeClass(row.contactType![idx] ?? '')"
             >
               {{ label }}
             </span>
@@ -181,7 +181,7 @@
           <span
             v-else
             class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-            :class="typeKeyBadgeClass(row.contactType?.[0] ?? '')"
+            :class="contactTypeKeyBadgeClass(row.contactType?.[0] ?? '')"
           >
             {{ row.primaryTypeLabel }}
           </span>
@@ -279,7 +279,7 @@
                     v-for="(label, idx) in row.contactTypeLabels"
                     :key="`${row.id}-${row.contactType![idx]}`"
                     class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-                    :class="typeKeyBadgeClass(row.contactType![idx] ?? '')"
+                    :class="contactTypeKeyBadgeClass(row.contactType![idx] ?? '')"
                   >
                     {{ label }}
                   </span>
@@ -287,7 +287,7 @@
                 <span
                   v-else
                   class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
-                  :class="typeKeyBadgeClass(row.contactType?.[0] ?? '')"
+                  :class="contactTypeKeyBadgeClass(row.contactType?.[0] ?? '')"
                 >
                   {{ row.primaryTypeLabel }}
                 </span>
@@ -470,7 +470,7 @@
                         v-for="(label, idx) in viewContactDetail.contactTypeLabels"
                         :key="`${viewContactDetail.id}-type-${idx}`"
                         class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset"
-                        :class="typeKeyBadgeClass(viewContactDetail.contactType?.[idx] ?? '')"
+                        :class="contactTypeKeyBadgeClass(viewContactDetail.contactType?.[idx] ?? '')"
                       >
                         {{ label }}
                       </span>
@@ -1056,7 +1056,7 @@
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { joinContactStreetParts, normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
-import { extractPhoneDigitsForInput, formatUsPhoneInputLive, formatUsPhoneNumber, usPhoneDigits } from '~~/shared/utils/usNumberFormatter'
+import { applyUsPhoneInputLive, formatUsPhoneInputLive, formatUsPhoneNumber, usPhoneDigits } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
   TenantContactListRow,
@@ -1065,10 +1065,6 @@ import type {
 } from '~/types/tenantContact'
 
 definePageMeta({ layout: 'default' })
-
-function typeKeyBadgeClass(kind: string): string {
-  return contactTypeKeyBadgeClass(kind)
-}
 
 const PAGE_SIZE = 25
 
@@ -1097,24 +1093,30 @@ type ContactFormField =
   | 'addressCity'
   | 'addressState'
   | 'addressCounty'
-const contactFormFieldErrors = ref<Partial<Record<ContactFormField, string>>>({})
-const addContactForm = ref({
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  company: '',
-  contactType: '',
-  channel: '',
-  status: '',
-  stage: '',
-  addressStreet: '',
-  addressUnit: '',
-  addressCity: '',
-  addressState: '',
-  addressCounty: ''
-})
 
+type ContactFormState = Record<ContactFormField, string>
+
+function emptyContactForm(): ContactFormState {
+  return {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: '',
+    contactType: '',
+    channel: '',
+    status: '',
+    stage: '',
+    addressStreet: '',
+    addressUnit: '',
+    addressCity: '',
+    addressState: '',
+    addressCounty: ''
+  }
+}
+
+const contactFormFieldErrors = ref<Partial<Record<ContactFormField, string>>>({})
+const addContactForm = ref<ContactFormState>(emptyContactForm())
 
 const ADD_CONTACT_INPUT_CLASS =
   'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20'
@@ -1132,39 +1134,19 @@ function contactInputClass(field: ContactFormField): string {
 
 function clearContactFormFieldError(field: ContactFormField) {
   if (!contactFormFieldErrors.value[field]) return
-  const next = { ...contactFormFieldErrors.value }
-  delete next[field]
+  const { [field]: _removed, ...next } = contactFormFieldErrors.value
   contactFormFieldErrors.value = next
 }
 
 function onContactPhoneInput(event: Event) {
   clearContactFormFieldError('phone')
   const input = event.target as HTMLInputElement
-  const raw = input.value
-  const cursorBefore = input.selectionStart ?? raw.length
-  const digitsBeforeCursor = extractPhoneDigitsForInput(raw.slice(0, cursorBefore)).length
-  const formatted = formatUsPhoneInputLive(raw)
+  const { formatted, caret } = applyUsPhoneInputLive(input.value, input.selectionStart ?? input.value.length)
 
   addContactForm.value.phone = formatted
 
   nextTick(() => {
-    const rejectedExtraDigit = String(raw).replace(/\D/g, '').length > 10
-    let newPos = formatted.length
-
-    if (!rejectedExtraDigit) {
-      let digitCount = 0
-      for (let i = 0; i < formatted.length; i++) {
-        if (/\d/.test(formatted[i]!)) {
-          digitCount++
-          if (digitCount >= digitsBeforeCursor) {
-            newPos = i + 1
-            break
-          }
-        }
-      }
-    }
-
-    input.setSelectionRange(newPos, newPos)
+    input.setSelectionRange(caret, caret)
   })
 }
 
@@ -1225,7 +1207,7 @@ function validateContactForm(): boolean {
   return true
 }
 
-function extractContactFormErrorMessage(error: unknown, fallback: string): string {
+function apiErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
     if ('data' in error) {
       const data = (error as { data?: { message?: string; statusMessage?: string } }).data
@@ -1240,25 +1222,6 @@ function extractContactFormErrorMessage(error: unknown, fallback: string): strin
     }
   }
   return fallback
-}
-
-function emptyContactForm() {
-  return {
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    company: '',
-    contactType: '',
-    channel: '',
-    status: '',
-    stage: '',
-    addressStreet: '',
-    addressUnit: '',
-    addressCity: '',
-    addressState: '',
-    addressCounty: ''
-  }
 }
 
 function populateContactFormFromDetail(contact: TenantContactDetail) {
@@ -1366,21 +1329,9 @@ async function openEditContactModal(contactId: string) {
         ...serverAuthHeaders()
       }
     )
-    populateContactFormFromDetail({
-      ...res.contact,
-      contactType: Array.isArray(res.contact.contactType) ? res.contact.contactType : [],
-      contactTypeLabels: Array.isArray(res.contact.contactTypeLabels)
-        ? res.contact.contactTypeLabels
-        : [],
-      primaryTypeLabel: res.contact.primaryTypeLabel ?? '—',
-      is_unsubscribe: res.contact.is_unsubscribe === true,
-      metadata:
-        res.contact.metadata && typeof res.contact.metadata === 'object'
-          ? res.contact.metadata
-          : {}
-    })
+    populateContactFormFromDetail(normalizeContactDetail(res.contact))
   } catch (e: unknown) {
-    const message = extractContactFormErrorMessage(e, 'Failed to load contact')
+    const message = apiErrorMessage(e, 'Failed to load contact')
     addContactError.value = message
     toast.error(message)
     addContactOpen.value = false
@@ -1419,13 +1370,37 @@ async function submitContactForm() {
     await load()
   } catch (e: unknown) {
     const fallback = contactFormMode.value === 'edit' ? 'Failed to update contact' : 'Failed to add contact'
-    showContactFormError(extractContactFormErrorMessage(e, fallback))
+    showContactFormError(apiErrorMessage(e, fallback))
   } finally {
     addContactSubmitting.value = false
   }
 }
 
 export type { TenantContactListRow, TenantContactTypeOption }
+
+function sortContactTypes(types: TenantContactTypeOption[]) {
+  return [...types].sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+}
+
+function normalizeContactListRow(row: TenantContactListRow): TenantContactListRow {
+  return {
+    ...row,
+    contactType: Array.isArray(row.contactType) ? row.contactType : [],
+    contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
+    primaryTypeLabel: row.primaryTypeLabel ?? '—',
+    is_unsubscribe: row.is_unsubscribe === true
+  }
+}
+
+function normalizeContactDetail(contact: TenantContactDetail): TenantContactDetail {
+  return {
+    ...normalizeContactListRow(contact),
+    status: contact.status,
+    stage: contact.stage,
+    deletedAt: contact.deletedAt,
+    metadata: contact.metadata && typeof contact.metadata === 'object' ? contact.metadata : {}
+  }
+}
 
 function serverAuthHeaders(): { headers?: HeadersInit } {
   if (!import.meta.server) return {}
@@ -1453,12 +1428,9 @@ const viewContactError = ref('')
 const viewContactDetail = ref<TenantContactDetail | null>(null)
 const ownerAvatarLoadFailed = ref(false)
 
-const addContactTypeOptions = computed(() => {
-  const api = data.value?.contactTypes ?? []
-  return [...api]
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
-    .map((t) => ({ key: t.key, label: t.label }))
-})
+const addContactTypeOptions = computed(() =>
+  sortContactTypes(data.value?.contactTypes ?? []).map((t) => ({ key: t.key, label: t.label }))
+)
 
 function defaultAddContactType(): string {
   return addContactTypeOptions.value[0]?.key ?? ''
@@ -1475,9 +1447,7 @@ const hasContactsWithoutKind = computed(() =>
 )
 
 const contactTypeFilterOptions = computed(() => {
-  const api = data.value?.contactTypes ?? []
-  const ordered = [...api].sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
-  const base = ordered.map((t) => ({ key: t.key, label: t.label }))
+  const base = sortContactTypes(data.value?.contactTypes ?? []).map((t) => ({ key: t.key, label: t.label }))
   const keysFromApi = new Set(base.map((o) => o.key.toLowerCase()))
   const extras: { key: string; label: string }[] = []
   for (const row of data.value?.contacts ?? []) {
@@ -1678,8 +1648,7 @@ const ownerDetailInitials = computed(() => {
 const ownerPhoneDisplay = computed(() => {
   const phone = ownerMetadata(viewContactDetail.value).ownerPhone
   if (typeof phone !== 'string' && typeof phone !== 'number') return ''
-  const formatted = formatUsPhoneNumber(String(phone))
-  return formatted || String(phone).trim()
+  return formatUsPhoneNumber(phone)
 })
 
 const contactDetailAddressFormatted = computed(() => {
@@ -1727,24 +1696,9 @@ async function openContactDetail(contactId: string) {
         ...serverAuthHeaders()
       }
     )
-    viewContactDetail.value = {
-      ...res.contact,
-      contactType: Array.isArray(res.contact.contactType) ? res.contact.contactType : [],
-      contactTypeLabels: Array.isArray(res.contact.contactTypeLabels)
-        ? res.contact.contactTypeLabels
-        : [],
-      primaryTypeLabel: res.contact.primaryTypeLabel ?? '—',
-      is_unsubscribe: res.contact.is_unsubscribe === true,
-      metadata:
-        res.contact.metadata && typeof res.contact.metadata === 'object'
-          ? res.contact.metadata
-          : {}
-    }
+    viewContactDetail.value = normalizeContactDetail(res.contact)
   } catch (e: unknown) {
-    viewContactError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load contact')
-        : 'Failed to load contact'
+    viewContactError.value = apiErrorMessage(e, 'Failed to load contact')
   } finally {
     viewContactLoading.value = false
   }
@@ -1813,10 +1767,7 @@ async function setContactSubscription(row: TenantContactListRow, subscribed: boo
       }
     }
   } catch (e: unknown) {
-    subscriptionActionError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to update subscription')
-        : 'Failed to update subscription'
+    subscriptionActionError.value = apiErrorMessage(e, 'Failed to update subscription')
   } finally {
     subscriptionSavingId.value = ''
   }
@@ -1830,13 +1781,7 @@ async function load() {
       credentials: 'include',
       ...serverAuthHeaders()
     })
-    const contacts = (res.contacts ?? []).map((row) => ({
-      ...row,
-      contactType: Array.isArray(row.contactType) ? row.contactType : [],
-      contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
-      primaryTypeLabel: row.primaryTypeLabel ?? '—',
-      is_unsubscribe: row.is_unsubscribe === true
-    }))
+    const contacts = (res.contacts ?? []).map(normalizeContactListRow)
     data.value = {
       contacts,
       contactTypes: res.contactTypes ?? [],
@@ -1847,10 +1792,7 @@ async function load() {
       contactTypeFilter.value = 'all'
     }
   } catch (e: unknown) {
-    loadError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load contacts')
-        : 'Failed to load contacts'
+    loadError.value = apiErrorMessage(e, 'Failed to load contacts')
     data.value = null
   } finally {
     pending.value = false

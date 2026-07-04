@@ -23,6 +23,13 @@ const emit = defineEmits<{
   change: [value: string]
 }>()
 
+const TRIGGER_BASE =
+  'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white pr-10 text-left text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
+
+const VIEWPORT_PADDING = 8
+const PANEL_GAP = 8
+const MAX_PANEL_HEIGHT = 240
+
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
@@ -30,49 +37,47 @@ const panelStyle = ref<Record<string, string>>({})
 
 const selectedLabel = computed(() => {
   const match = props.options.find((option) => option.value === model.value)
-  if (match) return match.label
-  return props.options[0]?.label ?? 'Select…'
+  return match?.label ?? props.options[0]?.label ?? 'Select…'
 })
 
 const triggerClass = computed(() => {
   if (props.variant === 'field') {
-    return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-left text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
+    return `${TRIGGER_BASE} py-2.5 pl-3 text-sm transition`
   }
-  return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-left text-[0.9375rem] font-medium text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
+  return `${TRIGGER_BASE} py-3.5 pl-4 text-[0.9375rem] font-medium transition-colors`
 })
 
 function updatePanelPosition() {
   const root = rootRef.value
   if (!root || !import.meta.client) return
+
   const rect = root.getBoundingClientRect()
-  const viewportPadding = 8
-  const gap = 8
-  const maxPanelHeight = 240
-  const spaceBelow = window.innerHeight - rect.bottom - viewportPadding
-  const spaceAbove = rect.top - viewportPadding
-  const openUp = spaceBelow < Math.min(maxPanelHeight, 160) && spaceAbove > spaceBelow
-  const maxHeight = openUp
-    ? Math.min(maxPanelHeight, spaceAbove - gap)
-    : Math.min(maxPanelHeight, spaceBelow - gap)
-
-  const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - rect.width - viewportPadding))
-
-  if (openUp) {
-    panelStyle.value = {
-      bottom: `${window.innerHeight - rect.top + gap}px`,
-      left: `${left}px`,
-      width: `${rect.width}px`,
-      maxHeight: `${Math.max(maxHeight, 120)}px`
-    }
-    return
-  }
+  const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PADDING
+  const spaceAbove = rect.top - VIEWPORT_PADDING
+  const openUp = spaceBelow < Math.min(MAX_PANEL_HEIGHT, 160) && spaceAbove > spaceBelow
+  const maxHeight = Math.max(
+    120,
+    openUp
+      ? Math.min(MAX_PANEL_HEIGHT, spaceAbove - PANEL_GAP)
+      : Math.min(MAX_PANEL_HEIGHT, spaceBelow - PANEL_GAP)
+  )
+  const left = Math.max(
+    VIEWPORT_PADDING,
+    Math.min(rect.left, window.innerWidth - rect.width - VIEWPORT_PADDING)
+  )
 
   panelStyle.value = {
-    top: `${rect.bottom + gap}px`,
+    ...(openUp
+      ? { bottom: `${window.innerHeight - rect.top + PANEL_GAP}px` }
+      : { top: `${rect.bottom + PANEL_GAP}px` }),
     left: `${left}px`,
     width: `${rect.width}px`,
-    maxHeight: `${Math.max(maxHeight, 120)}px`
+    maxHeight: `${maxHeight}px`
   }
+}
+
+function isSelected(value: string): boolean {
+  return model.value === value
 }
 
 function selectOption(value: string) {
@@ -93,14 +98,24 @@ function onDocumentPointerDown(event: MouseEvent) {
   if (!open.value) return
   const target = event.target
   if (!(target instanceof Node)) return
-  if (rootRef.value?.contains(target)) return
-  if (panelRef.value?.contains(target)) return
+  if (rootRef.value?.contains(target) || panelRef.value?.contains(target)) return
   open.value = false
 }
 
 function onViewportChange() {
-  if (!open.value) return
-  updatePanelPosition()
+  if (open.value) updatePanelPosition()
+}
+
+function setPanelListeners(active: boolean) {
+  if (!import.meta.client) return
+  if (active) {
+    nextTick(() => updatePanelPosition())
+    window.addEventListener('scroll', onViewportChange, true)
+    window.addEventListener('resize', onViewportChange)
+    return
+  }
+  window.removeEventListener('scroll', onViewportChange, true)
+  window.removeEventListener('resize', onViewportChange)
 }
 
 watch(
@@ -110,17 +125,7 @@ watch(
   }
 )
 
-watch(open, (isOpen) => {
-  if (!import.meta.client) return
-  if (isOpen) {
-    nextTick(() => updatePanelPosition())
-    window.addEventListener('scroll', onViewportChange, true)
-    window.addEventListener('resize', onViewportChange)
-  } else {
-    window.removeEventListener('scroll', onViewportChange, true)
-    window.removeEventListener('resize', onViewportChange)
-  }
-})
+watch(open, setPanelListeners)
 
 watch(
   () => props.options,
@@ -136,10 +141,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocumentPointerDown)
-  if (import.meta.client) {
-    window.removeEventListener('scroll', onViewportChange, true)
-    window.removeEventListener('resize', onViewportChange)
-  }
+  setPanelListeners(false)
 })
 </script>
 
@@ -182,15 +184,15 @@ onBeforeUnmount(() => {
           :key="`${option.value}-${option.label}`"
           type="button"
           class="flex w-full min-w-0 items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-          :class="model === option.value ? 'bg-primary-50/80 font-semibold text-primary-900' : 'font-medium text-slate-800'"
+          :class="isSelected(option.value) ? 'bg-primary-50/80 font-semibold text-primary-900' : 'font-medium text-slate-800'"
           role="option"
-          :aria-selected="model === option.value"
+          :aria-selected="isSelected(option.value)"
           :disabled="disabled"
           @click="selectOption(option.value)"
         >
           <span class="min-w-0 truncate">{{ option.label }}</span>
           <svg
-            v-if="model === option.value"
+            v-if="isSelected(option.value)"
             class="h-4 w-4 shrink-0 text-primary-600"
             fill="none"
             stroke="currentColor"
