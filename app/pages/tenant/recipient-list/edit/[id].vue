@@ -79,12 +79,16 @@
               </div>
               <div class="space-y-6 p-5 sm:p-6">
                 <div>
-                  <label for="rl-name" class="mb-2 block text-sm font-medium text-slate-700">List name</label>
+                  <label for="rl-name" class="mb-2 block text-sm font-medium text-slate-700">
+                    List name
+                    <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="rl-name"
                     v-model="form.name"
                     type="text"
                     required
+                    aria-required="true"
                     maxlength="200"
                     placeholder="e.g. Texas prospects"
                     class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:text-[15px]"
@@ -240,7 +244,7 @@
                       v-model="row.recipientFilterId"
                       label="Registry field"
                       variant="field"
-                      :options="recipientFilterSelectOptions(idx, true)"
+                      :options="recipientFilterSelectOptions(idx)"
                       @change="onRowFilterChange(row)"
                     />
                   </template>
@@ -334,22 +338,15 @@
           {{ saveError }}
         </div>
 
-        <div class="flex flex-col-reverse items-stretch gap-3 pt-2 sm:flex-row sm:justify-end sm:gap-4 sm:pt-2">
-          <NuxtLink
-            :to="`/tenant/recipient-list/${listId}`"
-            class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:text-[15px]"
-            :class="{ 'pointer-events-none opacity-50': saving }"
-          >
-            Cancel
-          </NuxtLink>
-          <button
-            type="submit"
-            class="inline-flex items-center justify-center rounded-xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50 sm:px-8 sm:text-[15px]"
-            :disabled="saving || !canSubmitPropertyValue || !audienceOptions.length"
-          >
-            {{ saving ? 'Saving…' : 'Save changes' }}
-          </button>
-        </div>
+        <TenantRecipientListFormActions
+          :reasons="submitBlockReasons"
+          hint-heading="Complete the following to save changes:"
+          submit-label="Save changes"
+          :cancel-to="`/tenant/recipient-list/${listId}`"
+          :can-submit="canSubmitForm"
+          :saving="saving"
+          cancel-first-on-mobile
+        />
       </form>
       </div>
   </div>
@@ -370,19 +367,21 @@ const {
   data,
   form,
   audienceOptions,
+  audienceFieldSelectOptions,
   filtersForAudience,
-  selectableFiltersForRow,
   canAddFilter,
   showPropertyRowFor,
   rowRegistryTokens,
   propertyValuePlaceholderFor,
   showCombineBeforeFormRow,
   joinSlotBeforeFormRow,
-  canSubmitPropertyValue,
+  canSubmitForm,
+  submitBlockReasons,
+  recipientFilterSelectOptions,
+  registryValueSelectOptions,
   onRowFilterChange,
   addFilterRow,
   removeFilterRow,
-  filterOptionLabel,
   matchRuleFieldLabel,
   registryValueDisplay,
   submitUpdate
@@ -390,29 +389,4 @@ const {
   mode: 'edit',
   listId: computed(() => String(route.params.id ?? ''))
 })
-
-const audienceFieldSelectOptions = computed(() => {
-  if (!audienceOptions.value.length) {
-    return [{ value: '', label: 'No audience types available' }]
-  }
-  return audienceOptions.value
-})
-
-function recipientFilterSelectOptions(idx: number, includePlaceholder = false) {
-  const items = selectableFiltersForRow(idx).map((f) => ({
-    value: f.id,
-    label: filterOptionLabel(f)
-  }))
-  if (includePlaceholder) {
-    return [{ value: '', label: 'Select a filter…' }, ...items]
-  }
-  return items
-}
-
-function registryValueSelectOptions(tokens: string[]) {
-  return [
-    { value: '', label: 'Choose a value…' },
-    ...tokens.map((opt) => ({ value: opt, label: registryValueDisplay(opt) }))
-  ]
-}
 </script>
