@@ -1,5 +1,6 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, isRef, toValue } from 'vue'
+import type { FilterSelectOption } from '~/components/tenant/FilterSelect.vue'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import {
   recipientFilterPropertyLabel,
@@ -65,15 +66,18 @@ export type RecipientListFormSharedReturn = {
     criterionJoins: ('and' | 'or')[]
   }
   audienceOptions: ComputedRef<{ value: string; label: string }[]>
+  audienceFieldSelectOptions: ComputedRef<FilterSelectOption[]>
   filtersForAudience: ComputedRef<RegistryFilterRow[]>
-  selectableFiltersForRow: (_rowIdx: number) => RegistryFilterRow[]
   canAddFilter: ComputedRef<boolean>
   showPropertyRowFor: (row: RecipientListFilterRow) => boolean
   rowRegistryTokens: (row: RecipientListFilterRow) => string[]
   propertyValuePlaceholderFor: (row: RecipientListFilterRow) => string
   showCombineBeforeFormRow: (formIdx: number) => boolean
   joinSlotBeforeFormRow: (formIdx: number) => number
-  canSubmitPropertyValue: ComputedRef<boolean>
+  canSubmitForm: ComputedRef<boolean>
+  submitBlockReasons: ComputedRef<string[]>
+  recipientFilterSelectOptions: (rowIdx: number) => FilterSelectOption[]
+  registryValueSelectOptions: (tokens: string[]) => FilterSelectOption[]
   onRowFilterChange: (row: RecipientListFilterRow) => void
   addFilterRow: () => void
   removeFilterRow: (idx: number) => void
@@ -116,6 +120,8 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   profile_type: 'Type',
   profile_subtype: 'Sub Type'
 }
+
+const CHOOSE_VALUE_LABEL = 'Choose a value…'
 
 export function useRecipientListForm(options: { mode: 'create' }): RecipientListFormCreateReturn
 export function useRecipientListForm(options: {
@@ -185,6 +191,13 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     })
   })
 
+  const audienceFieldSelectOptions = computed((): FilterSelectOption[] => {
+    if (!audienceOptions.value.length) {
+      return [{ value: '', label: 'No audience types available' }]
+    }
+    return audienceOptions.value
+  })
+
   watch(
     audienceOptions,
     (opts) => {
@@ -209,10 +222,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     })
   })
 
-  function selectableFiltersForRow(_rowIdx: number): RegistryFilterRow[] {
-    return filtersForAudience.value
-  }
-
   const canAddFilter = computed(() => filtersForAudience.value.length > 0)
 
   function rowFilter(row: RecipientListFilterRow): RegistryFilterRow | null {
@@ -220,6 +229,40 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     if (!id) return null
     return filtersForAudience.value.find((f) => f.id === id) ?? null
   }
+
+  function rowMissingPropertyValue(row: RecipientListFilterRow): 'choose' | 'enter' | null {
+    const f = rowFilter(row)
+    if (!f || f.property === 'none') return null
+    const tokens = rowRegistryTokens(row)
+    if (tokens.length === 1 || row.listPropertyValue.trim()) return null
+    return tokens.length > 1 ? 'choose' : 'enter'
+  }
+
+  const submitBlockReasons = computed((): string[] => {
+    const reasons: string[] = []
+    if (!form.name.trim()) {
+      reasons.push('Enter a list name.')
+    }
+    if (!audienceOptions.value.length) {
+      reasons.push('Add at least one enabled contact type before saving.')
+    }
+    form.filterRows.forEach((row, idx) => {
+      const condition = idx + 1
+      if (!row.recipientFilterId.trim()) {
+        reasons.push(`Choose a field for condition ${condition}.`)
+        return
+      }
+      const missing = rowMissingPropertyValue(row)
+      if (missing === 'choose') {
+        reasons.push(`Choose a value for condition ${condition}.`)
+      } else if (missing === 'enter') {
+        reasons.push(`Enter a value for condition ${condition}.`)
+      }
+    })
+    return reasons
+  })
+
+  const canSubmitForm = computed(() => submitBlockReasons.value.length === 0)
 
   function showPropertyRowFor(row: RecipientListFilterRow): boolean {
     const f = rowFilter(row)
@@ -285,22 +328,23 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     { deep: true, immediate: true }
   )
 
-  const canSubmitPropertyValue = computed(() => {
-    for (const row of form.filterRows) {
-      if (!row.recipientFilterId.trim()) return false
-      const f = rowFilter(row)
-      if (!f || f.property === 'none') continue
-      const tokens = rowRegistryTokens(row)
-      if (tokens.length > 1) {
-        if (!row.listPropertyValue.trim()) return false
-      } else if (tokens.length === 1) {
-        /* preset single value ok */
-      } else {
-        if (!row.listPropertyValue.trim()) return false
-      }
+  function recipientFilterSelectOptions(_rowIdx: number): FilterSelectOption[] {
+    const items = filtersForAudience.value.map((f) => ({
+      value: f.id,
+      label: filterOptionLabel(f)
+    }))
+    if (items.length > 1) {
+      return [{ value: '', label: CHOOSE_VALUE_LABEL }, ...items]
     }
-    return true
-  })
+    return items
+  }
+
+  function registryValueSelectOptions(tokens: string[]): FilterSelectOption[] {
+    return [
+      { value: '', label: CHOOSE_VALUE_LABEL },
+      ...tokens.map((opt) => ({ value: opt, label: formatRegistryLabelForDisplay(opt) }))
+    ]
+  }
 
   watch(
     () => form.audience,
@@ -317,10 +361,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     const tokens = tokenizePropertyValue(f.propertyValue ?? '')
     if (tokens.length === 1) {
       row.listPropertyValue = tokens[0] ?? ''
-    }
-    if (tokens.length > 1) {
-      const first = tokens[0] ?? ''
-      row.listPropertyValue = first
     }
   }
 
@@ -451,6 +491,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
 
   async function submitCreate(): Promise<void> {
     saveError.value = ''
+    if (!canSubmitForm.value) return
     saving.value = true
     try {
       await $fetch('/api/v1/tenant/recipient-list', {
@@ -504,6 +545,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   async function submitUpdate(listId: string): Promise<void> {
     if (!listId) return
     saveError.value = ''
+    if (!canSubmitForm.value) return
     saving.value = true
     try {
       await $fetch(`/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`, {
@@ -528,15 +570,18 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     data,
     form,
     audienceOptions,
+    audienceFieldSelectOptions,
     filtersForAudience,
-    selectableFiltersForRow,
     canAddFilter,
     showPropertyRowFor,
     rowRegistryTokens,
     propertyValuePlaceholderFor,
     showCombineBeforeFormRow,
     joinSlotBeforeFormRow,
-    canSubmitPropertyValue,
+    canSubmitForm,
+    submitBlockReasons,
+    recipientFilterSelectOptions,
+    registryValueSelectOptions,
     onRowFilterChange,
     addFilterRow,
     removeFilterRow,
