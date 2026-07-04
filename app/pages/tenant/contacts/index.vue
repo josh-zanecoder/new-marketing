@@ -717,81 +717,140 @@
             <div class="tenant-add-contact-form min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-4 sm:px-6 sm:py-5">
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div>
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-first-name">First name</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-first-name">
+                  First name <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="add-contact-first-name"
                   v-model="addContactForm.firstName"
                   type="text"
                   autocomplete="given-name"
                   placeholder="John"
-                  :class="ADD_CONTACT_INPUT_CLASS"
+                  required
+                  aria-required="true"
+                  :aria-invalid="!!contactFormFieldErrors.firstName"
+                  :class="contactInputClass('firstName')"
+                  @input="clearContactFormFieldError('firstName')"
                 >
+                <p v-if="contactFormFieldErrors.firstName" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.firstName }}
+                </p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-last-name">Last name</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-last-name">
+                  Last name <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="add-contact-last-name"
                   v-model="addContactForm.lastName"
                   type="text"
                   autocomplete="family-name"
                   placeholder="Doe"
-                  :class="ADD_CONTACT_INPUT_CLASS"
+                  required
+                  aria-required="true"
+                  :aria-invalid="!!contactFormFieldErrors.lastName"
+                  :class="contactInputClass('lastName')"
+                  @input="clearContactFormFieldError('lastName')"
                 >
+                <p v-if="contactFormFieldErrors.lastName" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.lastName }}
+                </p>
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700" for="add-contact-email">Email <span class="text-red-600">*</span></label>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-email">
+                Email <span class="text-red-600" aria-hidden="true">*</span>
+              </label>
               <input
                 id="add-contact-email"
                 v-model="addContactForm.email"
                 type="email"
                 required
+                aria-required="true"
                 autocomplete="email"
                 placeholder="john.doe@example.com"
-                :class="ADD_CONTACT_INPUT_CLASS"
+                :aria-invalid="!!contactFormFieldErrors.email"
+                :class="contactInputClass('email')"
+                @input="clearContactFormFieldError('email')"
               >
+              <p v-if="contactFormFieldErrors.email" class="mt-1 text-xs text-red-600" role="alert">
+                {{ contactFormFieldErrors.email }}
+              </p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700" for="add-contact-phone">Phone</label>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-phone">
+                Phone <span class="text-red-600" aria-hidden="true">*</span>
+              </label>
               <input
                 id="add-contact-phone"
                 v-model="addContactForm.phone"
                 type="tel"
+                inputmode="tel"
+                required
+                aria-required="true"
                 autocomplete="tel"
-                placeholder="(555) 123-4567"
-                :class="ADD_CONTACT_INPUT_CLASS"
+                placeholder="(555)-123-4567"
+                :aria-invalid="!!contactFormFieldErrors.phone"
+                :class="contactInputClass('phone')"
+                @input="onContactPhoneInput"
               >
+              <p v-if="contactFormFieldErrors.phone" class="mt-1 text-xs text-red-600" role="alert">
+                {{ contactFormFieldErrors.phone }}
+              </p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700" for="add-contact-company">Company</label>
+              <label class="block text-sm font-medium text-slate-700" for="add-contact-company">
+                Company <span class="text-red-600" aria-hidden="true">*</span>
+              </label>
               <input
                 id="add-contact-company"
                 v-model="addContactForm.company"
                 type="text"
+                required
+                aria-required="true"
                 autocomplete="organization"
                 placeholder="Acme Inc."
-                :class="ADD_CONTACT_INPUT_CLASS"
+                :aria-invalid="!!contactFormFieldErrors.company"
+                :class="contactInputClass('company')"
+                @input="clearContactFormFieldError('company')"
               >
+              <p v-if="contactFormFieldErrors.company" class="mt-1 text-xs text-red-600" role="alert">
+                {{ contactFormFieldErrors.company }}
+              </p>
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div :class="addContactTypeOptions.length ? '' : 'min-[480px]:col-span-2'">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">Channel</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-channel">
+                  Channel <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="add-contact-channel"
                   v-model="addContactForm.channel"
                   type="text"
+                  required
+                  aria-required="true"
                   autocomplete="off"
                   placeholder="e.g. email"
-                  :class="ADD_CONTACT_INPUT_CLASS"
+                  :aria-invalid="!!contactFormFieldErrors.channel"
+                  :class="contactInputClass('channel')"
+                  @input="clearContactFormFieldError('channel')"
                 >
+                <p v-if="contactFormFieldErrors.channel" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.channel }}
+                </p>
               </div>
               <div v-if="addContactTypeOptions.length">
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-type">Contact type <span class="text-red-600">*</span></label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-type">
+                  Contact type <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <select
                   id="add-contact-type"
                   v-model="addContactForm.contactType"
                   required
-                  :class="`${ADD_CONTACT_INPUT_CLASS} cursor-pointer appearance-none`"
+                  aria-required="true"
+                  :aria-invalid="!!contactFormFieldErrors.contactType"
+                  :class="`${contactInputClass('contactType')} cursor-pointer appearance-none`"
+                  @change="clearContactFormFieldError('contactType')"
                 >
                   <option
                     v-for="opt in addContactTypeOptions"
@@ -801,91 +860,157 @@
                     {{ opt.label }}
                   </option>
                 </select>
+                <p v-if="contactFormFieldErrors.contactType" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.contactType }}
+                </p>
               </div>
             </div>
             <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
               <div>
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-status">Status</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-status">
+                  Status <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="add-contact-status"
                   v-model="addContactForm.status"
                   type="text"
+                  required
+                  aria-required="true"
                   placeholder="e.g. prospect"
-                  :class="ADD_CONTACT_INPUT_CLASS"
+                  :aria-invalid="!!contactFormFieldErrors.status"
+                  :class="contactInputClass('status')"
+                  @input="clearContactFormFieldError('status')"
                 >
+                <p v-if="contactFormFieldErrors.status" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.status }}
+                </p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-slate-700" for="add-contact-stage">Stage</label>
+                <label class="block text-sm font-medium text-slate-700" for="add-contact-stage">
+                  Stage <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="add-contact-stage"
                   v-model="addContactForm.stage"
                   type="text"
+                  required
+                  aria-required="true"
                   placeholder="e.g. qualified"
-                  :class="ADD_CONTACT_INPUT_CLASS"
+                  :aria-invalid="!!contactFormFieldErrors.stage"
+                  :class="contactInputClass('stage')"
+                  @input="clearContactFormFieldError('stage')"
                 >
+                <p v-if="contactFormFieldErrors.stage" class="mt-1 text-xs text-red-600" role="alert">
+                  {{ contactFormFieldErrors.stage }}
+                </p>
               </div>
             </div>
             <fieldset class="space-y-3 rounded-xl border border-slate-200/80 px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4">
               <legend class="px-1 text-sm font-medium text-slate-700">
-                Address
+                Address <span class="text-red-600" aria-hidden="true">*</span>
               </legend>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
                 <div class="sm:col-span-4">
-                  <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-street">
+                    Street address <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="add-contact-street"
                     v-model="addContactForm.addressStreet"
                     type="text"
+                    required
+                    aria-required="true"
                     autocomplete="street-address"
                     placeholder="123 Main Street"
-                    :class="ADD_CONTACT_INPUT_CLASS"
+                    :aria-invalid="!!contactFormFieldErrors.addressStreet"
+                    :class="contactInputClass('addressStreet')"
+                    @input="clearContactFormFieldError('addressStreet')"
                   >
+                  <p v-if="contactFormFieldErrors.addressStreet" class="mt-1 text-xs text-red-600" role="alert">
+                    {{ contactFormFieldErrors.addressStreet }}
+                  </p>
                 </div>
                 <div class="sm:col-span-2">
-                  <label class="block text-sm font-medium text-slate-700" for="add-contact-unit">Unit</label>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-unit">
+                    Unit <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="add-contact-unit"
                     v-model="addContactForm.addressUnit"
                     type="text"
+                    required
+                    aria-required="true"
                     autocomplete="address-line2"
-                    placeholder="Apt 4B"
-                    :class="ADD_CONTACT_INPUT_CLASS"
+                    placeholder="Apt 4B or N/A"
+                    :aria-invalid="!!contactFormFieldErrors.addressUnit"
+                    :class="contactInputClass('addressUnit')"
+                    @input="clearContactFormFieldError('addressUnit')"
                   >
+                  <p v-if="contactFormFieldErrors.addressUnit" class="mt-1 text-xs text-red-600" role="alert">
+                    {{ contactFormFieldErrors.addressUnit }}
+                  </p>
                 </div>
               </div>
               <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
                 <div>
-                  <label class="block text-sm font-medium text-slate-700" for="add-contact-city">City</label>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-city">
+                    City <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="add-contact-city"
                     v-model="addContactForm.addressCity"
                     type="text"
+                    required
+                    aria-required="true"
                     autocomplete="address-level2"
                     placeholder="New York"
-                    :class="ADD_CONTACT_INPUT_CLASS"
+                    :aria-invalid="!!contactFormFieldErrors.addressCity"
+                    :class="contactInputClass('addressCity')"
+                    @input="clearContactFormFieldError('addressCity')"
                   >
+                  <p v-if="contactFormFieldErrors.addressCity" class="mt-1 text-xs text-red-600" role="alert">
+                    {{ contactFormFieldErrors.addressCity }}
+                  </p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-slate-700" for="add-contact-state">State</label>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-state">
+                    State <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="add-contact-state"
                     v-model="addContactForm.addressState"
                     type="text"
+                    required
+                    aria-required="true"
                     autocomplete="address-level1"
                     placeholder="NY"
-                    :class="ADD_CONTACT_INPUT_CLASS"
+                    :aria-invalid="!!contactFormFieldErrors.addressState"
+                    :class="contactInputClass('addressState')"
+                    @input="clearContactFormFieldError('addressState')"
                   >
+                  <p v-if="contactFormFieldErrors.addressState" class="mt-1 text-xs text-red-600" role="alert">
+                    {{ contactFormFieldErrors.addressState }}
+                  </p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-slate-700" for="add-contact-county">County</label>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-county">
+                    County <span class="text-red-600" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="add-contact-county"
                     v-model="addContactForm.addressCounty"
                     type="text"
+                    required
+                    aria-required="true"
                     autocomplete="off"
                     placeholder="El Paso"
-                    :class="ADD_CONTACT_INPUT_CLASS"
+                    :aria-invalid="!!contactFormFieldErrors.addressCounty"
+                    :class="contactInputClass('addressCounty')"
+                    @input="clearContactFormFieldError('addressCounty')"
                   >
+                  <p v-if="contactFormFieldErrors.addressCounty" class="mt-1 text-xs text-red-600" role="alert">
+                    {{ contactFormFieldErrors.addressCounty }}
+                  </p>
                 </div>
               </div>
             </fieldset>
@@ -931,7 +1056,7 @@
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { joinContactStreetParts, normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
-import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
+import { extractPhoneDigitsForInput, formatUsPhoneInputLive, formatUsPhoneNumber, usPhoneDigits } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
   TenantContactListRow,
@@ -957,6 +1082,22 @@ const contactFormLoading = ref(false)
 let contactModalEscListener: ((e: KeyboardEvent) => void) | null = null
 const addContactSubmitting = ref(false)
 const addContactError = ref('')
+type ContactFormField =
+  | 'firstName'
+  | 'lastName'
+  | 'email'
+  | 'phone'
+  | 'company'
+  | 'contactType'
+  | 'channel'
+  | 'status'
+  | 'stage'
+  | 'addressStreet'
+  | 'addressUnit'
+  | 'addressCity'
+  | 'addressState'
+  | 'addressCounty'
+const contactFormFieldErrors = ref<Partial<Record<ContactFormField, string>>>({})
 const addContactForm = ref({
   firstName: '',
   lastName: '',
@@ -977,6 +1118,112 @@ const addContactForm = ref({
 
 const ADD_CONTACT_INPUT_CLASS =
   'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20'
+const ADD_CONTACT_INPUT_ERROR_CLASS =
+  'border-red-300 ring-red-500/20 focus:border-red-400 focus:ring-red-500/20'
+
+const MARKETING_EMAIL_RE =
+  /^[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
+
+function contactInputClass(field: ContactFormField): string {
+  return contactFormFieldErrors.value[field]
+    ? `${ADD_CONTACT_INPUT_CLASS} ${ADD_CONTACT_INPUT_ERROR_CLASS}`
+    : ADD_CONTACT_INPUT_CLASS
+}
+
+function clearContactFormFieldError(field: ContactFormField) {
+  if (!contactFormFieldErrors.value[field]) return
+  const next = { ...contactFormFieldErrors.value }
+  delete next[field]
+  contactFormFieldErrors.value = next
+}
+
+function onContactPhoneInput(event: Event) {
+  clearContactFormFieldError('phone')
+  const input = event.target as HTMLInputElement
+  const raw = input.value
+  const cursorBefore = input.selectionStart ?? raw.length
+  const digitsBeforeCursor = extractPhoneDigitsForInput(raw.slice(0, cursorBefore)).length
+  const formatted = formatUsPhoneInputLive(raw)
+
+  addContactForm.value.phone = formatted
+
+  nextTick(() => {
+    const rejectedExtraDigit = String(raw).replace(/\D/g, '').length > 10
+    let newPos = formatted.length
+
+    if (!rejectedExtraDigit) {
+      let digitCount = 0
+      for (let i = 0; i < formatted.length; i++) {
+        if (/\d/.test(formatted[i]!)) {
+          digitCount++
+          if (digitCount >= digitsBeforeCursor) {
+            newPos = i + 1
+            break
+          }
+        }
+      }
+    }
+
+    input.setSelectionRange(newPos, newPos)
+  })
+}
+
+function clearContactFormFieldErrors() {
+  contactFormFieldErrors.value = {}
+}
+
+function isValidContactEmail(email: string): boolean {
+  const e = email.trim().toLowerCase()
+  if (e.length < 3 || e.length > 254) return false
+  if (e.includes(' ')) return false
+  const at = e.indexOf('@')
+  if (at <= 0 || at !== e.lastIndexOf('@')) return false
+  if (e.indexOf('.', at + 2) === -1) return false
+  return MARKETING_EMAIL_RE.test(e)
+}
+
+function validateContactForm(): boolean {
+  const errors: Partial<Record<ContactFormField, string>> = {}
+  const form = addContactForm.value
+
+  if (!form.firstName.trim()) errors.firstName = 'First name is required.'
+  if (!form.lastName.trim()) errors.lastName = 'Last name is required.'
+
+  const email = form.email.trim()
+  if (!email) errors.email = 'Email is required.'
+  else if (!isValidContactEmail(email)) errors.email = 'Enter a valid email address.'
+
+  const phone = form.phone.trim()
+  if (!phone) errors.phone = 'Phone is required.'
+  else if (usPhoneDigits(phone).length !== 10) {
+    errors.phone = 'Enter a valid 10-digit US phone number.'
+  }
+
+  if (!form.company.trim()) errors.company = 'Company is required.'
+  if (!form.channel.trim()) errors.channel = 'Channel is required.'
+  if (!form.status.trim()) errors.status = 'Status is required.'
+  if (!form.stage.trim()) errors.stage = 'Stage is required.'
+
+  if (addContactTypeOptions.value.length && !form.contactType.trim()) {
+    errors.contactType = 'Contact type is required.'
+  }
+
+  if (!form.addressStreet.trim()) errors.addressStreet = 'Street address is required.'
+  if (!form.addressUnit.trim()) errors.addressUnit = 'Unit is required.'
+  if (!form.addressCity.trim()) errors.addressCity = 'City is required.'
+  if (!form.addressState.trim()) errors.addressState = 'State is required.'
+  if (!form.addressCounty.trim()) errors.addressCounty = 'County is required.'
+
+  contactFormFieldErrors.value = errors
+  if (Object.keys(errors).length) {
+    addContactError.value = 'Please fix the highlighted fields.'
+    toast.error('Please complete all required fields.')
+    return false
+  }
+
+  addContactError.value = ''
+  return true
+}
 
 function extractContactFormErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -1019,7 +1266,7 @@ function populateContactFormFromDetail(contact: TenantContactDetail) {
     firstName: contact.firstName ?? '',
     lastName: contact.lastName ?? '',
     email: contact.email ?? '',
-    phone: contact.phone ?? '',
+    phone: formatUsPhoneInputLive(contact.phone ?? ''),
     company: contact.company ?? '',
     contactType: contact.contactType?.[0] ?? defaultAddContactType(),
     channel: contact.channel ?? '',
@@ -1095,6 +1342,7 @@ function openAddContactModal() {
   editingContactId.value = ''
   contactFormLoading.value = false
   addContactError.value = ''
+  clearContactFormFieldErrors()
   addContactForm.value = {
     ...emptyContactForm(),
     contactType: defaultAddContactType()
@@ -1107,6 +1355,7 @@ async function openEditContactModal(contactId: string) {
   editingContactId.value = contactId
   contactFormLoading.value = true
   addContactError.value = ''
+  clearContactFormFieldErrors()
   addContactForm.value = emptyContactForm()
   addContactOpen.value = true
   try {
@@ -1146,20 +1395,13 @@ function closeContactFormModal() {
   editingContactId.value = ''
   contactFormMode.value = 'add'
   addContactError.value = ''
+  clearContactFormFieldErrors()
 }
 
 async function submitContactForm() {
+  if (!validateContactForm()) return
+
   const email = addContactForm.value.email.trim()
-  if (!email) {
-    addContactError.value = 'Email is required.'
-    toast.error('Email is required.')
-    return
-  }
-  if (addContactTypeOptions.value.length && !addContactForm.value.contactType.trim()) {
-    addContactError.value = 'Contact type is required.'
-    toast.error('Please select a contact type.')
-    return
-  }
   addContactSubmitting.value = true
   addContactError.value = ''
   try {
@@ -1256,7 +1498,7 @@ const subscriptionFilterSelectOptions = [
   { value: 'all', label: 'All subscriptions' },
   { value: 'subscribed', label: 'Subscribed' },
   { value: 'unsubscribed', label: 'Unsubscribed' }
-] as const
+]
 
 const contactTypeSelectOptions = computed(() => {
   const options: { value: string; label: string }[] = [{ value: 'all', label: 'All types' }]
