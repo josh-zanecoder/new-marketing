@@ -1,4 +1,4 @@
-import type { ComputedRef, Ref } from 'vue'
+import { toValue, type ComputedRef, type MaybeRefOrGetter, type Ref } from 'vue'
 
 export interface ClientPaginationMeta {
   from: number
@@ -8,26 +8,49 @@ export interface ClientPaginationMeta {
 
 export function useClientPagination<T>(
   items: Ref<T[]> | ComputedRef<T[]>,
-  pageSize = 10
+  pageSize: MaybeRefOrGetter<number> = 10
 ) {
   const currentPage = ref(1)
+  const pageInput = ref('1')
+
+  const resolvedPageSize = computed(() => Math.max(1, toValue(pageSize)))
 
   const totalPages = computed(() =>
-    Math.max(1, Math.ceil(items.value.length / pageSize))
+    Math.max(1, Math.ceil(items.value.length / resolvedPageSize.value))
   )
 
   const paginatedItems = computed(() => {
-    const start = (currentPage.value - 1) * pageSize
-    return items.value.slice(start, start + pageSize)
+    const size = resolvedPageSize.value
+    const start = (currentPage.value - 1) * size
+    return items.value.slice(start, start + size)
   })
 
   const paginationMeta = computed((): ClientPaginationMeta => {
     const total = items.value.length
+    const size = resolvedPageSize.value
     if (!total) return { from: 0, to: 0, total: 0 }
-    const from = (currentPage.value - 1) * pageSize + 1
-    const to = Math.min(currentPage.value * pageSize, total)
+    const from = (currentPage.value - 1) * size + 1
+    const to = Math.min(currentPage.value * size, total)
     return { from, to, total }
   })
+
+  watch(
+    currentPage,
+    (page) => {
+      pageInput.value = String(page)
+    },
+    { immediate: true }
+  )
+
+  function commitPageInput() {
+    const parsed = Number.parseInt(pageInput.value.trim(), 10)
+    if (!Number.isFinite(parsed)) {
+      pageInput.value = String(currentPage.value)
+      return
+    }
+    currentPage.value = Math.min(totalPages.value, Math.max(1, parsed))
+    pageInput.value = String(currentPage.value)
+  }
 
   watch(
     () => items.value.length,
@@ -35,6 +58,10 @@ export function useClientPagination<T>(
       currentPage.value = 1
     }
   )
+
+  watch(resolvedPageSize, () => {
+    currentPage.value = 1
+  })
 
   watch(totalPages, (pages) => {
     if (currentPage.value > pages) currentPage.value = pages
@@ -45,6 +72,8 @@ export function useClientPagination<T>(
     totalPages,
     paginatedItems,
     paginationMeta,
-    pageSize
+    pageSize: resolvedPageSize,
+    pageInput,
+    commitPageInput
   }
 }

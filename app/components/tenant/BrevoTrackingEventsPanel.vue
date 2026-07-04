@@ -57,37 +57,22 @@ const props = withDefaults(
 
 const route = useRoute()
 
-const query = computed(() => {
-  const c = props.campaignId?.trim()
-  return c ? { campaignId: c } : {}
+const {
+  datePreset,
+  customDateFrom,
+  customDateTo,
+  effectiveDateRange,
+  dateRangeFilterActive,
+  dateRangeLabel,
+  resetDateRange
+} = useBrevoTrackingDateRange()
+
+const { data, error, pending } = useBrevoTrackingReport({
+  campaignId: () => props.campaignId,
+  dateRange: effectiveDateRange
 })
 
-const fetchKey = computed(() => `tenant-tracking-brevo-${props.campaignId?.trim() || 'all'}`)
-
-const { data, error, pending } = useFetch<{ report: unknown }>('/api/v1/tracking', {
-  query,
-  key: fetchKey
-})
-
-const { data: campaignsListData } = useFetch<{ campaigns: Array<{ id: string; name: string }> }>(
-  '/api/v1/tenant/campaigns',
-  { key: 'tenant-brevo-tracking-campaign-names' }
-)
-
-const campaignNameById = computed(() => {
-  const m = new Map<string, string>()
-  for (const c of campaignsListData.value?.campaigns ?? []) {
-    const id = c.id?.trim()
-    if (id) m.set(id, (c.name ?? '').trim() || id)
-  }
-  return m
-})
-
-function campaignDisplayLabel(campaignId: string | null): string {
-  if (!campaignId?.trim()) return ''
-  const id = campaignId.trim()
-  return campaignNameById.value.get(id) ?? id
-}
+const { campaignDisplayLabel } = useTenantCampaignsList({ lazy: true })
 
 const report = computed((): BrevoEventReport | null => {
   const r = data.value?.report
@@ -215,16 +200,6 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
 const searchQuery = ref('')
 const selectedEventTypes = ref<string[]>([])
 
-const {
-  datePreset,
-  customDateFrom,
-  customDateTo,
-  effectiveDateRange,
-  dateRangeFilterActive,
-  dateRangeLabel,
-  resetDateRange
-} = useBrevoTrackingDateRange()
-
 function groupMatchesDateRange(g: MessageEventGroup): boolean {
   const range = effectiveDateRange.value
   if (!range.from && !range.to) return true
@@ -235,7 +210,7 @@ function groupMatchesSearch(g: MessageEventGroup): boolean {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return true
   const campaign = parseCampaignIdFromTag(groupTagSample(g) || g.events[0]?.tag)
-  const campaignName = campaign ? campaignNameById.value.get(campaign) ?? '' : ''
+  const campaignName = campaign ? campaignDisplayLabel(campaign) : ''
   const parts = [
     groupSubject(g),
     g.messageId,
@@ -335,12 +310,17 @@ function eventBadgeClass(ev: string | undefined): string {
   return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
 }
 
+const TRACKING_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
+const tablePageSize = ref<number>(20)
+
 const {
   currentPage,
   totalPages,
   paginatedItems: paginatedTableRows,
-  paginationMeta
-} = useClientPagination(tableRows, 10)
+  paginationMeta,
+  pageInput,
+  commitPageInput
+} = useClientPagination(tableRows, tablePageSize)
 
 watch([searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes], () => {
   currentPage.value = 1
@@ -359,25 +339,16 @@ const hasActiveFilters = computed(
     selectedEventTypes.value.length > 0
 )
 
+const reportLoadFailed = computed(() => Boolean(error.value) && !pending.value)
+const showEmptyReport = computed(() => !pending.value && events.value.length === 0)
+
+const EVENT_FILTER_SKELETON_COUNT = 4
 </script>
 
 <template>
   <div>
     <div
-      v-if="pending"
-      class="flex flex-col items-center justify-center rounded-2xl border border-zinc-200/90 bg-white px-6 py-16 shadow-sm shadow-zinc-950/[0.04] sm:py-20"
-    >
-      <div
-        class="h-10 w-10 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-800"
-        aria-hidden="true"
-      />
-      <p class="mt-4 text-sm font-medium text-zinc-600">
-        Loading event report…
-      </p>
-    </div>
-
-    <div
-      v-else-if="error"
+      v-if="reportLoadFailed"
       class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3.5 text-sm text-red-900 shadow-sm"
       role="alert"
     >
@@ -387,7 +358,28 @@ const hasActiveFilters = computed(
       <span class="min-w-0 leading-relaxed">{{ error.message || 'Failed to load event report' }}</span>
     </div>
 
-    <div v-else-if="events.length > 0" class="space-y-0">
+    <div
+      v-else-if="showEmptyReport"
+      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-14 text-center shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-20"
+    >
+      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
+      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+        {{ campaignId?.trim() ? 'No tracking events for this campaign yet' : 'No events in this report' }}
+      </h3>
+      <p class="mt-2 max-w-sm text-sm text-zinc-500">
+        {{
+          campaignId?.trim()
+            ? 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
+            : 'After you send campaigns, opens, clicks, and delivery events will show up here.'
+        }}
+      </p>
+    </div>
+
+    <div v-else class="space-y-0" :aria-busy="pending">
       <!-- Filters sit on page background (same pattern as campaigns list: controls above the card) -->
       <div class="mb-4 space-y-3 sm:mb-6 sm:space-y-4">
         <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
@@ -423,7 +415,17 @@ const hasActiveFilters = computed(
             Clear filters
           </button>
         </div>
-        <div v-if="availableEventTypes.length">
+        <div v-if="pending" class="animate-pulse">
+          <div class="mb-2 h-3 w-16 rounded bg-zinc-100" />
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="n in EVENT_FILTER_SKELETON_COUNT"
+              :key="`filter-${n}`"
+              class="h-8 w-24 rounded-full bg-zinc-100"
+            />
+          </div>
+        </div>
+        <div v-else-if="availableEventTypes.length">
           <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
             Event type
           </p>
@@ -465,11 +467,14 @@ const hasActiveFilters = computed(
           :events="events"
           :date-range="effectiveDateRange"
           :selected-event-types="selectedEventTypes"
+          :loading="pending"
         />
 
         <div :class="cardClass">
+          <TenantBrevoTrackingTableSkeleton v-if="pending" />
+
           <div
-            v-if="tableRows.length === 0"
+            v-else-if="tableRows.length === 0"
             class="px-4 py-14 text-center sm:px-6 sm:py-16"
           >
             <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
@@ -624,62 +629,74 @@ const hasActiveFilters = computed(
             </div>
 
             <div
-              v-if="totalPages > 1"
-              class="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
+              v-if="tableRows.length > 0"
+              class="flex flex-col gap-3 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4"
             >
               <p class="min-w-0 text-xs tabular-nums text-zinc-500 sm:text-sm">
                 <span class="font-semibold text-zinc-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
                 <span class="text-zinc-300"> / </span>
                 <span>{{ paginationMeta.total.toLocaleString() }}</span>
               </p>
-              <nav class="flex shrink-0 items-center gap-1 sm:gap-1.5" aria-label="Tracking pagination">
-                <button
-                  type="button"
-                  class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-                  :disabled="currentPage === 1"
-                  @click="currentPage -= 1"
-                >
-                  <span class="sm:hidden">Prev</span>
-                  <span class="hidden sm:inline">Previous</span>
-                </button>
-                <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-zinc-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
-                  <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
-                  <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
-                </span>
-                <button
-                  type="button"
-                  class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-                  :disabled="currentPage === totalPages"
-                  @click="currentPage += 1"
-                >
-                  Next
-                </button>
-              </nav>
+
+              <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <label class="flex items-center gap-2 text-xs text-zinc-500 sm:text-sm">
+                  <span class="whitespace-nowrap">Rows per page</span>
+                  <select
+                    v-model.number="tablePageSize"
+                    class="h-9 rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-medium tabular-nums text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:rounded-xl sm:px-3 sm:text-[0.8125rem]"
+                    aria-label="Rows per page"
+                  >
+                    <option
+                      v-for="size in TRACKING_PAGE_SIZE_OPTIONS"
+                      :key="size"
+                      :value="size"
+                    >
+                      {{ size }}
+                    </option>
+                  </select>
+                </label>
+
+                <nav class="flex shrink-0 items-center gap-1 sm:gap-1.5" aria-label="Tracking pagination">
+                  <button
+                    type="button"
+                    class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+                    :disabled="currentPage === 1"
+                    @click="currentPage -= 1"
+                  >
+                    <span class="sm:hidden">Prev</span>
+                    <span class="hidden sm:inline">Previous</span>
+                  </button>
+
+                  <div class="flex items-center gap-1 px-1 text-xs font-medium tabular-nums text-zinc-500 sm:text-[0.8125rem]">
+                    <label class="sr-only" for="tracking-page-input">Page</label>
+                    <input
+                      id="tracking-page-input"
+                      v-model="pageInput"
+                      type="number"
+                      min="1"
+                      :max="totalPages"
+                      inputmode="numeric"
+                      class="h-9 w-12 rounded-lg border border-zinc-200 bg-white px-1 text-center text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] [appearance:textfield] transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none sm:w-14 sm:rounded-xl sm:text-[0.8125rem]"
+                      @keydown.enter.prevent="commitPageInput"
+                      @blur="commitPageInput"
+                    >
+                    <span aria-hidden="true">/ {{ totalPages }}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+                    :disabled="currentPage === totalPages"
+                    @click="currentPage += 1"
+                  >
+                    Next
+                  </button>
+                </nav>
+              </div>
             </div>
           </template>
         </div>
       </div>
-    </div>
-
-    <div
-      v-else
-      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-14 text-center shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-20"
-    >
-      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
-        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      </div>
-      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
-        {{ campaignId?.trim() ? 'No tracking events for this campaign yet' : 'No events in this report' }}
-      </h3>
-      <p class="mt-2 max-w-sm text-sm text-zinc-500">
-        {{
-          campaignId?.trim()
-            ? 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
-            : 'After you send campaigns, opens, clicks, and delivery events will show up here.'
-        }}
-      </p>
     </div>
   </div>
 </template>
