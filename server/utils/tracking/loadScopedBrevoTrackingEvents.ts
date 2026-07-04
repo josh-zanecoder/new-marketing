@@ -4,13 +4,12 @@ import {
   resolveTenantIdForTenantAuth,
   type RegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
-import { fetchTenantBrevoEmailEvents } from './fetchTenantBrevoEmailEvents'
 import {
-  filterBrevoEventsForTenant,
   normalizeCampaignIdQuery,
   normalizeYmdQuery,
   type BrevoTrackingEmailEvent
 } from './brevoTenantEvents'
+import { loadTenantBrevoTrackingEvents } from './loadTenantBrevoTrackingEvents'
 
 export async function loadScopedBrevoTrackingEvents(
   event: H3Event,
@@ -30,20 +29,11 @@ export async function loadScopedBrevoTrackingEvents(
   const registryConn = await getRegistryConnection()
   const marketingTenantId = await resolveTenantIdForTenantAuth(registryConn, tenantAuth)
 
-  const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
+  const { events, error } = await loadTenantBrevoTrackingEvents(dbName, marketingTenantId, {
+    campaignId,
     fromYmd,
     toYmd
   })
-  if (error) {
-    return { events: [], fromYmd, toYmd, campaignId, error }
-  }
 
-  const events = filterBrevoEventsForTenant(
-    rawEvents,
-    dbName,
-    marketingTenantId,
-    campaignId
-  )
-
-  return { events, fromYmd, toYmd, campaignId }
+  return { events, fromYmd, toYmd, campaignId, error }
 }

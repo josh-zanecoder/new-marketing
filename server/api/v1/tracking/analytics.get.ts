@@ -1,9 +1,15 @@
+import { getRegistryConnection } from '@server/lib/mongoose'
 import {
   isRegisteredTenantAuthContext,
+  resolveTenantIdForTenantAuth,
   type RegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
 import { computeMarketingAnalytics } from '@server/utils/tracking/computeMarketingAnalytics'
-import { loadScopedBrevoTrackingEvents } from '@server/utils/tracking/loadScopedBrevoTrackingEvents'
+import {
+  normalizeCampaignIdQuery,
+  normalizeYmdQuery
+} from '@server/utils/tracking/brevoTenantEvents'
+import { loadTenantBrevoTrackingEvents } from '@server/utils/tracking/loadTenantBrevoTrackingEvents'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth
@@ -23,7 +29,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Missing tenant database context' })
   }
 
-  const { events, fromYmd, toYmd, error } = await loadScopedBrevoTrackingEvents(event, tenantAuth)
+  const registryConn = await getRegistryConnection()
+  const marketingTenantId = await resolveTenantIdForTenantAuth(registryConn, tenantAuth)
+
+  const campaignId = normalizeCampaignIdQuery(event)
+  const fromYmd = normalizeYmdQuery(event, 'from')
+  const toYmd = normalizeYmdQuery(event, 'to')
+
+  const { events, error } = await loadTenantBrevoTrackingEvents(dbName, marketingTenantId, {
+    campaignId,
+    fromYmd,
+    toYmd
+  })
+
   if (error) {
     throw createError({ statusCode: 502, statusMessage: error })
   }
