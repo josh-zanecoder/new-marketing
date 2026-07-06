@@ -1,11 +1,12 @@
-import { normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { normalizeContactAddressInput } from '~~/shared/utils/contactAddress'
 import { usPhoneDigits } from '~~/shared/utils/usNumberFormatter'
-import mongoose, { type Connection, type Types } from 'mongoose'
+import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
+import mongoose, { type Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { applyContactTypeFieldsToSetDoc, normalizeContactTypeInput } from '@server/utils/contact/contactTypeWrite'
-import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import { scheduleContactRecipientListMembershipSync } from '@server/utils/recipient/syncContactRecipientListMembership'
 import type { CreateTenantContactInput, CreateTenantContactResult } from './createTenantContact'
 
 export async function updateTenantContact(
@@ -32,12 +33,7 @@ export async function updateTenantContact(
   const status = String(input.status ?? '').trim()
   const stage = String(input.stage ?? '').trim()
   const addressInput = input.address ?? {}
-  const address = {
-    street: String(addressInput.street ?? '').trim(),
-    city: String(addressInput.city ?? '').trim(),
-    state: String(addressInput.state ?? '').trim(),
-    county: normalizeContactCounty(String(addressInput.county ?? ''))
-  }
+  const address = normalizeContactAddressInput(addressInput)
 
   const { Contact } = getTenantClientModels(tenantConn)
   const scopeFilter = mergeTenantOwnerEmailScopeFilter(
@@ -69,7 +65,10 @@ export async function updateTenantContact(
         },
         auth
       )
-      const withPhone = await Contact.find(phoneScope).select('phone').lean()
+      const withPhone = await (Contact as ContactModel)
+        .find(phoneScope)
+        .select('phone')
+        .lean<Pick<ContactLean, 'phone'>[]>()
       const phoneDuplicate = withPhone.some((row) => {
         const existingDigits = usPhoneDigits(String(row.phone ?? ''))
         return existingDigits.length >= 7 && existingDigits === phoneDigits
@@ -98,12 +97,14 @@ export async function updateTenantContact(
 
   await applyContactTypeFieldsToSetDoc(setDoc, tenantConn)
 
-  const doc = await Contact.findOneAndUpdate(scopeFilter, { $set: setDoc }, { new: true })
+  const doc = await (Contact as ContactModel)
+    .findOneAndUpdate(scopeFilter, { $set: setDoc }, { new: true })
+    .lean<ContactLean>()
   if (!doc) {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
-  await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
+  scheduleContactRecipientListMembershipSync(tenantConn, doc._id)
 
   return {
     id: String(doc._id),

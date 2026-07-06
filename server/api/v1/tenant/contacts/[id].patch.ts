@@ -1,4 +1,5 @@
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { parseContactAddressBody } from '@server/utils/contact/createTenantContact'
 import { updateTenantContact } from '@server/utils/contact/updateTenantContact'
 
 export default defineEventHandler(async (event) => {
@@ -23,23 +24,7 @@ export default defineEventHandler(async (event) => {
     channel: typeof body.channel === 'string' ? body.channel : undefined,
     status: typeof body.status === 'string' ? body.status : undefined,
     stage: typeof body.stage === 'string' ? body.stage : undefined,
-    address:
-      body.address && typeof body.address === 'object' && !Array.isArray(body.address)
-        ? {
-            street: typeof (body.address as Record<string, unknown>).street === 'string'
-              ? ((body.address as Record<string, unknown>).street as string)
-              : '',
-            city: typeof (body.address as Record<string, unknown>).city === 'string'
-              ? ((body.address as Record<string, unknown>).city as string)
-              : '',
-            state: typeof (body.address as Record<string, unknown>).state === 'string'
-              ? ((body.address as Record<string, unknown>).state as string)
-              : '',
-            county: typeof (body.address as Record<string, unknown>).county === 'string'
-              ? ((body.address as Record<string, unknown>).county as string)
-              : ''
-          }
-        : undefined
+    address: parseContactAddressBody(body.address)
   })
 
   return { ok: true, contact }

@@ -930,7 +930,7 @@
 
 <script setup lang="ts">
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
-import { joinContactStreetParts, normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
+import { normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import type {
   TenantContactDetail,
@@ -1026,7 +1026,7 @@ function populateContactFormFromDetail(contact: TenantContactDetail) {
     status: contact.status ?? '',
     stage: contact.stage ?? '',
     addressStreet: contact.address?.street ?? '',
-    addressUnit: '',
+    addressUnit: contact.address?.unit ?? '',
     addressCity: contact.address?.city ?? '',
     addressState: contact.address?.state ?? '',
     addressCounty: contact.address?.county ?? ''
@@ -1046,6 +1046,7 @@ function buildContactFormBody(email: string) {
     stage?: string
     address?: {
       street?: string
+      unit?: string
       city?: string
       state?: string
       county?: string
@@ -1068,10 +1069,8 @@ function buildContactFormBody(email: string) {
   if (status) body.status = status
   if (stage) body.stage = stage
   body.address = {
-    street: joinContactStreetParts(
-      addContactForm.value.addressStreet,
-      addContactForm.value.addressUnit
-    ),
+    street: addContactForm.value.addressStreet.trim(),
+    unit: addContactForm.value.addressUnit.trim(),
     city: addContactForm.value.addressCity.trim(),
     state: addContactForm.value.addressState.trim(),
     county: normalizeContactCounty(addContactForm.value.addressCounty)
@@ -1164,8 +1163,11 @@ async function submitContactForm() {
   addContactError.value = ''
   try {
     const body = buildContactFormBody(email)
-    if (contactFormMode.value === 'edit') {
-      await marketingApi.updateContact(editingContactId.value, body)
+    const wasEdit = contactFormMode.value === 'edit'
+    const editedId = editingContactId.value
+    if (wasEdit) {
+      await marketingApi.updateContact(editedId, body)
+      patchContactRowFromForm(editedId, body)
       toast.success('Contact updated successfully.')
     } else {
       await marketingApi.createContact(body)
@@ -1174,7 +1176,7 @@ async function submitContactForm() {
     addContactOpen.value = false
     editingContactId.value = ''
     contactFormMode.value = 'add'
-    await load()
+    void refreshContactsSilently()
   } catch (e: unknown) {
     const fallback = contactFormMode.value === 'edit' ? 'Failed to update contact' : 'Failed to add contact'
     showContactFormError(extractContactFormErrorMessage(e, fallback))
@@ -1302,6 +1304,7 @@ const filteredContacts = computed(() => {
       ...(row.contactType ?? []),
       ...(row.contactTypeLabels ?? []),
       row.address?.street,
+      row.address?.unit,
       row.address?.city,
       row.address?.state,
       row.address?.county
@@ -1445,6 +1448,7 @@ const contactDetailAddressFormatted = computed(() => {
   if (!c?.address) return ''
   return formatContactAddress({
     street: c.address.street,
+    unit: c.address.unit,
     city: c.address.city,
     state: c.address.state,
     county: normalizeContactCounty(c.address.county)
@@ -1580,30 +1584,92 @@ async function setContactSubscription(row: TenantContactListRow, subscribed: boo
   }
 }
 
+function patchContactRowFromForm(
+  contactId: string,
+  body: ReturnType<typeof buildContactFormBody>
+) {
+  const rows = data.value?.contacts
+  if (!rows?.length) return
+  const index = rows.findIndex((row) => row.id === contactId)
+  if (index < 0) return
+
+  const existing = rows[index]!
+  const typeKey = body.contactType?.trim().toLowerCase() ?? ''
+  const typeOpt = data.value?.contactTypes?.find((t) => t.key === typeKey)
+  const typeKeys = typeKey ? [typeKey] : existing.contactType
+  const typeLabels = typeOpt ? [typeOpt.label] : existing.contactTypeLabels
+  const firstName = body.firstName?.trim() ?? existing.firstName
+  const lastName = body.lastName?.trim() ?? existing.lastName
+
+  rows[index] = {
+    ...existing,
+    firstName,
+    lastName,
+    name: [firstName, lastName].filter(Boolean).join(' ').trim() || existing.name,
+    email: body.email,
+    phone: body.phone?.trim() ?? existing.phone,
+    company: body.company?.trim() ?? existing.company,
+    channel: body.channel?.trim() ?? existing.channel,
+    contactType: typeKeys,
+    contactTypeLabels: typeLabels,
+    primaryTypeLabel: typeLabels[0] ?? existing.primaryTypeLabel,
+    address: {
+      street: body.address?.street ?? existing.address.street,
+      unit: body.address?.unit ?? existing.address.unit,
+      city: body.address?.city ?? existing.address.city,
+      state: body.address?.state ?? existing.address.state,
+      county: body.address?.county ?? existing.address.county
+    },
+    updatedAt: new Date().toISOString()
+  }
+}
+
+function normalizeContactsPayload(res: TenantContactsListPayload): TenantContactsListPayload {
+  const contacts = (res.contacts ?? []).map((row) => ({
+    ...row,
+    contactType: Array.isArray(row.contactType) ? row.contactType : [],
+    contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
+    primaryTypeLabel: row.primaryTypeLabel ?? '—',
+    is_unsubscribe: row.is_unsubscribe === true
+  }))
+  return {
+    contacts,
+    contactTypes: res.contactTypes ?? [],
+    total: res.total ?? 0,
+    truncated: res.truncated ?? false
+  }
+}
+
+async function fetchContactsPayload(): Promise<TenantContactsListPayload> {
+  return $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
+    credentials: 'include',
+    ...serverAuthHeaders()
+  })
+}
+
+function applyContactsPayload(res: TenantContactsListPayload) {
+  data.value = normalizeContactsPayload(res)
+  if (
+    !data.value.contacts.some((row) => !rowHasAnyContactType(row)) &&
+    contactTypeFilter.value === KIND_FILTER_NONE
+  ) {
+    contactTypeFilter.value = 'all'
+  }
+}
+
+async function refreshContactsSilently() {
+  try {
+    applyContactsPayload(await fetchContactsPayload())
+  } catch {
+    // Keep the optimistic row; a full reload can recover on next visit.
+  }
+}
+
 async function load() {
   pending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
-      credentials: 'include',
-      ...serverAuthHeaders()
-    })
-    const contacts = (res.contacts ?? []).map((row) => ({
-      ...row,
-      contactType: Array.isArray(row.contactType) ? row.contactType : [],
-      contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
-      primaryTypeLabel: row.primaryTypeLabel ?? '—',
-      is_unsubscribe: row.is_unsubscribe === true
-    }))
-    data.value = {
-      contacts,
-      contactTypes: res.contactTypes ?? [],
-      total: res.total ?? 0,
-      truncated: res.truncated ?? false
-    }
-    if (!contacts.some((r) => !rowHasAnyContactType(r)) && contactTypeFilter.value === KIND_FILTER_NONE) {
-      contactTypeFilter.value = 'all'
-    }
+    applyContactsPayload(await fetchContactsPayload())
   } catch (e: unknown) {
     loadError.value =
       e && typeof e === 'object' && 'data' in e

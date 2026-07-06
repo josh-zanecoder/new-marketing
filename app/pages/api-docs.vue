@@ -202,7 +202,7 @@ const syncRequestedExample = `{
         </ul>
         <p class="mt-2">
           Payload fields include <code>externalId</code>, name parts, <code>email</code>, <code>phone</code>, <code>company</code>,
-          <code>address</code> (<code>street</code>, <code>city</code>, <code>state</code>, <code>county</code>),
+          <code>address</code> (<code>street</code>, <code>unit</code>, <code>city</code>, <code>state</code>, <code>county</code>),
           <code>contactType</code> or <code>contactTypes</code> (tenant <code>contact_types</code> keys, e.g. <code>lead</code>), <code>channel</code>, optional
           <code>metadata</code> (<code>ownerId</code> / <code>ownerEmail</code>).
         </p>
