@@ -34,6 +34,7 @@ export interface TenantContactListRow {
   is_unsubscribe: boolean
   address: {
     street: string
+    unit: string
     city: string
     state: string
     county: string

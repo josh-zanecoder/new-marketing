@@ -8,7 +8,7 @@ const props = withDefaults(
   defineProps<{
     id: string
     label: string
-    options: FilterSelectOption[]
+    options: readonly FilterSelectOption[]
     disabled?: boolean
     /** `filter` = toolbar filters; `field` = form fields inside cards/modals */
     variant?: 'filter' | 'field'
