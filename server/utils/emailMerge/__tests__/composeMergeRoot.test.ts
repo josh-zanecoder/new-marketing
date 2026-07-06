@@ -1,24 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import {
-  mergeDynamicVariableValue,
-  mergeMustacheTemplate,
-  resolveUserSourceDynamicVariable
-} from '../../../../shared/utils/emailTemplateMerge'
+import { Types } from 'mongoose'
+import type { ContactLean } from '@server/types/tenant/contact.model'
+import { mergeDynamicVariableValue, mergeMustacheTemplate } from '../../../../shared/utils/emailTemplateMerge'
 import { composeEmailMergeRoot } from '../composeMergeRoot'
 
-describe('resolveUserSourceDynamicVariable', () => {
-  it('returns AE phone from contact metadata', () => {
-    expect(
-      resolveUserSourceDynamicVariable('phone', {
-        metadata: { ownerPhone: '9497768200' }
-      })
-    ).toBe('(949) 776-8200')
-  })
-
-  it('does not fall back to session user when AE is missing', () => {
-    expect(resolveUserSourceDynamicVariable('phone', { metadata: {} })).toBe('')
-  })
-})
+function testContact(overrides: Partial<ContactLean> = {}): ContactLean {
+  return {
+    _id: new Types.ObjectId(),
+    firstName: '',
+    lastName: '',
+    email: '',
+    channel: 'email',
+    ...overrides
+  }
+}
 
 describe('mergeDynamicVariableValue', () => {
   it('uses primary when present', () => {
@@ -35,11 +30,9 @@ describe('mergeDynamicVariableValue', () => {
 })
 
 describe('composeEmailMergeRoot', () => {
-  it('applies per-variable fallback when AE is missing', () => {
+  it('applies per-variable fallback when owner fields are missing', () => {
     const root = composeEmailMergeRoot(
-      {
-        metadata: {}
-      },
+      testContact({ metadata: {} }),
       [
         {
           key: 'user.phone',
@@ -65,14 +58,14 @@ describe('composeEmailMergeRoot', () => {
     expect(html).toBe('FCL Number: (949) 776-8200 | FCL Email: info@myfcltpo.com')
   })
 
-  it('prefers AE over fallback', () => {
+  it('prefers owner metadata over fallback', () => {
     const root = composeEmailMergeRoot(
-      {
+      testContact({
         metadata: {
           ownerPhone: '5551234567',
           ownerEmail: 'ae@example.com'
         }
-      },
+      }),
       [
         {
           key: 'user.phone',
@@ -87,9 +80,9 @@ describe('composeEmailMergeRoot', () => {
     expect(mergeMustacheTemplate('{{user.phone}}', root)).toBe('(555) 123-4567')
   })
 
-  it('leaves token empty when AE and fallback are both missing', () => {
+  it('leaves token empty when owner data and fallback are both missing', () => {
     const root = composeEmailMergeRoot(
-      { metadata: {} },
+      testContact({ metadata: {} }),
       [
         {
           key: 'user.phone',
@@ -103,4 +96,27 @@ describe('composeEmailMergeRoot', () => {
 
     expect(mergeMustacheTemplate('Phone: {{user.phone}}', root)).toBe('Phone: ')
   })
+
+  it.each(['user.ownerAvatarUrl', 'ownerAvatarUrl', 'metadata.ownerAvatarUrl'])(
+    'resolves user.avatar via contact path %s',
+    (contactPath) => {
+      const avatar = 'https://cdn.example.com/owners/jane.jpg'
+      const root = composeEmailMergeRoot(
+        testContact({ metadata: { ownerAvatarUrl: avatar } }),
+        [
+          {
+            key: 'user.avatar',
+            contactPath,
+            sourceType: 'user',
+            enabled: true,
+            fallbackValue: ''
+          }
+        ]
+      )
+
+      expect(mergeMustacheTemplate('<img src="{{user.avatar}}">', root)).toBe(
+        `<img src="${avatar}">`
+      )
+    }
+  )
 })

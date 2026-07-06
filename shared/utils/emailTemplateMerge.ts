@@ -61,7 +61,48 @@ export const USER_MERGE_PATH_TO_OWNER_METADATA: Record<string, string> = {
   ownerFirstName: 'ownerFirstName',
   ownerLastName: 'ownerLastName',
   ownerEmail: 'ownerEmail',
-  ownerPhone: 'ownerPhone'
+  ownerPhone: 'ownerPhone',
+  ownerAvatarUrl: 'ownerAvatarUrl',
+  avatar: 'ownerAvatarUrl',
+  avatarUrl: 'ownerAvatarUrl'
+}
+
+/** Canonical `metadata.owner*` paths for admin User-source contact paths. */
+const USER_SOURCE_PATH_TO_METADATA: Record<string, string> = {
+  firstname: 'metadata.ownerFirstName',
+  ownerfirstname: 'metadata.ownerFirstName',
+  lastname: 'metadata.ownerLastName',
+  ownerlastname: 'metadata.ownerLastName',
+  email: 'metadata.ownerEmail',
+  owneremail: 'metadata.ownerEmail',
+  phone: 'metadata.ownerPhone',
+  ownerphone: 'metadata.ownerPhone',
+  owneravatarurl: 'metadata.ownerAvatarUrl',
+  avatar: 'metadata.ownerAvatarUrl',
+  avatarurl: 'metadata.ownerAvatarUrl'
+}
+
+/** Strips a leading `user.` prefix from admin keys or contact paths. */
+export function stripUserMergePrefix(pathOrKey: string): string {
+  let path = pathOrKey.trim()
+  if (!path) return ''
+  while (path.toLowerCase().startsWith('user.')) {
+    path = path.slice('user.'.length).trim()
+  }
+  return path
+}
+
+/**
+ * Normalizes admin User-source contact paths to canonical `metadata.owner*` paths.
+ * e.g. `user.ownerAvatarUrl` and `ownerAvatarUrl` → `metadata.ownerAvatarUrl`
+ */
+export function normalizeUserSourceContactPath(contactPath: string): string {
+  const stripped = stripUserMergePrefix(contactPath)
+  if (!stripped) return ''
+  if (stripped.toLowerCase().startsWith('metadata.')) {
+    return stripped
+  }
+  return USER_SOURCE_PATH_TO_METADATA[stripped.toLowerCase()] ?? stripped
 }
 
 function formatOwnerMetadataMergeValue(path: string, raw: unknown): string {
@@ -104,18 +145,19 @@ export function resolveUserSourceDynamicVariable(
   contactPath: string,
   contact: { metadata?: Record<string, unknown> } | null | undefined
 ): string {
-  const path = contactPath.trim()
+  const path = normalizeUserSourceContactPath(contactPath)
   if (!path) return ''
 
   const meta = contact?.metadata
   if (!meta || typeof meta !== 'object') return ''
 
+  if (path.startsWith('metadata.')) {
+    return formatOwnerMetadataMergeValue(path, getMergeValue({ metadata: meta }, path))
+  }
+
   const ownerMetaKey = USER_MERGE_PATH_TO_OWNER_METADATA[path]
   if (ownerMetaKey) {
     return formatOwnerMetadataMergeValue(path, meta[ownerMetaKey])
-  }
-  if (path.startsWith('metadata.')) {
-    return formatOwnerMetadataMergeValue(path, getMergeValue({ metadata: meta }, path))
   }
   return ''
 }
