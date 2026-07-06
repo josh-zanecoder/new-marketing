@@ -1,10 +1,7 @@
 import type { EmailDynamicVariableBinding } from '@server/utils/emailMerge/composeMergeRoot'
-import type { UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
+import { stripUserMergePrefix, type UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
 
 const USER_FIELD_BY_BINDING: Record<string, keyof UserMergeSnapshot> = {
-  'user.firstname': 'firstName',
-  'user.lastname': 'lastName',
-  'user.email': 'email',
   firstname: 'firstName',
   lastname: 'lastName',
   email: 'email',
@@ -26,8 +23,8 @@ export function userMergeSnapshotFromDynamicVariableFallbacks(
     if (!fallback) continue
 
     const field =
-      USER_FIELD_BY_BINDING[binding.key.trim().toLowerCase()] ??
-      USER_FIELD_BY_BINDING[binding.contactPath.trim().toLowerCase()]
+      USER_FIELD_BY_BINDING[stripUserMergePrefix(binding.key).toLowerCase()] ??
+      USER_FIELD_BY_BINDING[stripUserMergePrefix(binding.contactPath).toLowerCase()]
     if (!field) continue
 
     if (field === 'email') {

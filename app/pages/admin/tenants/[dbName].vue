@@ -1067,7 +1067,7 @@
                       required
                       aria-required="true"
                       class="compact-modal-input compact-modal-input--mono"
-                      placeholder="e.g. firstName"
+                      placeholder="e.g. user.firstName or ownerAvatarUrl"
                     >
                   </div>
 
@@ -1095,14 +1095,12 @@
                   <div class="compact-modal-field compact-modal-field--full">
                     <label for="dv-fallback" class="compact-modal-label">
                       Fallback value
-                      <span class="field-required" aria-hidden="true">*</span>
+                      <span class="compact-modal-label-hint">(optional)</span>
                     </label>
                     <input
                       id="dv-fallback"
                       v-model="dynamicForm.fallbackValue"
                       type="text"
-                      required
-                      aria-required="true"
                       class="compact-modal-input"
                       placeholder="e.g. N/A"
                       title="Per-tenant default when the contact has no value for this field."
@@ -1835,10 +1833,6 @@ async function saveDynamicVariable() {
   }
   if (!dynamicForm.contactPath.trim()) {
     dynamicFormError.value = 'Contact path is required.'
-    return
-  }
-  if (!dynamicForm.fallbackValue.trim()) {
-    dynamicFormError.value = 'Fallback value is required.'
     return
   }
   dynamicSaving.value = true
