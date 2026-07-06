@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import type TenantMarketingAnalyticsPanel from '~/components/tenant/MarketingAnalyticsPanel.vue'
+
 definePageMeta({ layout: 'default' })
+
+const analyticsPanelRef = ref<InstanceType<typeof TenantMarketingAnalyticsPanel> | null>(null)
 </script>
 
 <template>
   <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 sm:space-y-8">
-    <header>
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0 space-y-1">
         <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">
           Insights
@@ -16,8 +20,13 @@ definePageMeta({ layout: 'default' })
           Campaign performance from Brevo delivery and engagement events—volume, delivery, opens, clicks, bounces, and unsubscribes.
         </p>
       </div>
+      <TenantRefreshIconButton
+        aria-label="Refresh marketing analytics"
+        :pending="analyticsPanelRef?.pending"
+        @click="() => analyticsPanelRef?.refresh?.()"
+      />
     </header>
 
-    <TenantMarketingAnalyticsPanel />
+    <TenantMarketingAnalyticsPanel ref="analyticsPanelRef" />
   </div>
 </template>

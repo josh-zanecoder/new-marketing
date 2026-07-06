@@ -154,12 +154,19 @@ onMounted(() => {
           Create templates by pasting or uploading HTML, preview them full size, and start a campaign from any template.
         </p>
       </div>
-      <NuxtLink
-        to="/tenant/email-templates/add"
-        class="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700"
-      >
-        Create template
-      </NuxtLink>
+      <div class="flex items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          to="/tenant/email-templates/add"
+          class="btn-cta"
+        >
+          Create template
+        </NuxtLink>
+        <TenantRefreshIconButton
+          aria-label="Refresh email templates"
+          :pending="pending"
+          @click="() => loadTemplates()"
+        />
+      </div>
     </header>
 
     <div
