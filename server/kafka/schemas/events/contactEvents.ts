@@ -8,6 +8,7 @@ export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[keyof typeof CONTACT
 
 export type ContactAddress = {
   street: string
+  unit?: string
   city: string
   state: string
   county: string

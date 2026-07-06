@@ -20,6 +20,7 @@ type ContactDoc = {
   isUnsubscribe?: boolean
   address?: {
     street?: string
+    unit?: string
     city?: string
     state?: string
     county?: string
@@ -106,6 +107,7 @@ export default defineEventHandler(async (event) => {
     ownerEmail: ownerRaw,
     address: {
       street: c.address?.street ?? '',
+      unit: c.address?.unit ?? '',
       city: c.address?.city ?? '',
       state: c.address?.state ?? '',
       county: c.address?.county ?? ''
