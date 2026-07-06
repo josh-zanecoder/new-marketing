@@ -29,7 +29,7 @@ const props = withDefaults(
     cardClass?: string
     loading?: boolean
   }>(),
-  { loading: false }
+  { loading: false, cardClass: DEFAULT_CARD_CLASS }
 )
 
 const chartOption = computed(() =>
@@ -53,7 +53,7 @@ const hasChartData = computed(() => {
 
 <template>
   <div
-    :class="cardClass || DEFAULT_CARD_CLASS"
+    :class="cardClass"
     :aria-busy="loading"
     aria-label="Event activity chart"
   >

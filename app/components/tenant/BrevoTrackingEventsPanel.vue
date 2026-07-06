@@ -67,10 +67,12 @@ const {
   resetDateRange
 } = useBrevoTrackingDateRange()
 
-const { data, error, pending } = useBrevoTrackingReport({
+const { data, error, pending, refresh } = useBrevoTrackingReport({
   campaignId: () => props.campaignId,
   dateRange: effectiveDateRange
 })
+
+defineExpose({ refresh, pending })
 
 const { campaignDisplayLabel } = useTenantCampaignsList({ lazy: true })
 
@@ -355,7 +357,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
       <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
       </svg>
-      <span class="min-w-0 leading-relaxed">{{ error.message || 'Failed to load event report' }}</span>
+      <span class="min-w-0 leading-relaxed">{{ error?.message || 'Failed to load event report' }}</span>
     </div>
 
     <div

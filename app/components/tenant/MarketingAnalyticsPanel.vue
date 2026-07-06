@@ -66,6 +66,8 @@ function clearAllFilters() {
   resetDateRange()
   selectedCampaignId.value = ''
 }
+
+defineExpose({ refresh, pending })
 </script>
 
 <template>
@@ -83,17 +85,8 @@ function clearAllFilters() {
             Refine metrics and the performance chart
           </p>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
+        <div v-if="hasActiveFilters" class="flex shrink-0 items-center gap-2">
           <button
-            type="button"
-            class="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50 sm:flex-none"
-            :disabled="pending"
-            @click="() => refresh()"
-          >
-            Refresh
-          </button>
-          <button
-            v-if="hasActiveFilters"
             type="button"
             class="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
             @click="clearAllFilters"
