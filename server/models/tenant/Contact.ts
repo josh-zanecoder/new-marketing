@@ -6,6 +6,7 @@ import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefau
 const addressSchema = new mongoose.Schema(
   {
     street: { type: String, default: '' },
+    unit: { type: String, default: '' },
     city: { type: String, default: '' },
     state: { type: String, default: '' },
     county: { type: String, default: '' }

@@ -1,26 +1,40 @@
-import { normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { normalizeContactAddressInput } from '~~/shared/utils/contactAddress'
 import { usPhoneDigits } from '~~/shared/utils/usNumberFormatter'
 import { randomUUID } from 'node:crypto'
 import type { Connection, Types } from 'mongoose'
+import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { tenantOwnershipFieldsFromAuth } from '@server/tenant/registry-auth'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { applyContactTypeFieldsToSetDoc, normalizeContactTypeInput } from '@server/utils/contact/contactTypeWrite'
-import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import { scheduleContactRecipientListMembershipSync } from '@server/utils/recipient/syncContactRecipientListMembership'
 
 const TENANT_UI_CONTACT_SOURCE = 'tenant-ui'
 
 export interface ContactAddressInput {
   street?: string
+  unit?: string
   city?: string
   state?: string
   county?: string
 }
 
+export function parseContactAddressBody(address: unknown): ContactAddressInput | undefined {
+  if (!address || typeof address !== 'object' || Array.isArray(address)) return undefined
+  const a = address as Record<string, unknown>
+  return {
+    street: typeof a.street === 'string' ? a.street : '',
+    unit: typeof a.unit === 'string' ? a.unit : '',
+    city: typeof a.city === 'string' ? a.city : '',
+    state: typeof a.state === 'string' ? a.state : '',
+    county: typeof a.county === 'string' ? a.county : ''
+  }
+}
+
 export interface CreateTenantContactInput {
-  firstName?: string
-  lastName?: string
+  firstName: string
+  lastName: string
   email: string
   phone?: string
   company?: string
@@ -50,18 +64,19 @@ export async function createTenantContact(
 
   const firstName = String(input.firstName ?? '').trim()
   const lastName = String(input.lastName ?? '').trim()
+  if (!firstName) {
+    throw createError({ statusCode: 400, message: 'First name is required' })
+  }
+  if (!lastName) {
+    throw createError({ statusCode: 400, message: 'Last name is required' })
+  }
   const phone = String(input.phone ?? '').trim()
   const company = String(input.company ?? '').trim()
   const channel = String(input.channel ?? 'email').trim() || 'email'
   const status = String(input.status ?? '').trim()
   const stage = String(input.stage ?? '').trim()
   const addressInput = input.address ?? {}
-  const address = {
-    street: String(addressInput.street ?? '').trim(),
-    city: String(addressInput.city ?? '').trim(),
-    state: String(addressInput.state ?? '').trim(),
-    county: normalizeContactCounty(String(addressInput.county ?? ''))
-  }
+  const address = normalizeContactAddressInput(addressInput)
 
   const { Contact } = getTenantClientModels(tenantConn)
   const ownership = tenantOwnershipFieldsFromAuth(auth)
@@ -86,7 +101,10 @@ export async function createTenantContact(
         { deletedAt: null, phone: { $exists: true, $nin: [null, ''] } },
         auth
       )
-      const withPhone = await Contact.find(phoneScope).select('phone').lean()
+      const withPhone = await (Contact as ContactModel)
+        .find(phoneScope)
+        .select('phone')
+        .lean<Pick<ContactLean, 'phone'>[]>()
       const phoneDuplicate = withPhone.some((row) => {
         const existingDigits = usPhoneDigits(String(row.phone ?? ''))
         return existingDigits.length >= 7 && existingDigits === phoneDigits
@@ -123,7 +141,7 @@ export async function createTenantContact(
   const doc = await Contact.create(setDoc)
   const id = String(doc._id)
 
-  await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
+  scheduleContactRecipientListMembershipSync(tenantConn, doc._id as Types.ObjectId)
 
   return { id, firstName, lastName, email }
 }

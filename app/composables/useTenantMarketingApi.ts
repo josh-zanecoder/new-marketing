@@ -181,6 +181,7 @@ export function useTenantMarketingApi() {
     stage?: string
     address?: {
       street?: string
+      unit?: string
       city?: string
       state?: string
       county?: string
@@ -206,6 +207,7 @@ export function useTenantMarketingApi() {
       stage?: string
       address?: {
         street?: string
+        unit?: string
         city?: string
         state?: string
         county?: string

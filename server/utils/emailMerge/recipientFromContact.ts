@@ -1,5 +1,6 @@
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import { formatContactFullName } from '@server/utils/contactPersonName'
+import { joinContactStreetParts } from '../../../shared/utils/contactAddress'
 import { formatUsPhoneNumber } from '../../../shared/utils/usNumberFormatter'
 
 /** Minimal CRM contact shape needed for `recipient.*` merge tokens. */
@@ -14,6 +15,7 @@ export type CrmContactFieldsForMerge = {
   channel?: string
   address?: {
     street?: string
+    unit?: string
     city?: string
     state?: string
     county?: string
@@ -44,7 +46,8 @@ export function recipientFieldsFromContact(
     out.contactType = contact.contactType.join(', ')
   }
   if (contact.channel) out.channel = contact.channel
-  if (contact.address?.street) out.street = contact.address.street
+  const streetLine = joinContactStreetParts(contact.address?.street, contact.address?.unit)
+  if (streetLine) out.street = streetLine
   if (contact.address?.city) out.city = contact.address.city
   if (contact.address?.state) out.state = contact.address.state
   if (contact.address?.county) out.county = contact.address.county
