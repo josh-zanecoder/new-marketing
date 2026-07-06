@@ -10,15 +10,22 @@
           Build segments for campaigns with filters on audience and contact attributes.
         </p>
       </div>
-      <NuxtLink
-        to="/tenant/recipient-list/add"
-        class="group inline-flex shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:px-5"
-      >
-        <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        New list
-      </NuxtLink>
+      <div class="flex items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          to="/tenant/recipient-list/add"
+          class="btn-cta group"
+        >
+          <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          New list
+        </NuxtLink>
+        <TenantRefreshIconButton
+          aria-label="Refresh recipient lists"
+          :pending="pending"
+          @click="() => load({ force: true })"
+        />
+      </div>
     </header>
 
     <div

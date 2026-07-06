@@ -52,7 +52,7 @@ const duplicateModalMessage = computed(() =>
     : ''
 )
 
-const { pending: campaignsIndexPending } = useAsyncData(
+const { pending: campaignsIndexPending, refresh: refreshCampaigns } = useAsyncData(
   'tenant-campaigns-index',
   async () => {
     await store.fetchCampaigns()
@@ -306,15 +306,22 @@ onUnmounted(() => {
           Create sends, track draft and delivery status, and manage campaigns from one place.
         </p>
       </div>
-      <NuxtLink
-        to="/tenant/campaigns/add"
-        class="btn-cta group self-start"
-      >
-        <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        Create campaign
-      </NuxtLink>
+      <div class="flex items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          to="/tenant/campaigns/add"
+          class="btn-cta group"
+        >
+          <svg class="h-4 w-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Create campaign
+        </NuxtLink>
+        <TenantRefreshIconButton
+          aria-label="Refresh campaigns"
+          :pending="campaignsIndexPending"
+          @click="() => refreshCampaigns()"
+        />
+      </div>
     </header>
 
     <div
