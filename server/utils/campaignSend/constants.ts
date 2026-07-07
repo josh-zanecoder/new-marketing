@@ -20,3 +20,11 @@ export const CAMPAIGN_RECIPIENT_STATUS_PENDING = 'pending'
 export const CAMPAIGN_RECIPIENT_STATUS_SENDING = 'sending'
 export const CAMPAIGN_RECIPIENT_STATUS_SENT = 'sent'
 export const CAMPAIGN_RECIPIENT_STATUS_FAILED = 'failed'
+export const CAMPAIGN_RECIPIENT_STATUS_ABORTED = 'aborted'
+/** @deprecated Legacy status written before abort rename; still counted in reads. */
+export const CAMPAIGN_RECIPIENT_STATUS_CANCELLED_LEGACY = 'cancelled'
+
+export const CAMPAIGN_RECIPIENT_ABORTED_STATUSES = [
+  CAMPAIGN_RECIPIENT_STATUS_ABORTED,
+  CAMPAIGN_RECIPIENT_STATUS_CANCELLED_LEGACY
+] as const

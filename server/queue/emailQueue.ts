@@ -219,6 +219,40 @@ export async function enqueueScheduledCampaignStart(
   return job
 }
 
+export type RemoveCampaignBatchJobsResult = {
+  removed: number
+  skippedActive: number
+}
+
+/** Remove queued batch jobs for a campaign (waiting/delayed). Active jobs finish but no-op on stale run. */
+export async function removeCampaignBatchJobs(
+  dbName: string,
+  campaignId: string
+): Promise<RemoveCampaignBatchJobsResult> {
+  const queue = getEmailQueue()
+  let removed = 0
+
+  for (const state of ['waiting', 'delayed', 'completed', 'failed'] as const) {
+    const jobs = await queue.getJobs([state], 0, 500)
+    for (const job of jobs) {
+      if (!matchesCampaignJob(job, campaignId, dbName, [EMAIL_JOB_PROCESS_BATCH])) continue
+      const result = await removeBullJobSafely(job, state, { campaignId, dbName })
+      if (result.removed) removed++
+    }
+  }
+
+  const activeJobs = await queue.getJobs(['active'], 0, 200)
+  const skippedActive = activeJobs.filter((job) =>
+    matchesCampaignJob(job, campaignId, dbName, [EMAIL_JOB_PROCESS_BATCH])
+  ).length
+
+  if (removed > 0 || skippedActive > 0) {
+    logQueue('removeCampaignBatchJobs', { campaignId, dbName, removed, skippedActive })
+  }
+
+  return { removed, skippedActive }
+}
+
 export async function removeScheduledCampaignJob(
   dbName: string,
   campaignId: string

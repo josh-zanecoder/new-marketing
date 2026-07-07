@@ -15,6 +15,9 @@ const {
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
+  canPauseSend,
+  canStopSend,
+  canResumeSend,
   sendProgress,
   buildCampaignSendProgress,
   startSendStatusPolling,
@@ -23,9 +26,13 @@ const {
   isSendPolling,
   closeSendModal,
   dismissSendModal,
-  openSendModal
+  openSendModal,
+  pauseSend,
+  stopSend,
+  resumeSend
 } = useCampaignSendFlow()
 const id = route.params.id as string
+const sendControlBusy = ref(false)
 
 const cachedDetail = campaignStore.getCampaignDetailCache(id)
 const detailAsync = useAsyncData(
@@ -122,21 +129,86 @@ async function handleSend() {
   startSendStatusPolling(c.id, onSendPollingComplete)
 }
 
-const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
+async function handlePauseSend() {
+  const c = campaignForSend.value
+  if (!c || !canPauseSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const ok = await pauseSend(c)
+    if (ok) await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function handleStopSend() {
+  const c = campaignForSend.value
+  if (!c || !canStopSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const ok = await stopSend(c)
+    if (ok) await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function handleResumeSend() {
+  const c = campaignForSend.value
+  if (!c || !canResumeSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await resumeSend(c)
+    if (!poll) return
+    startSendStatusPolling(c.id, onSendPollingComplete)
+    await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function loadPausedProgress() {
+  const c = campaign.value
+  if (!c || (c.status !== 'Paused' && c.status !== 'Stopped')) return
+  try {
+    const res = await marketingApi.fetchSendCampaignStatus(id)
+    campaignStore.setSendStatus({ ...res, campaignId: id })
+  } catch {
+    // ignore
+  }
+}
+
+watch(
+  () => campaign.value?.status,
+  (status) => {
+    if (status === 'Sending') tryResumeSendPolling()
+    if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
+  }
+)
+
+onMounted(() => {
+  tryResumeSendPolling()
+  void loadPausedProgress()
+})
 
 const sendProgressModalOpen = computed(() => sendingCampaignId.value === id)
+
+const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
 
 /** Inline live progress when modal is dismissed (send-now or scheduled background send). */
 const showDetailSendProgress = computed(() => {
   if (sendProgressModalOpen.value) return false
-  return (
-    campaign.value?.status === 'Sending' ||
-    (!!detailSendProgress.value && !detailSendProgress.value.done)
-  )
+  const status = campaign.value?.status
+  if (status === 'Sending') return true
+  if ((status === 'Paused' || status === 'Stopped') && detailSendProgress.value) return true
+  return !!detailSendProgress.value && !detailSendProgress.value.done
 })
 
 const detailSendProgressLabel = computed(() => {
-  if (isSendPolling(id) || campaign.value?.status === 'Sending') return 'Send in progress'
+  const status = campaign.value?.status
+  if (status === 'Paused') return 'Send paused'
+  if (status === 'Stopped') return 'Send stopped'
+  if (isSendPolling(id) || status === 'Sending') return 'Send in progress'
   return 'Scheduled send in progress'
 })
 
@@ -153,22 +225,11 @@ function tryResumeSendPolling() {
 }
 
 watch(
-  () => campaign.value?.status,
-  (status) => {
-    if (status === 'Sending') tryResumeSendPolling()
-  }
-)
-
-watch(
   () => data.value?.campaign?.status,
   () => {
     if (!pending.value) tryResumeSendPolling()
   }
 )
-
-onMounted(() => {
-  tryResumeSendPolling()
-})
 
 function closeSendSuccessModal() {
   sendSuccessSummary.value = null
@@ -529,6 +590,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               v-else-if="showDetailSendProgress && detailSendProgress"
               :progress="detailSendProgress"
               :label="detailSendProgressLabel"
+              :status="campaign.status"
               clickable
               @open="openDetailSendReport"
             />
@@ -546,6 +608,33 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             </div>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              v-if="campaignForSend && canPauseSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-950 shadow-sm transition-colors hover:bg-violet-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy"
+              @click="handlePauseSend"
+            >
+              Pause
+            </button>
+            <button
+              v-if="campaignForSend && canStopSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-red-200/90 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-950 shadow-sm transition-colors hover:bg-red-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy"
+              @click="handleStopSend"
+            >
+              Stop
+            </button>
+            <button
+              v-if="campaignForSend && canResumeSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy || !!sendingCampaignId"
+              @click="handleResumeSend"
+            >
+              Resume send
+            </button>
             <button
               v-if="campaignForSend && canSendScheduled(campaignForSend)"
               type="button"
@@ -607,6 +696,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               :class="{
                 'bg-amber-50 text-amber-800 ring-amber-200/80': campaign.status === 'Draft',
                 'bg-sky-50 text-sky-800 ring-sky-200/80': campaign.status === 'Scheduled' || campaign.status === 'Sending',
+                'bg-violet-50 text-violet-800 ring-violet-200/80': campaign.status === 'Paused',
+                'bg-orange-50 text-orange-800 ring-orange-200/80': campaign.status === 'Stopped',
                 'bg-emerald-50 text-emerald-800 ring-emerald-200/80': campaign.status === 'Sent',
                 'bg-red-50 text-red-800 ring-red-200/80': campaign.status === 'Failed',
                 'bg-slate-100 text-slate-700 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
@@ -734,6 +825,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                     <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
                     <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
                     <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
+                    <span class="text-slate-600">Aborted: {{ campaign.recipients.filter(r => r.status === 'aborted' || r.status === 'cancelled').length }}</span>
                   </div>
                 </div>
                 <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
@@ -758,10 +850,11 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                       :class="{
                         'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
                         'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
-                        'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed'
+                        'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed',
+                        'bg-slate-100 text-slate-700 ring-slate-200/70': r.status === 'aborted' || r.status === 'cancelled'
                       }"
                     >
-                      {{ r.status }}
+                      {{ r.status === 'cancelled' ? 'aborted' : r.status }}
                     </span>
                   </li>
                 </ul>

@@ -56,6 +56,15 @@ function eventTagMatchesTenant(
   return false
 }
 
+export function eventMatchesAnyAdminTenant(
+  tagStr: string | undefined,
+  tenants: Array<{ dbName: string; marketingTenantId: string | null }>
+): boolean {
+  return tenants.some((tenant) =>
+    eventTagMatchesTenant(tagStr, tenant.dbName, tenant.marketingTenantId)
+  )
+}
+
 function eventTagMatchesCampaign(tagStr: string | undefined, campaignId: string): boolean {
   return parseTagSegments(tagStr).includes(`campaign:${campaignId}`)
 }
