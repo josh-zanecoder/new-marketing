@@ -26,6 +26,36 @@ export function canSendNow(c: Campaign): boolean {
 /** Same rules as send-now; only draft campaigns can be scheduled. */
 export const canScheduleDraft = canSendDraft
 
+export function canPauseSend(c: Campaign): boolean {
+  return c.status === 'Sending'
+}
+
+export function canStopSend(c: Campaign): boolean {
+  return c.status === 'Sending'
+}
+
+export function canResumeSend(c: Campaign): boolean {
+  return c.status === 'Paused' || c.status === 'Stopped'
+}
+
+/** Restart a halted send (re-email previously sent recipients as well). */
+export function canRestartSend(c: Campaign): boolean {
+  return c.status === 'Paused' || c.status === 'Stopped'
+}
+
+export function hasActiveSendingCampaigns(campaigns: Campaign[]): boolean {
+  return campaigns.some((c) => c.status === 'Sending')
+}
+
+export function hasScheduledCampaigns(campaigns: Campaign[]): boolean {
+  return campaigns.some((c) => c.status === 'Scheduled')
+}
+
+/** Sending or scheduled campaigns that can be bulk-cancelled. */
+export function hasCancellableActiveCampaignSends(campaigns: Campaign[]): boolean {
+  return hasActiveSendingCampaigns(campaigns) || hasScheduledCampaigns(campaigns)
+}
+
 export type CampaignSendProgress = SendStatus & {
   processed: number
   pct: number
@@ -38,7 +68,7 @@ export function buildCampaignSendProgress(
 ): CampaignSendProgress | null {
   if (!status) return null
   if (campaignId && status.campaignId && status.campaignId !== campaignId) return null
-  const processed = status.sent + status.failed
+  const processed = status.sent + status.failed + (status.aborted ?? 0)
   const pct = status.total > 0 ? (processed / status.total) * 100 : 0
   return {
     ...status,
@@ -94,17 +124,49 @@ export function useCampaignSendFlow() {
     return campaignStore.isSendPolling(campaignId)
   }
 
+  function pauseSend(c: Campaign) {
+    return campaignStore.pauseCampaignSend(c)
+  }
+
+  function stopSend(c: Campaign) {
+    return campaignStore.stopCampaignSend(c)
+  }
+
+  function stopAllSends() {
+    return campaignStore.stopAllCampaignSends()
+  }
+
+  function resumeSend(c: Campaign) {
+    return campaignStore.resumeCampaignSend(c)
+  }
+
+  function restartSend(c: Campaign) {
+    return campaignStore.restartCampaignSend(c)
+  }
+
   return {
     canSendDraft,
     canSendScheduled,
     canSendNow,
     canScheduleDraft,
+    canPauseSend,
+    canStopSend,
+    canResumeSend,
+    canRestartSend,
+    hasActiveSendingCampaigns,
+    hasScheduledCampaigns,
+    hasCancellableActiveCampaignSends,
     sendProgress,
     buildCampaignSendProgress,
     startSendStatusPolling,
     resumeSendStatusPolling,
     stopSendPolling,
     isSendPolling,
+    pauseSend,
+    stopSend,
+    stopAllSends,
+    resumeSend,
+    restartSend,
     closeSendModal,
     dismissSendModal,
     openSendModal

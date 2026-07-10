@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import {
   isoMatchesBrevoTrackingRange,
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
+import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
 
 interface BrevoEmailEvent {
   email?: string
@@ -45,15 +46,26 @@ const props = withDefaults(
     cardClass?: string
     /** Hide campaign column when viewing a single campaign's tracking tab. */
     hideCampaignColumn?: boolean
+    /** Admin console: tenant DB for scoped tracking via x-admin-tenant-db. */
+    adminTenantDb?: string
+    /** Admin tracking page: use `/api/v1/admin/tracking` (optional tenantDbName query). */
+    adminTracking?: boolean
+    /** Admin tracking page: tenant filter options for the filter row. */
+    adminTenantFilterOptions?: Array<{ value: string; label: string }>
   }>(),
   {
     campaignId: undefined,
     panelHint: '',
     cardClass:
       'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]',
-    hideCampaignColumn: false
+    hideCampaignColumn: false,
+    adminTenantDb: undefined,
+    adminTracking: false,
+    adminTenantFilterOptions: () => []
   }
 )
+
+const adminTenantFilter = defineModel<string>('adminTenantFilter', { default: '' })
 
 const route = useRoute()
 
@@ -67,14 +79,96 @@ const {
   resetDateRange
 } = useBrevoTrackingDateRange()
 
-const { data, error, pending, refresh } = useBrevoTrackingReport({
-  campaignId: () => props.campaignId,
-  dateRange: effectiveDateRange
+const trackingQuery = computed(() => {
+  const q: Record<string, string> = {}
+  const c = props.campaignId?.trim()
+  if (c) q.campaignId = c
+  const from = effectiveDateRange.value.from?.trim()
+  const to = effectiveDateRange.value.to?.trim()
+  if (from) q.from = from
+  if (to) q.to = to
+  if (props.adminTracking) {
+    const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
+    if (db) q.tenantDbName = db
+  }
+  return q
 })
+
+const adminTenantHeaders = computed(() => {
+  if (props.adminTracking) return undefined
+  const db = props.adminTenantDb?.trim()
+  return db ? { [ADMIN_TENANT_DB_HEADER]: db } : undefined
+})
+
+const trackingScope = computed(() =>
+  props.adminTracking
+    ? `admin-${(props.adminTenantDb ?? adminTenantFilter.value).trim() || 'all'}`
+    : props.adminTenantDb?.trim() || 'self'
+)
+
+const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
+  () => (props.adminTracking ? '/api/v1/admin/tracking' : '/api/v1/tracking'),
+  {
+    query: trackingQuery,
+    key: computed(
+      () =>
+        `tenant-tracking-brevo-${trackingScope.value}-${props.campaignId?.trim() || 'all'}-${JSON.stringify(trackingQuery.value)}`
+    ),
+    headers: adminTenantHeaders,
+    watch: [
+      trackingScope,
+      trackingQuery,
+      adminTenantFilter,
+      () => props.adminTenantDb,
+      effectiveDateRange
+    ]
+  }
+)
 
 defineExpose({ refresh, pending })
 
-const { campaignDisplayLabel } = useTenantCampaignsList({ lazy: true })
+const campaignsScope = computed(() =>
+  props.adminTracking
+    ? `admin-${(props.adminTenantDb ?? adminTenantFilter.value).trim() || 'all'}`
+    : props.adminTenantDb?.trim() || 'self'
+)
+
+const campaignsQuery = computed(() => {
+  if (!props.adminTracking) return {}
+  const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
+  return db ? { tenantDbName: db } : {}
+})
+
+const { data: campaignsListData } = useFetch<{ campaigns: Array<{ id: string; name: string }> }>(
+  () => (props.adminTracking ? '/api/v1/admin/campaigns' : '/api/v1/tenant/campaigns'),
+  {
+    query: campaignsQuery,
+    key: computed(() => `tenant-brevo-tracking-campaign-names-${campaignsScope.value}`),
+    headers: adminTenantHeaders,
+    watch: [campaignsScope, campaignsQuery, adminTenantFilter, () => props.adminTenantDb],
+    lazy: !props.adminTracking
+  }
+)
+
+const { campaignDisplayLabel: tenantCampaignDisplayLabel } = useTenantCampaignsList({ lazy: true })
+
+const campaignNameById = computed(() => {
+  const m = new Map<string, string>()
+  for (const c of campaignsListData.value?.campaigns ?? []) {
+    const id = c.id?.trim()
+    if (id) m.set(id, (c.name ?? '').trim() || id)
+  }
+  return m
+})
+
+function campaignDisplayLabel(campaignId: string | null): string {
+  if (props.adminTracking) {
+    if (!campaignId?.trim()) return ''
+    const id = campaignId.trim()
+    return campaignNameById.value.get(id) ?? id
+  }
+  return tenantCampaignDisplayLabel(campaignId)
+}
 
 const report = computed((): BrevoEventReport | null => {
   const r = data.value?.report
@@ -108,7 +202,10 @@ function isMongoId(s: string): boolean {
 }
 
 function campaignPagePath(campaignId: string): string {
-  return `/tenant/campaigns/${campaignId.trim()}`
+  const id = campaignId.trim()
+  const db = props.adminTenantDb?.trim()
+  if (db) return `/admin/campaigns/${encodeURIComponent(db)}/${encodeURIComponent(id)}`
+  return `/tenant/campaigns/${id}`
 }
 
 async function navigateToCampaign(campaignId: string | null) {
@@ -324,7 +421,7 @@ const {
   commitPageInput
 } = useClientPagination(tableRows, tablePageSize)
 
-watch([searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes], () => {
+watch([searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes, adminTenantFilter], () => {
   currentPage.value = 1
 })
 
@@ -332,14 +429,39 @@ function clearAllFilters() {
   searchQuery.value = ''
   resetDateRange()
   clearEventFilters()
+  if (props.adminTracking && !props.adminTenantDb) {
+    adminTenantFilter.value = ''
+  }
 }
 
 const hasActiveFilters = computed(
   () =>
     !!searchQuery.value.trim() ||
     dateRangeFilterActive.value ||
-    selectedEventTypes.value.length > 0
+    selectedEventTypes.value.length > 0 ||
+    (props.adminTracking && !props.adminTenantDb && !!adminTenantFilter.value.trim())
 )
+
+const emptyStateTitle = computed(() => {
+  if (props.campaignId?.trim()) return 'No tracking events for this campaign yet'
+  if (props.adminTracking && adminTenantFilter.value.trim()) {
+    return 'No events for this tenant'
+  }
+  return 'No events in this report'
+})
+
+const emptyStateMessage = computed(() => {
+  if (props.campaignId?.trim()) {
+    return 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
+  }
+  if (props.adminTracking && adminTenantFilter.value.trim()) {
+    return 'Try another tenant or switch back to All tenants if you expect cross-tenant activity.'
+  }
+  if (props.adminTracking) {
+    return 'After tenants send campaigns, delivery, opens, and clicks will show up here. Filter by tenant to narrow results.'
+  }
+  return 'After you send campaigns, opens, clicks, and delivery events will show up here.'
+})
 
 const reportLoadFailed = computed(() => Boolean(error.value) && !pending.value)
 const showEmptyReport = computed(() => !pending.value && events.value.length === 0)
@@ -351,7 +473,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
   <div>
     <div
       v-if="reportLoadFailed"
-      class="flex gap-3 rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3.5 text-sm text-red-900 shadow-sm"
+      class="mb-4 flex gap-3 rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3.5 text-sm text-red-900 shadow-sm"
       role="alert"
     >
       <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -360,29 +482,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
       <span class="min-w-0 leading-relaxed">{{ error?.message || 'Failed to load event report' }}</span>
     </div>
 
-    <div
-      v-else-if="showEmptyReport"
-      class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-14 text-center shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-20"
-    >
-      <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
-        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      </div>
-      <h3 class="mt-5 text-lg font-semibold text-zinc-900">
-        {{ campaignId?.trim() ? 'No tracking events for this campaign yet' : 'No events in this report' }}
-      </h3>
-      <p class="mt-2 max-w-sm text-sm text-zinc-500">
-        {{
-          campaignId?.trim()
-            ? 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
-            : 'After you send campaigns, opens, clicks, and delivery events will show up here.'
-        }}
-      </p>
-    </div>
-
-    <div v-else class="space-y-0" :aria-busy="pending">
-      <!-- Filters sit on page background (same pattern as campaigns list: controls above the card) -->
+    <template v-else>
       <div class="mb-4 space-y-3 sm:mb-6 sm:space-y-4">
         <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
           {{ panelHint }}
@@ -402,6 +502,14 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:pl-12"
             >
           </div>
+          <TenantFilterSelect
+            v-if="adminTenantFilterOptions.length"
+            id="admin-tracking-tenant-filter"
+            v-model="adminTenantFilter"
+            label="Filter by tenant"
+            variant="tracking"
+            :options="adminTenantFilterOptions"
+          />
           <TenantBrevoTrackingDateRangePicker
             v-model:preset="datePreset"
             v-model:custom-from="customDateFrom"
@@ -464,7 +572,24 @@ const EVENT_FILTER_SKELETON_COUNT = 4
         </div>
       </div>
 
-      <div class="space-y-2 sm:space-y-4">
+      <div
+        v-if="showEmptyReport"
+        class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-14 text-center shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-20"
+      >
+        <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500">
+          <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+        <h3 class="mt-5 text-lg font-semibold text-zinc-900">
+          {{ emptyStateTitle }}
+        </h3>
+        <p class="mt-2 max-w-sm text-sm text-zinc-500">
+          {{ emptyStateMessage }}
+        </p>
+      </div>
+
+      <div v-else class="space-y-2 sm:space-y-4" :aria-busy="pending">
         <TenantBrevoTrackingLineChart
           :events="events"
           :date-range="effectiveDateRange"
@@ -699,6 +824,6 @@ const EVENT_FILTER_SKELETON_COUNT = 4
           </template>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>

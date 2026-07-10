@@ -253,6 +253,158 @@ export const useCampaignStore = defineStore('campaigns', () => {
     }
   }
 
+  async function pauseCampaignSend(c: Campaign): Promise<boolean> {
+    sendError.value = null
+    try {
+      await $fetch('/api/v1/tenant/send-campaign/pause', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (sendingCampaignId.value === c.id || sendPollCampaignId.value === c.id) {
+        stopSendStatusPolling()
+        sendingCampaignId.value = null
+        sendStatus.value = null
+      }
+      await fetchCampaigns({ force: true })
+      return true
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to pause send')
+      return false
+    }
+  }
+
+  async function stopCampaignSend(c: Campaign): Promise<boolean> {
+    sendError.value = null
+    try {
+      await $fetch('/api/v1/tenant/send-campaign/stop', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (sendingCampaignId.value === c.id || sendPollCampaignId.value === c.id) {
+        stopSendStatusPolling()
+        sendingCampaignId.value = null
+        sendStatus.value = null
+      }
+      await fetchCampaigns({ force: true })
+      return true
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to stop send')
+      return false
+    }
+  }
+
+  async function stopAllCampaignSends(): Promise<boolean> {
+    sendError.value = null
+    try {
+      await $fetch('/api/v1/tenant/send-campaign/stop-all', {
+        method: 'POST',
+        timeout: 60000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      stopSendStatusPolling()
+      sendingCampaignId.value = null
+      sendStatus.value = null
+      await fetchCampaigns({ force: true })
+      return true
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to stop active sends')
+      return false
+    }
+  }
+
+  async function resumeCampaignSend(c: Campaign): Promise<{ poll: boolean }> {
+    if (c.status !== 'Paused' && c.status !== 'Stopped') {
+      sendError.value = 'Only paused or stopped campaigns can be resumed.'
+      return { poll: false }
+    }
+    sendError.value = null
+    sendingCampaignId.value = c.id
+    sendStatus.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/tenant/send-campaign/resume', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (!res?.queued) {
+        sendError.value = 'No pending recipients to resume.'
+        return { poll: false }
+      }
+      sendStatus.value = {
+        campaignId: c.id,
+        campaignStatus: 'Sending',
+        pending: res.pending,
+        sent: res.sent,
+        failed: res.failed,
+        total: res.total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to resume send')
+      return { poll: false }
+    }
+  }
+
+  async function restartCampaignSend(c: Campaign): Promise<{ poll: boolean }> {
+    if (c.status !== 'Paused' && c.status !== 'Stopped') {
+      sendError.value = 'Only paused or stopped campaigns can be sent again.'
+      return { poll: false }
+    }
+    sendError.value = null
+    sendingCampaignId.value = c.id
+    sendStatus.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/tenant/send-campaign/restart', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+      if (!res?.queued) {
+        sendError.value = 'No recipients to send again.'
+        return { poll: false }
+      }
+      sendStatus.value = {
+        campaignId: c.id,
+        campaignStatus: 'Sending',
+        pending: res.pending,
+        sent: res.sent,
+        failed: res.failed,
+        total: res.total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to send campaign again')
+      return { poll: false }
+    }
+  }
+
   async function deleteCampaign(c: Campaign) {
     try {
       await $fetch(`/api/v1/tenant/campaigns/${c.id}`, {
@@ -424,6 +576,11 @@ export const useCampaignStore = defineStore('campaigns', () => {
     fetchCampaigns,
     sendCampaign,
     retryFailedCampaign,
+    pauseCampaignSend,
+    stopCampaignSend,
+    stopAllCampaignSends,
+    resumeCampaignSend,
+    restartCampaignSend,
     deleteCampaign,
     duplicateCampaign,
     setSendStatus,

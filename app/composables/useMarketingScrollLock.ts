@@ -8,7 +8,10 @@ let savedMainOverflow = ''
 
 function mainScrollElement(): HTMLElement | null {
   if (!import.meta.client) return null
-  return document.querySelector<HTMLElement>('.marketing-main-scroll')
+  return (
+    document.querySelector<HTMLElement>('.admin-main-scroll') ??
+    document.querySelector<HTMLElement>('.marketing-main-scroll')
+  )
 }
 
 function applyMarketingScrollLock() {
@@ -28,6 +31,12 @@ function releaseMarketingScrollLock() {
   document.documentElement.style.overflow = savedHtmlOverflow
   const main = mainScrollElement()
   if (main) main.style.overflow = savedMainOverflow
+}
+
+export function forceReleaseMarketingScrollLock() {
+  if (!import.meta.client) return
+  lockCount = 0
+  releaseMarketingScrollLock()
 }
 
 export function lockMarketingScroll() {
