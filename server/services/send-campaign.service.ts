@@ -14,7 +14,7 @@ import type {
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
-import { enqueueCampaignBatch } from '../queue/emailQueue'
+import { enqueueCampaignBatch, hasActiveCampaignSendJob } from '../queue/emailQueue'
 import {
   contactsByEmailForAudience,
   recipientEmailsForCampaign
@@ -41,6 +41,7 @@ import {
   CAMPAIGN_RECIPIENT_STATUS_PENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENT,
+  CAMPAIGN_RECIPIENT_ABORTED_STATUSES,
   CAMPAIGN_SEND_BATCH_SIZE,
   CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS_DEFAULT,
   CAMPAIGN_SEND_STALE_SENDING_MS_DEFAULT
@@ -194,6 +195,7 @@ export interface ProcessBatchResult {
   pending: number
   sent: number
   failed: number
+  aborted: number
   total: number
   done: boolean
   skipped?: boolean
@@ -288,6 +290,17 @@ export async function beginCampaignSend(
   })
 
   if (mode === 'retry_failed') {
+    const dbNameForJob = conn.db?.databaseName
+    if (dbNameForJob) {
+      const activeJob = await hasActiveCampaignSendJob(campaignId, dbNameForJob)
+      if (!activeJob) {
+        await (CampaignRecipient as CampaignRecipientModel).updateMany(
+          { campaign: campaignId, status: CAMPAIGN_RECIPIENT_STATUS_SENDING },
+          { $set: { status: CAMPAIGN_RECIPIENT_STATUS_PENDING }, $unset: { error: 1 } }
+        )
+      }
+    }
+
     const [retryable, sentCount, failedCount] = await Promise.all([
       (CampaignRecipient as CampaignRecipientModel).countDocuments({
         campaign: campaignId,
@@ -488,23 +501,13 @@ export async function getCampaignSendProgress(
     throw createError({ statusCode: 404, message: 'Campaign not found' })
   }
 
-  const [pendingCount, sentCount, failedCount] = await Promise.all([
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_SENT
-    }),
-    (CampaignRecipient as CampaignRecipientModel).countDocuments({
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_FAILED
-    })
-  ])
+  const counts = await countRecipientStatuses(
+    CampaignRecipient as CampaignRecipientModel,
+    campaignId
+  )
 
   let campaignStatus = campaign.status
-  if (pendingCount === 0) {
+  if (counts.pending === 0) {
     const fresh = await (Campaign as CampaignModel)
       .findOne(campaignScope)
       .lean<CampaignLean | null>()
@@ -514,11 +517,12 @@ export async function getCampaignSendProgress(
   return {
     campaignId,
     campaignStatus,
-    pending: pendingCount,
-    sent: sentCount,
-    failed: failedCount,
-    total: pendingCount + sentCount + failedCount,
-    done: pendingCount === 0 && campaignStatus !== 'Sending'
+    pending: counts.pending,
+    sent: counts.sent,
+    failed: counts.failed,
+    aborted: counts.aborted,
+    total: recipientStatusTotal(counts),
+    done: counts.pending === 0 && campaignStatus !== 'Sending'
   }
 }
 
@@ -561,7 +565,8 @@ export async function processBatch(
       pending: counts.pending,
       sent: counts.sent,
       failed: counts.failed,
-      total: counts.pending + counts.sent + counts.failed,
+      aborted: counts.aborted,
+      total: recipientStatusTotal(counts),
       done: counts.pending === 0,
       skipped: true
     }
@@ -624,6 +629,7 @@ export async function processBatch(
         counts.pending = afterAck.pending
         counts.sent = afterAck.sent
         counts.failed = afterAck.failed
+        counts.aborted = afterAck.aborted
         waitForInFlight = afterAck.pending > 0
         if (!waitForInFlight) {
           await finalizeCampaignSendIfComplete(models, campaignId)
@@ -649,7 +655,8 @@ export async function processBatch(
       pending: counts.pending,
       sent: counts.sent,
       failed: counts.failed,
-      total: counts.pending + counts.sent + counts.failed,
+      aborted: counts.aborted,
+      total: recipientStatusTotal(counts),
       done: counts.pending === 0,
       chainNext: stillQueued && !waitForInFlight,
       processedInBatch: 0
@@ -931,7 +938,8 @@ export async function processBatch(
     pending: counts.pending,
     sent: counts.sent,
     failed: counts.failed,
-    total: counts.pending + counts.sent + counts.failed,
+    aborted: counts.aborted,
+    total: recipientStatusTotal(counts),
     done: !hasNext,
     chainNext: hasNext,
     processedInBatch
@@ -941,8 +949,8 @@ export async function processBatch(
 async function countRecipientStatuses(
   CampaignRecipient: CampaignRecipientModel,
   campaignId: string
-): Promise<{ pending: number; sent: number; failed: number }> {
-  const [pending, sent, failed] = await Promise.all([
+): Promise<{ pending: number; sent: number; failed: number; aborted: number }> {
+  const [pending, sent, failed, aborted] = await Promise.all([
     CampaignRecipient.countDocuments({
       campaign: campaignId,
       status: { $in: [CAMPAIGN_RECIPIENT_STATUS_PENDING, CAMPAIGN_RECIPIENT_STATUS_SENDING] }
@@ -954,7 +962,20 @@ async function countRecipientStatuses(
     CampaignRecipient.countDocuments({
       campaign: campaignId,
       status: CAMPAIGN_RECIPIENT_STATUS_FAILED
+    }),
+    CampaignRecipient.countDocuments({
+      campaign: campaignId,
+      status: { $in: [...CAMPAIGN_RECIPIENT_ABORTED_STATUSES] }
     })
   ])
-  return { pending, sent, failed }
+  return { pending, sent, failed, aborted }
+}
+
+function recipientStatusTotal(counts: {
+  pending: number
+  sent: number
+  failed: number
+  aborted: number
+}): number {
+  return counts.pending + counts.sent + counts.failed + counts.aborted
 }

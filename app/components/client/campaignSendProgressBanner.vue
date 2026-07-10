@@ -5,6 +5,8 @@ const props = defineProps<{
   progress: CampaignSendProgress
   /** e.g. "Scheduled send" vs "Sending" */
   label?: string
+  /** Campaign status override when progress.campaignStatus is unavailable. */
+  status?: string
   /** When true, clicking opens the detailed send report modal. */
   clickable?: boolean
 }>()
@@ -14,6 +16,16 @@ const emit = defineEmits<{
 }>()
 
 const heading = computed(() => props.label?.trim() || 'Sending in progress')
+
+const indicatorKind = computed(() => {
+  const status = props.status?.trim() || props.progress.campaignStatus
+  if (status === 'Paused') return 'pause'
+  if (status === 'Stopped') return 'stop'
+  if (!props.progress.done) return 'spinner'
+  return null
+})
+
+const isBusy = computed(() => indicatorKind.value === 'spinner')
 
 function onActivate() {
   if (props.clickable) emit('open')
@@ -28,12 +40,12 @@ function onActivate() {
     :class="props.clickable ? 'cursor-pointer transition-colors hover:border-primary-300 hover:bg-primary-100/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600' : ''"
     role="status"
     aria-live="polite"
-    :aria-busy="!props.progress.done"
+    :aria-busy="isBusy"
     @click="onActivate"
   >
     <div class="flex flex-wrap items-center gap-2">
       <svg
-        v-if="!props.progress.done"
+        v-if="indicatorKind === 'spinner'"
         class="h-4 w-4 shrink-0 animate-spin text-primary-600"
         fill="none"
         viewBox="0 0 24 24"
@@ -41,6 +53,42 @@ function onActivate() {
       >
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+      <svg
+        v-else-if="indicatorKind === 'pause'"
+        class="h-4 w-4 shrink-0 text-violet-600"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <svg
+        v-else-if="indicatorKind === 'stop'"
+        class="h-4 w-4 shrink-0 text-orange-600"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+        />
       </svg>
       <span class="font-semibold">{{ heading }}</span>
       <span class="tabular-nums text-primary-800">

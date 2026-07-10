@@ -3,6 +3,7 @@ import type {
   CampaignSendRecipientReportStatus,
   SendStatus
 } from '~/types/campaign'
+import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
 import type {
   TenantRecipientListDetailPayload,
   TenantRecipientListMemberRow,
@@ -107,8 +108,11 @@ export type EmailMergeContextBody =
 
 /**
  * Tenant marketing API: SSR cookie forwarding + `credentials: 'include'` on the client.
+ * Pass `adminTenantDb` when an admin session should act on a specific tenant (see auth middleware).
  */
-export function useTenantMarketingApi() {
+export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<string> }) {
+  const adminTenantDb = options?.adminTenantDb ? toRef(options.adminTenantDb) : null
+
   function serverAuthHeaders(): { headers?: HeadersInit } {
     if (!import.meta.server) return {}
     try {
@@ -118,10 +122,25 @@ export function useTenantMarketingApi() {
     }
   }
 
+  function adminProxyHeaders(): HeadersInit | undefined {
+    const db = adminTenantDb?.value?.trim()
+    if (!db) return undefined
+    return { [ADMIN_TENANT_DB_HEADER]: db }
+  }
+
   function tenantFetchInit(init?: Record<string, unknown>): Record<string, unknown> {
+    const proxyHeaders = adminProxyHeaders()
+    const serverHeaders = serverAuthHeaders().headers
+    const mergedHeaders =
+      proxyHeaders || serverHeaders
+        ? {
+            ...(typeof serverHeaders === 'object' && serverHeaders !== null ? serverHeaders : {}),
+            ...(proxyHeaders ?? {})
+          }
+        : undefined
     return {
       credentials: 'include' as RequestCredentials,
-      ...serverAuthHeaders(),
+      ...(mergedHeaders ? { headers: mergedHeaders } : {}),
       ...init
     }
   }
@@ -331,6 +350,103 @@ export function useTenantMarketingApi() {
     )
   }
 
+  async function pauseCampaignSend(campaignId: string) {
+    return $fetch<{
+      ok: boolean
+      campaignId: string
+      status: string
+      pending: number
+      sent: number
+      failed: number
+    }>('/api/v1/tenant/send-campaign/pause', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId },
+      timeout: 30000
+    }))
+  }
+
+  async function stopCampaignSend(campaignId: string) {
+    return $fetch<{
+      ok: boolean
+      campaignId: string
+      status: string
+      pending: number
+      sent: number
+      failed: number
+    }>('/api/v1/tenant/send-campaign/stop', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId },
+      timeout: 30000
+    }))
+  }
+
+  async function stopAllCampaignSends() {
+    return $fetch<{
+      ok: boolean
+      halted: Array<{
+        campaignId: string
+        status: string
+        pending: number
+        sent: number
+        failed: number
+      }>
+    }>('/api/v1/tenant/send-campaign/stop-all', tenantFetchInit({
+      method: 'POST',
+      timeout: 60000
+    }))
+  }
+
+  async function resumeCampaignSend(campaignId: string) {
+    return $fetch<{
+      ok: boolean
+      total: number
+      queued: number
+      sent: number
+      failed: number
+      pending: number
+      sendRunId: string
+      resumed?: boolean
+    }>('/api/v1/tenant/send-campaign/resume', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId },
+      timeout: 30000
+    }))
+  }
+
+  async function restartCampaignSend(campaignId: string) {
+    return $fetch<{
+      ok: boolean
+      total: number
+      queued: number
+      sent: number
+      failed: number
+      pending: number
+      sendRunId: string
+      resumed?: boolean
+    }>('/api/v1/tenant/send-campaign/restart', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId },
+      timeout: 30000
+    }))
+  }
+
+  async function abortCampaignRecipients(campaignId: string, emails: string[]) {
+    return $fetch<{
+      ok: boolean
+      campaignId: string
+      aborted: number
+      skipped: number
+      notFound: number
+      pending: number
+      sent: number
+      failed: number
+    }>('/api/v1/tenant/send-campaign/recipients/abort', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId, emails },
+      timeout: 30000
+    }))
+  }
+
   async function sendTestEmail(body: {
     recipient: string
     campaignId?: string
@@ -371,6 +487,12 @@ export function useTenantMarketingApi() {
     updateCampaign,
     scheduleCampaignSend,
     unscheduleCampaignSend,
+    pauseCampaignSend,
+    stopCampaignSend,
+    stopAllCampaignSends,
+    resumeCampaignSend,
+    restartCampaignSend,
+    abortCampaignRecipients,
     sendTestEmail
   }
 }

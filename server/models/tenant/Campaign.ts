@@ -1,6 +1,14 @@
 import mongoose from 'mongoose'
 
-const campaignStatusEnum = ['Draft', 'Scheduled', 'Sending', 'Sent', 'Failed'] as const
+const campaignStatusEnum = [
+  'Draft',
+  'Scheduled',
+  'Sending',
+  'Paused',
+  'Stopped',
+  'Sent',
+  'Failed'
+] as const
 const recipientsTypeEnum = ['manual', 'list'] as const
 
 const mergeUserSnapshotSchema = new mongoose.Schema(

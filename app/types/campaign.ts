@@ -14,7 +14,14 @@ export interface CampaignRecipient {
 }
 
 export type CampaignRecipientsType = 'manual' | 'list'
-export type CampaignStatus = 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Failed'
+export type CampaignStatus =
+  | 'Draft'
+  | 'Scheduled'
+  | 'Sending'
+  | 'Paused'
+  | 'Stopped'
+  | 'Sent'
+  | 'Failed'
 
 export interface Campaign {
   id: string
@@ -36,11 +43,12 @@ export interface SendStatus {
   pending: number
   sent: number
   failed: number
+  aborted?: number
   total: number
   done: boolean
 }
 
-export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed'
+export type CampaignSendRecipientReportStatus = 'all' | 'sent' | 'pending' | 'failed' | 'aborted'
 
 export interface CampaignSendRecipientReportItem {
   email: string
@@ -61,6 +69,7 @@ export interface CampaignSendRecipientReport {
     pending: number
     failed: number
     sending: number
+    aborted: number
     total: number
   }
   items: CampaignSendRecipientReportItem[]

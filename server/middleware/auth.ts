@@ -7,11 +7,14 @@ import { getRegistryConnection } from '../lib/mongoose'
 import {
   findRegistryTenantByApiKey,
   findRegistryTenantByDbName,
-  findRegistryTenantByTenantId
+  findRegistryTenantByTenantId,
+  ADMIN_ROLE
 } from '../tenant/registry-auth'
 import { MARKETING_TENANT_SESSION_COOKIE } from '../constants/tenantAuth.constants'
 import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '../constants/contactOwnerScope.constants'
 import { verifyMarketingTenantBrowserSession } from '../utils/auth/marketingTenantBrowserSession'
+import { ADMIN_TENANT_DB_HEADER } from '../constants/adminTenantProxy.constants'
+import { adminTenantProxyBlocksRequest } from '../utils/admin/adminTenantProxyRestrictions'
 
 const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/login',
@@ -250,6 +253,36 @@ export default defineEventHandler(async (event) => {
       dbName: row.dbName
     }
     return
+  }
+
+  if (dbUser.role === ADMIN_ROLE) {
+    const adminTenantDb = (getHeader(event, ADMIN_TENANT_DB_HEADER) || '').trim()
+    const tenantApiPath = '/api/v1/tenant/'
+    if (adminTenantDb && path.startsWith(tenantApiPath)) {
+      if (adminTenantProxyBlocksRequest(event.method, path)) {
+        throw createError({
+          statusCode: 403,
+          message: 'Admin tenant proxy cannot modify campaigns or start sends'
+        })
+      }
+      const row = await findRegistryTenantByDbName(registryConn, adminTenantDb)
+      if (!row) {
+        throw createError({
+          statusCode: 403,
+          message: 'Unknown tenant for admin proxy'
+        })
+      }
+      event.context.auth = {
+        type: 'tenantApiKey',
+        role: 'tenant',
+        tenantName: row.tenantName,
+        dbName: row.dbName,
+        ...(row.tenantId ? { tenantId: row.tenantId } : {}),
+        ...(row.crmAppUrl ? { crmAppUrl: row.crmAppUrl } : {}),
+        tenantWideContacts: true
+      }
+      return
+    }
   }
 
   event.context.auth = {

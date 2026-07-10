@@ -15,6 +15,9 @@ const {
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
+  canStopSend,
+  canResumeSend,
+  canRestartSend,
   sendProgress,
   buildCampaignSendProgress,
   startSendStatusPolling,
@@ -23,9 +26,15 @@ const {
   isSendPolling,
   closeSendModal,
   dismissSendModal,
-  openSendModal
+  openSendModal,
+  stopSend,
+  resumeSend,
+  restartSend
 } = useCampaignSendFlow()
 const id = route.params.id as string
+const sendControlBusy = ref(false)
+const resumeConfirmOpen = ref(false)
+const restartConfirmOpen = ref(false)
 
 const cachedDetail = campaignStore.getCampaignDetailCache(id)
 const detailAsync = useAsyncData(
@@ -122,26 +131,118 @@ async function handleSend() {
   startSendStatusPolling(c.id, onSendPollingComplete)
 }
 
-const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
+async function handleStopSend() {
+  const c = campaignForSend.value
+  if (!c || !canStopSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const ok = await stopSend(c)
+    if (ok) await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+function openResumeConfirm() {
+  if (!campaignForSend.value || !canResumeSend(campaignForSend.value) || sendControlBusy.value) return
+  resumeConfirmOpen.value = true
+}
+
+function openRestartConfirm() {
+  if (!campaignForSend.value || !canRestartSend(campaignForSend.value) || sendControlBusy.value) return
+  restartConfirmOpen.value = true
+}
+
+async function confirmResumeSend() {
+  const c = campaignForSend.value
+  if (!c || !canResumeSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await resumeSend(c)
+    resumeConfirmOpen.value = false
+    if (!poll) return
+    startSendStatusPolling(c.id, onSendPollingComplete)
+    await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function confirmRestartSend() {
+  const c = campaignForSend.value
+  if (!c || !canRestartSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await restartSend(c)
+    restartConfirmOpen.value = false
+    if (!poll) return
+    startSendStatusPolling(c.id, onSendPollingComplete)
+    await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function loadPausedProgress() {
+  const c = campaign.value
+  if (!c || (c.status !== 'Paused' && c.status !== 'Stopped')) return
+  try {
+    const res = await marketingApi.fetchSendCampaignStatus(id)
+    campaignStore.setSendStatus({ ...res, campaignId: id })
+  } catch {
+    // ignore
+  }
+}
+
+watch(
+  () => campaign.value?.status,
+  (status) => {
+    if (status === 'Sending') tryResumeSendPolling()
+    if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
+  }
+)
+
+onMounted(() => {
+  tryResumeSendPolling()
+  void loadPausedProgress()
+})
 
 const sendProgressModalOpen = computed(() => sendingCampaignId.value === id)
+
+const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
 
 /** Inline live progress when modal is dismissed (send-now or scheduled background send). */
 const showDetailSendProgress = computed(() => {
   if (sendProgressModalOpen.value) return false
-  return (
-    campaign.value?.status === 'Sending' ||
-    (!!detailSendProgress.value && !detailSendProgress.value.done)
-  )
+  const status = campaign.value?.status
+  if (status === 'Sending') return true
+  if ((status === 'Paused' || status === 'Stopped') && detailSendProgress.value) return true
+  return !!detailSendProgress.value && !detailSendProgress.value.done
 })
 
 const detailSendProgressLabel = computed(() => {
-  if (isSendPolling(id) || campaign.value?.status === 'Sending') return 'Send in progress'
+  const status = campaign.value?.status
+  if (status === 'Paused') return 'Send paused'
+  if (status === 'Stopped') return 'Send stopped'
+  if (isSendPolling(id) || status === 'Sending') return 'Send in progress'
   return 'Scheduled send in progress'
 })
 
 function openDetailSendReport() {
   openSendModal(id)
+}
+
+async function onSendModalControl(detail: {
+  action: 'pause' | 'stop' | 'resume' | 'restart'
+  poll?: boolean
+}) {
+  await refresh()
+  if ((detail.action === 'resume' || detail.action === 'restart') && detail.poll) {
+    startSendStatusPolling(id, onSendPollingComplete)
+  }
+  if (detail.action === 'stop' || detail.action === 'pause') {
+    void loadPausedProgress()
+  }
 }
 
 function tryResumeSendPolling() {
@@ -153,22 +254,11 @@ function tryResumeSendPolling() {
 }
 
 watch(
-  () => campaign.value?.status,
-  (status) => {
-    if (status === 'Sending') tryResumeSendPolling()
-  }
-)
-
-watch(
   () => data.value?.campaign?.status,
   () => {
     if (!pending.value) tryResumeSendPolling()
   }
 )
-
-onMounted(() => {
-  tryResumeSendPolling()
-})
 
 function closeSendSuccessModal() {
   sendSuccessSummary.value = null
@@ -528,6 +618,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               v-else-if="showDetailSendProgress && detailSendProgress"
               :progress="detailSendProgress"
               :label="detailSendProgressLabel"
+              :status="campaign.status"
               clickable
               @open="openDetailSendReport"
             />
@@ -545,6 +636,33 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             </div>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              v-if="campaignForSend && canStopSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-red-200/90 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-950 shadow-sm transition-colors hover:bg-red-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy"
+              @click="handleStopSend"
+            >
+              Stop
+            </button>
+            <button
+              v-if="campaignForSend && canResumeSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy || !!sendingCampaignId"
+              @click="openResumeConfirm"
+            >
+              Resume
+            </button>
+            <button
+              v-if="campaignForSend && canRestartSend(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy || !!sendingCampaignId"
+              @click="openRestartConfirm"
+            >
+              Send again
+            </button>
             <button
               v-if="campaignForSend && canSendScheduled(campaignForSend)"
               type="button"
@@ -606,6 +724,8 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               :class="{
                 'bg-amber-50 text-amber-800 ring-amber-200/80': campaign.status === 'Draft',
                 'bg-sky-50 text-sky-800 ring-sky-200/80': campaign.status === 'Scheduled' || campaign.status === 'Sending',
+                'bg-violet-50 text-violet-800 ring-violet-200/80': campaign.status === 'Paused',
+                'bg-orange-50 text-orange-800 ring-orange-200/80': campaign.status === 'Stopped',
                 'bg-emerald-50 text-emerald-800 ring-emerald-200/80': campaign.status === 'Sent',
                 'bg-red-50 text-red-800 ring-red-200/80': campaign.status === 'Failed',
                 'bg-slate-100 text-slate-700 ring-slate-200/80': !['Draft','Scheduled','Sending','Sent','Failed'].includes(campaign.status)
@@ -823,6 +943,29 @@ function setCampaignViewTab(tab: CampaignViewTab) {
       :send-error="sendError"
       :send-progress="detailSendProgress ?? sendProgress"
       @close="dismissSendModal"
+      @send-control="onSendModalControl"
+    />
+
+    <ClientConfirmationModal
+      :open="resumeConfirmOpen"
+      title="Resume send?"
+      message="Continue sending only to remaining pending recipients. People who already received this campaign will not be emailed again."
+      confirm-text="Resume"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmResumeSend"
+      @cancel="resumeConfirmOpen = false"
+    />
+
+    <ClientConfirmationModal
+      :open="restartConfirmOpen"
+      title="Send again?"
+      message="Start over and send this campaign again to everyone, including recipients who already received it."
+      confirm-text="Send again"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmRestartSend"
+      @cancel="restartConfirmOpen = false"
     />
 
     <ClientSendSuccessModal

@@ -10,8 +10,8 @@ const props = withDefaults(
     label: string
     options: readonly FilterSelectOption[]
     disabled?: boolean
-    /** `filter` = toolbar filters; `field` = form fields inside cards/modals */
-    variant?: 'filter' | 'field'
+    /** `filter` = toolbar filters; `field` = form fields inside cards/modals; `tracking` = Brevo tracking toolbar */
+    variant?: 'filter' | 'field' | 'tracking'
   }>(),
   { disabled: false, variant: 'filter' }
 )
@@ -38,8 +38,23 @@ const triggerClass = computed(() => {
   if (props.variant === 'field') {
     return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-left text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
   }
+  if (props.variant === 'tracking') {
+    return 'inline-flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-auto sm:justify-start sm:gap-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+  }
   return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-left text-[0.9375rem] font-medium text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
 })
+
+const rootClass = computed(() =>
+  props.variant === 'tracking'
+    ? 'relative w-full shrink-0 sm:w-fit'
+    : 'relative min-w-0 w-full max-w-full'
+)
+
+const chevronClass = computed(() =>
+  props.variant === 'tracking'
+    ? 'h-4 w-4 shrink-0 text-zinc-400 transition-transform'
+    : 'pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-transform'
+)
 
 function updatePanelPosition() {
   const root = rootRef.value
@@ -144,7 +159,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="relative min-w-0 w-full max-w-full">
+  <div ref="rootRef" :class="rootClass">
     <label class="sr-only" :for="id">{{ label }}</label>
     <button
       :id="id"
@@ -157,8 +172,7 @@ onBeforeUnmount(() => {
     >
       <span class="min-w-0 truncate">{{ selectedLabel }}</span>
       <svg
-        class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-transform"
-        :class="{ 'rotate-180': open }"
+        :class="[chevronClass, { 'rotate-180': open }]"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
