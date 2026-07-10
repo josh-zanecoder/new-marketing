@@ -46,9 +46,9 @@ export function adminCampaignSubtitle(
     }
     return `${tenant}Sending in progress`
   }
-  if (row.status === 'Paused') return `${tenant}Paused — resume to continue sending`
+  if (row.status === 'Paused') return `${tenant}Paused — resume pending recipients or send again to everyone`
   if (row.status === 'Stopped') {
-    return `${tenant}Stopped — resume to continue from last unsent email`
+    return `${tenant}Stopped — resume pending recipients or send again to everyone`
   }
   if (row.status === 'Sent') {
     const raw = row.updatedAt || row.createdAt
@@ -151,6 +151,13 @@ export function useAdminCampaignsApi() {
     })
   }
 
+  async function restartCampaignSend(dbName: string, campaignId: string) {
+    return $fetch(`/api/v1/admin/campaigns/${encDbName(dbName)}/restart`, {
+      method: 'POST',
+      body: { campaignId }
+    })
+  }
+
   async function abortCampaignRecipients(
     dbName: string,
     campaignId: string,
@@ -172,6 +179,7 @@ export function useAdminCampaignsApi() {
     stopCampaignSend,
     stopAllTenantCampaignSends,
     resumeCampaignSend,
+    restartCampaignSend,
     abortCampaignRecipients
   }
 }

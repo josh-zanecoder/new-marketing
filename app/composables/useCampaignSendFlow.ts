@@ -38,6 +38,11 @@ export function canResumeSend(c: Campaign): boolean {
   return c.status === 'Paused' || c.status === 'Stopped'
 }
 
+/** Restart a halted send (re-email previously sent recipients as well). */
+export function canRestartSend(c: Campaign): boolean {
+  return c.status === 'Paused' || c.status === 'Stopped'
+}
+
 export function hasActiveSendingCampaigns(campaigns: Campaign[]): boolean {
   return campaigns.some((c) => c.status === 'Sending')
 }
@@ -135,6 +140,10 @@ export function useCampaignSendFlow() {
     return campaignStore.resumeCampaignSend(c)
   }
 
+  function restartSend(c: Campaign) {
+    return campaignStore.restartCampaignSend(c)
+  }
+
   return {
     canSendDraft,
     canSendScheduled,
@@ -143,6 +152,7 @@ export function useCampaignSendFlow() {
     canPauseSend,
     canStopSend,
     canResumeSend,
+    canRestartSend,
     hasActiveSendingCampaigns,
     hasScheduledCampaigns,
     hasCancellableActiveCampaignSends,
@@ -156,6 +166,7 @@ export function useCampaignSendFlow() {
     stopSend,
     stopAllSends,
     resumeSend,
+    restartSend,
     closeSendModal,
     dismissSendModal,
     openSendModal

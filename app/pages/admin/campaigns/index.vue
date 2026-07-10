@@ -5,9 +5,9 @@ import type { AdminTenantRow } from '~/types/adminTenant'
 import { storeToRefs } from 'pinia'
 import { useAdminCampaignStore } from '~/store/adminCampaignStore'
 import {
-  canPauseSend,
   canStopSend,
   canResumeSend,
+  canRestartSend,
   hasCancellableActiveCampaignSends
 } from '~/composables/useCampaignSendFlow'
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
@@ -23,10 +23,10 @@ const {
   startSendStatusPolling,
   dismissSendModal,
   closeSendModal,
-  pauseSend,
   stopSend,
   cancelAllActiveSends,
-  resumeSend
+  resumeSend,
+  restartSend
 } = useAdminCampaignSendFlow()
 
 const searchQuery = ref('')
@@ -53,6 +53,8 @@ const tenantFilterSelectOptions = computed(() => [
 const sendControlBusy = ref(false)
 const scheduleBusy = ref(false)
 const cancelAllConfirmOpen = ref(false)
+const resumeConfirmCampaign = ref<AdminCampaign | null>(null)
+const restartConfirmCampaign = ref<AdminCampaign | null>(null)
 const currentPage = ref(1)
 const PAGE_SIZE = 10
 
@@ -157,18 +159,8 @@ const cancelAllConfirmMessage = computed(() => {
     )
   }
   const action = parts.join('; ')
-  return `Across ${cancelAllScopeLabel.value}: ${action}. Stopped sends keep unsent emails and can be resumed later.`
+  return `Across ${cancelAllScopeLabel.value}: ${action}. Stopped sends keep unsent emails so you can resume pending recipients or send again later.`
 })
-
-async function handlePause(c: AdminCampaign) {
-  if (!canPauseSend(c) || sendControlBusy.value) return
-  sendControlBusy.value = true
-  try {
-    await pauseSend(c)
-  } finally {
-    sendControlBusy.value = false
-  }
-}
 
 async function handleStop(c: AdminCampaign) {
   if (!canStopSend(c) || sendControlBusy.value) return
@@ -191,11 +183,23 @@ async function confirmCancelAllActive() {
   }
 }
 
-async function handleResume(c: AdminCampaign) {
+function openResumeConfirm(c: AdminCampaign) {
   if (!canResumeSend(c) || sendControlBusy.value) return
+  resumeConfirmCampaign.value = c
+}
+
+function openRestartConfirm(c: AdminCampaign) {
+  if (!canRestartSend(c) || sendControlBusy.value) return
+  restartConfirmCampaign.value = c
+}
+
+async function confirmResumeSend() {
+  const c = resumeConfirmCampaign.value
+  if (!c || !canResumeSend(c) || sendControlBusy.value) return
   sendControlBusy.value = true
   try {
     const { poll } = await resumeSend(c)
+    resumeConfirmCampaign.value = null
     if (!poll) return
     startSendStatusPolling(c, async (res) => {
       const name = campaigns.value.find((x) => adminCampaignKey(x) === adminCampaignKey(c))?.name || 'campaign'
@@ -209,6 +213,49 @@ async function handleResume(c: AdminCampaign) {
     })
   } finally {
     sendControlBusy.value = false
+  }
+}
+
+async function confirmRestartSend() {
+  const c = restartConfirmCampaign.value
+  if (!c || !canRestartSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await restartSend(c)
+    restartConfirmCampaign.value = null
+    if (!poll) return
+    startSendStatusPolling(c, async (res) => {
+      const name = campaigns.value.find((x) => adminCampaignKey(x) === adminCampaignKey(c))?.name || 'campaign'
+      await nextTick()
+      sendSuccessSummary.value = {
+        campaignName: name,
+        sent: res.sent,
+        failed: res.failed,
+        campaignStatus: res.campaignStatus
+      }
+    })
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function onSendModalControl(detail: {
+  action: 'pause' | 'stop' | 'resume' | 'restart'
+  poll?: boolean
+}) {
+  await store.fetchCampaigns({ force: true })
+  if ((detail.action === 'resume' || detail.action === 'restart') && detail.poll && sendingCampaign.value) {
+    const c = sendingCampaign.value
+    startSendStatusPolling(c, async (res) => {
+      const name = campaigns.value.find((x) => adminCampaignKey(x) === adminCampaignKey(c))?.name || 'campaign'
+      await nextTick()
+      sendSuccessSummary.value = {
+        campaignName: name,
+        sent: res.sent,
+        failed: res.failed,
+        campaignStatus: res.campaignStatus
+      }
+    })
   }
 }
 
@@ -264,9 +311,9 @@ function campaignSubtitle(c: AdminCampaign, nowMs: number): string {
     return `${tenant}Sent ${md}`
   }
   if (c.status === 'Sending') return `${tenant}Sending in progress`
-  if (c.status === 'Paused') return `${tenant}Paused — resume to continue sending`
+  if (c.status === 'Paused') return `${tenant}Paused — resume pending recipients or send again to everyone`
   if (c.status === 'Stopped') {
-    return `${tenant}Stopped — resume to continue from last unsent email`
+    return `${tenant}Stopped — resume pending recipients or send again to everyone`
   }
   if (c.status === 'Failed') {
     const raw = c.updatedAt || c.createdAt
@@ -315,7 +362,7 @@ onUnmounted(() => {
           Campaigns
         </h1>
         <p class="page-lead max-w-2xl sm:text-[0.9375rem] sm:leading-relaxed">
-          Monitor campaign sends across tenants and pause, stop, or cancel active batches.
+          Monitor campaign sends across tenants and stop, resume, or restart active batches.
         </p>
     </header>
 
@@ -491,18 +538,6 @@ onUnmounted(() => {
         </NuxtLink>
         <div class="mt-3 flex flex-wrap items-center gap-0.5 border-t border-slate-100 pt-3 sm:mt-4">
           <button
-            v-if="canPauseSend(c)"
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-violet-600 transition-colors hover:bg-violet-50 hover:text-violet-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-violet-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="sendControlBusy"
-            title="Pause send"
-            @click.stop="handlePause(c)"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-          <button
             v-if="canStopSend(c)"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-red-500/25 disabled:cursor-not-allowed disabled:opacity-40"
@@ -518,14 +553,26 @@ onUnmounted(() => {
           <button
             v-if="canResumeSend(c)"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-primary-600 transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="sendControlBusy || !!sendingCampaignKey"
-            title="Resume send"
-            @click.stop="handleResume(c)"
+            title="Resume pending recipients"
+            @click.stop="openResumeConfirm(c)"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <button
+            v-if="canRestartSend(c)"
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-primary-600 transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="sendControlBusy || !!sendingCampaignKey"
+            title="Send again to everyone"
+            @click.stop="openRestartConfirm(c)"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           <button
@@ -592,6 +639,28 @@ onUnmounted(() => {
       @cancel="cancelAllConfirmOpen = false"
     />
 
+    <ClientConfirmationModal
+      :open="!!resumeConfirmCampaign"
+      title="Resume send?"
+      message="Continue sending only to remaining pending recipients. People who already received this campaign will not be emailed again."
+      confirm-text="Resume"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmResumeSend"
+      @cancel="resumeConfirmCampaign = null"
+    />
+
+    <ClientConfirmationModal
+      :open="!!restartConfirmCampaign"
+      title="Send again?"
+      message="Start over and send this campaign again to everyone, including recipients who already received it."
+      confirm-text="Send again"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmRestartSend"
+      @cancel="restartConfirmCampaign = null"
+    />
+
     <ClientSendProgressModal
       :open="!!sendingCampaignKey"
       :campaign-id="sendingCampaign?.id ?? ''"
@@ -600,6 +669,7 @@ onUnmounted(() => {
       :send-error="sendError"
       :send-progress="sendProgress"
       @close="dismissSendModal"
+      @send-control="onSendModalControl"
     />
 
     <ClientSendSuccessModal

@@ -68,6 +68,10 @@ export function useAdminCampaignSendFlow() {
     return campaignStore.resumeCampaignSend(c)
   }
 
+  function restartSend(c: AdminCampaign) {
+    return campaignStore.restartCampaignSend(c)
+  }
+
   function isSending(c: AdminCampaign, sendingCampaignKey: string | null) {
     return sendingCampaignKey === adminCampaignKey(c)
   }
@@ -86,6 +90,7 @@ export function useAdminCampaignSendFlow() {
     stopAllSends,
     cancelAllActiveSends,
     resumeSend,
+    restartSend,
     isSending
   }
 }

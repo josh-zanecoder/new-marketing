@@ -257,6 +257,76 @@ export async function resumeCampaignSend(
 }
 
 /**
+ * Restart a paused or stopped send: reset previously sent/failed rows to pending
+ * and send to the full audience again (including recipients who already received it).
+ */
+export async function restartCampaignSend(
+  conn: Connection,
+  campaignId: string,
+  options?: { auth?: unknown; mergeUserSnapshot?: CampaignLean['mergeUserSnapshot'] }
+) {
+  const dbName = conn.db?.databaseName
+  if (!dbName) {
+    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
+  }
+
+  const models = getTenantClientModels(conn)
+  const { Campaign, CampaignRecipient } = models
+  const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, options?.auth)
+
+  const campaign = await (Campaign as CampaignModel)
+    .findOne(campaignScope)
+    .select('status')
+    .lean<Pick<CampaignLean, 'status'> | null>()
+  if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
+  if (campaign.status !== 'Paused' && campaign.status !== 'Stopped') {
+    throw createError({
+      statusCode: 400,
+      message: 'Only paused or stopped campaigns can be sent again'
+    })
+  }
+
+  const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
+  if (activeJob) {
+    throw createError({
+      statusCode: 400,
+      message: 'Campaign send is still in progress'
+    })
+  }
+
+  const resetResult = await (CampaignRecipient as CampaignRecipientModel).updateMany(
+    {
+      campaign: campaignId,
+      status: {
+        $in: [
+          CAMPAIGN_RECIPIENT_STATUS_SENT,
+          CAMPAIGN_RECIPIENT_STATUS_FAILED,
+          CAMPAIGN_RECIPIENT_STATUS_SENDING
+        ]
+      }
+    },
+    {
+      $set: { status: CAMPAIGN_RECIPIENT_STATUS_PENDING },
+      $unset: { error: 1, sentAt: 1, brevoMessageId: 1 }
+    }
+  )
+
+  console.log('[CampaignSendControl] restartRecipients', {
+    campaignId,
+    dbName,
+    reset: resetResult.modifiedCount ?? 0
+  })
+
+  return beginCampaignSend(conn, campaignId, {
+    allowedStatuses: ['Paused', 'Stopped'],
+    mode: 'retry_failed',
+    auth: options?.auth,
+    statusOnEnqueueFailure: campaign.status,
+    ...(options?.mergeUserSnapshot ? { mergeUserSnapshot: options.mergeUserSnapshot } : {})
+  })
+}
+
+/**
  * Abort selected pending recipients so they are not sent in this campaign run.
  * Only `pending` rows are aborted; in-flight `sending` rows are skipped.
  */

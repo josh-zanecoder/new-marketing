@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type {
+  Campaign,
   CampaignSendRecipientReport,
   CampaignSendRecipientReportStatus
 } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 import { useAdminCampaignStore } from '~/store/adminCampaignStore'
 import { useAdminCampaignsApi } from '~/composables/admin/campaigns/useAdminCampaigns'
+import { canRestartSend, canResumeSend, canStopSend } from '~/composables/useCampaignSendFlow'
 
 const props = defineProps<{
   open: boolean
@@ -29,6 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  'send-control': [detail: { action: 'pause' | 'stop' | 'resume' | 'restart'; poll?: boolean }]
 }>()
 
 const marketingApi = useTenantMarketingApi({
@@ -47,6 +50,45 @@ const reportError = ref('')
 const selectedEmails = ref<Set<string>>(new Set())
 const abortBusy = ref(false)
 const abortMessage = ref('')
+const sendControlBusy = ref(false)
+const resumeConfirmOpen = ref(false)
+const restartConfirmOpen = ref(false)
+
+const adminDb = computed(() => props.adminTenantDb?.trim() || '')
+
+const campaignForSendControl = computed((): Campaign | null => {
+  const id = props.campaignId
+  const status = props.sendProgress?.campaignStatus
+  if (!id || !status) return null
+  return {
+    id,
+    name: props.campaignName,
+    status,
+    sender: { name: '', email: '' },
+    recipientsType: 'manual',
+    subject: '',
+    recipients: [],
+    createdAt: '',
+    updatedAt: ''
+  }
+})
+
+const showStopSend = computed(
+  () => !!campaignForSendControl.value && canStopSend(campaignForSendControl.value)
+)
+const showResumeSend = computed(
+  () => !!campaignForSendControl.value && canResumeSend(campaignForSendControl.value)
+)
+const showRestartSend = computed(
+  () => !!campaignForSendControl.value && canRestartSend(campaignForSendControl.value)
+)
+
+const isActivelySending = computed(
+  () =>
+    !!props.sendProgress &&
+    !props.sendProgress.done &&
+    props.sendProgress.campaignStatus === 'Sending'
+)
 
 const REPORT_LIMIT = 50
 
@@ -130,6 +172,70 @@ async function refreshSendProgress() {
     }
   } catch {
     // keep existing progress
+  }
+}
+
+async function handleStopSend() {
+  const c = campaignForSendControl.value
+  if (!c || !showStopSend.value || sendControlBusy.value) return
+  sendControlBusy.value = true
+  reportError.value = ''
+  try {
+    const ok = adminDb.value
+      ? await adminCampaignStore.stopCampaignSend({
+          ...c,
+          tenantDbName: adminDb.value,
+          tenantName: ''
+        })
+      : await campaignStore.stopCampaignSend(c)
+    if (ok) {
+      await refreshSendProgress()
+      emit('send-control', { action: 'stop' })
+    }
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function confirmResumeSend() {
+  const c = campaignForSendControl.value
+  if (!c || !showResumeSend.value || sendControlBusy.value) return
+  sendControlBusy.value = true
+  reportError.value = ''
+  try {
+    const { poll } = adminDb.value
+      ? await adminCampaignStore.resumeCampaignSend({
+          ...c,
+          tenantDbName: adminDb.value,
+          tenantName: ''
+        })
+      : await campaignStore.resumeCampaignSend(c)
+    resumeConfirmOpen.value = false
+    await refreshSendProgress()
+    emit('send-control', { action: 'resume', poll })
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function confirmRestartSend() {
+  const c = campaignForSendControl.value
+  if (!c || !showRestartSend.value || sendControlBusy.value) return
+  sendControlBusy.value = true
+  reportError.value = ''
+  try {
+    const { poll } = adminDb.value
+      ? await adminCampaignStore.restartCampaignSend({
+          ...c,
+          tenantDbName: adminDb.value,
+          tenantName: ''
+        })
+      : await campaignStore.restartCampaignSend(c)
+    restartConfirmOpen.value = false
+    await refreshSendProgress()
+    emit('send-control', { action: 'restart', poll })
+  } finally {
+    sendControlBusy.value = false
   }
 }
 
@@ -232,6 +338,8 @@ watch(
       reportPage.value = 1
       selectedEmails.value = new Set()
       abortMessage.value = ''
+      resumeConfirmOpen.value = false
+      restartConfirmOpen.value = false
     }
   },
   { immediate: true }
@@ -268,7 +376,7 @@ watch(reportPage, () => {
         <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
           <div class="flex min-w-0 items-center gap-2">
             <svg
-              v-if="props.sendProgress && !props.sendProgress.done"
+              v-if="isActivelySending"
               class="h-5 w-5 shrink-0 animate-spin text-slate-500"
               fill="none"
               viewBox="0 0 24 24"
@@ -279,6 +387,12 @@ watch(reportPage, () => {
             </svg>
             <h3 id="send-progress-modal-title" class="truncate text-lg font-semibold text-slate-900">
               <template v-if="props.sendProgress?.done">Send finished</template>
+              <template v-else-if="props.sendProgress?.campaignStatus === 'Paused'">
+                Send paused — {{ props.campaignName || 'campaign' }}
+              </template>
+              <template v-else-if="props.sendProgress?.campaignStatus === 'Stopped'">
+                Send stopped — {{ props.campaignName || 'campaign' }}
+              </template>
               <template v-else>Sending {{ props.campaignName || 'campaign' }}</template>
             </h3>
           </div>
@@ -304,6 +418,12 @@ watch(reportPage, () => {
                 <template v-if="props.sendProgress.done">
                   {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} processed
                 </template>
+                <template v-else-if="props.sendProgress.campaignStatus === 'Paused'">
+                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — paused
+                </template>
+                <template v-else-if="props.sendProgress.campaignStatus === 'Stopped'">
+                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — stopped
+                </template>
                 <template v-else>
                   {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
                 </template>
@@ -327,6 +447,38 @@ watch(reportPage, () => {
                   <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.remaining }}</div>
                   <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800">Pending</div>
                 </div>
+              </div>
+              <div
+                v-if="showStopSend || showResumeSend || showRestartSend"
+                class="mt-4 flex flex-wrap gap-2"
+              >
+                <button
+                  v-if="showStopSend"
+                  type="button"
+                  class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-950 hover:bg-red-100/90 disabled:opacity-40 sm:text-sm"
+                  :disabled="sendControlBusy || abortBusy"
+                  @click="handleStopSend"
+                >
+                  {{ sendControlBusy ? 'Stopping…' : 'Stop send' }}
+                </button>
+                <button
+                  v-if="showResumeSend"
+                  type="button"
+                  class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-40 sm:text-sm"
+                  :disabled="sendControlBusy || abortBusy"
+                  @click="resumeConfirmOpen = true"
+                >
+                  Resume
+                </button>
+                <button
+                  v-if="showRestartSend"
+                  type="button"
+                  class="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-40 sm:text-sm"
+                  :disabled="sendControlBusy || abortBusy"
+                  @click="restartConfirmOpen = true"
+                >
+                  Send again
+                </button>
               </div>
             </div>
 
@@ -497,4 +649,26 @@ watch(reportPage, () => {
       </div>
     </div>
   </Teleport>
+
+  <ClientConfirmationModal
+    :open="resumeConfirmOpen"
+    title="Resume send?"
+    message="Continue sending only to remaining pending recipients. People who already received this campaign will not be emailed again."
+    confirm-text="Resume"
+    variant="primary"
+    :confirm-loading="sendControlBusy"
+    @confirm="confirmResumeSend"
+    @cancel="resumeConfirmOpen = false"
+  />
+
+  <ClientConfirmationModal
+    :open="restartConfirmOpen"
+    title="Send again?"
+    message="Start over and send this campaign again to everyone, including recipients who already received it."
+    confirm-text="Send again"
+    variant="primary"
+    :confirm-loading="sendControlBusy"
+    @confirm="confirmRestartSend"
+    @cancel="restartConfirmOpen = false"
+  />
 </template>

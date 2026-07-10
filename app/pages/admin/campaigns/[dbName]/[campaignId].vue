@@ -5,9 +5,9 @@ import { adminCampaignKey } from '~/types/adminCampaign'
 import { useAdminCampaignStore } from '~/store/adminCampaignStore'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import {
-  canPauseSend,
   canStopSend,
   canResumeSend,
+  canRestartSend,
   buildCampaignSendProgress
 } from '~/composables/useCampaignSendFlow'
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
@@ -33,12 +33,14 @@ const {
   closeSendModal,
   dismissSendModal,
   openSendModal,
-  pauseSend,
   stopSend,
-  resumeSend
+  resumeSend,
+  restartSend
 } = useAdminCampaignSendFlow()
 const sendControlBusy = ref(false)
 const scheduleBusy = ref(false)
+const resumeConfirmOpen = ref(false)
+const restartConfirmOpen = ref(false)
 
 const currentSendKey = computed(() =>
   adminCampaignKey({ tenantDbName: tenantDbName.value, id: id.value })
@@ -110,18 +112,6 @@ async function onSendPollingComplete(res: { sent: number; failed: number; campai
   }
 }
 
-async function handlePauseSend() {
-  const c = campaignForSend.value
-  if (!c || !canPauseSend(c) || sendControlBusy.value) return
-  sendControlBusy.value = true
-  try {
-    const ok = await pauseSend(c)
-    if (ok) await refresh()
-  } finally {
-    sendControlBusy.value = false
-  }
-}
-
 async function handleStopSend() {
   const c = campaignForSend.value
   if (!c || !canStopSend(c) || sendControlBusy.value) return
@@ -134,12 +124,38 @@ async function handleStopSend() {
   }
 }
 
-async function handleResumeSend() {
+function openResumeConfirm() {
+  if (!campaignForSend.value || !canResumeSend(campaignForSend.value) || sendControlBusy.value) return
+  resumeConfirmOpen.value = true
+}
+
+function openRestartConfirm() {
+  if (!campaignForSend.value || !canRestartSend(campaignForSend.value) || sendControlBusy.value) return
+  restartConfirmOpen.value = true
+}
+
+async function confirmResumeSend() {
   const c = campaignForSend.value
   if (!c || !canResumeSend(c) || sendControlBusy.value) return
   sendControlBusy.value = true
   try {
     const { poll } = await resumeSend(c)
+    resumeConfirmOpen.value = false
+    if (!poll) return
+    startSendStatusPolling(c, onSendPollingComplete)
+    await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function confirmRestartSend() {
+  const c = campaignForSend.value
+  if (!c || !canRestartSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await restartSend(c)
+    restartConfirmOpen.value = false
     if (!poll) return
     startSendStatusPolling(c, onSendPollingComplete)
     await refresh()
@@ -198,6 +214,20 @@ const detailSendProgressLabel = computed(() => {
 function openDetailSendReport() {
   const c = campaignForSend.value
   if (c) openSendModal(c)
+}
+
+async function onSendModalControl(detail: {
+  action: 'pause' | 'stop' | 'resume' | 'restart'
+  poll?: boolean
+}) {
+  await refresh()
+  const c = campaignForSend.value
+  if ((detail.action === 'resume' || detail.action === 'restart') && detail.poll && c) {
+    startSendStatusPolling(c, onSendPollingComplete)
+  }
+  if (detail.action === 'stop' || detail.action === 'pause') {
+    void loadPausedProgress()
+  }
 }
 
 function tryResumeSendPolling() {
@@ -553,15 +583,6 @@ const recipientListTruncated = computed(() => {
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
-              v-if="campaignForSend && canPauseSend(campaignForSend)"
-              type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-950 shadow-sm transition-colors hover:bg-violet-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
-              :disabled="sendControlBusy"
-              @click="handlePauseSend"
-            >
-              Pause
-            </button>
-            <button
               v-if="campaignForSend && canStopSend(campaignForSend)"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl border border-red-200/90 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-950 shadow-sm transition-colors hover:bg-red-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
@@ -573,11 +594,20 @@ const recipientListTruncated = computed(() => {
             <button
               v-if="campaignForSend && canResumeSend(campaignForSend)"
               type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy || !!sendingCampaignKey"
+              @click="openResumeConfirm"
+            >
+              Resume
+            </button>
+            <button
+              v-if="campaignForSend && canRestartSend(campaignForSend)"
+              type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="sendControlBusy || !!sendingCampaignKey"
-              @click="handleResumeSend"
+              @click="openRestartConfirm"
             >
-              Resume send
+              Send again
             </button>
             <button
               v-if="isScheduledCampaign"
@@ -809,6 +839,29 @@ const recipientListTruncated = computed(() => {
       :send-error="sendError"
       :send-progress="detailSendProgress ?? sendProgress"
       @close="dismissSendModal"
+      @send-control="onSendModalControl"
+    />
+
+    <ClientConfirmationModal
+      :open="resumeConfirmOpen"
+      title="Resume send?"
+      message="Continue sending only to remaining pending recipients. People who already received this campaign will not be emailed again."
+      confirm-text="Resume"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmResumeSend"
+      @cancel="resumeConfirmOpen = false"
+    />
+
+    <ClientConfirmationModal
+      :open="restartConfirmOpen"
+      title="Send again?"
+      message="Start over and send this campaign again to everyone, including recipients who already received it."
+      confirm-text="Send again"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmRestartSend"
+      @cancel="restartConfirmOpen = false"
     />
 
     <ClientSendSuccessModal

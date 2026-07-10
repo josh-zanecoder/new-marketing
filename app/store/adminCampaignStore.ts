@@ -413,6 +413,49 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
     }
   }
 
+  async function restartCampaignSend(c: AdminCampaign): Promise<{ poll: boolean }> {
+    const key = adminCampaignKey(c)
+    if (c.status !== 'Paused' && c.status !== 'Stopped') {
+      sendError.value = 'Only paused or stopped campaigns can be sent again.'
+      return { poll: false }
+    }
+    sendError.value = null
+    sendingCampaignKey.value = key
+    sendStatus.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        total: number
+        queued: number
+        sent: number
+        failed: number
+        pending: number
+      }>('/api/v1/tenant/send-campaign/restart', {
+        method: 'POST',
+        body: { campaignId: c.id },
+        timeout: 30000,
+        ...adminFetchInit(c.tenantDbName)
+      })
+      if (!res?.queued) {
+        sendError.value = 'No recipients to send again.'
+        return { poll: false }
+      }
+      sendStatus.value = {
+        campaignId: c.id,
+        campaignStatus: 'Sending',
+        pending: res.pending,
+        sent: res.sent,
+        failed: res.failed,
+        total: res.total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to send campaign again')
+      return { poll: false }
+    }
+  }
+
   async function deleteCampaign(c: AdminCampaign) {
     try {
       await $fetch(`/api/v1/tenant/campaigns/${c.id}`, {
@@ -587,6 +630,7 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
     stopAllCampaignSends,
     cancelAllActiveCampaignSends,
     resumeCampaignSend,
+    restartCampaignSend,
     deleteCampaign,
     duplicateCampaign,
     setSendStatus,

@@ -15,9 +15,9 @@ const {
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
-  canPauseSend,
   canStopSend,
   canResumeSend,
+  canRestartSend,
   sendProgress,
   buildCampaignSendProgress,
   startSendStatusPolling,
@@ -27,12 +27,14 @@ const {
   closeSendModal,
   dismissSendModal,
   openSendModal,
-  pauseSend,
   stopSend,
-  resumeSend
+  resumeSend,
+  restartSend
 } = useCampaignSendFlow()
 const id = route.params.id as string
 const sendControlBusy = ref(false)
+const resumeConfirmOpen = ref(false)
+const restartConfirmOpen = ref(false)
 
 const cachedDetail = campaignStore.getCampaignDetailCache(id)
 const detailAsync = useAsyncData(
@@ -129,18 +131,6 @@ async function handleSend() {
   startSendStatusPolling(c.id, onSendPollingComplete)
 }
 
-async function handlePauseSend() {
-  const c = campaignForSend.value
-  if (!c || !canPauseSend(c) || sendControlBusy.value) return
-  sendControlBusy.value = true
-  try {
-    const ok = await pauseSend(c)
-    if (ok) await refresh()
-  } finally {
-    sendControlBusy.value = false
-  }
-}
-
 async function handleStopSend() {
   const c = campaignForSend.value
   if (!c || !canStopSend(c) || sendControlBusy.value) return
@@ -153,12 +143,38 @@ async function handleStopSend() {
   }
 }
 
-async function handleResumeSend() {
+function openResumeConfirm() {
+  if (!campaignForSend.value || !canResumeSend(campaignForSend.value) || sendControlBusy.value) return
+  resumeConfirmOpen.value = true
+}
+
+function openRestartConfirm() {
+  if (!campaignForSend.value || !canRestartSend(campaignForSend.value) || sendControlBusy.value) return
+  restartConfirmOpen.value = true
+}
+
+async function confirmResumeSend() {
   const c = campaignForSend.value
   if (!c || !canResumeSend(c) || sendControlBusy.value) return
   sendControlBusy.value = true
   try {
     const { poll } = await resumeSend(c)
+    resumeConfirmOpen.value = false
+    if (!poll) return
+    startSendStatusPolling(c.id, onSendPollingComplete)
+    await refresh()
+  } finally {
+    sendControlBusy.value = false
+  }
+}
+
+async function confirmRestartSend() {
+  const c = campaignForSend.value
+  if (!c || !canRestartSend(c) || sendControlBusy.value) return
+  sendControlBusy.value = true
+  try {
+    const { poll } = await restartSend(c)
+    restartConfirmOpen.value = false
     if (!poll) return
     startSendStatusPolling(c.id, onSendPollingComplete)
     await refresh()
@@ -214,6 +230,19 @@ const detailSendProgressLabel = computed(() => {
 
 function openDetailSendReport() {
   openSendModal(id)
+}
+
+async function onSendModalControl(detail: {
+  action: 'pause' | 'stop' | 'resume' | 'restart'
+  poll?: boolean
+}) {
+  await refresh()
+  if ((detail.action === 'resume' || detail.action === 'restart') && detail.poll) {
+    startSendStatusPolling(id, onSendPollingComplete)
+  }
+  if (detail.action === 'stop' || detail.action === 'pause') {
+    void loadPausedProgress()
+  }
 }
 
 function tryResumeSendPolling() {
@@ -609,15 +638,6 @@ function setCampaignViewTab(tab: CampaignViewTab) {
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
-              v-if="campaignForSend && canPauseSend(campaignForSend)"
-              type="button"
-              class="inline-flex items-center gap-2 rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-950 shadow-sm transition-colors hover:bg-violet-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
-              :disabled="sendControlBusy"
-              @click="handlePauseSend"
-            >
-              Pause
-            </button>
-            <button
               v-if="campaignForSend && canStopSend(campaignForSend)"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl border border-red-200/90 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-950 shadow-sm transition-colors hover:bg-red-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
@@ -629,11 +649,20 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             <button
               v-if="campaignForSend && canResumeSend(campaignForSend)"
               type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="sendControlBusy || !!sendingCampaignId"
+              @click="openResumeConfirm"
+            >
+              Resume
+            </button>
+            <button
+              v-if="campaignForSend && canRestartSend(campaignForSend)"
+              type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="sendControlBusy || !!sendingCampaignId"
-              @click="handleResumeSend"
+              @click="openRestartConfirm"
             >
-              Resume send
+              Send again
             </button>
             <button
               v-if="campaignForSend && canSendScheduled(campaignForSend)"
@@ -825,7 +854,6 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                     <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
                     <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
                     <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
-                    <span class="text-slate-600">Aborted: {{ campaign.recipients.filter(r => r.status === 'aborted' || r.status === 'cancelled').length }}</span>
                   </div>
                 </div>
                 <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
@@ -850,11 +878,10 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                       :class="{
                         'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
                         'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
-                        'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed',
-                        'bg-slate-100 text-slate-700 ring-slate-200/70': r.status === 'aborted' || r.status === 'cancelled'
+                        'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed'
                       }"
                     >
-                      {{ r.status === 'cancelled' ? 'aborted' : r.status }}
+                      {{ r.status }}
                     </span>
                   </li>
                 </ul>
@@ -917,6 +944,29 @@ function setCampaignViewTab(tab: CampaignViewTab) {
       :send-error="sendError"
       :send-progress="detailSendProgress ?? sendProgress"
       @close="dismissSendModal"
+      @send-control="onSendModalControl"
+    />
+
+    <ClientConfirmationModal
+      :open="resumeConfirmOpen"
+      title="Resume send?"
+      message="Continue sending only to remaining pending recipients. People who already received this campaign will not be emailed again."
+      confirm-text="Resume"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmResumeSend"
+      @cancel="resumeConfirmOpen = false"
+    />
+
+    <ClientConfirmationModal
+      :open="restartConfirmOpen"
+      title="Send again?"
+      message="Start over and send this campaign again to everyone, including recipients who already received it."
+      confirm-text="Send again"
+      variant="primary"
+      :confirm-loading="sendControlBusy"
+      @confirm="confirmRestartSend"
+      @cancel="restartConfirmOpen = false"
     />
 
     <ClientSendSuccessModal

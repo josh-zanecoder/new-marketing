@@ -4,6 +4,7 @@ const ADMIN_PROXY_ALLOWED_SEND_POST = new Set([
   `${SEND_CAMPAIGN_PREFIX}/pause`,
   `${SEND_CAMPAIGN_PREFIX}/stop`,
   `${SEND_CAMPAIGN_PREFIX}/resume`,
+  `${SEND_CAMPAIGN_PREFIX}/restart`,
   `${SEND_CAMPAIGN_PREFIX}/stop-all`
 ])
 

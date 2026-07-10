@@ -413,6 +413,23 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     }))
   }
 
+  async function restartCampaignSend(campaignId: string) {
+    return $fetch<{
+      ok: boolean
+      total: number
+      queued: number
+      sent: number
+      failed: number
+      pending: number
+      sendRunId: string
+      resumed?: boolean
+    }>('/api/v1/tenant/send-campaign/restart', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId },
+      timeout: 30000
+    }))
+  }
+
   async function abortCampaignRecipients(campaignId: string, emails: string[]) {
     return $fetch<{
       ok: boolean
@@ -474,6 +491,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     stopCampaignSend,
     stopAllCampaignSends,
     resumeCampaignSend,
+    restartCampaignSend,
     abortCampaignRecipients,
     sendTestEmail
   }
