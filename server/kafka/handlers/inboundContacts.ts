@@ -1,4 +1,4 @@
-import type { Types } from 'mongoose'
+import type { Connection, Types } from 'mongoose'
 import {
   namesFromContactPayload,
   type ContactDeletedEventEnvelope,
@@ -7,7 +7,10 @@ import {
 } from '../schemas/events/contactEvents'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
-import { syncContactRecipientListMembership } from '@server/utils/recipient/syncContactRecipientListMembership'
+import {
+  rebuildAllNonStaticRecipientListsForTenant,
+  syncContactRecipientListMembership
+} from '@server/utils/recipient/syncContactRecipientListMembership'
 import {
   applyContactTypeFieldsToSetDoc,
   normalizeContactTypeInput
@@ -514,21 +517,22 @@ async function upsertContactSyncSlice(
     { ordered: false }
   )
 
-  const externalIds = rows.map((r) => r.externalId)
-
-  const docs = await models.Contact.find(
-    {
-      externalId: { $in: externalIds },
-      source: KAFKA_INBOUND_CONTACT_SOURCE
-    },
-    { _id: 1 }
-  ).lean()
-
-  await Promise.all(
-    docs.map((doc) =>
-      syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-    )
-  )
-
+  // List membership is deferred to end-of-sync (see finalizeInboundSyncRecipientLists).
   return rows.length
+}
+
+/** Rebuild dynamic/filter recipient lists once after the final sync chunk. */
+export async function finalizeInboundSyncRecipientLists(params: {
+  tenantId: string
+  dBname: string
+  heartbeat?: () => Promise<void>
+}): Promise<{ listCount: number; memberCount: number }> {
+  const tenantConn = await getTenantConnectionForInboundEvent(params.tenantId, {
+    eventType: 'marketing.sync.requested',
+    dBname: params.dBname
+  })
+  if (!tenantConn) return { listCount: 0, memberCount: 0 }
+  return rebuildAllNonStaticRecipientListsForTenant(tenantConn as Connection, {
+    heartbeat: params.heartbeat
+  })
 }
