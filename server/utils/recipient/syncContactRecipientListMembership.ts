@@ -2,11 +2,17 @@ import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactLean } from '@server/types/tenant/contact.model'
-import type { RecipientListCriterion } from '@server/types/tenant/recipientList.model'
+import type {
+  RecipientListCriterion,
+  RecipientListMembershipScope
+} from '@server/types/tenant/recipientList.model'
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
-import { buildContactFilterQuery } from '@server/utils/recipient/recipientListMembershipQuery'
+import {
+  buildContactFilterQuery,
+  rebuildRecipientListMembers
+} from '@server/utils/recipient/recipientListMembershipQuery'
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
 import {
   pickJoinsForQuery,
@@ -210,4 +216,71 @@ export function scheduleContactRecipientListMembershipSync(
       err
     })
   })
+}
+
+function membershipScopeFromListDoc(listDoc: RecipientListDoc): RecipientListMembershipScope {
+  const scopeRaw = (listDoc as { membershipScope?: unknown }).membershipScope
+  return scopeRaw === 'tenant' || scopeRaw === 'owner_emails' ? scopeRaw : 'owner_emails'
+}
+
+function membershipOwnerEmailsForRebuild(listDoc: RecipientListDoc): string[] {
+  const storedEmails = recipientListStoredMembershipEmails(
+    listDoc as { membershipOwnerEmails?: unknown }
+  )
+  if (storedEmails.length) return storedEmails
+  const listOE = recipientListOwnerEmailForContactScope(
+    listDoc as { metadata?: { ownerEmail?: unknown } | null }
+  )
+  return listOE ? [listOE] : []
+}
+
+async function rebuildOneNonStaticListFromDoc(
+  tenantConn: Connection,
+  listDoc: RecipientListDoc,
+  filterById: Map<string, FilterDoc>
+): Promise<number> {
+  const normalized = normalizeRecipientListDoc(listDoc)
+  const { audience, filters, filterMode } = normalized
+  const criterionGroups = criterionGroupsFromFilterRows(audience, listDoc.filterRows, filterById)
+  const joinsForRebuild = pickJoinsForQuery(
+    criterionGroups,
+    null,
+    listDoc as { criterionJoins?: unknown }
+  )
+  const membershipScope = membershipScopeFromListDoc(listDoc)
+  const membershipOwnerEmails = membershipOwnerEmailsForRebuild(listDoc)
+
+  return rebuildRecipientListMembers(
+    tenantConn,
+    listDoc._id,
+    audience,
+    filters,
+    filterMode,
+    criterionGroups,
+    null,
+    membershipScope,
+    membershipOwnerEmails,
+    joinsForRebuild
+  )
+}
+
+/**
+ * After a launch/login sync finishes, rebuild every non-static list once (query + batch insert)
+ * instead of per-contact membership during each sync chunk.
+ */
+export async function rebuildAllNonStaticRecipientListsForTenant(
+  tenantConn: Connection,
+  options?: { heartbeat?: () => Promise<void> }
+): Promise<{ listCount: number; memberCount: number }> {
+  const { RecipientList } = getTenantClientModels(tenantConn)
+  const lists = await RecipientList.find({ listType: { $nin: ['static'] } }).lean<RecipientListDoc[]>()
+  if (!lists.length) return { listCount: 0, memberCount: 0 }
+
+  const filterById = await loadRecipientFiltersById(tenantConn, lists)
+  let memberCount = 0
+  for (const listDoc of lists) {
+    await options?.heartbeat?.()
+    memberCount += await rebuildOneNonStaticListFromDoc(tenantConn, listDoc, filterById)
+  }
+  return { listCount: lists.length, memberCount }
 }

@@ -34,6 +34,7 @@ import {
 } from './schemas/events/emailTemplateEvents'
 import {
   createContactFromCreatedEvent,
+  finalizeInboundSyncRecipientLists,
   softDeleteContactFromDeletedEvent,
   updateContactFromUpdatedEvent,
   upsertContactsFromSyncSnapshot
@@ -251,6 +252,35 @@ async function handleMarketingSyncRequested(
       durationMs: Date.now() - startedAt
     })
     if (chunkCount > 0 && chunkIndex >= chunkCount) {
+      const rebuildStartedAt = Date.now()
+      let rebuild = { listCount: 0, memberCount: 0 }
+      try {
+        await ctx?.heartbeat()
+        rebuild = await finalizeInboundSyncRecipientLists({
+          tenantId: evt.tenantId,
+          dBname: evt.dBname,
+          heartbeat: async () => {
+            await ctx?.heartbeat()
+          }
+        })
+        await ctx?.heartbeat()
+      } catch (err) {
+        logger.warn('Kafka inbound recipient list rebuild after sync failed', {
+          tenantId: evt.tenantId,
+          dBname: evt.dBname,
+          syncId,
+          err: err instanceof Error ? err.message : String(err)
+        })
+      }
+      logger.info('Kafka inbound recipient list membership rebuild after sync', {
+        tenantId: evt.tenantId,
+        dBname: evt.dBname,
+        syncId,
+        syncType,
+        syncMode,
+        ...rebuild,
+        durationMs: Date.now() - rebuildStartedAt
+      })
       const completedLog = {
         tenantId: evt.tenantId,
         dBname: evt.dBname,
@@ -258,7 +288,9 @@ async function handleMarketingSyncRequested(
         syncType,
         syncMode,
         chunkCount,
-        syncedCount
+        syncedCount,
+        recipientListCount: rebuild.listCount,
+        recipientMemberCount: rebuild.memberCount
       }
       if (syncMode === 'delta') {
         logger.info('Kafka inbound marketing.sync.delta completed', completedLog)
