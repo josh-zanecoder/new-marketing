@@ -253,7 +253,7 @@ async function handleMarketingSyncRequested(
     })
     if (chunkCount > 0 && chunkIndex >= chunkCount) {
       const rebuildStartedAt = Date.now()
-      let rebuild = { listCount: 0, memberCount: 0 }
+      let rebuild = { listCount: 0, memberCount: 0, concurrency: 0 }
       try {
         await ctx?.heartbeat()
         rebuild = await finalizeInboundSyncRecipientLists({
