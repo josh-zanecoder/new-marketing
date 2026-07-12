@@ -27,6 +27,8 @@ const currentPage = ref(1)
 const previewOpen = ref(false)
 const previewTemplate = ref<EmailTemplateListRow | null>(null)
 
+const EMAIL_TEMPLATES_CACHE_KEY = 'tenant-email-templates-index'
+
 const subjectFilterSelectOptions = [
   { value: 'all', label: 'All templates' },
   { value: 'with-subject', label: 'With default subject' },
@@ -120,12 +122,25 @@ function closePreview() {
   previewTemplate.value = null
 }
 
-async function loadTemplates() {
+async function loadTemplates(options?: { force?: boolean }) {
+  if (!options?.force) {
+    const cached = readNuxtPayloadCache(EMAIL_TEMPLATES_CACHE_KEY, useNuxtApp()) as
+      | EmailTemplateListRow[]
+      | undefined
+    if (Array.isArray(cached)) {
+      templates.value = cached
+      pending.value = false
+      loadError.value = ''
+      return
+    }
+  }
+
   pending.value = true
   loadError.value = ''
   try {
     const res = await marketingApi.fetchEmailTemplates()
     templates.value = (res.templates ?? []) as EmailTemplateListRow[]
+    useNuxtApp().payload.data[EMAIL_TEMPLATES_CACHE_KEY] = templates.value
   } catch (e: unknown) {
     loadError.value =
       e && typeof e === 'object' && 'data' in e
@@ -164,7 +179,7 @@ onMounted(() => {
         <TenantRefreshIconButton
           aria-label="Refresh email templates"
           :pending="pending"
-          @click="() => loadTemplates()"
+          @click="() => loadTemplates({ force: true })"
         />
       </div>
     </header>

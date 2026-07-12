@@ -51,7 +51,8 @@ export function useMarketingMe() {
     },
     {
       server: true,
-      default: () => null
+      default: () => null,
+      getCachedData: (key, nuxtApp) => readNuxtPayloadCache(key, nuxtApp)
     }
   )
 }

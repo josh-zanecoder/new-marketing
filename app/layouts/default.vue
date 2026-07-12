@@ -2,8 +2,7 @@
 import { marketingSidebarNavItems } from '~/constants/marketingSidebarNav'
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
-const route = useRoute()
-const { data: me, pending, refresh } = useMarketingMe()
+const { data: me, pending } = useMarketingMe()
 
 const SIDEBAR_STORAGE_KEY = 'marketing-sidebar-compact'
 const MOBILE_SIDEBAR_MQ = '(max-width: 1023px)'
@@ -29,11 +28,6 @@ useHead({
 const sidebarTitle = computed(() =>
   me.value?.authType === 'apiKey' ? me.value.tenantName : 'Mortdash'
 )
-
-/** Cancel any in-flight `/me` request so we always hit the server again (not a deduped no-op). */
-function refreshMe() {
-  return refresh({ dedupe: 'cancel' })
-}
 
 function syncMobileViewport() {
   if (!import.meta.client) return
@@ -80,7 +74,6 @@ onMounted(() => {
     sidebarMediaQuery.addEventListener('change', syncMobileViewport)
     syncMobileDrawerSideEffects()
   }
-  void refreshMe()
 })
 
 onBeforeUnmount(() => {
@@ -107,13 +100,6 @@ function collapseSidebarIfMobileExpanded() {
   if (sidebarCompact.value) return
   if (window.matchMedia(MOBILE_SIDEBAR_MQ).matches) sidebarCompact.value = true
 }
-
-watch(
-  () => route.fullPath,
-  () => {
-    if (import.meta.client) void refreshMe()
-  }
-)
 
 const sidebarAccount = computed(() => {
   if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }

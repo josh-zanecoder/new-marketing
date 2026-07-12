@@ -5,17 +5,13 @@ export interface TenantCampaignListItem {
 
 const TENANT_CAMPAIGNS_LIST_KEY = 'tenant-campaigns-list'
 
-function readCachedPayload(key: string, nuxtApp: ReturnType<typeof useNuxtApp>) {
-  return nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]
-}
-
 export function useTenantCampaignsList(options?: { lazy?: boolean }) {
   const fetchResult = useFetch<{ campaigns: TenantCampaignListItem[] }>(
     '/api/v1/tenant/campaigns',
     {
       key: TENANT_CAMPAIGNS_LIST_KEY,
       lazy: options?.lazy ?? false,
-      getCachedData: (key, nuxtApp) => readCachedPayload(key, nuxtApp)
+      getCachedData: (key, nuxtApp) => readNuxtPayloadCache(key, nuxtApp)
     }
   )
 

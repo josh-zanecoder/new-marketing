@@ -520,10 +520,24 @@ function makeCampaignHref(listId: string): string {
   return `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId)}`
 }
 
+const RECIPIENT_LIST_CACHE_KEY = 'tenant-recipient-list-index'
+
 async function load(options?: { force?: boolean }) {
   const force = options?.force === true
   const hasFreshData = !!data.value && Date.now() - loadedAt.value < 15000
   if (!force && hasFreshData) return
+  if (!force && !data.value) {
+    const cached = readNuxtPayloadCache(RECIPIENT_LIST_CACHE_KEY, useNuxtApp()) as
+      | RecipientListIndexPayload
+      | undefined
+    if (cached?.lists) {
+      data.value = cached
+      loadedAt.value = Date.now()
+      pending.value = false
+      loadError.value = ''
+      return
+    }
+  }
   if (loadInFlight) return loadInFlight
 
   loadInFlight = (async () => {
@@ -541,6 +555,7 @@ async function load(options?: { force?: boolean }) {
         recipientFilters: res.recipientFilters ?? [],
         contactTypes: res.contactTypes ?? []
       }
+      useNuxtApp().payload.data[RECIPIENT_LIST_CACHE_KEY] = data.value
       loadedAt.value = Date.now()
     } catch (e: unknown) {
       loadError.value =

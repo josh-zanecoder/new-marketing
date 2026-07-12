@@ -24,7 +24,7 @@
         <TenantRefreshIconButton
           aria-label="Refresh contacts"
           :pending="pending"
-          @click="() => load()"
+          @click="() => load({ force: true })"
         />
       </div>
     </header>
@@ -1692,6 +1692,8 @@ function normalizeContactsPayload(res: TenantContactsListPayload): TenantContact
   }
 }
 
+const CONTACTS_CACHE_KEY = 'tenant-contacts-index'
+
 async function fetchContactsPayload(): Promise<TenantContactsListPayload> {
   return $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
     credentials: 'include',
@@ -1701,6 +1703,7 @@ async function fetchContactsPayload(): Promise<TenantContactsListPayload> {
 
 function applyContactsPayload(res: TenantContactsListPayload) {
   data.value = normalizeContactsPayload(res)
+  useNuxtApp().payload.data[CONTACTS_CACHE_KEY] = data.value
   if (
     !data.value.contacts.some((row) => !rowHasAnyContactType(row)) &&
     contactTypeFilter.value === KIND_FILTER_NONE
@@ -1717,7 +1720,19 @@ async function refreshContactsSilently() {
   }
 }
 
-async function load() {
+async function load(options?: { force?: boolean }) {
+  if (!options?.force) {
+    const cached = readNuxtPayloadCache(CONTACTS_CACHE_KEY, useNuxtApp()) as
+      | TenantContactsListPayload
+      | undefined
+    if (cached && Array.isArray(cached.contacts)) {
+      applyContactsPayload(cached)
+      pending.value = false
+      loadError.value = ''
+      return
+    }
+  }
+
   pending.value = true
   loadError.value = ''
   try {
