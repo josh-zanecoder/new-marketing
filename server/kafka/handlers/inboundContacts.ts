@@ -526,12 +526,12 @@ export async function finalizeInboundSyncRecipientLists(params: {
   tenantId: string
   dBname: string
   heartbeat?: () => Promise<void>
-}): Promise<{ listCount: number; memberCount: number }> {
+}): Promise<{ listCount: number; memberCount: number; concurrency: number }> {
   const tenantConn = await getTenantConnectionForInboundEvent(params.tenantId, {
     eventType: 'marketing.sync.requested',
     dBname: params.dBname
   })
-  if (!tenantConn) return { listCount: 0, memberCount: 0 }
+  if (!tenantConn) return { listCount: 0, memberCount: 0, concurrency: 0 }
   return rebuildAllNonStaticRecipientListsForTenant(tenantConn as Connection, {
     heartbeat: params.heartbeat
   })

@@ -264,23 +264,62 @@ async function rebuildOneNonStaticListFromDoc(
   )
 }
 
+const REBUILD_LIST_CONCURRENCY_DEFAULT = 4
+
+function resolveRebuildListConcurrency(): number {
+  const raw = Number(process.env.MARKETING_INBOUND_SYNC_LIST_REBUILD_CONCURRENCY)
+  if (Number.isFinite(raw) && raw >= 1 && raw <= 16) return Math.floor(raw)
+  return REBUILD_LIST_CONCURRENCY_DEFAULT
+}
+
+/** Run `worker` over `items` with at most `concurrency` in flight. */
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (!items.length) return []
+  const limit = Math.max(1, Math.min(concurrency, items.length))
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+
+  async function runWorker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const i = nextIndex++
+      results[i] = await worker(items[i]!)
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, () => runWorker()))
+  return results
+}
+
 /**
  * After a launch/login sync finishes, rebuild every non-static list once (query + batch insert)
  * instead of per-contact membership during each sync chunk.
+ * Lists rebuild in parallel (default 4; `MARKETING_INBOUND_SYNC_LIST_REBUILD_CONCURRENCY`).
  */
 export async function rebuildAllNonStaticRecipientListsForTenant(
   tenantConn: Connection,
   options?: { heartbeat?: () => Promise<void> }
-): Promise<{ listCount: number; memberCount: number }> {
+): Promise<{ listCount: number; memberCount: number; concurrency: number }> {
   const { RecipientList } = getTenantClientModels(tenantConn)
   const lists = await RecipientList.find({ listType: { $nin: ['static'] } }).lean<RecipientListDoc[]>()
-  if (!lists.length) return { listCount: 0, memberCount: 0 }
+  if (!lists.length) return { listCount: 0, memberCount: 0, concurrency: 0 }
 
   const filterById = await loadRecipientFiltersById(tenantConn, lists)
-  let memberCount = 0
-  for (const listDoc of lists) {
+  const concurrency = resolveRebuildListConcurrency()
+  await options?.heartbeat?.()
+
+  const counts = await mapPool(lists, concurrency, async (listDoc) => {
+    const count = await rebuildOneNonStaticListFromDoc(tenantConn, listDoc, filterById)
     await options?.heartbeat?.()
-    memberCount += await rebuildOneNonStaticListFromDoc(tenantConn, listDoc, filterById)
+    return count
+  })
+
+  return {
+    listCount: lists.length,
+    memberCount: counts.reduce((sum, n) => sum + n, 0),
+    concurrency
   }
-  return { listCount: lists.length, memberCount }
 }
