@@ -5,7 +5,7 @@ export type MarketingMeFirebaseUser = {
   role: 'admin' | 'tenant' | 'client'
   tenantId: string | null
   dbName: string | null
-  /** Registry `crmAppUrl` for tenant/client (not admin). */
+  /** Registry / handoff return URL for “Back” (may be a full Retail path). */
   crmAppUrl?: string
 }
 
@@ -15,7 +15,7 @@ export type MarketingMeApiKeyUser = {
   tenantName: string
   dbName: string
   tenantId?: string
-  /** Registry `crmAppUrl` — CRM base URL for “Back to CRM”. */
+  /** Handoff `crmAppUrl` — exact CRM/Retail URL for “Back” (includes path). */
   crmAppUrl?: string
   /** Forwarded operator id (`x-tenant-user-id` / legacy `x-crm-user-id`). */
   tenantUserId?: string
@@ -51,8 +51,7 @@ export function useMarketingMe() {
     },
     {
       server: true,
-      default: () => null,
-      getCachedData: (key, nuxtApp) => readNuxtPayloadCache(key, nuxtApp)
+      default: () => null
     }
   )
 }
