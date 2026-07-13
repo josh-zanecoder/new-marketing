@@ -2,7 +2,9 @@
 import { marketingSidebarNavItems } from '~/constants/marketingSidebarNav'
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
-const { data: me, pending } = useMarketingMe()
+const { data: me, pending, refresh } = useMarketingMe()
+
+const route = useRoute()
 
 const SIDEBAR_STORAGE_KEY = 'marketing-sidebar-compact'
 const MOBILE_SIDEBAR_MQ = '(max-width: 1023px)'
@@ -11,7 +13,7 @@ const MOBILE_SIDEBAR_MQ = '(max-width: 1023px)'
 const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
 const isMobileViewport = ref(false)
 
-/** `null` until client mount — hide handoff “Back” until we know we are not in an iframe (embedded Retail). */
+/** `null` until client mount — hide handoff “Back” until we know we are not in an iframe (Retail/CRM outer chrome). */
 const inIframe = ref<boolean | null>(null)
 
 let sidebarMediaQuery: MediaQueryList | null = null
@@ -28,6 +30,11 @@ useHead({
 const sidebarTitle = computed(() =>
   me.value?.authType === 'apiKey' ? me.value.tenantName : 'Mortdash'
 )
+
+/** Cancel any in-flight `/me` request so each tab sees fresh `crmAppUrl` (Retail return URL). */
+function refreshMe() {
+  return refresh({ dedupe: 'cancel' })
+}
 
 function syncMobileViewport() {
   if (!import.meta.client) return
@@ -74,6 +81,7 @@ onMounted(() => {
     sidebarMediaQuery.addEventListener('change', syncMobileViewport)
     syncMobileDrawerSideEffects()
   }
+  void refreshMe()
 })
 
 onBeforeUnmount(() => {
@@ -101,6 +109,13 @@ function collapseSidebarIfMobileExpanded() {
   if (window.matchMedia(MOBILE_SIDEBAR_MQ).matches) sidebarCompact.value = true
 }
 
+watch(
+  () => route.fullPath,
+  () => {
+    if (import.meta.client) void refreshMe()
+  }
+)
+
 const sidebarAccount = computed(() => {
   if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }
   const roleLabel =
@@ -112,7 +127,7 @@ const sidebarAccount = computed(() => {
   return { primary: me.value.email, secondary: roleLabel }
 })
 
-/** CRM handoff / tenant API-key browser session — use “Back” instead of Logout (hidden when iframed). */
+/** CRM / Retail handoff session — “Back” instead of Logout (hidden when iframed; host has outer Back). */
 const isApiKeyBrowserSession = computed(() => me.value?.authType === 'apiKey')
 
 const showHandoffBack = computed(

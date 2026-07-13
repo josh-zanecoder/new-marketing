@@ -35,6 +35,7 @@ export function mergeContactOwnerScopeFilter(
 /**
  * Same email scope as contacts: `contactOwnerScope` on tenant API key sessions, unless
  * `tenantWideContacts` is set (then no row filter).
+ * Scoped sessions with an empty owner list return no rows (do not leak tenant-wide).
  */
 export function mergeTenantOwnerEmailScopeFilter(
   base: Record<string, unknown>,
@@ -42,5 +43,9 @@ export function mergeTenantOwnerEmailScopeFilter(
 ): Record<string, unknown> {
   if (!isTenantApiKeyAuthContext(auth)) return base
   if (auth.tenantWideContacts === true) return base
-  return mergeContactOwnerScopeFilter(base, auth.contactOwnerScope)
+  const scope = auth.contactOwnerScope
+  if (!scope?.length) {
+    return { $and: [base, { _id: { $in: [] } }] }
+  }
+  return mergeContactOwnerScopeFilter(base, scope)
 }
