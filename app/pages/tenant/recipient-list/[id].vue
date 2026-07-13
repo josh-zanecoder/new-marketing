@@ -483,6 +483,7 @@ async function confirmDeleteDetail() {
       ...serverAuthHeaders()
     })
     deleteConfirmOpen.value = false
+    clearNuxtPayloadCache(TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY)
     await navigateTo('/tenant/recipient-list')
   } catch (e: unknown) {
     loadError.value =

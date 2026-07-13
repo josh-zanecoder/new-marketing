@@ -27,7 +27,7 @@ const currentPage = ref(1)
 const previewOpen = ref(false)
 const previewTemplate = ref<EmailTemplateListRow | null>(null)
 
-const EMAIL_TEMPLATES_CACHE_KEY = 'tenant-email-templates-index'
+const EMAIL_TEMPLATES_CACHE_KEY = TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY
 
 const subjectFilterSelectOptions = [
   { value: 'all', label: 'All templates' },

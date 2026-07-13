@@ -174,6 +174,7 @@ async function saveStandaloneAndExit() {
         saveToLibrary: true
       })
     }
+    clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     await navigateTo('/tenant/email-templates')
   } catch {
     standaloneSaveError.value = 'Failed to save template. Please try again.'

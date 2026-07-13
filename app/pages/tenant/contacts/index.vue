@@ -1692,7 +1692,7 @@ function normalizeContactsPayload(res: TenantContactsListPayload): TenantContact
   }
 }
 
-const CONTACTS_CACHE_KEY = 'tenant-contacts-index'
+const CONTACTS_CACHE_KEY = TENANT_CONTACTS_INDEX_CACHE_KEY
 
 async function fetchContactsPayload(): Promise<TenantContactsListPayload> {
   return $fetch<TenantContactsListPayload>('/api/v1/tenant/contacts', {
