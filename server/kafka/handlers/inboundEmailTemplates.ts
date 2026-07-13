@@ -9,6 +9,39 @@ import {
 } from '../schemas/events/emailTemplateEvents'
 import { logger } from '../../utils/logger'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
+import {
+  isEmailTemplateHtmlStorageRef,
+  resolveStoredEmailTemplateHtml
+} from '../../utils/emailTemplate/resolveStoredEmailTemplateHtml'
+
+async function resolveHtmlForPersist(htmlTemplate: string, meta: Record<string, unknown>) {
+  if (!isEmailTemplateHtmlStorageRef(htmlTemplate)) return htmlTemplate
+  try {
+    const resolved = await resolveStoredEmailTemplateHtml(htmlTemplate, {
+      throwOnFetchError: true
+    })
+    if (resolved !== htmlTemplate) {
+      logger.info('Resolved CRM email template HTML storage ref', {
+        ...meta,
+        refHost: (() => {
+          try {
+            return new URL(htmlTemplate).host
+          } catch {
+            return null
+          }
+        })(),
+        resolvedChars: resolved.length
+      })
+    }
+    return resolved
+  } catch (err) {
+    logger.warn('Failed to resolve CRM email template HTML storage ref; storing ref as-is', {
+      ...meta,
+      err: err instanceof Error ? err.message : String(err)
+    })
+    return htmlTemplate
+  }
+}
 
 export async function saveMarketingEmailTemplateFromCreatedEvent(
   event: EmailTemplateUpsertEventEnvelope
@@ -28,6 +61,13 @@ export async function saveMarketingEmailTemplateFromCreatedEvent(
     return
   }
 
+  const resolvedHtml = await resolveHtmlForPersist(htmlTemplate, {
+    tenantId,
+    dBname,
+    externalId,
+    eventType: EMAIL_TEMPLATE_EVENT_TYPES.CREATED
+  })
+
   await models.EmailTemplate.updateOne(
     { externalId },
     {
@@ -36,7 +76,7 @@ export async function saveMarketingEmailTemplateFromCreatedEvent(
         name,
         description,
         subject,
-        htmlTemplate
+        htmlTemplate: resolvedHtml
       }
     },
     { upsert: true }
@@ -61,6 +101,13 @@ export async function saveMarketingEmailTemplateFromUpdatedEvent(
     return
   }
 
+  const resolvedHtml = await resolveHtmlForPersist(htmlTemplate, {
+    tenantId,
+    dBname,
+    externalId,
+    eventType: EMAIL_TEMPLATE_EVENT_TYPES.UPDATED
+  })
+
   await models.EmailTemplate.updateOne(
     { externalId },
     {
@@ -69,7 +116,7 @@ export async function saveMarketingEmailTemplateFromUpdatedEvent(
         name,
         description,
         subject,
-        htmlTemplate
+        htmlTemplate: resolvedHtml
       }
     },
     { upsert: true }

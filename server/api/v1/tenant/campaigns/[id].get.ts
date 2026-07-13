@@ -8,6 +8,7 @@ import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/te
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { materializeEmailTemplateHtmlIfNeeded } from '@server/utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
@@ -92,7 +93,12 @@ export default defineEventHandler(async (event) => {
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (linkedTemplate) {
-      const rawHtml = linkedTemplate.htmlTemplate ?? linkedTemplate.html ?? ''
+      const model = EmailTemplate as EmailTemplateModel
+      const rawHtml = await materializeEmailTemplateHtmlIfNeeded({
+        EmailTemplate: model,
+        id: String(linkedTemplate._id),
+        htmlTemplate: linkedTemplate.htmlTemplate ?? linkedTemplate.html ?? ''
+      })
       emailTemplate = { name: linkedTemplate.name, html: rawHtml }
       templateHtmlSource =
         linkedTemplate.htmlSource === 'upload' ? 'upload' : 'editor'

@@ -4,6 +4,7 @@ import { getTenantClientModels } from '../models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model'
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
+import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
@@ -57,7 +58,11 @@ async function resolveCampaignTemplateHtml(
   if (!campaign.emailTemplate) return ''
   const template = await EmailTemplate.findById(campaign.emailTemplate).lean<EmailTemplateDoc | null>()
   if (!template) return ''
-  const rawHtml = template.htmlTemplate ?? template.html ?? ''
+  const rawHtml = await materializeEmailTemplateHtmlIfNeeded({
+    EmailTemplate,
+    id: String(template._id),
+    htmlTemplate: template.htmlTemplate ?? template.html ?? ''
+  })
   if (!rawHtml.trim()) return ''
   return template.css?.trim() ? `<style>${template.css}</style>${rawHtml}` : rawHtml
 }

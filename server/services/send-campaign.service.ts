@@ -13,6 +13,7 @@ import type {
 } from '../types/tenant/campaignRecipient.model'
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
+import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { enqueueCampaignBatch, hasActiveCampaignSendJob } from '../queue/emailQueue'
 import {
@@ -578,11 +579,15 @@ export async function processBatch(
       .findById(campaign.emailTemplate)
       .lean<EmailTemplateDoc | null>()
     if (template) {
-      const rawHtml = template.htmlTemplate ?? template.html ?? null
+      const rawHtml = await materializeEmailTemplateHtmlIfNeeded({
+        EmailTemplate: EmailTemplate as EmailTemplateModel,
+        id: String(template._id),
+        htmlTemplate: template.htmlTemplate ?? template.html ?? ''
+      })
       templateHtml =
         rawHtml && template.css?.trim()
           ? `<style>${template.css}</style>${rawHtml}`
-          : rawHtml
+          : rawHtml || null
     }
   }
 
