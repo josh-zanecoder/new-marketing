@@ -3,7 +3,7 @@ export interface TenantCampaignListItem {
   name: string
 }
 
-const TENANT_CAMPAIGNS_LIST_KEY = 'tenant-campaigns-list'
+const TENANT_CAMPAIGNS_LIST_KEY = TENANT_CAMPAIGNS_LIST_CACHE_KEY
 
 export function useTenantCampaignsList(options?: { lazy?: boolean }) {
   const fetchResult = useFetch<{ campaigns: TenantCampaignListItem[] }>(

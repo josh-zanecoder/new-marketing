@@ -471,6 +471,7 @@ async function confirmDeleteList() {
       ...serverAuthHeaders()
     })
     listToDelete.value = null
+    clearNuxtPayloadCache(RECIPIENT_LIST_CACHE_KEY)
     await load({ force: true })
   } catch (e: unknown) {
     loadError.value =
@@ -520,7 +521,7 @@ function makeCampaignHref(listId: string): string {
   return `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId)}`
 }
 
-const RECIPIENT_LIST_CACHE_KEY = 'tenant-recipient-list-index'
+const RECIPIENT_LIST_CACHE_KEY = TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY
 
 async function load(options?: { force?: boolean }) {
   const force = options?.force === true
@@ -530,7 +531,7 @@ async function load(options?: { force?: boolean }) {
     const cached = readNuxtPayloadCache(RECIPIENT_LIST_CACHE_KEY, useNuxtApp()) as
       | RecipientListIndexPayload
       | undefined
-    if (cached?.lists) {
+    if (cached && Array.isArray(cached.lists)) {
       data.value = cached
       loadedAt.value = Date.now()
       pending.value = false

@@ -494,12 +494,18 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     if (!canSubmitForm.value) return
     saving.value = true
     try {
-      await $fetch('/api/v1/tenant/recipient-list', {
+      const created = await $fetch<{ list?: { id?: string } }>('/api/v1/tenant/recipient-list', {
         method: 'POST',
         credentials: 'include',
         ...serverAuthHeaders(),
         body: buildSaveBody()
       })
+      clearNuxtPayloadCache(TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY)
+      const newId = typeof created?.list?.id === 'string' ? created.list.id.trim() : ''
+      if (newId) {
+        await navigateTo(`/tenant/recipient-list/${encodeURIComponent(newId)}`)
+        return
+      }
       await navigateTo('/tenant/recipient-list')
     } catch (e: unknown) {
       saveError.value = fetchErrorMessage(e, 'Save failed')
@@ -554,6 +560,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
         ...serverAuthHeaders(),
         body: buildSaveBody()
       })
+      clearNuxtPayloadCache(TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY)
       await navigateTo(`/tenant/recipient-list/${encodeURIComponent(listId)}`)
     } catch (e: unknown) {
       saveError.value = fetchErrorMessage(e, 'Save failed')

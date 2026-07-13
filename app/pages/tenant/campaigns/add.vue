@@ -910,7 +910,8 @@ function onSendSuccessModalClose() {
   pendingPostSendNavigationId.value = null
   if (target) {
     campaignStore.removeCampaignDetailCache(target)
-    void campaignStore.fetchCampaigns()
+    clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
+    void campaignStore.fetchCampaigns({ force: true })
     void navigateTo(`/tenant/campaigns/${target}`)
   }
 }
@@ -1678,7 +1679,8 @@ async function confirmScheduleFromWizard() {
       })
       const cached = campaignStore.getCampaignDetailCache(id)
       if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
-      void campaignStore.fetchCampaigns()
+      clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
+      void campaignStore.fetchCampaigns({ force: true })
       await navigateTo(`/tenant/campaigns/${id}`)
     } catch (e: unknown) {
       const msg =
@@ -1732,7 +1734,8 @@ async function handleSendFromWizard() {
         }
         pendingPostSendNavigationId.value = null
         primeCampaignCacheAfterSave(id)
-        void campaignStore.fetchCampaigns()
+        clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
+        void campaignStore.fetchCampaigns({ force: true })
         await navigateTo(`/tenant/campaigns/${id}`)
         return
       }
@@ -1785,7 +1788,8 @@ async function handleCreate() {
       const savedId = await persistSavedCampaign()
       clearCampaignSessionStorage()
       primeCampaignCacheAfterSave(savedId)
-      void campaignStore.fetchCampaigns()
+      clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
+      void campaignStore.fetchCampaigns({ force: true })
       await navigateTo(`/tenant/campaigns/${savedId}`)
     } catch (e: unknown) {
       setSaveErrorFromCatch(e)

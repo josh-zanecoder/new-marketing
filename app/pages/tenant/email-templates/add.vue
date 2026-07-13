@@ -243,6 +243,7 @@ async function saveTemplate() {
         saveToLibrary: true
       })
     }
+    clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     await navigateTo('/tenant/email-templates')
   } catch {
     formError.value = 'Failed to save template. Please try again.'
