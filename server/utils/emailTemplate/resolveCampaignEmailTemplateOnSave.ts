@@ -1,13 +1,14 @@
+import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
-import type { Connection } from 'mongoose'
+import { resolveCampaignTemplateHtmlSource } from '~~/shared/campaignTemplateSource'
 
 export type CampaignTemplateSaveInput = {
   campaignName: string
   subject?: string
   emailTemplateId?: string
   templateHtml?: string
-  templateHtmlSource?: 'editor' | 'upload'
+  templateHtmlSource?: 'editor' | 'upload' | 'custom'
   saveHtmlToLibrary?: boolean
   /** Existing linked template on campaign update. */
   currentEmailTemplateId?: string | mongoose.Types.ObjectId | null
@@ -22,7 +23,7 @@ export type CampaignTemplateSaveResult = {
  * When `emailTemplateId` is provided (and no `templateHtml`), reuses that template — no duplicate row.
  */
 export async function resolveCampaignEmailTemplateOnSave(
-  tenantConn: Connection,
+  _tenantConn: Connection,
   EmailTemplate: EmailTemplateModel,
   input: CampaignTemplateSaveInput
 ): Promise<CampaignTemplateSaveResult> {
@@ -30,8 +31,9 @@ export async function resolveCampaignEmailTemplateOnSave(
   const linkId = String(input.emailTemplateId ?? '').trim()
 
   if (html) {
-    const htmlSource = input.templateHtmlSource === 'upload' ? 'upload' : 'editor'
-    const saveToLibrary = input.saveHtmlToLibrary === true
+    const htmlSource = resolveCampaignTemplateHtmlSource(input.templateHtmlSource)
+    const saveToLibrary =
+      htmlSource === 'custom' ? false : input.saveHtmlToLibrary === true
     const currentId = input.currentEmailTemplateId
       ? String(input.currentEmailTemplateId)
       : ''

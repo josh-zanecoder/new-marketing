@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
 
   let emailTemplate: { html: string; name: string } | null = null
   let templateHtml: string | null = null
-  let templateHtmlSource: 'editor' | 'upload' = 'editor'
+  let templateHtmlSource: 'editor' | 'upload' | 'custom' = 'editor'
   let linkedTemplate: EmailTemplateDoc | null = null
   if (campaign.emailTemplate) {
     linkedTemplate = await (EmailTemplate as EmailTemplateModel)
@@ -101,7 +101,11 @@ export default defineEventHandler(async (event) => {
       })
       emailTemplate = { name: linkedTemplate.name, html: rawHtml }
       templateHtmlSource =
-        linkedTemplate.htmlSource === 'upload' ? 'upload' : 'editor'
+        linkedTemplate.htmlSource === 'upload'
+          ? 'upload'
+          : linkedTemplate.htmlSource === 'custom'
+            ? 'custom'
+            : 'editor'
       templateHtml = linkedTemplate.css ? `<style>${linkedTemplate.css}</style>${rawHtml}` : rawHtml
     }
   }

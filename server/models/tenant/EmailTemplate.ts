@@ -5,8 +5,8 @@ export const emailTemplateSchema = new mongoose.Schema({
   description: { type: String, default: '', trim: true },
   subject: { type: String, required: true, trim: true },
   htmlTemplate: { type: String, required: true },
-  /** `upload` = raw import; `editor` = GrapesJS or library via editor path */
-  htmlSource: { type: String, enum: ['editor', 'upload'], default: 'editor' },
+  /** `upload` = raw import; `editor` = GrapesJS; `custom` = plain personal-style compose */
+  htmlSource: { type: String, enum: ['editor', 'upload', 'custom'], default: 'editor' },
   /** When false, template is campaign-only and hidden from the design modal library list. */
   saveToLibrary: { type: Boolean, default: true },
   externalId: { type: String, default: '', trim: true }

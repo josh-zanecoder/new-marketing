@@ -1,7 +1,8 @@
 import { campaignTemplateHtmlSourceFromMode } from './campaignTemplateSource'
+import type { CampaignTemplateMode } from './campaignTemplateSource'
 
 export type CampaignTemplatePersistInput = {
-  templateMode: 'scratch' | 'existing' | 'upload'
+  templateMode: CampaignTemplateMode
   selectedTemplateId: string
   templateDesignModified: boolean
   linkedEmailTemplateId?: string
@@ -13,7 +14,7 @@ export type CampaignTemplatePersistFields =
   | { emailTemplateId: string }
   | {
       templateHtml: string
-      templateHtmlSource: 'editor' | 'upload'
+      templateHtmlSource: 'editor' | 'upload' | 'custom'
       saveHtmlToLibrary: boolean
     }
 
@@ -35,6 +36,6 @@ export function buildCampaignTemplatePersistFields(
   return {
     templateHtml: input.savedTemplateHtml ?? '',
     templateHtmlSource: campaignTemplateHtmlSourceFromMode(input.templateMode),
-    saveHtmlToLibrary: input.saveHtmlToLibrary
+    saveHtmlToLibrary: input.templateMode === 'custom' ? false : input.saveHtmlToLibrary
   }
 }

@@ -32,8 +32,8 @@ export interface TenantCampaignDetail {
   emailTemplate?: { name: string; html: string }
   emailTemplateId?: string
   templateHtml?: string | null
-  /** `upload` = raw HTML file; `editor` = GrapesJS */
-  templateHtmlSource?: 'editor' | 'upload'
+  /** `upload` = raw HTML file; `editor` = GrapesJS; `custom` = plain personal compose */
+  templateHtmlSource?: 'editor' | 'upload' | 'custom'
   /** Whether the linked template is visible in Email templates / design library. */
   saveHtmlToLibrary?: boolean
   mergeUserSnapshot?: Record<string, unknown>

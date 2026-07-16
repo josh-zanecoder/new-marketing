@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     /** Link an existing library template without creating a duplicate. */
     emailTemplateId?: string
     templateHtml?: string
-    templateHtmlSource?: 'editor' | 'upload'
+    templateHtmlSource?: 'editor' | 'upload' | 'custom'
     /** When true, the design also appears in Saved templates. Defaults to false when omitted. */
     saveHtmlToLibrary?: boolean
   }>(event)

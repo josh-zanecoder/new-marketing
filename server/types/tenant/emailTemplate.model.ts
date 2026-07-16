@@ -6,7 +6,7 @@ export interface EmailTemplateDoc {
   subject?: string
   /** Current schema field */
   htmlTemplate?: string
-  htmlSource?: 'editor' | 'upload'
+  htmlSource?: 'editor' | 'upload' | 'custom'
   /** Listed under Saved templates in the design modal when true (default). */
   saveToLibrary?: boolean
   /** Legacy field */
