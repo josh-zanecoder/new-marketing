@@ -18,6 +18,10 @@ const {
   recipientLists,
   recipientListsPending,
   recipientListsError,
+  firstRecipientLabel,
+  listMemberTotal,
+  firstRecipientPending,
+  firstRecipientError,
   saveError,
   isSending,
   canSend,
@@ -84,6 +88,20 @@ onMounted(() => {
           <NuxtLink to="/tenant/recipient-list/add" class="font-semibold text-indigo-600 underline hover:text-indigo-700">
             Create one
           </NuxtLink>
+        </p>
+        <p v-else-if="recipientsListId && firstRecipientPending" class="mt-2 text-sm text-slate-500">
+          Loading first recipient…
+        </p>
+        <p v-else-if="firstRecipientError" class="mt-2 text-sm text-red-600">{{ firstRecipientError }}</p>
+        <p v-else-if="recipientsListId && firstRecipientLabel" class="mt-2 text-sm text-slate-700">
+          First recipient:
+          <span class="font-medium">{{ firstRecipientLabel }}</span>
+          <span v-if="listMemberTotal > 1" class="text-slate-500">
+            · {{ listMemberTotal }} contacts in this list
+          </span>
+        </p>
+        <p v-else-if="recipientsListId && !firstRecipientPending" class="mt-2 text-sm text-slate-500">
+          This list has no contacts yet.
         </p>
       </div>
 
