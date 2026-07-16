@@ -62,3 +62,28 @@ export function customMarketingHtmlToPlainText(html: string): string {
 export function isCustomMarketingBodyReady(plainBody: string): boolean {
   return String(plainBody ?? '').trim().length > 0
 }
+
+export type CustomMarketingContentSource = 'write' | 'upload'
+
+/** HTML that will be sent for Custom Marketing (plain compose or uploaded template). */
+export function resolveCustomMarketingSendHtml(input: {
+  contentSource: CustomMarketingContentSource
+  plainBody: string
+  uploadedHtml: string
+}): string {
+  if (input.contentSource === 'upload') {
+    return String(input.uploadedHtml ?? '').trim()
+  }
+  return plainTextToCustomMarketingHtml(input.plainBody)
+}
+
+export function isCustomMarketingContentReady(input: {
+  contentSource: CustomMarketingContentSource
+  plainBody: string
+  uploadedHtml: string
+}): boolean {
+  if (input.contentSource === 'upload') {
+    return String(input.uploadedHtml ?? '').trim().length > 0
+  }
+  return isCustomMarketingBodyReady(input.plainBody)
+}
