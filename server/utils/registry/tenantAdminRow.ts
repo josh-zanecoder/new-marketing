@@ -40,6 +40,36 @@ export function normalizeCampaignSenderNameInput(
   return trimmed || null
 }
 
+/** Mask a Brevo API key for admin display (never return the full secret). */
+export function maskBrevoApiKeyPrefix(raw: string): string | null {
+  const key = raw.trim()
+  if (!key) return null
+  if (key.length < 8) return '••••'
+  return `${key.slice(0, 4)}…${key.slice(-4)}`
+}
+
+/** Normalize admin input: empty → null (use env). */
+export function normalizeBrevoApiKeyInput(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null
+  const trimmed = String(raw).trim()
+  return trimmed || null
+}
+
+export function parseRegistryBrevoApiKey(doc: RegistryTenantDoc): {
+  brevoApiKey: string | null
+  brevoApiKeyConfigured: boolean
+  brevoApiKeyPrefix: string | null
+} {
+  const raw = doc.brevoApiKey
+  const brevoApiKey =
+    typeof raw === 'string' && raw.trim() ? raw.trim() : null
+  return {
+    brevoApiKey,
+    brevoApiKeyConfigured: Boolean(brevoApiKey),
+    brevoApiKeyPrefix: brevoApiKey ? maskBrevoApiKeyPrefix(brevoApiKey) : null
+  }
+}
+
 export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
   const name = typeof doc.name === 'string' ? doc.name : ''
   const email = typeof doc.email === 'string' ? doc.email : null
@@ -71,6 +101,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
 
   const { defaultCampaignSenderEmail, defaultCampaignSenderName } =
     parseRegistryCampaignSenderFields(doc)
+  const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
 
   if (!name || !dbName || !createdAt) return null
   return {
@@ -83,6 +114,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     crmAppUrl,
     kafkaOutboundTopic,
     defaultCampaignSenderEmail,
-    defaultCampaignSenderName
+    defaultCampaignSenderName,
+    brevoApiKeyConfigured,
+    brevoApiKeyPrefix
   }
 }

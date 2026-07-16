@@ -109,6 +109,23 @@
             >
           </div>
 
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-brevo-key" class="compact-modal-label">
+              Brevo API key <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              Leave blank to use env <span class="font-mono">BREVO_API_KEY</span>.
+            </p>
+            <input
+              id="add-tenant-brevo-key"
+              v-model="brevoApiKey"
+              type="password"
+              autocomplete="off"
+              placeholder="xkeysib-…"
+              class="compact-modal-input compact-modal-input--mono"
+            >
+          </div>
+
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
           </div>
@@ -166,6 +183,7 @@ const emit = defineEmits<{
     crmAppUrl?: string
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    brevoApiKey?: string | null
   }]
 }>()
 
@@ -174,6 +192,7 @@ const email = ref('')
 const defaultCampaignSenderName = ref('')
 const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
+const brevoApiKey = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -185,6 +204,7 @@ function resetForm() {
   defaultCampaignSenderName.value = ''
   defaultCampaignSenderEmail.value = ''
   crmAppUrl.value = ''
+  brevoApiKey.value = ''
   errorMessage.value = null
   stopSubmitting()
 }
@@ -249,7 +269,8 @@ function handleSubmit() {
     defaultCampaignSenderEmail: trimmedSenderEmail
       ? trimmedSenderEmail.toLowerCase()
       : null,
-    ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {})
+    ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {}),
+    ...(brevoApiKey.value.trim() ? { brevoApiKey: brevoApiKey.value.trim() } : {})
   })
 }
 </script>

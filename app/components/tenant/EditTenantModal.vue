@@ -124,6 +124,41 @@
             >
           </div>
 
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-brevo-key" class="compact-modal-label">
+              Brevo API key <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              <template v-if="props.tenant?.brevoApiKeyConfigured">
+                Custom key set
+                <span v-if="props.tenant.brevoApiKeyPrefix" class="font-mono">
+                  ({{ props.tenant.brevoApiKeyPrefix }})
+                </span>
+                — leave blank to keep, or clear to use env
+                <span class="font-mono">BREVO_API_KEY</span>.
+              </template>
+              <template v-else>
+                Using env <span class="font-mono">BREVO_API_KEY</span>. Paste a key to override for this tenant.
+              </template>
+            </p>
+            <input
+              id="edit-tenant-brevo-key"
+              v-model="brevoApiKey"
+              type="password"
+              autocomplete="off"
+              placeholder="xkeysib-…"
+              class="compact-modal-input compact-modal-input--mono"
+              :disabled="clearBrevoApiKey"
+            >
+            <label
+              v-if="props.tenant?.brevoApiKeyConfigured"
+              class="mt-2 flex items-center gap-2 text-xs text-slate-600"
+            >
+              <input v-model="clearBrevoApiKey" type="checkbox" class="rounded border-slate-300">
+              Clear custom key (use env default)
+            </label>
+          </div>
+
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
           </div>
@@ -184,6 +219,8 @@ const emit = defineEmits<{
     tenantId: string | null
     defaultCampaignSenderEmail: string | null
     defaultCampaignSenderName: string | null
+    /** Omit = keep; `null` = clear to env; string = set/replace. */
+    brevoApiKey?: string | null
   }]
 }>()
 
@@ -193,6 +230,8 @@ const tenantId = ref('')
 const defaultCampaignSenderName = ref('')
 const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
+const brevoApiKey = ref('')
+const clearBrevoApiKey = ref(false)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -205,6 +244,8 @@ function loadFromTenant(t: AdminTenantRow) {
   defaultCampaignSenderName.value = t.defaultCampaignSenderName ?? ''
   defaultCampaignSenderEmail.value = t.defaultCampaignSenderEmail ?? ''
   crmAppUrl.value = t.crmAppUrl ?? ''
+  brevoApiKey.value = ''
+  clearBrevoApiKey.value = false
 }
 
 function resetLocal() {
@@ -280,7 +321,15 @@ function handleSubmit() {
   }
 
   startSubmitting()
-  emit('submit', {
+  const payload: {
+    name: string
+    email: string | null
+    crmAppUrl: string | null
+    tenantId: string | null
+    defaultCampaignSenderName: string | null
+    defaultCampaignSenderEmail: string | null
+    brevoApiKey?: string | null
+  } = {
     name: trimmedName,
     email: trimmedEmail.toLowerCase(),
     crmAppUrl: trimmedCrm || null,
@@ -289,6 +338,14 @@ function handleSubmit() {
     defaultCampaignSenderEmail: trimmedSenderEmail
       ? trimmedSenderEmail.toLowerCase()
       : null
-  })
+  }
+
+  if (clearBrevoApiKey.value) {
+    payload.brevoApiKey = null
+  } else if (brevoApiKey.value.trim()) {
+    payload.brevoApiKey = brevoApiKey.value.trim()
+  }
+
+  emit('submit', payload)
 }
 </script>

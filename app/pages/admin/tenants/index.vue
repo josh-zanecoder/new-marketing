@@ -426,6 +426,8 @@ async function fetchTenants() {
         kafkaOutboundTopic: string | null
         defaultCampaignSenderEmail: string | null
         defaultCampaignSenderName: string | null
+        brevoApiKeyConfigured?: boolean
+        brevoApiKeyPrefix?: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -440,6 +442,8 @@ async function fetchTenants() {
       kafkaOutboundTopic: t.kafkaOutboundTopic ?? null,
       defaultCampaignSenderEmail: t.defaultCampaignSenderEmail ?? null,
       defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
+      brevoApiKeyConfigured: Boolean(t.brevoApiKeyConfigured),
+      brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
       status: 'Ready'
     }))
   } catch {
@@ -453,6 +457,7 @@ async function handleAddTenantSubmit(payload: {
   crmAppUrl?: string
   defaultCampaignSenderEmail?: string | null
   defaultCampaignSenderName?: string | null
+  brevoApiKey?: string | null
 }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
@@ -474,6 +479,7 @@ async function handleEditTenantSubmit(payload: {
   tenantId: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
+  brevoApiKey?: string | null
 }) {
   const row = editingTenant.value
   if (!row) return

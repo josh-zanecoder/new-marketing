@@ -31,15 +31,21 @@ function toBrevoRequestParams(params: BrevoEventReportDateParams): GetEmailEvent
 }
 
 export async function fetchCachedBrevoEventReport(
-  params: BrevoEventReportDateParams = {}
+  params: BrevoEventReportDateParams = {},
+  options?: { dbName?: string | null; apiKey?: string }
 ): Promise<{ report?: unknown; error?: string }> {
-  const key = buildCacheKey(params)
+  const dbSeg = options?.dbName?.trim() || ''
+  const keySeg = options?.apiKey?.trim() ? 'explicit' : 'resolved'
+  const key = `${dbSeg}|${keySeg}|${buildCacheKey(params)}`
   const cached = reportCache.get(key)
   if (cached && cached.expiresAt > Date.now()) {
     return { report: cached.report }
   }
 
-  const result = await getTransactionalEmailEventReport(toBrevoRequestParams(params))
+  const result = await getTransactionalEmailEventReport(toBrevoRequestParams(params), {
+    dbName: options?.dbName,
+    apiKey: options?.apiKey
+  })
   if (!result.error && result.report !== undefined) {
     reportCache.set(key, {
       report: result.report,

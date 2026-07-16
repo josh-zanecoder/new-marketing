@@ -4,18 +4,9 @@ import {
   buildCampaignBrevoBatchRequest,
   type CampaignBatchMessageVersion
 } from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
+import { resolveBrevoApiKey } from '../utils/brevo/resolveBrevoApiKey'
 
 export type { CampaignBatchMessageVersion }
-
-function getBrevoApiKey(): string {
-  try {
-    const config = useRuntimeConfig()
-    const key = config.brevoApiKey || process.env.BREVO_API_KEY || ''
-    return key
-  } catch {
-    return process.env.BREVO_API_KEY || ''
-  }
-}
 
 export interface SendEmailParams {
   sender: { name: string; email: string }
@@ -27,22 +18,35 @@ export interface SendEmailParams {
   tags?: string[]
   /** When set, a `tenant:{value}` tag is sent to Brevo (prefer marketing registry `tenantId`; else DB name). */
   tenantId?: string
-  /** When set, a `db:{dbName}` tag is sent to Brevo (MongoDB database name). */
+  /** When set, a `db:{dbName}` tag is sent to Brevo (MongoDB database name). Also used to resolve per-tenant API key. */
   dbName?: string
   /** When set, a `user:{user}` tag is sent to Brevo (e.g. CRM user email). */
   user?: string
+  /** Explicit Brevo API key override (skips tenant/env resolution). */
+  apiKey?: string
 }
 
-let brevoClient: BrevoClient | null = null
+const clientsByApiKey = new Map<string, BrevoClient>()
 
-function getBrevoClient(): BrevoClient | null {
-  const apiKey = getBrevoApiKey()
-  if (!apiKey) return null
-
-  if (!brevoClient) {
-    brevoClient = new BrevoClient({ apiKey })
+function getBrevoClientForApiKey(apiKey: string): BrevoClient | null {
+  const key = apiKey.trim()
+  if (!key) return null
+  let client = clientsByApiKey.get(key)
+  if (!client) {
+    client = new BrevoClient({ apiKey: key })
+    clientsByApiKey.set(key, client)
   }
-  return brevoClient
+  return client
+}
+
+async function resolveClient(options?: {
+  apiKey?: string
+  dbName?: string | null
+}): Promise<BrevoClient | null> {
+  const explicit = options?.apiKey?.trim()
+  if (explicit) return getBrevoClientForApiKey(explicit)
+  const resolved = await resolveBrevoApiKey(options?.dbName)
+  return getBrevoClientForApiKey(resolved)
 }
 
 function extractBrevoError(e: unknown): string {
@@ -79,10 +83,11 @@ export async function sendCampaignBatchWithMessageVersions(params: {
   tenantId?: string
   dbName?: string
   user?: string
+  apiKey?: string
   /** Brevo `Idempotency-Key` header — stable per logical batch retry. */
   idempotencyKey?: string
 }): Promise<{ messageIds: (string | null)[]; error?: string }> {
-  const client = getBrevoClient()
+  const client = await resolveClient({ apiKey: params.apiKey, dbName: params.dbName })
   if (!client) {
     console.error('[Brevo] API key is not configured')
     return { messageIds: [], error: 'Brevo API key is not configured' }
@@ -183,7 +188,7 @@ function alignBrevoMessageIdsToRecipients(
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: string; error?: string }> {
-  const client = getBrevoClient()
+  const client = await resolveClient({ apiKey: params.apiKey, dbName: params.dbName })
   if (!client) {
     console.error('[Brevo] API key is not configured')
     return { error: 'Brevo API key is not configured' }
@@ -231,9 +236,10 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
 }
 
 export async function getTransactionalEmailEventReport(
-  params: GetEmailEventReportRequest = {}
+  params: GetEmailEventReportRequest = {},
+  options?: { apiKey?: string; dbName?: string | null }
 ): Promise<{ report?: unknown; error?: string }> {
-  const client = getBrevoClient()
+  const client = await resolveClient(options)
   if (!client) {
     console.error('[Brevo] API key is not configured')
     return { error: 'Brevo API key is not configured' }

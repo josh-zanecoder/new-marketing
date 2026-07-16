@@ -1235,6 +1235,8 @@ interface TenantDetail {
   kafkaOutboundTopic: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
+  brevoApiKeyConfigured?: boolean
+  brevoApiKeyPrefix?: string | null
 }
 
 interface FilterRow {

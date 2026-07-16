@@ -8,6 +8,7 @@ import {
 } from '@server/kafka/kafkaProducer'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import {
+  normalizeBrevoApiKeyInput,
   normalizeCampaignSenderEmailInput,
   normalizeCampaignSenderNameInput,
   toTenantAdminRow
@@ -34,6 +35,12 @@ export default defineEventHandler(async (event) => {
     tenantId?: string | null
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    /**
+     * Optional. Omit to leave unchanged.
+     * `null` or `""` clears the custom key (use env `BREVO_API_KEY`).
+     * Non-empty string sets/replaces the tenant key.
+     */
+    brevoApiKey?: string | null
   }>(event)
 
   const displayName = body?.name?.trim()
@@ -132,7 +139,17 @@ export default defineEventHandler(async (event) => {
     kafkaOutboundTopic: computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
   }
 
-  await registryConn.collection('clients').updateOne({ dbName }, { $set })
+  const $unset: Record<string, ''> = {}
+  if (Object.prototype.hasOwnProperty.call(body ?? {}, 'brevoApiKey')) {
+    const nextKey = normalizeBrevoApiKeyInput(body?.brevoApiKey)
+    if (nextKey) $set.brevoApiKey = nextKey
+    else $unset.brevoApiKey = ''
+  }
+
+  const update: { $set: Record<string, unknown>; $unset?: Record<string, ''> } = { $set }
+  if (Object.keys($unset).length) update.$unset = $unset
+
+  await registryConn.collection('clients').updateOne({ dbName }, update)
 
   invalidateTenantTopicCacheForDbName(dbName)
 
