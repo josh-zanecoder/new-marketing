@@ -15,5 +15,9 @@ export interface AdminTenantRow {
   defaultCampaignSenderEmail: string | null
   /** Default campaign From name; null uses global fallback. */
   defaultCampaignSenderName: string | null
+  /** True when a custom Brevo API key is stored for this tenant. */
+  brevoApiKeyConfigured: boolean
+  /** Masked prefix of the custom Brevo key (never the full secret). */
+  brevoApiKeyPrefix: string | null
   status: string
 }

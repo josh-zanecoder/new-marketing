@@ -829,9 +829,8 @@ export async function processBatch(
         messageVersions: group.map((p) => p.version),
         tags: [`campaign:${campaignId}`],
         idempotencyKey,
-        ...(tenantDbNameForTags && brevoTenantTagValue
-          ? { tenantId: brevoTenantTagValue, dbName: tenantDbNameForTags }
-          : {}),
+        ...(tenantDbNameForTags ? { dbName: tenantDbNameForTags } : {}),
+        ...(brevoTenantTagValue ? { tenantId: brevoTenantTagValue } : {}),
         ...(userForTag ? { user: userForTag } : {})
       })
 

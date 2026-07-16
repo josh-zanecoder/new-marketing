@@ -21,7 +21,8 @@ export async function loadTenantBrevoTrackingEvents(
   const toYmd = options.toYmd ?? null
 
   const { report, error } = await fetchCachedBrevoEventReport(
-    fromYmd && toYmd ? { startDate: fromYmd, endDate: toYmd } : {}
+    fromYmd && toYmd ? { startDate: fromYmd, endDate: toYmd } : {},
+    { dbName }
   )
   if (error) {
     return { events: [], error }

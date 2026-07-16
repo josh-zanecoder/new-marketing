@@ -42,6 +42,7 @@ export function useAdminTenantsCreateDb() {
     crmAppUrl?: string
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    brevoApiKey?: string | null
   }): Promise<CreateTenantDbResult> {
     resetError()
 
@@ -60,7 +61,10 @@ export function useAdminTenantsCreateDb() {
             email: payload.email,
             crmAppUrl: payload.crmAppUrl?.trim() ? payload.crmAppUrl.trim() : null,
             defaultCampaignSenderEmail: payload.defaultCampaignSenderEmail ?? null,
-            defaultCampaignSenderName: payload.defaultCampaignSenderName ?? null
+            defaultCampaignSenderName: payload.defaultCampaignSenderName ?? null,
+            ...(payload.brevoApiKey?.trim()
+              ? { brevoApiKey: payload.brevoApiKey.trim() }
+              : {})
           }
         }
       )
@@ -107,6 +111,7 @@ export function useAdminTenantsCreateDb() {
       tenantId: string | null
       defaultCampaignSenderEmail: string | null
       defaultCampaignSenderName: string | null
+      brevoApiKey?: string | null
     }
   ): Promise<{ ok: boolean }> {
     resetError()

@@ -2,6 +2,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { ensureTenantDatabaseInitialized } from '@server/tenant/provisioning'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import {
+  normalizeBrevoApiKeyInput,
   normalizeCampaignSenderEmailInput,
   normalizeCampaignSenderNameInput
 } from '@server/utils/registry/tenantAdminRow'
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event) => {
     crmAppUrl?: string | null
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    brevoApiKey?: string | null
   }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()
@@ -56,6 +58,8 @@ export default defineEventHandler(async (event) => {
     body?.defaultCampaignSenderName !== undefined
       ? normalizeCampaignSenderNameInput(body.defaultCampaignSenderName)
       : null
+  const brevoApiKey =
+    body?.brevoApiKey !== undefined ? normalizeBrevoApiKeyInput(body.brevoApiKey) : null
 
   const registryConn = await getRegistryConnection()
   const { dbName, apiKey, tenantId: resolvedTenantId } =
@@ -68,16 +72,14 @@ export default defineEventHandler(async (event) => {
     )
 
   const autoTopic = computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
-  await registryConn.collection('clients').updateOne(
-    { dbName },
-    {
-      $set: {
-        kafkaOutboundTopic: autoTopic,
-        defaultCampaignSenderEmail,
-        defaultCampaignSenderName
-      }
-    }
-  )
+  const $set: Record<string, unknown> = {
+    kafkaOutboundTopic: autoTopic,
+    defaultCampaignSenderEmail,
+    defaultCampaignSenderName
+  }
+  if (brevoApiKey) $set.brevoApiKey = brevoApiKey
+
+  await registryConn.collection('clients').updateOne({ dbName }, { $set })
   invalidateTenantTopicCacheForDbName(dbName)
   let kafkaTopic: string | null = null
   try {
