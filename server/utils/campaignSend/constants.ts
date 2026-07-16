@@ -1,3 +1,6 @@
+/** HTTP path Cloud Tasks POSTs for each campaign send chunk. */
+export const CAMPAIGN_SEND_TASK_PATH = '/api/internal/campaign-sends/batch'
+
 /** Recipients per BullMQ batch job (Brevo messageVersions limit; aligned with mortdash ratesheet max chunk). */
 export const CAMPAIGN_SEND_BATCH_SIZE = 100
 
