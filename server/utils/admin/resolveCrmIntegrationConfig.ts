@@ -31,24 +31,22 @@ function resolveDeployEnvDefaults(deployEnv: string): { marketingAppUrl: string;
   return DEVELOP_DEFAULTS
 }
 
+/** CRM external-connection JSON — read Cloud Run / .env at request time. */
 export function resolveCrmIntegrationConfig(): CrmIntegrationConfig {
-  const config = useRuntimeConfig()
-  const deployEnv = String(config.marketingDeployEnv ?? 'develop').trim().toLowerCase()
+  const deployEnv = String(process.env.MARKETING_DEPLOY_ENV ?? 'develop').trim().toLowerCase()
   const defaults = resolveDeployEnvDefaults(deployEnv)
 
-  const marketingAppUrl = normalizeAppUrl(
-    String(config.marketingAppUrl || defaults.marketingAppUrl)
-  )
-  const kafkaBridgeUrl = normalizeBridgeUrl(
-    String(config.kafkaBridgeUrl || defaults.kafkaBridgeUrl)
-  )
-  const kafkaBridgeToken = String(config.kafkaBridgeToken ?? '').trim()
-
   return {
-    marketingAppUrl,
-    kafkaBridgeUrl,
-    kafkaBridgeToken,
-    marketingHandoffIss: String(config.marketingHandoffIss ?? '').trim() || 'marketing-tenant',
-    marketingHandoffAud: String(config.marketingHandoffAud ?? '').trim() || 'new-marketing'
+    marketingAppUrl: normalizeAppUrl(
+      process.env.MARKETING_APP_URL || defaults.marketingAppUrl
+    ),
+    kafkaBridgeUrl: normalizeBridgeUrl(
+      process.env.KAFKA_BRIDGE_URL || defaults.kafkaBridgeUrl
+    ),
+    kafkaBridgeToken: String(process.env.KAFKA_BRIDGE_TOKEN ?? '').trim(),
+    marketingHandoffIss:
+      String(process.env.MARKETING_HANDOFF_JWT_ISS ?? '').trim() || 'marketing-tenant',
+    marketingHandoffAud:
+      String(process.env.MARKETING_HANDOFF_JWT_AUD ?? '').trim() || 'new-marketing'
   }
 }
