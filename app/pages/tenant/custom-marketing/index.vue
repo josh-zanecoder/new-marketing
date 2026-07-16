@@ -19,6 +19,8 @@ const {
   recipientListsPending,
   recipientListsError,
   firstRecipientLabel,
+  toEmail,
+  toPlaceholder,
   listMemberTotal,
   firstRecipientPending,
   firstRecipientError,
@@ -59,11 +61,11 @@ onMounted(() => {
       </div>
 
       <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
-        <label for="custom-marketing-to" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-          To
+        <label for="custom-marketing-list" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Recipient list
         </label>
         <select
-          id="custom-marketing-to"
+          id="custom-marketing-list"
           v-model="recipientsListId"
           class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:text-[15px]"
           :disabled="recipientListsPending"
@@ -89,22 +91,28 @@ onMounted(() => {
             Create one
           </NuxtLink>
         </p>
-        <p v-else-if="recipientsListId && firstRecipientPending" class="mt-2 text-sm text-slate-500">
-          Loading first recipient…
-        </p>
-        <p v-else-if="firstRecipientError" class="mt-2 text-sm text-red-600">{{ firstRecipientError }}</p>
-        <p v-else-if="recipientsListId && firstRecipientLabel" class="mt-2 text-sm text-slate-700">
-          First recipient:
-          <span class="font-medium">{{ firstRecipientLabel }}</span>
-          <span v-if="listMemberTotal > 1" class="text-slate-500">
-            · {{ listMemberTotal }} contacts in this list
-          </span>
-        </p>
-        <p v-else-if="recipientsListId && !firstRecipientPending" class="mt-2 text-sm text-slate-500">
-          This list has no contacts yet.
+        <p v-else-if="recipientsListId && listMemberTotal > 0" class="mt-2 text-xs text-slate-500">
+          {{ listMemberTotal }} contact{{ listMemberTotal === 1 ? '' : 's' }} in this list (bulk send)
         </p>
       </div>
 
+      <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <label for="custom-marketing-to" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+          To
+        </label>
+        <input
+          id="custom-marketing-to"
+          type="text"
+          readonly
+          :value="toEmail"
+          :placeholder="toPlaceholder"
+          class="w-full rounded-xl border border-slate-200/90 bg-slate-50 px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 sm:text-[15px]"
+        >
+        <p v-if="firstRecipientError" class="mt-2 text-sm text-red-600">{{ firstRecipientError }}</p>
+        <p v-else-if="toEmail && listMemberTotal > 1" class="mt-2 text-xs text-slate-500">
+          Showing first recipient email. Message will send to all {{ listMemberTotal }} contacts in the list.
+        </p>
+      </div>
       <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
         <label for="custom-marketing-subject" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
           Subject

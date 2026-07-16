@@ -62,6 +62,15 @@ export function useCustomMarketingCompose() {
     return email || name || 'Unknown contact'
   })
 
+  const toEmail = computed(() => firstRecipient.value?.email?.trim() || '')
+
+  const toPlaceholder = computed(() => {
+    if (!recipientsListId.value.trim()) return 'Select a recipient list to see the email'
+    if (firstRecipientPending.value) return 'Loading recipient email…'
+    if (firstRecipientError.value) return 'Could not load recipient email'
+    return 'This list has no contacts yet'
+  })
+
   const canSend = computed(
     () =>
       !!recipientsListId.value.trim()
@@ -302,6 +311,8 @@ export function useCustomMarketingCompose() {
     recipientListsError,
     firstRecipient,
     firstRecipientLabel,
+    toEmail,
+    toPlaceholder,
     listMemberTotal,
     firstRecipientPending,
     firstRecipientError,
