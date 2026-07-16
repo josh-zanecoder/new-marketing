@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     recipientsManual?: string[]
     emailTemplateId?: string
     templateHtml?: string
-    templateHtmlSource?: 'editor' | 'upload'
+    templateHtmlSource?: 'editor' | 'upload' | 'custom'
     saveHtmlToLibrary?: boolean
   }>(event)
 
