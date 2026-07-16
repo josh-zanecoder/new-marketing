@@ -5,7 +5,7 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
 ## User flow
 
 1. Open **Custom Marketing** in the sidebar (`/tenant/custom-marketing`).
-2. Choose a **recipient list** (To).
+2. Choose a **recipient list** (To). The **first recipient** from that list is shown under the dropdown (name · email), plus total contact count when available.
 3. Edit **Subject**.
 4. Choose content:
    - **Write message** — plain personal body (defaults provided), or

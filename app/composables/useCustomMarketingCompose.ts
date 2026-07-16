@@ -13,6 +13,12 @@ interface RecipientListOption {
   name: string
 }
 
+interface FirstRecipientPreview {
+  id: string
+  name: string
+  email: string
+}
+
 export function useCustomMarketingCompose() {
   const marketingApi = useTenantMarketingApi()
   const campaignStore = useCampaignStore()
@@ -31,6 +37,10 @@ export function useCustomMarketingCompose() {
   const recipientLists = ref<RecipientListOption[]>([])
   const recipientListsPending = ref(false)
   const recipientListsError = ref('')
+  const firstRecipient = ref<FirstRecipientPreview | null>(null)
+  const listMemberTotal = ref(0)
+  const firstRecipientPending = ref(false)
+  const firstRecipientError = ref('')
   const saveError = ref<string | null>(null)
   const isSending = ref(false)
 
@@ -41,6 +51,15 @@ export function useCustomMarketingCompose() {
     const id = recipientsListId.value.trim()
     if (!id) return ''
     return recipientLists.value.find((l) => l.id === id)?.name ?? ''
+  })
+
+  const firstRecipientLabel = computed(() => {
+    const row = firstRecipient.value
+    if (!row) return ''
+    const name = row.name.trim()
+    const email = row.email.trim()
+    if (name && email) return `${name} · ${email}`
+    return email || name || 'Unknown contact'
   })
 
   const canSend = computed(
@@ -107,6 +126,46 @@ export function useCustomMarketingCompose() {
     }
   }
 
+  async function loadFirstRecipient(listId: string): Promise<void> {
+    const id = listId.trim()
+    if (!id) {
+      firstRecipient.value = null
+      listMemberTotal.value = 0
+      firstRecipientError.value = ''
+      return
+    }
+    firstRecipientPending.value = true
+    firstRecipientError.value = ''
+    try {
+      const res = await marketingApi.fetchRecipientListById(id, { page: 1, limit: 1 })
+      listMemberTotal.value = res.members?.total ?? 0
+      const first = res.members?.items?.[0]
+      if (!first) {
+        firstRecipient.value = null
+        return
+      }
+      firstRecipient.value = {
+        id: first.id,
+        name: first.name || '',
+        email: first.email || ''
+      }
+    } catch {
+      firstRecipient.value = null
+      listMemberTotal.value = 0
+      firstRecipientError.value = 'Could not load the first recipient for this list.'
+    } finally {
+      firstRecipientPending.value = false
+    }
+  }
+
+  watch(
+    recipientsListId,
+    (id) => {
+      void loadFirstRecipient(id)
+    },
+    { immediate: true }
+  )
+
   async function bootstrap(): Promise<void> {
     subject.value = CUSTOM_MARKETING_DEFAULT_SUBJECT
     body.value = CUSTOM_MARKETING_DEFAULT_BODY
@@ -114,6 +173,9 @@ export function useCustomMarketingCompose() {
     uploadedHtml.value = ''
     uploadedFileName.value = ''
     uploadError.value = ''
+    firstRecipient.value = null
+    listMemberTotal.value = 0
+    firstRecipientError.value = ''
     await Promise.all([loadDefaultCampaignSender(), loadRecipientLists()])
   }
 
@@ -238,6 +300,11 @@ export function useCustomMarketingCompose() {
     recipientLists,
     recipientListsPending,
     recipientListsError,
+    firstRecipient,
+    firstRecipientLabel,
+    listMemberTotal,
+    firstRecipientPending,
+    firstRecipientError,
     saveError,
     isSending,
     canSend,
