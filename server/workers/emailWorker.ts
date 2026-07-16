@@ -7,16 +7,15 @@ import {
   EMAIL_JOB_START_SCHEDULED,
   EMAIL_QUEUE_NAME,
   enqueueCampaignBatch,
-  enqueueCampaignBatchFollowUp,
   getEmailQueue,
   type CampaignQueueJobData
 } from '../queue/emailQueue'
 import {
   beginCampaignSend,
-  finalizeCampaignSendIfComplete,
-  processBatch
+  finalizeCampaignSendIfComplete
 } from '../services/send-campaign.service'
-import { notifyCampaignSendCompleted } from '../campaign-delivery/notifyCampaignSendCompleted'
+import { runCampaignBatchJob } from '../services/runCampaignBatchJob'
+import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import { getTenantConnectionByDbName } from '../tenant/connection'
 import {
   CAMPAIGN_EMAIL_WORKER_CONCURRENCY_DEFAULT,
@@ -184,78 +183,12 @@ export function startEmailWorker() {
         jobLog('job.ignored', { jobId: job.id, name: job.name })
         return
       }
-      if (!dbName) {
-        throw new Error('Email job missing dbName (tenant database)')
-      }
-      if (!sendRunId) {
-        throw new Error('Email job missing sendRunId')
-      }
-      const tenantConn = await getTenantConnectionByDbName(dbName)
-      const models = getTenantClientModels(tenantConn)
-
-      const result = await processBatch(models, campaignId, { sendRunId, page })
-
-      if (result.skipped) {
-        jobLog('batch.skipped', { campaignId, dbName, sendRunId, page })
+      if (isCampaignCloudTasksEnabled()) {
+        jobLog('batch.delegatedToCloudTasks', { campaignId, dbName, sendRunId, page })
         return
       }
-
-      if (!result.done) {
-        if (result.chainNext === false) {
-          jobLog('batch.deferChain', {
-            campaignId,
-            dbName,
-            sendRunId,
-            page,
-            pending: result.pending,
-            sent: result.sent,
-            failed: result.failed,
-            processedInBatch: result.processedInBatch,
-            ms: Date.now() - startedAt
-          })
-          return
-        }
-        const processed = result.processedInBatch ?? 0
-        const nextPage = processed > 0 ? page + 1 : page
-        await enqueueCampaignBatchFollowUp({
-          campaignId,
-          dbName,
-          sendRunId,
-          page: nextPage
-        })
-        jobLog('batch.continue', {
-          campaignId,
-          dbName,
-          sendRunId,
-          page,
-          nextPage,
-          processedInBatch: processed,
-          pending: result.pending,
-          sent: result.sent,
-          failed: result.failed,
-          ms: Date.now() - startedAt
-        })
-      } else {
-        await notifyCampaignSendCompleted({
-          tenantDbName: dbName,
-          campaignId,
-          campaignStatus: result.campaignStatus,
-          sent: result.sent,
-          failed: result.failed,
-          total: result.total
-        })
-        jobLog('batch.complete', {
-          campaignId,
-          dbName,
-          sendRunId,
-          page,
-          campaignStatus: result.campaignStatus,
-          sent: result.sent,
-          failed: result.failed,
-          total: result.total,
-          ms: Date.now() - startedAt
-        })
-      }
+      await runCampaignBatchJob({ campaignId, dbName, sendRunId, page })
+      jobLog('batch.done', { campaignId, dbName, sendRunId, page, ms: Date.now() - startedAt })
     },
     {
       connection: getBullMqConnectionOptions(),
