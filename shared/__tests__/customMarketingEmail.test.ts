@@ -6,7 +6,9 @@ import {
   customMarketingHtmlToPlainText,
   escapeHtmlText,
   isCustomMarketingBodyReady,
-  plainTextToCustomMarketingHtml
+  isCustomMarketingContentReady,
+  plainTextToCustomMarketingHtml,
+  resolveCustomMarketingSendHtml
 } from '../customMarketingEmail'
 import {
   campaignTemplateHtmlSourceFromMode,
@@ -46,6 +48,36 @@ describe('customMarketingEmail', () => {
     assert.equal(isCustomMarketingBodyReady(''), false)
     assert.equal(isCustomMarketingBodyReady('   '), false)
     assert.equal(isCustomMarketingBodyReady('Hi'), true)
+  })
+
+  it('resolves send HTML from write or uploaded template', () => {
+    const fromWrite = resolveCustomMarketingSendHtml({
+      contentSource: 'write',
+      plainBody: 'Hello',
+      uploadedHtml: '<p>ignored</p>'
+    })
+    assert.ok(fromWrite.includes('Hello'))
+    const fromUpload = resolveCustomMarketingSendHtml({
+      contentSource: 'upload',
+      plainBody: 'Hello',
+      uploadedHtml: '<html><body>Template</body></html>'
+    })
+    assert.equal(fromUpload, '<html><body>Template</body></html>')
+  })
+
+  it('requires uploaded HTML when content source is upload', () => {
+    assert.equal(
+      isCustomMarketingContentReady({ contentSource: 'upload', plainBody: 'Hi', uploadedHtml: '' }),
+      false
+    )
+    assert.equal(
+      isCustomMarketingContentReady({
+        contentSource: 'upload',
+        plainBody: '',
+        uploadedHtml: '<p>ok</p>'
+      }),
+      true
+    )
   })
 })
 
