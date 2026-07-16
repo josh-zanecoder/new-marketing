@@ -5,9 +5,10 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
 ## User flow
 
 1. Open **Custom Marketing** in the sidebar (`/tenant/custom-marketing`).
-2. Choose a **recipient list** (To). The **first recipient** from that list is shown under the dropdown (name · email), plus total contact count when available.
-3. Edit **Subject**.
-4. Choose content:
+2. Choose a **Recipient list** (separate field).
+3. **To** is a readonly input showing only the first recipient email from that list (empty until a list is selected). Bulk send still goes to everyone on the list.
+4. Edit **Subject**.
+5. Choose content:
    - **Write message** — plain personal body (defaults provided), or
    - **Upload HTML template** — choose a `.html` / `.htm` file (previewed and sent as-is)
 5. Click **Send** — creates a campaign with `templateHtmlSource: custom` and starts the Brevo send pipeline, then opens the campaign detail page.
