@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useSubjectVariableInsert } from '~/composables/useSubjectVariableInsert'
+import { useTenantMarketingApi } from '~/composables/useTenantMarketingApi'
+import { resolveCustomMarketingMergeVariables } from '~~/shared/customMarketingMergeVariables'
+
 const {
   subject,
   body,
@@ -36,8 +41,33 @@ const {
   sendCustomMarketing
 } = useCustomMarketingCompose()
 
+const marketingApi = useTenantMarketingApi()
+const subjectField = computed({
+  get: () => subject.value,
+  set: (value: string) => {
+    subject.value = value
+  }
+})
+const { subjectVariable, subjectInputRef, syncSubjectCaret } = useSubjectVariableInsert(subjectField)
+const subjectApiVariables = ref<Array<{ key: string; label: string; scopes?: Array<'subject' | 'body'>; enabled?: boolean }>>([])
+
+const subjectVariableSelectOptions = computed(() => [
+  { value: '', label: 'Insert variable' },
+  ...resolveCustomMarketingMergeVariables(subjectApiVariables.value, 'subject').map((v) => ({
+    value: `{{${v.key}}}`,
+    label: v.label || v.key
+  }))
+])
+
 onMounted(() => {
   void bootstrap()
+  void marketingApi.fetchDynamicVariables()
+    .then((res) => {
+      subjectApiVariables.value = Array.isArray(res.variables) ? res.variables : []
+    })
+    .catch(() => {
+      subjectApiVariables.value = []
+    })
 })
 </script>
 
@@ -118,14 +148,29 @@ onMounted(() => {
         <label for="custom-marketing-subject" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
           Subject
         </label>
-        <input
-          id="custom-marketing-subject"
-          v-model="subject"
-          type="text"
-          autocomplete="off"
-          placeholder="Email subject"
-          class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
-        >
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            id="custom-marketing-subject"
+            ref="subjectInputRef"
+            v-model="subject"
+            type="text"
+            autocomplete="off"
+            placeholder="Email subject"
+            class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+            @click="syncSubjectCaret"
+            @keyup="syncSubjectCaret"
+            @select="syncSubjectCaret"
+          >
+          <TenantFilterSelect
+            id="custom-marketing-subject-variable"
+            v-model="subjectVariable"
+            label="Insert variable"
+            variant="field"
+            :options="subjectVariableSelectOptions"
+            class="w-full shrink-0 sm:w-44"
+            @before-select="syncSubjectCaret"
+          />
+        </div>
       </div>
 
       <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
@@ -177,9 +222,9 @@ onMounted(() => {
         </ClientOnly>
         <p class="mt-2 text-xs text-slate-500">
           Inbox-style preview — what recipients see in Gmail and similar clients. Photos upload even
-          before a recipient list is chosen. Merge tags such as
-          <code class="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">&#123;&#123; recipient.firstName &#125;&#125;</code>
-          are supported.
+          before a recipient list is chosen. Use <strong>Insert variable</strong> (&#123;&#123;&#125;&#125; button)
+          to add merge tags such as
+          <code class="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">&#123;&#123; recipient.firstName &#125;&#125;</code>.
         </p>
       </div>
 

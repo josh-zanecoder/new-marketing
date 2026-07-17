@@ -179,4 +179,42 @@ describe('customMarketingDraggableImage', () => {
     assert.ok(/margin-right:\s*auto/i.test(html))
     editor.destroy()
   })
+
+  it('deletes a selected photo from the document', () => {
+    const mount = document.createElement('div') as unknown as HTMLElement
+    document.body.appendChild(mount as unknown as Node)
+    const editor = new Editor({
+      element: mount,
+      extensions: [
+        StarterKit.configure({ trailingNode: false }),
+        CustomMarketingDraggableImage.configure({ allowBase64: true, inline: false })
+      ],
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'before' }] },
+          {
+            type: 'image',
+            attrs: { src: 'https://storage.googleapis.com/bucket/remove-me.jpg' }
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'after' }] }
+        ]
+      }
+    })
+    let imagePos: number | null = null
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name !== 'image') return
+      imagePos = pos
+      return false
+    })
+    assert.ok(imagePos != null)
+    editor.commands.setNodeSelection(imagePos!)
+    assert.equal(editor.isActive('image'), true)
+    assert.equal(editor.commands.deleteSelection(), true)
+    const html = editor.getHTML()
+    assert.ok(!html.includes('remove-me.jpg'))
+    assert.ok(html.includes('before'))
+    assert.ok(html.includes('after'))
+    editor.destroy()
+  })
 })

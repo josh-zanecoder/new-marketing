@@ -135,4 +135,19 @@ describe('customMarketingTwoColumn', () => {
     assert.match(html, /src="https:\/\/example\.com\/photo\.jpg"/)
     editor.destroy()
   })
+
+  it('removes two columns and keeps cell content', () => {
+    const window = installDom()
+    const editor = createEditor(window)
+    assert.equal(editor.commands.insertCustomMarketingTwoColumns(), true)
+    // Place caret in the right column paragraph and type.
+    editor.commands.setTextSelection(editor.state.doc.content.size - 2)
+    editor.commands.insertContent('Hello beside')
+    assert.match(editor.getHTML(), /data-custom-marketing-columns/)
+    assert.equal(editor.commands.deleteCustomMarketingTwoColumns(), true)
+    const html = editor.getHTML()
+    assert.doesNotMatch(html, /data-custom-marketing-columns/)
+    assert.match(html, /Hello beside/)
+    editor.destroy()
+  })
 })
