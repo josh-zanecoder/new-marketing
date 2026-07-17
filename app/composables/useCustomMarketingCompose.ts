@@ -13,6 +13,7 @@ import {
   defaultScheduleDatetimeLocal,
   parseDatetimeLocalToIso
 } from '~~/shared/datetimeLocal'
+import { resolveCrmAuthenticatedSender } from '~~/shared/crmAuthenticatedSender'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
 import { useCampaignStore } from '~/store/campaignStore'
 import { useMarketingScrollLock } from '~/composables/useMarketingScrollLock'
@@ -31,6 +32,7 @@ interface FirstRecipientPreview {
 export function useCustomMarketingCompose() {
   const marketingApi = useTenantMarketingApi()
   const campaignStore = useCampaignStore()
+  const { data: authUser } = useMarketingMe()
   const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
     useDefaultCampaignSender()
 
@@ -59,8 +61,9 @@ export function useCustomMarketingCompose() {
 
   useMarketingScrollLock(scheduleModalOpen)
 
-  const senderName = computed(() => defaultSenderName.value)
-  const senderEmail = computed(() => defaultSenderEmail.value)
+  const crmSender = computed(() => resolveCrmAuthenticatedSender(authUser.value))
+  const senderName = computed(() => crmSender.value?.name || defaultSenderName.value)
+  const senderEmail = computed(() => crmSender.value?.email || defaultSenderEmail.value)
 
   const selectedListName = computed(() => {
     const id = recipientsListId.value.trim()
