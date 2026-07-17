@@ -95,7 +95,9 @@ export type CustomMarketingRichTextEditorBinders = {
   openImagePicker: () => void
   onImageFileChange: (ev: Event) => Promise<void>
   setImageWidthPreset: (width: CustomMarketingImageWidthPreset) => void
+  deleteSelectedImage: () => void
   insertTwoColumns: () => void
+  deleteTwoColumns: () => void
   isInTwoColumns: ComputedRef<boolean>
   toolbarBtnClass: (active: boolean) => string
 }
@@ -512,8 +514,18 @@ export function useCustomMarketingRichTextEditor(options: {
     current.chain().focus().updateAttributes('image', { width, height: null }).run()
   }
 
+  function deleteSelectedImage(): void {
+    const current = editor.value
+    if (!current?.isActive('image')) return
+    current.chain().focus().deleteSelection().run()
+  }
+
   function insertTwoColumns(): void {
     editor.value?.chain().focus().insertCustomMarketingTwoColumns().run()
+  }
+
+  function deleteTwoColumns(): void {
+    editor.value?.chain().focus().deleteCustomMarketingTwoColumns().run()
   }
 
   function toolbarBtnClass(active: boolean): string {
@@ -579,7 +591,9 @@ export function useCustomMarketingRichTextEditor(options: {
     openImagePicker,
     onImageFileChange,
     setImageWidthPreset,
+    deleteSelectedImage,
     insertTwoColumns,
+    deleteTwoColumns,
     toolbarBtnClass
   }
 }

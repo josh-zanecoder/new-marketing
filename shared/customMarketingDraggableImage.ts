@@ -1,5 +1,6 @@
 import { mergeAttributes, ResizableNodeView, type ResizableNodeViewDirection } from '@tiptap/core'
 import Image from '@tiptap/extension-image'
+import { createCustomMarketingNodeDeleteButton } from './customMarketingEditorDeleteControl'
 
 /** Corner grips only — aspect ratio stays locked while resizing from any corner. */
 export const CUSTOM_MARKETING_IMAGE_RESIZE_DIRECTIONS: ResizableNodeViewDirection[] = [
@@ -252,6 +253,16 @@ export const CustomMarketingDraggableImage = Image.extend({
       dom.setAttribute('data-drag-handle', '')
       dom.draggable = true
       dom.contentEditable = 'false'
+      const deleteButton = createCustomMarketingNodeDeleteButton({
+        ariaLabel: 'Remove photo',
+        title: 'Remove photo',
+        onDelete: () => {
+          const pos = getPos()
+          if (typeof pos !== 'number') return
+          editor.chain().focus().setNodeSelection(pos).deleteSelection().run()
+        }
+      })
+      dom.appendChild(deleteButton)
       dom.style.visibility = 'hidden'
       dom.style.pointerEvents = 'none'
       el.onload = () => {

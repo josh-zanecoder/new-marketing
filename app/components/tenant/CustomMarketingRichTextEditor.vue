@@ -6,6 +6,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Braces,
   Columns2,
   Highlighter,
   Image as ImageIcon,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-vue-next'
 import { useCustomMarketingEmailPreviewChrome } from '~/composables/useCustomMarketingEmailPreviewChrome'
 import { useCustomMarketingRichTextEditor } from '~/composables/useCustomMarketingRichTextEditor'
+import { useCustomMarketingVariablePicker } from '~/composables/useCustomMarketingVariablePicker'
 import '~/assets/css/custom-marketing-editor.css'
 
 const props = withDefaults(
@@ -124,6 +126,17 @@ const {
   insertTwoColumns,
   toolbarBtnClass
 } = useCustomMarketingRichTextEditor({ model, recipientListId: recipientListIdRef })
+
+const {
+  variablePickerOpen,
+  variablesPending,
+  variablesError,
+  groupedBodyVariables,
+  hasBodyVariables,
+  toggleVariablePicker,
+  insertMergeVariable,
+  tokenFor
+} = useCustomMarketingVariablePicker({ editor })
 </script>
 
 <template>
@@ -291,6 +304,81 @@ const {
             >
               <Columns2 :size="15" :stroke-width="2" />
             </button>
+            <div class="custom-marketing-editor__variable-wrap" data-custom-marketing-variable-picker>
+              <button
+                type="button"
+                :class="toolbarBtnClass(variablePickerOpen)"
+                data-tip="Insert variable"
+                aria-label="Insert variable"
+                aria-haspopup="listbox"
+                :aria-expanded="variablePickerOpen"
+                @mousedown.prevent
+                @click="toggleVariablePicker"
+              >
+                <Braces :size="15" :stroke-width="2" />
+              </button>
+              <div
+                v-if="variablePickerOpen"
+                class="custom-marketing-editor__variable-menu"
+                role="listbox"
+                aria-label="Merge variables"
+              >
+                <p v-if="variablesPending" class="custom-marketing-editor__variable-empty">Loading variables…</p>
+                <p v-else-if="variablesError && !hasBodyVariables" class="custom-marketing-editor__variable-empty">
+                  {{ variablesError }}
+                </p>
+                <p v-else-if="!hasBodyVariables" class="custom-marketing-editor__variable-empty">
+                  No variables available.
+                </p>
+                <template v-else>
+                  <div v-if="groupedBodyVariables.recipient.length" class="custom-marketing-editor__variable-group">
+                    <p class="custom-marketing-editor__variable-group-label">Recipient</p>
+                    <button
+                      v-for="v in groupedBodyVariables.recipient"
+                      :key="`recipient-${v.key}`"
+                      type="button"
+                      class="custom-marketing-editor__variable-item"
+                      role="option"
+                      @mousedown.prevent
+                      @click="insertMergeVariable(v)"
+                    >
+                      <span class="custom-marketing-editor__variable-item-label">{{ v.label }}</span>
+                      <span class="custom-marketing-editor__variable-item-token">{{ tokenFor(v) }}</span>
+                    </button>
+                  </div>
+                  <div v-if="groupedBodyVariables.sender.length" class="custom-marketing-editor__variable-group">
+                    <p class="custom-marketing-editor__variable-group-label">Sender</p>
+                    <button
+                      v-for="v in groupedBodyVariables.sender"
+                      :key="`sender-${v.key}`"
+                      type="button"
+                      class="custom-marketing-editor__variable-item"
+                      role="option"
+                      @mousedown.prevent
+                      @click="insertMergeVariable(v)"
+                    >
+                      <span class="custom-marketing-editor__variable-item-label">{{ v.label }}</span>
+                      <span class="custom-marketing-editor__variable-item-token">{{ tokenFor(v) }}</span>
+                    </button>
+                  </div>
+                  <div v-if="groupedBodyVariables.other.length" class="custom-marketing-editor__variable-group">
+                    <p class="custom-marketing-editor__variable-group-label">Other</p>
+                    <button
+                      v-for="v in groupedBodyVariables.other"
+                      :key="`other-${v.key}`"
+                      type="button"
+                      class="custom-marketing-editor__variable-item"
+                      role="option"
+                      @mousedown.prevent
+                      @click="insertMergeVariable(v)"
+                    >
+                      <span class="custom-marketing-editor__variable-item-label">{{ v.label }}</span>
+                      <span class="custom-marketing-editor__variable-item-token">{{ tokenFor(v) }}</span>
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </div>
           </div>
           <span class="custom-marketing-editor__group-label">Insert</span>
         </div>
@@ -400,7 +488,7 @@ const {
       {{ gmailClipWarning }}
     </p>
     <p class="custom-marketing-editor__status">
-      Photos are compressed for Gmail. Select a photo, then use Left/Right align to type beside it (or Center for text below).
+      Photos are compressed for Gmail. Select a photo for size and align. Use the trash on a photo or two-column block to remove it.
       Use <strong>Two columns</strong> for a fixed side-by-side layout.
     </p>
   </div>
