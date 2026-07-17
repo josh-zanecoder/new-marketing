@@ -8,16 +8,18 @@ Use **Custom Marketing** when you want to email a whole list, but the message st
 2. Pick a **Recipient list** — everyone on that list will get the email.
 3. Check the **To** field — it shows the first person on the list so you can confirm the list looks right. The email still goes to the full list.
 4. Write your **Subject**.
+   - Optional: next to Subject, click **Insert variable** and pick a tag (for example **Recipient first name**). That inserts a merge tag such as `{{ recipient.firstName }}` so each person’s details fill in when you send.
 5. Choose how to write the message:
    - **Write message** — type and format like a normal email (bold, lists, photos, etc.), or
    - **Upload HTML template** — use a ready-made HTML file instead.
-6. Look at the **preview** — it shows roughly how the email will look in someone’s inbox.
-7. Click **Send**.
+6. Click **Preview** to open the browser + Gmail view of your message (merge tags fill from the first contact on the selected list), then close it when you’re done.
+7. Click **Send** to send immediately, or **Schedule send** to choose a date and time (same as campaigns).
 
 After you send, you’ll land on the campaign page so you can follow progress.
 
 ## Writing tips
 
+The page shows a **Quick tips** panel under the editor (Preview, Variables, Photos, Layout). In short:
 - **From** uses your CRM’s default sender — you don’t change it on this page.
 - You can **paste or insert photos**. New photos sit on the left so you can **type beside them**. Select a photo to resize (S / M / L / Full) or align (**Left/Right** = text wraps beside, **Center** = text below). Click the **trash on the photo** to remove it. Drag a corner to resize, or drag the photo to move it.
 - Optional: use **Two columns** for a fixed side-by-side layout. Hover the block and click the **trash on the columns** to remove the layout (your text and photos stay).
@@ -37,4 +39,62 @@ These tools appear in the formatting bar above your message:
 - **Text style** — Bold, Italic, Underline, Strikethrough, Subscript, Superscript, Text color, Highlight color, Clear highlight, Clear formatting
 - **Lists and layout** — Bulleted list, Numbered list, Increase indent, Decrease indent, Align left / center / right / justify
 - **Photos** — Insert or paste a photo; size S / M / L / Full; align left / center / right; drag a corner to resize or drag the photo to move it
-- **Two columns** — Custom Marketing supports two columns so you can place a photo beside text (or two text columns) and use the white space next to an image
+- **Insert variable** — `{ }` in the toolbar (or Insert variable next to Subject) to add tags like `{{ recipient.firstName }}`
+
+## Two columns
+
+Custom Marketing supports **Two columns** so you can place a photo beside text (or two text columns) and use the white space next to an image.
+
+1. In the formatting bar, open **Insert** and click **Two columns** (tooltip: “Two columns — image beside text”).
+2. Two side-by-side boxes appear in your message. Click inside a column to type, or insert a photo into one side.
+3. To remove the layout, hover the two-column block and click the **trash** on it — your text and photos stay in the message.
+
+You can put a photo in both columns (or text in both) so the message uses the space side by side.
+
+## Insert variable
+
+Custom Marketing supports **Insert variable** so you can personalize each email without typing tags by hand.
+
+1. Place your cursor where you want the name (or other detail) to appear — in the **Subject** field or in the message body.
+2. Click **Insert variable** next to Subject, or the **`{ }`** button in the message toolbar.
+3. Pick a tag from the list (for example **Recipient first name** → `{{ recipient.firstName }}`).
+4. When the email sends, that tag is replaced with each person’s real details.
+
+Common tags include recipient first name, last name, full name, email, and phone.
+
+## Remove a photo
+
+Custom Marketing supports removing a photo from your message without rewriting the rest of the email.
+
+1. Click the photo so it is selected (blue outline and corner handles appear).
+2. Click the red **trash** button on the photo (tooltip: “Remove photo”).
+3. The photo is removed; your other text and layout stay in place.
+
+The same trash control appears on a **Two columns** block if you want to remove that layout.
+
+## Remove two columns
+
+Custom Marketing supports removing a **Two columns** layout while keeping the content inside.
+
+1. Hover the two-column block (or click inside it) so the red **trash** appears on the block.
+2. Click the trash (tooltip: “Remove two columns (keeps content)”).
+3. The side-by-side layout is removed; your text and photos stay in the message.
+
+## Align a photo
+
+Custom Marketing supports aligning a photo so text can sit beside it or below it.
+
+1. Click the photo so it is selected.
+2. In the **Image** bar, choose a size if you want (**S / M / L / Full**).
+3. Click an align button:
+   - **Align left** — “type beside photo” (text can sit to the right)
+   - **Align center** — “text below” (photo centered; text goes under it)
+   - **Align right** — “type beside photo” (text can sit to the left)
+
+## Resize a photo
+
+Custom Marketing supports resizing a photo with quick size buttons or by dragging a corner.
+
+1. Click the photo so it is selected.
+2. In the **Image** bar, choose **S**, **M**, **L**, or **Full** for a quick size.
+3. Or drag a **corner handle** on the photo to resize it freely (aspect ratio stays locked).
