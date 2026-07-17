@@ -1,7 +1,12 @@
 import type { Connection } from 'mongoose'
 import mongoose from 'mongoose'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import { rewriteCustomMarketingDataImagesToGcs } from '@server/services/customMarketingImageUpload.service'
 import { resolveCampaignTemplateHtmlSource } from '~~/shared/campaignTemplateSource'
+import {
+  CUSTOM_MARKETING_GCS_NO_LIST_FOLDER,
+  htmlContainsCustomMarketingDataImages
+} from '~~/shared/customMarketingHostedImages'
 
 export type CampaignTemplateSaveInput = {
   campaignName: string
@@ -12,6 +17,10 @@ export type CampaignTemplateSaveInput = {
   saveHtmlToLibrary?: boolean
   /** Existing linked template on campaign update. */
   currentEmailTemplateId?: string | mongoose.Types.ObjectId | null
+  /** Tenant display name — GCS folder `custom-marketing/{tenantName}/{listId}/`. */
+  tenantName?: string
+  /** Recipient list id — optional; without a list, images use the `no-list` folder. */
+  recipientListId?: string
 }
 
 export type CampaignTemplateSaveResult = {
@@ -27,8 +36,21 @@ export async function resolveCampaignEmailTemplateOnSave(
   EmailTemplate: EmailTemplateModel,
   input: CampaignTemplateSaveInput
 ): Promise<CampaignTemplateSaveResult> {
-  const html = String(input.templateHtml ?? '').trim()
+  let html = String(input.templateHtml ?? '').trim()
   const linkId = String(input.emailTemplateId ?? '').trim()
+  const tenantName = String(input.tenantName ?? '').trim()
+  const recipientListId =
+    String(input.recipientListId ?? '').trim() || CUSTOM_MARKETING_GCS_NO_LIST_FOLDER
+
+  if (html && htmlContainsCustomMarketingDataImages(html)) {
+    if (!tenantName) {
+      throw createError({
+        statusCode: 400,
+        message: 'Photos must be hosted for email clients. Configure GCS tenant credentials.'
+      })
+    }
+    html = await rewriteCustomMarketingDataImagesToGcs(html, { tenantName, recipientListId })
+  }
 
   if (html) {
     const htmlSource = resolveCampaignTemplateHtmlSource(input.templateHtmlSource)

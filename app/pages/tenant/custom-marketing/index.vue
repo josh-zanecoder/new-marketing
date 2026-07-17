@@ -25,6 +25,7 @@ const {
   firstRecipientPending,
   firstRecipientError,
   saveError,
+  gmailClipWarning,
   isSending,
   canSend,
   bootstrap,
@@ -129,21 +130,22 @@ onMounted(() => {
 
       <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Content</p>
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="flex flex-wrap gap-3">
           <button
             type="button"
-            class="rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors"
+            class="w-fit max-w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors"
             :class="contentSource === 'write'
               ? 'border-indigo-300 bg-indigo-50/50 text-slate-900 shadow-sm ring-1 ring-indigo-200/50'
               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"
             @click="setContentSource('write')"
           >
             Write message
-            <span class="mt-1 block text-xs font-normal text-slate-500">Plain personal email body</span>
+            <span class="mt-1 block text-xs font-normal text-slate-500">Rich text personal email</span>
           </button>
+          <!-- Hidden for now — re-enable when HTML template upload is needed
           <button
             type="button"
-            class="rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors"
+            class="w-fit max-w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors"
             :class="contentSource === 'upload'
               ? 'border-indigo-300 bg-indigo-50/50 text-slate-900 shadow-sm ring-1 ring-indigo-200/50'
               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"
@@ -152,28 +154,37 @@ onMounted(() => {
             Upload HTML template
             <span class="mt-1 block text-xs font-normal text-slate-500">Use a .html file as the email</span>
           </button>
+          -->
         </div>
       </div>
 
       <div v-if="contentSource === 'write'" class="px-5 py-4 sm:px-6 sm:py-5">
-        <label for="custom-marketing-body" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
           Message
         </label>
-        <textarea
-          id="custom-marketing-body"
-          v-model="body"
-          rows="14"
-          placeholder="Write your message…"
-          class="w-full resize-y rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm leading-relaxed text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
-        />
+        <ClientOnly>
+          <TenantCustomMarketingRichTextEditor
+            v-model="body"
+            :subject="subject"
+            :from-name="senderName"
+            :from-email="senderEmail"
+            :to-email="toEmail"
+            :recipient-list-id="recipientsListId"
+          />
+          <template #fallback>
+            <div class="min-h-[18rem] animate-pulse rounded-xl border border-slate-200 bg-slate-50" />
+          </template>
+        </ClientOnly>
         <p class="mt-2 text-xs text-slate-500">
-          Looks like a regular email when sent. Merge tags such as
+          Inbox-style preview — what recipients see in Gmail and similar clients. Photos upload even
+          before a recipient list is chosen. Merge tags such as
           <code class="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">&#123;&#123; recipient.firstName &#125;&#125;</code>
           are supported.
         </p>
       </div>
 
-      <div v-else class="px-5 py-4 sm:px-6 sm:py-5">
+      <!-- Upload HTML template UI hidden for now — set v-if to contentSource === 'upload' to restore -->
+      <div v-if="false" class="px-5 py-4 sm:px-6 sm:py-5">
         <div class="flex flex-wrap items-center gap-3">
           <input
             ref="fileInputRef"
@@ -284,6 +295,14 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
+
+    <div
+      v-if="gmailClipWarning"
+      class="mt-4 rounded-2xl border border-amber-200/90 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+      role="status"
+    >
+      {{ gmailClipWarning }}
+    </div>
 
     <div
       v-if="saveError"
