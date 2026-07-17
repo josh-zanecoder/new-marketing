@@ -18,8 +18,9 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
 | Capability | Behavior |
 | --- | --- |
 | Preview chrome | Browser window frame + Gmail-like reading pane (tab, address bar, subject, avatar, From, To, date) |
-| Formatting ribbon | Font/size/color/highlight, B/I/U/strike, sub/sup, lists, indent, align, undo/redo, image. Hover any control for a label (including font dropdowns and disabled buttons). |
-| Images | Paste/insert → GCS upload. When a photo is selected, a compact **Image** bar shows **S/M/L/Full** and **Left/Center/Right**. Drag a corner to resize. Drag the photo to move it in the message. |
+| Formatting ribbon | Font/size/color/highlight, B/I/U/strike, sub/sup, lists, indent, align, undo/redo, image, **two columns**. Hover any control for a label (including font dropdowns and disabled buttons). |
+| Images | Paste/insert → GCS upload (defaults to **float left** so you can type beside the photo). When selected: **S/M/L/Full**, **Left/Right** (text wraps beside), **Center** (text below). Drag a corner to resize. Drag the photo to move it. |
+| Two columns | Optional fixed side-by-side table. Prefer Left/Right align for free typing beside a photo. |
 | Image folders | `custom-marketing/{tenantName}/{recipientListId\|no-list}/{timestamp-uuid}.jpg` (registry tenant **name**; `no-list` when none selected) |
 | From | Tenant default campaign sender (`/tenant/me`) — shown in preview, not editable on this page |
 
@@ -82,6 +83,7 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Gmail clip size helpers | `shared/customMarketingEmailSize.ts` |
 | Hosted image helpers (data URL ↔ GCS path) | `shared/customMarketingHostedImages.ts` |
 | Draggable + resizable image node | `shared/customMarketingDraggableImage.ts` |
+| Two-column layout (email table) | `shared/customMarketingTwoColumn.ts` |
 | External drop vs reposition helper | `shared/customMarketingImageDrag.ts` |
 | Image compression | `app/utils/compressCustomMarketingImage.ts` |
 | GCS upload + HTML rewrite | `server/services/customMarketingImageUpload.service.ts` |
@@ -107,8 +109,9 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Hosted image / GCS path helpers | `shared/__tests__/customMarketingHostedImages.test.ts` |
 | Image drag vs external drop | `shared/__tests__/customMarketingImageDrag.test.ts` |
 | Image resize / align (corners, shrink-wrap, margins) | `shared/__tests__/customMarketingDraggableImage.test.ts` |
+| Two-column insert / wrap image | `shared/__tests__/customMarketingTwoColumn.test.ts` |
 
 ```bash
 cd new-marketing
-node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts
+node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts shared/__tests__/customMarketingTwoColumn.test.ts
 ```

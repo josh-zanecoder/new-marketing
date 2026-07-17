@@ -6,6 +6,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Columns2,
   Highlighter,
   Image as ImageIcon,
   IndentDecrease,
@@ -81,6 +82,7 @@ const {
   imageError,
   imageUploading,
   isImageSelected,
+  isInTwoColumns,
   selectedImageWidth,
   gmailClipWarning,
   isBold,
@@ -119,6 +121,7 @@ const {
   openImagePicker,
   onImageFileChange,
   setImageWidthPreset,
+  insertTwoColumns,
   toolbarBtnClass
 } = useCustomMarketingRichTextEditor({ model, recipientListId: recipientListIdRef })
 </script>
@@ -239,13 +242,13 @@ const {
             <button type="button" :class="toolbarBtnClass(false)" data-tip="Increase indent" aria-label="Increase indent" @mousedown.prevent @click="indent">
               <IndentIncrease :size="15" :stroke-width="2" />
             </button>
-            <button type="button" :class="toolbarBtnClass(isAlignLeft)" :data-tip="isImageSelected ? 'Align image left' : 'Align text left'" :aria-label="isImageSelected ? 'Align image left' : 'Align text left'" @mousedown.prevent @click="setAlign('left')">
+            <button type="button" :class="toolbarBtnClass(isAlignLeft)" :data-tip="isImageSelected ? 'Align left — type beside photo' : 'Align text left'" :aria-label="isImageSelected ? 'Align image left so text wraps beside it' : 'Align text left'" @mousedown.prevent @click="setAlign('left')">
               <AlignLeft :size="15" :stroke-width="2" />
             </button>
-            <button type="button" :class="toolbarBtnClass(isAlignCenter)" :data-tip="isImageSelected ? 'Align image center' : 'Align text center'" :aria-label="isImageSelected ? 'Align image center' : 'Align text center'" @mousedown.prevent @click="setAlign('center')">
+            <button type="button" :class="toolbarBtnClass(isAlignCenter)" :data-tip="isImageSelected ? 'Align center — text below' : 'Align text center'" :aria-label="isImageSelected ? 'Align image center' : 'Align text center'" @mousedown.prevent @click="setAlign('center')">
               <AlignCenter :size="15" :stroke-width="2" />
             </button>
-            <button type="button" :class="toolbarBtnClass(isAlignRight)" :data-tip="isImageSelected ? 'Align image right' : 'Align text right'" :aria-label="isImageSelected ? 'Align image right' : 'Align text right'" @mousedown.prevent @click="setAlign('right')">
+            <button type="button" :class="toolbarBtnClass(isAlignRight)" :data-tip="isImageSelected ? 'Align right — type beside photo' : 'Align text right'" :aria-label="isImageSelected ? 'Align image right so text wraps beside it' : 'Align text right'" @mousedown.prevent @click="setAlign('right')">
               <AlignRight :size="15" :stroke-width="2" />
             </button>
             <span class="custom-marketing-editor__tip" :data-tip="isImageSelected ? 'Justify (text only)' : 'Justify'">
@@ -278,6 +281,16 @@ const {
                 <ImageIcon :size="15" :stroke-width="2" />
               </button>
             </span>
+            <button
+              type="button"
+              :class="toolbarBtnClass(isInTwoColumns)"
+              data-tip="Two columns — image beside text"
+              aria-label="Insert two columns"
+              @mousedown.prevent
+              @click="insertTwoColumns"
+            >
+              <Columns2 :size="15" :stroke-width="2" />
+            </button>
           </div>
           <span class="custom-marketing-editor__group-label">Insert</span>
         </div>
@@ -311,13 +324,13 @@ const {
           </button>
         </div>
         <div class="custom-marketing-editor__image-toolbar-align" role="group" aria-label="Image align">
-          <button type="button" :class="toolbarBtnClass(isAlignLeft)" data-tip="Align image left" aria-label="Align image left" @mousedown.prevent @click="setAlign('left')">
+          <button type="button" :class="toolbarBtnClass(isAlignLeft)" data-tip="Align left — type beside photo" aria-label="Align image left so text wraps beside it" @mousedown.prevent @click="setAlign('left')">
             <AlignLeft :size="15" :stroke-width="2" />
           </button>
-          <button type="button" :class="toolbarBtnClass(isAlignCenter)" data-tip="Align image center" aria-label="Align image center" @mousedown.prevent @click="setAlign('center')">
+          <button type="button" :class="toolbarBtnClass(isAlignCenter)" data-tip="Align center — text below" aria-label="Align image center" @mousedown.prevent @click="setAlign('center')">
             <AlignCenter :size="15" :stroke-width="2" />
           </button>
-          <button type="button" :class="toolbarBtnClass(isAlignRight)" data-tip="Align image right" aria-label="Align image right" @mousedown.prevent @click="setAlign('right')">
+          <button type="button" :class="toolbarBtnClass(isAlignRight)" data-tip="Align right — type beside photo" aria-label="Align image right so text wraps beside it" @mousedown.prevent @click="setAlign('right')">
             <AlignRight :size="15" :stroke-width="2" />
           </button>
         </div>
@@ -387,7 +400,8 @@ const {
       {{ gmailClipWarning }}
     </p>
     <p class="custom-marketing-editor__status">
-      Photos are compressed for Gmail. Select a photo for size and align options, or drag a corner to resize.
+      Photos are compressed for Gmail. Select a photo, then use Left/Right align to type beside it (or Center for text below).
+      Use <strong>Two columns</strong> for a fixed side-by-side layout.
     </p>
   </div>
 </template>

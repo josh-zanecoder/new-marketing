@@ -18,17 +18,23 @@ export function normalizeCustomMarketingImageAlign(
   return 'left'
 }
 
-/** Gmail-safe horizontal placement (free-form absolute position is not supported in email). */
+/** Gmail-safe placement: left/right float so following text wraps beside the photo. */
 export function customMarketingImageAlignCss(align: CustomMarketingImageAlign): string {
-  if (align === 'center') return 'display:block;margin-left:auto;margin-right:auto;'
-  if (align === 'right') return 'display:block;margin-left:auto;margin-right:0;'
-  return 'display:block;margin-left:0;margin-right:auto;'
+  if (align === 'center') {
+    return 'display:block;float:none;clear:both;margin-left:auto;margin-right:auto;'
+  }
+  if (align === 'right') {
+    return 'display:block;float:right;margin:0 0 8px 12px;max-width:100%;height:auto;'
+  }
+  return 'display:block;float:left;margin:0 12px 8px 0;max-width:100%;height:auto;'
 }
 
 export function parseCustomMarketingImageAlign(element: HTMLElement): CustomMarketingImageAlign {
+  const style = element.getAttribute('style') ?? ''
+  if (/float\s*:\s*right/i.test(style)) return 'right'
+  if (/float\s*:\s*left/i.test(style)) return 'left'
   const textAlign = element.style.textAlign
   if (textAlign === 'center' || textAlign === 'right' || textAlign === 'left') return textAlign
-  const style = element.getAttribute('style') ?? ''
   const leftAuto = /margin-left\s*:\s*auto/i.test(style)
   const rightAuto = /margin-right\s*:\s*auto/i.test(style)
   if (leftAuto && rightAuto) return 'center'
@@ -72,19 +78,25 @@ export function applyCustomMarketingImageAlign(
 ): void {
   const normalized = normalizeCustomMarketingImageAlign(align)
   dom.dataset.imageAlign = normalized
-  // Keep inline margins for email-preview parity; CSS [data-image-align] reinforces in the editor.
+  // Float left/right so following paragraphs wrap beside the photo in the editor + email.
   if (normalized === 'center') {
+    dom.style.float = 'none'
+    dom.style.clear = 'both'
     dom.style.marginLeft = 'auto'
     dom.style.marginRight = 'auto'
     return
   }
   if (normalized === 'right') {
-    dom.style.marginLeft = 'auto'
+    dom.style.float = 'right'
+    dom.style.clear = 'none'
+    dom.style.marginLeft = '12px'
     dom.style.marginRight = '0'
     return
   }
+  dom.style.float = 'left'
+  dom.style.clear = 'none'
   dom.style.marginLeft = '0'
-  dom.style.marginRight = 'auto'
+  dom.style.marginRight = '12px'
 }
 
 /** Shared by toolbar: image selection uses attrs; text uses TextAlign. */

@@ -18,6 +18,10 @@ import {
   normalizeCustomMarketingImageAlign
 } from '~~/shared/customMarketingDraggableImage'
 import {
+  CustomMarketingColumn,
+  CustomMarketingColumns
+} from '~~/shared/customMarketingTwoColumn'
+import {
   firstImageFileFromDataTransfer,
   shouldAcceptExternalImageDrop
 } from '~~/shared/customMarketingImageDrag'
@@ -91,6 +95,8 @@ export type CustomMarketingRichTextEditorBinders = {
   openImagePicker: () => void
   onImageFileChange: (ev: Event) => Promise<void>
   setImageWidthPreset: (width: CustomMarketingImageWidthPreset) => void
+  insertTwoColumns: () => void
+  isInTwoColumns: ComputedRef<boolean>
   toolbarBtnClass: (active: boolean) => string
 }
 
@@ -101,7 +107,15 @@ async function insertImageFromFile(
 ): Promise<void> {
   const dataUrl = await compressCustomMarketingImageFile(file)
   const src = await upload(dataUrl)
-  editor.chain().focus().setImage({ src }).run()
+  // Float left by default + trailing paragraph so you can type beside the photo immediately.
+  editor
+    .chain()
+    .focus()
+    .insertContent([
+      { type: 'image', attrs: { src, textAlign: 'left' } },
+      { type: 'paragraph' }
+    ])
+    .run()
 }
 
 export function useCustomMarketingRichTextEditor(options: {
@@ -187,6 +201,8 @@ export function useCustomMarketingRichTextEditor(options: {
         inline: false,
         HTMLAttributes: { class: 'custom-marketing-editor__image' }
       }),
+      CustomMarketingColumns,
+      CustomMarketingColumn,
       Placeholder.configure({ placeholder })
     ],
     editorProps: {
@@ -329,6 +345,14 @@ export function useCustomMarketingRichTextEditor(options: {
   const isBulletList = computed(() => tickActive(() => editor.value?.isActive('bulletList') ?? false))
   const isOrderedList = computed(() => tickActive(() => editor.value?.isActive('orderedList') ?? false))
   const isImageSelected = computed(() => tickActive(() => editor.value?.isActive('image') ?? false))
+  const isInTwoColumns = computed(() =>
+    tickActive(
+      () =>
+        editor.value?.isActive('customMarketingColumns')
+        || editor.value?.isActive('customMarketingColumn')
+        || false
+    )
+  )
   const selectedImageWidth = computed((): number | null => {
     void selectionTick.value
     const width = editor.value?.getAttributes('image').width
@@ -488,6 +512,10 @@ export function useCustomMarketingRichTextEditor(options: {
     current.chain().focus().updateAttributes('image', { width, height: null }).run()
   }
 
+  function insertTwoColumns(): void {
+    editor.value?.chain().focus().insertCustomMarketingTwoColumns().run()
+  }
+
   function toolbarBtnClass(active: boolean): string {
     return active
       ? 'custom-marketing-editor__btn custom-marketing-editor__btn--active'
@@ -512,6 +540,7 @@ export function useCustomMarketingRichTextEditor(options: {
     imageError,
     imageUploading,
     isImageSelected,
+    isInTwoColumns,
     selectedImageWidth,
     gmailClipWarning,
     isBold,
@@ -550,6 +579,7 @@ export function useCustomMarketingRichTextEditor(options: {
     openImagePicker,
     onImageFileChange,
     setImageWidthPreset,
+    insertTwoColumns,
     toolbarBtnClass
   }
 }
