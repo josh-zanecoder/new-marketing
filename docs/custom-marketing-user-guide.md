@@ -20,7 +20,7 @@ After you send, you’ll land on the campaign page so you can follow progress.
 ## Writing tips
 
 The page shows a **Quick tips** panel under the editor (Preview, Variables, Photos, Layout). In short:
-- **From** uses your CRM’s default sender — you don’t change it on this page.
+- **From** uses the CRM signed-in user’s email (and name when available) — you don’t change it on this page.
 - You can **paste or insert photos**. New photos sit on the left so you can **type beside them**. Select a photo to resize (S / M / L / Full) or align (**Left/Right** = text wraps beside, **Center** = text below). Click the **trash on the photo** to remove it. Drag a corner to resize, or drag the photo to move it.
 - Optional: use **Two columns** for a fixed side-by-side layout. Hover the block and click the **trash on the columns** to remove the layout (your text and photos stay).
 - If the message is very large (usually lots of big photos), you may see a warning before send — shrink or remove photos and try again.

@@ -1,5 +1,5 @@
 /** Default subject for Custom Marketing (personal-style bulk email). */
-export const CUSTOM_MARKETING_DEFAULT_SUBJECT = 'A quick note from {{ user.firstName }}'
+export const CUSTOM_MARKETING_DEFAULT_SUBJECT = 'A quick note from {{ recipient.firstName }}'
 
 /** Default plain-text body — looks like a normal personal email, not a marketing blast. */
 export const CUSTOM_MARKETING_DEFAULT_BODY = [

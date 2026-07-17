@@ -33,6 +33,7 @@ import {
 describe('customMarketingEmail', () => {
   it('exposes non-empty default subject and body', () => {
     assert.ok(CUSTOM_MARKETING_DEFAULT_SUBJECT.trim().length > 0)
+    assert.ok(CUSTOM_MARKETING_DEFAULT_SUBJECT.includes('{{ recipient.firstName }}'))
     assert.ok(CUSTOM_MARKETING_DEFAULT_BODY.trim().length > 0)
     assert.ok(CUSTOM_MARKETING_DEFAULT_BODY_HTML.includes('<p>'))
   })

@@ -25,7 +25,7 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
 | Variable picker | Subject: Insert variable select. Body: `{ }` toolbar menu loads `/tenant/dynamic-variables` (falls back to built-in recipient/sender tags). Inserts `{{key}}` at caret. |
 | Quick tips panel | Below the editor: Preview, Variables, Photos, Layout (`CustomMarketingEditorTips.vue`) |
 | Image folders | `custom-marketing/{tenantName}/{recipientListId\|no-list}/{timestamp-uuid}.jpg` (registry tenant **name**; `no-list` when none selected) |
-| From | Tenant default campaign sender (`/tenant/me`) — shown in preview, not editable on this page |
+| From | CRM authenticated user email/name from `/auth/me` (falls back to tenant default sender) — shown in preview, not editable |
 
 ## GCS setup
 
@@ -78,6 +78,7 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Page | `app/pages/tenant/custom-marketing/index.vue` |
 | Compose + send / schedule logic | `app/composables/useCustomMarketingCompose.ts` |
 | Schedule datetime helpers | `shared/datetimeLocal.ts` |
+| CRM From resolver | `shared/crmAuthenticatedSender.ts` |
 | TipTap editor logic | `app/composables/useCustomMarketingRichTextEditor.ts` |
 | Inbox preview chrome | `app/composables/useCustomMarketingEmailPreviewChrome.ts` |
 | Message Preview modal | `app/composables/useCustomMarketingMessagePreview.ts`, `app/composables/useCustomMarketingPreviewMerge.ts`, `shared/customMarketingMessagePreview.ts` |
@@ -122,8 +123,9 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Message Preview modal Escape + merge helpers | `shared/__tests__/customMarketingMessagePreview.test.ts` |
 | Schedule datetime-local helpers | `shared/__tests__/datetimeLocal.test.ts` |
 | Quick tips copy | `shared/__tests__/customMarketingEditorTips.test.ts` |
+| CRM From resolver | `shared/__tests__/crmAuthenticatedSender.test.ts` |
 
 ```bash
 cd new-marketing
-node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts shared/__tests__/customMarketingTwoColumn.test.ts shared/__tests__/customMarketingMergeVariables.test.ts shared/__tests__/customMarketingMessagePreview.test.ts shared/__tests__/datetimeLocal.test.ts shared/__tests__/customMarketingEditorTips.test.ts
+node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts shared/__tests__/customMarketingTwoColumn.test.ts shared/__tests__/customMarketingMergeVariables.test.ts shared/__tests__/customMarketingMessagePreview.test.ts shared/__tests__/datetimeLocal.test.ts shared/__tests__/customMarketingEditorTips.test.ts shared/__tests__/crmAuthenticatedSender.test.ts
 ```
