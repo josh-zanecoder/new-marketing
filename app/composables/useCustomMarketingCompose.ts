@@ -1,10 +1,14 @@
 import {
-  CUSTOM_MARKETING_DEFAULT_BODY,
+  CUSTOM_MARKETING_DEFAULT_BODY_HTML,
   CUSTOM_MARKETING_DEFAULT_SUBJECT,
   isCustomMarketingContentReady,
   resolveCustomMarketingSendHtml,
   type CustomMarketingContentSource
 } from '~~/shared/customMarketingEmail'
+import {
+  customMarketingGmailClipWarning,
+  isCustomMarketingHtmlOverGmailClip
+} from '~~/shared/customMarketingEmailSize'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -26,7 +30,7 @@ export function useCustomMarketingCompose() {
     useDefaultCampaignSender()
 
   const subject = ref(CUSTOM_MARKETING_DEFAULT_SUBJECT)
-  const body = ref(CUSTOM_MARKETING_DEFAULT_BODY)
+  const body = ref(CUSTOM_MARKETING_DEFAULT_BODY_HTML)
   const contentSource = ref<CustomMarketingContentSource>('write')
   const uploadedHtml = ref('')
   const uploadedFileName = ref('')
@@ -77,7 +81,7 @@ export function useCustomMarketingCompose() {
       && subject.value.trim().length > 0
       && isCustomMarketingContentReady({
         contentSource: contentSource.value,
-        plainBody: body.value,
+        bodyHtml: body.value,
         uploadedHtml: uploadedHtml.value
       })
       && !isSending.value
@@ -87,6 +91,16 @@ export function useCustomMarketingCompose() {
   const uploadPreviewSrcdoc = computed(() => uploadedHtml.value.trim())
 
   const hasUploadedTemplate = computed(() => uploadedHtml.value.trim().length > 0)
+
+  const sendHtmlPreview = computed(() =>
+    resolveCustomMarketingSendHtml({
+      contentSource: contentSource.value,
+      bodyHtml: body.value,
+      uploadedHtml: uploadedHtml.value
+    })
+  )
+
+  const gmailClipWarning = computed(() => customMarketingGmailClipWarning(sendHtmlPreview.value))
   const previewFullscreenOpen = ref(false)
 
   function openPreviewFullscreen(): void {
@@ -177,7 +191,7 @@ export function useCustomMarketingCompose() {
 
   async function bootstrap(): Promise<void> {
     subject.value = CUSTOM_MARKETING_DEFAULT_SUBJECT
-    body.value = CUSTOM_MARKETING_DEFAULT_BODY
+    body.value = CUSTOM_MARKETING_DEFAULT_BODY_HTML
     contentSource.value = 'write'
     uploadedHtml.value = ''
     uploadedFileName.value = ''
@@ -237,13 +251,19 @@ export function useCustomMarketingCompose() {
       saveError.value = 'Select a recipient list and provide a subject and message or uploaded template.'
       return
     }
+    const html = resolveCustomMarketingSendHtml({
+      contentSource: contentSource.value,
+      bodyHtml: body.value,
+      uploadedHtml: uploadedHtml.value
+    })
+    if (isCustomMarketingHtmlOverGmailClip(html)) {
+      saveError.value =
+        customMarketingGmailClipWarning(html)
+        ?? 'Email HTML is too large for Gmail. Remove or shrink photos before sending.'
+      return
+    }
     isSending.value = true
     try {
-      const html = resolveCustomMarketingSendHtml({
-        contentSource: contentSource.value,
-        plainBody: body.value,
-        uploadedHtml: uploadedHtml.value
-      })
       const listName = selectedListName.value || 'recipients'
       const name = `Custom Marketing — ${listName}`.slice(0, 120)
       const created = await marketingApi.createCampaign({
@@ -317,6 +337,7 @@ export function useCustomMarketingCompose() {
     firstRecipientPending,
     firstRecipientError,
     saveError,
+    gmailClipWarning,
     isSending,
     canSend,
     bootstrap,

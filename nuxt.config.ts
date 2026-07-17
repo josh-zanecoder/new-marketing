@@ -26,6 +26,14 @@ export default defineNuxtConfig({
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
+    /** GCS bucket for Custom Marketing email images (public HTTPS URLs for Gmail). */
+    gcsBucket: process.env.GCS_BUCKET || process.env.MARKETING_GCS_BUCKET || '',
+    gcsProjectId:
+      process.env.GCS_PROJECT_ID || process.env.CLOUD_TASKS_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || '',
+    gcsClientEmail: process.env.GCS_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || '',
+    /** PEM private key, or set `GCS_PRIVATE_KEY_BASE64` instead. */
+    gcsPrivateKey: process.env.GCS_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || '',
+    gcsPrivateKeyBase64: process.env.GCS_PRIVATE_KEY_BASE64 || '',
     public: {
       marketingBaseUrl:
         process.env.NUXT_PUBLIC_MARKETING_BASE_URL || process.env.MARKETING_PUBLIC_BASE_URL || '',

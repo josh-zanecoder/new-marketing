@@ -14,6 +14,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
+import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -40,18 +41,27 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailTemplate, ManualRecipient, Contact } = getTenantClientModels(conn)
 
+  const recipientsType = body.recipientsType || 'manual'
+  const recipientsListId = body.recipientsListId || ''
+  const auth = event.context.auth
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
+  const tenantName = isRegisteredTenantAuthContext(auth)
+    ? await resolveCustomMarketingTenantFolderName(auth)
+    : ''
+
   const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
     campaignName: body.name.trim(),
     subject: body.subject,
     emailTemplateId: body.emailTemplateId,
     templateHtml: body.templateHtml,
     templateHtmlSource: body.templateHtmlSource,
-    saveHtmlToLibrary: body.saveHtmlToLibrary
+    saveHtmlToLibrary: body.saveHtmlToLibrary,
+    tenantName,
+    recipientListId: recipientsListId
   })
   const emailTemplateId = templateResult.emailTemplateId
 
-  const recipientsType = body.recipientsType || 'manual'
-  const recipientsListId = body.recipientsListId || ''
   const manualRecipientIds = [
     ...new Set(
       (body.recipientsManual || [])
@@ -76,12 +86,7 @@ export default defineEventHandler(async (event) => {
         ? resolveRecipientListContactIds(conn, recipientsListId)
         : Promise.resolve([])
 
-  const auth = event.context.auth
   const registryConn = await getRegistryConnection()
-  const dbName =
-    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
-      ? auth.dbName
-      : ''
   const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
   const sender = resolveCampaignSenderForPersistence(auth, senderDefaults, {
     senderEmail: body.senderEmail
