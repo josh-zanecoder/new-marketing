@@ -464,6 +464,17 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** Compress client-side, then host on GCS under tenant + recipient-list (or `no-list`) folders. */
+  async function uploadCustomMarketingImage(body: {
+    dataUrl: string
+    recipientListId?: string
+  }) {
+    return $fetch<{ ok: boolean; url: string; objectPath: string }>(
+      '/api/v1/tenant/custom-marketing/images',
+      tenantFetchInit({ method: 'POST', body, timeout: 60000 })
+    )
+  }
+
   return {
     serverAuthHeaders,
     tenantFetchInit,
@@ -493,6 +504,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     resumeCampaignSend,
     restartCampaignSend,
     abortCampaignRecipients,
-    sendTestEmail
+    sendTestEmail,
+    uploadCustomMarketingImage
   }
 }

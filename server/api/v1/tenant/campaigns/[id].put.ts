@@ -19,6 +19,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
+import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -61,6 +62,13 @@ export default defineEventHandler(async (event) => {
 
   const saveHtmlToLibrary = body.saveHtmlToLibrary === true
 
+  const auth = event.context.auth
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
+  const tenantName = isRegisteredTenantAuthContext(auth)
+    ? await resolveCustomMarketingTenantFolderName(auth)
+    : ''
+
   const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
     campaignName: body.name.trim(),
     subject: body.subject,
@@ -68,18 +76,15 @@ export default defineEventHandler(async (event) => {
     templateHtml: body.templateHtml,
     templateHtmlSource: body.templateHtmlSource,
     saveHtmlToLibrary,
-    currentEmailTemplateId: campaign.emailTemplate
+    currentEmailTemplateId: campaign.emailTemplate,
+    tenantName,
+    recipientListId: recipientsListId
   })
   if (templateResult.emailTemplateId) {
     campaign.emailTemplate = new mongoose.Types.ObjectId(templateResult.emailTemplateId)
   }
 
-  const auth = event.context.auth
   const registryConn = await getRegistryConnection()
-  const dbName =
-    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string'
-      ? auth.dbName
-      : ''
   const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
 
   campaign.name = body.name.trim()
