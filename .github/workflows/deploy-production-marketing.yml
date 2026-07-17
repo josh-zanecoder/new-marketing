@@ -28,7 +28,7 @@ env:
   SEND_WORKER_MIN_INSTANCES: 1
   SEND_WORKER_MAX_INSTANCES: 1
   # Set to 'true' after Secret Manager has CAMPAIGN_SEND_WORKER_SECRET + Cloud Tasks queue vars.
-  DEPLOY_SEND_WORKER: 'false'
+  DEPLOY_SEND_WORKER: 'true'
   # Set to 'true' to deploy marketing-kafka-worker-production on production pushes.
   DEPLOY_KAFKA_WORKER: 'false'
   # Set to 'true' to deploy marketing-kafka-producer-bridge-production on production pushes.
