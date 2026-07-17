@@ -9,8 +9,13 @@ import {
   customMarketingGmailClipWarning,
   isCustomMarketingHtmlOverGmailClip
 } from '~~/shared/customMarketingEmailSize'
+import {
+  defaultScheduleDatetimeLocal,
+  parseDatetimeLocalToIso
+} from '~~/shared/datetimeLocal'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
 import { useCampaignStore } from '~/store/campaignStore'
+import { useMarketingScrollLock } from '~/composables/useMarketingScrollLock'
 
 interface RecipientListOption {
   id: string
@@ -47,6 +52,12 @@ export function useCustomMarketingCompose() {
   const firstRecipientError = ref('')
   const saveError = ref<string | null>(null)
   const isSending = ref(false)
+  const scheduleModalOpen = ref(false)
+  const scheduleLocal = ref('')
+  const scheduleError = ref('')
+  const scheduleSubmitting = ref(false)
+
+  useMarketingScrollLock(scheduleModalOpen)
 
   const senderName = computed(() => defaultSenderName.value)
   const senderEmail = computed(() => defaultSenderEmail.value)
@@ -85,8 +96,11 @@ export function useCustomMarketingCompose() {
         uploadedHtml: uploadedHtml.value
       })
       && !isSending.value
+      && !scheduleSubmitting.value
       && !uploadPending.value
   )
+
+  const sendBusy = computed(() => isSending.value || scheduleSubmitting.value)
 
   const uploadPreviewSrcdoc = computed(() => uploadedHtml.value.trim())
 
@@ -245,12 +259,16 @@ export function useCustomMarketingCompose() {
     }
   }
 
-  async function sendCustomMarketing(): Promise<void> {
-    saveError.value = null
-    if (!canSend.value) {
-      saveError.value = 'Select a recipient list and provide a subject and message or uploaded template.'
-      return
-    }
+  function catchApiMessage(e: unknown, fallback: string): string {
+    const data =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string; statusMessage?: string } }).data
+        : undefined
+    const raw = data?.message ?? data?.statusMessage ?? (e instanceof Error ? e.message : undefined)
+    return typeof raw === 'string' ? raw : fallback
+  }
+
+  function resolveSendHtmlOrSetError(): string | null {
     const html = resolveCustomMarketingSendHtml({
       contentSource: contentSource.value,
       bodyHtml: body.value,
@@ -260,25 +278,93 @@ export function useCustomMarketingCompose() {
       saveError.value =
         customMarketingGmailClipWarning(html)
         ?? 'Email HTML is too large for Gmail. Remove or shrink photos before sending.'
+      return null
+    }
+    return html
+  }
+
+  async function createCustomMarketingCampaign(html: string): Promise<{ id: string; name: string }> {
+    const listName = selectedListName.value || 'recipients'
+    const name = `Custom Marketing — ${listName}`.slice(0, 120)
+    const created = await marketingApi.createCampaign({
+      name,
+      senderName: senderName.value,
+      senderEmail: senderEmail.value,
+      subject: subject.value.trim(),
+      recipientsType: 'list',
+      recipientsListId: recipientsListId.value.trim(),
+      recipientsManual: [],
+      templateHtml: html,
+      templateHtmlSource: 'custom',
+      saveHtmlToLibrary: false
+    })
+    return { id: created.id, name }
+  }
+
+  function openScheduleModal(): void {
+    if (!canSend.value) return
+    saveError.value = null
+    scheduleError.value = ''
+    scheduleLocal.value = defaultScheduleDatetimeLocal()
+    scheduleModalOpen.value = true
+  }
+
+  function closeScheduleModal(): void {
+    if (scheduleSubmitting.value) return
+    scheduleModalOpen.value = false
+    scheduleError.value = ''
+  }
+
+  async function confirmScheduleCustomMarketing(): Promise<void> {
+    saveError.value = null
+    scheduleError.value = ''
+    if (!canSend.value) {
+      saveError.value = 'Select a recipient list and provide a subject and message or uploaded template.'
       return
     }
+    const scheduledIso = parseDatetimeLocalToIso(scheduleLocal.value)
+    if (!scheduledIso) {
+      scheduleError.value = 'Pick a valid date and time.'
+      return
+    }
+    const html = resolveSendHtmlOrSetError()
+    if (!html) return
+    scheduleSubmitting.value = true
+    try {
+      const { id } = await createCustomMarketingCampaign(html)
+      try {
+        await marketingApi.scheduleCampaignSend(id, scheduledIso)
+        scheduleModalOpen.value = false
+        const now = new Date().toISOString()
+        campaignStore.patchCampaignDetailCache(id, {
+          status: 'Scheduled',
+          scheduledAt: scheduledIso,
+          updatedAt: now
+        })
+        void campaignStore.fetchCampaigns({ force: true })
+        await navigateTo(`/tenant/campaigns/${id}`)
+      } catch (e) {
+        scheduleError.value = catchApiMessage(e, 'Could not schedule send.')
+      }
+    } catch (e) {
+      saveError.value = catchApiMessage(e, 'Failed to save custom marketing for scheduling')
+      scheduleModalOpen.value = false
+    } finally {
+      scheduleSubmitting.value = false
+    }
+  }
+
+  async function sendCustomMarketing(): Promise<void> {
+    saveError.value = null
+    if (!canSend.value) {
+      saveError.value = 'Select a recipient list and provide a subject and message or uploaded template.'
+      return
+    }
+    const html = resolveSendHtmlOrSetError()
+    if (!html) return
     isSending.value = true
     try {
-      const listName = selectedListName.value || 'recipients'
-      const name = `Custom Marketing — ${listName}`.slice(0, 120)
-      const created = await marketingApi.createCampaign({
-        name,
-        senderName: senderName.value,
-        senderEmail: senderEmail.value,
-        subject: subject.value.trim(),
-        recipientsType: 'list',
-        recipientsListId: recipientsListId.value.trim(),
-        recipientsManual: [],
-        templateHtml: html,
-        templateHtmlSource: 'custom',
-        saveHtmlToLibrary: false
-      })
-      const campaignId = created.id
+      const { id: campaignId, name } = await createCustomMarketingCampaign(html)
       const sendResult = await campaignStore.sendCampaign({
         id: campaignId,
         name,
@@ -298,12 +384,7 @@ export function useCustomMarketingCompose() {
       }
       await navigateTo(`/tenant/campaigns/${campaignId}`)
     } catch (e) {
-      const data =
-        e && typeof e === 'object' && 'data' in e
-          ? (e as { data?: { message?: string; statusMessage?: string } }).data
-          : undefined
-      const raw = data?.message ?? data?.statusMessage ?? (e instanceof Error ? e.message : undefined)
-      saveError.value = typeof raw === 'string' ? raw : 'Failed to send custom marketing'
+      saveError.value = catchApiMessage(e, 'Failed to send custom marketing')
     } finally {
       isSending.value = false
     }
@@ -339,7 +420,15 @@ export function useCustomMarketingCompose() {
     saveError,
     gmailClipWarning,
     isSending,
+    sendBusy,
     canSend,
+    scheduleModalOpen,
+    scheduleLocal,
+    scheduleError,
+    scheduleSubmitting,
+    openScheduleModal,
+    closeScheduleModal,
+    confirmScheduleCustomMarketing,
     bootstrap,
     setContentSource,
     clearUploadedTemplate,

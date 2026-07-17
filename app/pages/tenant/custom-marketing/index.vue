@@ -32,7 +32,15 @@ const {
   saveError,
   gmailClipWarning,
   isSending,
+  sendBusy,
   canSend,
+  scheduleModalOpen,
+  scheduleLocal,
+  scheduleError,
+  scheduleSubmitting,
+  openScheduleModal,
+  closeScheduleModal,
+  confirmScheduleCustomMarketing,
   bootstrap,
   setContentSource,
   clearUploadedTemplate,
@@ -220,12 +228,7 @@ onMounted(() => {
             <div class="min-h-[18rem] animate-pulse rounded-xl border border-slate-200 bg-slate-50" />
           </template>
         </ClientOnly>
-        <p class="mt-2 text-xs text-slate-500">
-          Inbox-style preview — what recipients see in Gmail and similar clients. Photos upload even
-          before a recipient list is chosen. Use <strong>Insert variable</strong> (&#123;&#123;&#125;&#125; button)
-          to add merge tags such as
-          <code class="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">&#123;&#123; recipient.firstName &#125;&#125;</code>.
-        </p>
+        <TenantCustomMarketingEditorTips class="mt-3" />
       </div>
 
       <!-- Upload HTML template UI hidden for now — set v-if to contentSource === 'upload' to restore -->
@@ -357,15 +360,80 @@ onMounted(() => {
       {{ saveError }}
     </div>
 
-    <div class="mt-8 flex justify-end">
+    <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="!canSend"
+        class="inline-flex w-full items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        :disabled="!canSend || sendBusy"
+        @click="openScheduleModal"
+      >
+        Schedule send
+      </button>
+      <button
+        type="button"
+        class="inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        :disabled="!canSend || sendBusy"
         @click="sendCustomMarketing"
       >
         {{ isSending ? 'Sending…' : 'Send' }}
       </button>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="scheduleModalOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-marketing-schedule-title"
+      >
+        <div
+          class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          aria-hidden="true"
+          @click="closeScheduleModal"
+        />
+        <div
+          class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6 sm:pb-6"
+          @click.stop
+        >
+          <h2 id="custom-marketing-schedule-title" class="text-lg font-semibold text-slate-900">
+            Schedule send
+          </h2>
+          <p class="mt-1 text-sm text-slate-500">
+            Your message will be saved as a campaign, then set to send at the time below (your local time).
+          </p>
+          <label class="mt-4 block text-sm font-medium text-slate-700" for="custom-marketing-schedule-datetime">
+            Date &amp; time
+          </label>
+          <input
+            id="custom-marketing-schedule-datetime"
+            v-model="scheduleLocal"
+            type="datetime-local"
+            class="mt-2 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+          >
+          <p v-if="scheduleError" class="mt-3 text-sm text-red-600" role="alert">
+            {{ scheduleError }}
+          </p>
+          <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-colors hover:bg-indigo-700 disabled:opacity-50 sm:order-2 sm:w-auto"
+              :disabled="sendBusy"
+              @click="confirmScheduleCustomMarketing"
+            >
+              {{ scheduleSubmitting ? 'Scheduling…' : 'Schedule' }}
+            </button>
+            <button
+              type="button"
+              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 sm:order-1 sm:w-auto"
+              :disabled="sendBusy"
+              @click="closeScheduleModal"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

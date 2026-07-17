@@ -9,19 +9,21 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
 3. **To** is a readonly input showing only the first recipient email from that list (empty until a list is selected). Bulk send still goes to everyone on the list.
 4. Edit **Subject**.
 5. Choose content:
-   - **Write message** — TipTap rich text with an **inbox-style preview** (what it looks like in Gmail), or
+   - **Write message** — TipTap rich text compose; click **Preview** for browser + Gmail view, or
    - **Upload HTML template** — choose a `.html` / `.htm` file (previewed and sent as-is)
-6. Click **Send** — creates a campaign with `templateHtmlSource: custom` and starts the Brevo send pipeline, then opens the campaign detail page.
+6. Click **Send** to send now, or **Schedule send** to pick a date/time (same flow as campaign create) — creates a campaign with `templateHtmlSource: custom`, then starts Brevo send or enqueues the scheduled job, and opens the campaign detail page.
 
 ## Rich text editor
 
 | Capability | Behavior |
 | --- | --- |
-| Preview chrome | Browser window frame + Gmail-like reading pane (tab, address bar, subject, avatar, From, To, date) |
+| Preview chrome | **Preview** opens a centered modal (backdrop click / Esc / Close) with browser frame + Gmail-like reading pane. Subject/body `{{…}}` tags are filled from the **first contact** on the selected recipient list (`/email/merge-context`). Without a list, tags stay as written. |
+| Compose surface | Plain editor under the ribbon while writing |
 | Formatting ribbon | Font/size/color/highlight, B/I/U/strike, sub/sup, lists, indent, align, undo/redo, image, two columns, **variable picker**. Hover any control for a label (including font dropdowns and disabled buttons). |
 | Images | Paste/insert → GCS upload (defaults to **float left** so you can type beside the photo). When selected: **S/M/L/Full**, **Left/Right** (text wraps beside), **Center** (text below), and an on-photo **trash** control. Drag a corner to resize. Drag the photo to move it. |
 | Two columns | Optional fixed side-by-side table. Hover/focus shows an on-block **trash** control that removes the layout and keeps the content. Prefer Left/Right align for free typing beside a photo. |
 | Variable picker | Subject: Insert variable select. Body: `{ }` toolbar menu loads `/tenant/dynamic-variables` (falls back to built-in recipient/sender tags). Inserts `{{key}}` at caret. |
+| Quick tips panel | Below the editor: Preview, Variables, Photos, Layout (`CustomMarketingEditorTips.vue`) |
 | Image folders | `custom-marketing/{tenantName}/{recipientListId\|no-list}/{timestamp-uuid}.jpg` (registry tenant **name**; `no-list` when none selected) |
 | From | Tenant default campaign sender (`/tenant/me`) — shown in preview, not editable on this page |
 
@@ -74,9 +76,11 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | --- | --- |
 | Nav item | `app/constants/marketingSidebarNav.ts` |
 | Page | `app/pages/tenant/custom-marketing/index.vue` |
-| Compose + send logic | `app/composables/useCustomMarketingCompose.ts` |
+| Compose + send / schedule logic | `app/composables/useCustomMarketingCompose.ts` |
+| Schedule datetime helpers | `shared/datetimeLocal.ts` |
 | TipTap editor logic | `app/composables/useCustomMarketingRichTextEditor.ts` |
 | Inbox preview chrome | `app/composables/useCustomMarketingEmailPreviewChrome.ts` |
+| Message Preview modal | `app/composables/useCustomMarketingMessagePreview.ts`, `app/composables/useCustomMarketingPreviewMerge.ts`, `shared/customMarketingMessagePreview.ts` |
 | TipTap UI shell | `app/components/tenant/CustomMarketingRichTextEditor.vue` |
 | Editor CSS | `app/assets/css/custom-marketing-editor.css` |
 | Defaults + rich wrap + upload resolve | `shared/customMarketingEmail.ts` |
@@ -87,6 +91,7 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Two-column layout (email table) | `shared/customMarketingTwoColumn.ts` |
 | Merge variable helpers | `shared/customMarketingMergeVariables.ts` |
 | Variable picker (body) | `app/composables/useCustomMarketingVariablePicker.ts` |
+| Quick tips panel | `app/components/tenant/CustomMarketingEditorTips.vue`, `app/composables/useCustomMarketingEditorTips.ts`, `shared/customMarketingEditorTips.ts` |
 | External drop vs reposition helper | `shared/customMarketingImageDrag.ts` |
 | Image compression | `app/utils/compressCustomMarketingImage.ts` |
 | GCS upload + HTML rewrite | `server/services/customMarketingImageUpload.service.ts` |
@@ -114,8 +119,11 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Image resize / align (corners, shrink-wrap, margins) | `shared/__tests__/customMarketingDraggableImage.test.ts` |
 | Two-column insert / wrap image | `shared/__tests__/customMarketingTwoColumn.test.ts` |
 | Merge variable token / fallback / groups | `shared/__tests__/customMarketingMergeVariables.test.ts` |
+| Message Preview modal Escape + merge helpers | `shared/__tests__/customMarketingMessagePreview.test.ts` |
+| Schedule datetime-local helpers | `shared/__tests__/datetimeLocal.test.ts` |
+| Quick tips copy | `shared/__tests__/customMarketingEditorTips.test.ts` |
 
 ```bash
 cd new-marketing
-node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts shared/__tests__/customMarketingTwoColumn.test.ts shared/__tests__/customMarketingMergeVariables.test.ts
+node --import tsx --test shared/__tests__/customMarketingEmail.test.ts shared/__tests__/customMarketingParagraphIndent.test.ts shared/__tests__/customMarketingListItem.test.ts shared/__tests__/customMarketingEmailSize.test.ts shared/__tests__/customMarketingHostedImages.test.ts shared/__tests__/customMarketingImageDrag.test.ts shared/__tests__/customMarketingDraggableImage.test.ts shared/__tests__/customMarketingTwoColumn.test.ts shared/__tests__/customMarketingMergeVariables.test.ts shared/__tests__/customMarketingMessagePreview.test.ts shared/__tests__/datetimeLocal.test.ts shared/__tests__/customMarketingEditorTips.test.ts
 ```

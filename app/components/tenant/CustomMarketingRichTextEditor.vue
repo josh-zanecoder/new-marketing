@@ -8,6 +8,7 @@ import {
   Bold,
   Braces,
   Columns2,
+  Eye,
   Highlighter,
   Image as ImageIcon,
   IndentDecrease,
@@ -22,9 +23,12 @@ import {
   Subscript,
   Superscript,
   Underline,
-  Undo2
+  Undo2,
+  X
 } from 'lucide-vue-next'
 import { useCustomMarketingEmailPreviewChrome } from '~/composables/useCustomMarketingEmailPreviewChrome'
+import { useCustomMarketingMessagePreview } from '~/composables/useCustomMarketingMessagePreview'
+import { useCustomMarketingPreviewMerge } from '~/composables/useCustomMarketingPreviewMerge'
 import { useCustomMarketingRichTextEditor } from '~/composables/useCustomMarketingRichTextEditor'
 import { useCustomMarketingVariablePicker } from '~/composables/useCustomMarketingVariablePicker'
 import '~/assets/css/custom-marketing-editor.css'
@@ -53,6 +57,16 @@ const fromNameRef = computed(() => props.fromName)
 const fromEmailRef = computed(() => props.fromEmail)
 const toEmailRef = computed(() => props.toEmail)
 const recipientListIdRef = computed(() => props.recipientListId)
+const bodyHtmlRef = computed(() => model.value ?? '')
+
+const { previewOpen, openPreview, closePreview } = useCustomMarketingMessagePreview()
+
+const { previewSubject, previewBodyHtml } = useCustomMarketingPreviewMerge({
+  previewOpen,
+  recipientListId: recipientListIdRef,
+  subject: subjectRef,
+  bodyHtml: bodyHtmlRef
+})
 
 const {
   subjectDisplay,
@@ -64,7 +78,7 @@ const {
   browserAddressUrl,
   browserTabLabel
 } = useCustomMarketingEmailPreviewChrome({
-  subject: subjectRef,
+  subject: previewSubject,
   fromName: fromNameRef,
   fromEmail: fromEmailRef,
   toEmail: toEmailRef
@@ -141,6 +155,18 @@ const {
 
 <template>
   <div class="custom-marketing-editor__shell">
+    <div class="custom-marketing-editor__shell-top">
+      <button
+        type="button"
+        class="custom-marketing-editor__preview-btn"
+        data-tip="Preview as Gmail"
+        aria-label="Preview as Gmail"
+        @click="openPreview"
+      >
+        <Eye :size="15" :stroke-width="2" />
+        <span>Preview</span>
+      </button>
+    </div>
     <div class="custom-marketing-editor__ribbon" role="toolbar" aria-label="Message formatting">
       <div class="custom-marketing-editor__ribbon-row">
         <div class="custom-marketing-editor__group">
@@ -425,60 +451,18 @@ const {
       </div>
     </div>
 
-    <div class="custom-marketing-editor__browser" aria-label="Browser email preview">
-      <div class="custom-marketing-editor__browser-titlebar">
-        <div class="custom-marketing-editor__browser-traffic" aria-hidden="true">
-          <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--red" />
-          <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--yellow" />
-          <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--green" />
-        </div>
-        <div class="custom-marketing-editor__browser-tab">
-          <span class="custom-marketing-editor__browser-tab-favicon" aria-hidden="true">M</span>
-          <span class="custom-marketing-editor__browser-tab-label">{{ browserTabLabel }}</span>
-        </div>
-      </div>
-      <div class="custom-marketing-editor__browser-toolbar">
-        <div class="custom-marketing-editor__browser-nav" aria-hidden="true">
-          <span class="custom-marketing-editor__browser-nav-btn">‹</span>
-          <span class="custom-marketing-editor__browser-nav-btn">›</span>
-          <span class="custom-marketing-editor__browser-nav-btn">↻</span>
-        </div>
-        <div class="custom-marketing-editor__browser-address">
-          <span class="custom-marketing-editor__browser-lock" aria-hidden="true" />
-          <span class="custom-marketing-editor__browser-url">{{ browserAddressUrl }}</span>
-        </div>
-      </div>
-      <div class="custom-marketing-editor__inbox">
-        <div class="custom-marketing-editor__inbox-header">
-          <h2 class="custom-marketing-editor__inbox-subject">{{ subjectDisplay }}</h2>
-          <div class="custom-marketing-editor__inbox-meta">
-            <div class="custom-marketing-editor__inbox-avatar" aria-hidden="true">{{ senderInitials }}</div>
-            <div class="custom-marketing-editor__inbox-meta-main">
-              <div class="custom-marketing-editor__inbox-from-row">
-                <div>
-                  <span class="custom-marketing-editor__inbox-from-name">{{ fromNameDisplay }}</span>
-                  <span v-if="fromEmailDisplay" class="custom-marketing-editor__inbox-from-email">&lt;{{ fromEmailDisplay }}&gt;</span>
-                </div>
-                <span class="custom-marketing-editor__inbox-date">{{ dateLabel }}</span>
-              </div>
-              <p class="custom-marketing-editor__inbox-to">
-                to <strong>{{ toDisplay }}</strong>
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="custom-marketing-editor__inbox-body">
-          <EditorContent v-if="editor" :editor="editor" />
-          <div
-            v-if="imageUploading"
-            class="custom-marketing-editor__image-loader"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <span class="custom-marketing-editor__image-loader-spinner" aria-hidden="true" />
-            <span class="custom-marketing-editor__image-loader-text">Uploading photo…</span>
-          </div>
+    <div class="custom-marketing-editor__compose" aria-label="Message editor">
+      <div class="custom-marketing-editor__compose-body">
+        <EditorContent v-if="editor" :editor="editor" />
+        <div
+          v-if="imageUploading"
+          class="custom-marketing-editor__image-loader"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span class="custom-marketing-editor__image-loader-spinner" aria-hidden="true" />
+          <span class="custom-marketing-editor__image-loader-text">Uploading photo…</span>
         </div>
       </div>
     </div>
@@ -487,9 +471,88 @@ const {
     <p v-if="gmailClipWarning" class="custom-marketing-editor__clip-warning" role="status">
       {{ gmailClipWarning }}
     </p>
-    <p class="custom-marketing-editor__status">
-      Photos are compressed for Gmail. Select a photo for size and align. Use the trash on a photo or two-column block to remove it.
-      Use <strong>Two columns</strong> for a fixed side-by-side layout.
-    </p>
+
+    <Teleport to="body">
+      <div
+        v-if="previewOpen"
+        class="custom-marketing-editor__preview-modal"
+        @click.self="closePreview"
+      >
+        <div
+          class="custom-marketing-editor__preview-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Email preview"
+        >
+          <div class="custom-marketing-editor__preview-modal-bar">
+            <div class="custom-marketing-editor__preview-modal-copy">
+              <p class="custom-marketing-editor__preview-modal-title">Email preview</p>
+              <p class="custom-marketing-editor__preview-modal-subtitle">
+                Browser + Gmail view
+              </p>
+            </div>
+            <button
+              type="button"
+              class="custom-marketing-editor__preview-modal-close"
+              aria-label="Close preview"
+              @click="closePreview"
+            >
+              <X :size="16" :stroke-width="2" />
+              <span>Close</span>
+            </button>
+          </div>
+          <div class="custom-marketing-editor__preview-modal-scroll">
+            <div class="custom-marketing-editor__browser" aria-label="Browser email preview">
+              <div class="custom-marketing-editor__browser-titlebar">
+                <div class="custom-marketing-editor__browser-traffic" aria-hidden="true">
+                  <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--red" />
+                  <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--yellow" />
+                  <span class="custom-marketing-editor__browser-dot custom-marketing-editor__browser-dot--green" />
+                </div>
+                <div class="custom-marketing-editor__browser-tab">
+                  <span class="custom-marketing-editor__browser-tab-favicon" aria-hidden="true">M</span>
+                  <span class="custom-marketing-editor__browser-tab-label">{{ browserTabLabel }}</span>
+                </div>
+              </div>
+              <div class="custom-marketing-editor__browser-toolbar">
+                <div class="custom-marketing-editor__browser-nav" aria-hidden="true">
+                  <span class="custom-marketing-editor__browser-nav-btn">‹</span>
+                  <span class="custom-marketing-editor__browser-nav-btn">›</span>
+                  <span class="custom-marketing-editor__browser-nav-btn">↻</span>
+                </div>
+                <div class="custom-marketing-editor__browser-address">
+                  <span class="custom-marketing-editor__browser-lock" aria-hidden="true" />
+                  <span class="custom-marketing-editor__browser-url">{{ browserAddressUrl }}</span>
+                </div>
+              </div>
+              <div class="custom-marketing-editor__inbox">
+                <div class="custom-marketing-editor__inbox-header">
+                  <h2 class="custom-marketing-editor__inbox-subject">{{ subjectDisplay }}</h2>
+                  <div class="custom-marketing-editor__inbox-meta">
+                    <div class="custom-marketing-editor__inbox-avatar" aria-hidden="true">{{ senderInitials }}</div>
+                    <div class="custom-marketing-editor__inbox-meta-main">
+                      <div class="custom-marketing-editor__inbox-from-row">
+                        <div>
+                          <span class="custom-marketing-editor__inbox-from-name">{{ fromNameDisplay }}</span>
+                          <span v-if="fromEmailDisplay" class="custom-marketing-editor__inbox-from-email">&lt;{{ fromEmailDisplay }}&gt;</span>
+                        </div>
+                        <span class="custom-marketing-editor__inbox-date">{{ dateLabel }}</span>
+                      </div>
+                      <p class="custom-marketing-editor__inbox-to">
+                        to <strong>{{ toDisplay }}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="custom-marketing-editor__inbox-body custom-marketing-editor__content custom-marketing-editor__preview-body"
+                  v-html="previewBodyHtml"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
