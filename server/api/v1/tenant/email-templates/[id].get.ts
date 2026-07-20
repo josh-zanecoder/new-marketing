@@ -1,8 +1,13 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import type { EmailTemplateCategoryModel } from '@server/types/tenant/emailTemplateCategory.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { materializeEmailTemplateHtmlIfNeeded } from '@server/utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import {
+  categoryIdToString,
+  loadCategoryNameMap
+} from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -11,8 +16,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const { EmailTemplate } = getTenantClientModels(conn)
+  const { EmailTemplate, EmailTemplateCategory } = getTenantClientModels(conn)
   const model = EmailTemplate as EmailTemplateModel
+  const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
   const doc = await model.findById(rawId).lean<EmailTemplateDoc | null>()
 
@@ -26,6 +32,9 @@ export default defineEventHandler(async (event) => {
     htmlTemplate: doc.htmlTemplate ?? doc.html ?? ''
   })
 
+  const categoryId = categoryIdToString(doc.categoryId)
+  const nameById = await loadCategoryNameMap(categoryModel, [categoryId])
+
   return {
     template: {
       id: String(doc._id),
@@ -36,6 +45,8 @@ export default defineEventHandler(async (event) => {
       htmlSource: doc.htmlSource === 'upload' ? 'upload' : 'editor',
       saveToLibrary: doc.saveToLibrary !== false,
       externalId: doc.externalId ?? '',
+      categoryId,
+      categoryName: categoryId ? (nameById.get(categoryId) ?? null) : null,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     }

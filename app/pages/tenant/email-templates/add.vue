@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
-import type { TenantDynamicVariableItem } from '~/composables/useTenantMarketingApi'
+import type { TenantDynamicVariableItem, TenantEmailTemplateCategoryRow } from '~/composables/useTenantMarketingApi'
+import { buildEmailTemplateCategoryAssignOptions } from '~~/shared/utils/emailTemplateCategory'
 
 definePageMeta({ layout: 'default' })
 
@@ -17,6 +18,8 @@ const isEdit = computed(() => Boolean(editTemplateId.value && /^[a-f0-9]{24}$/i.
 
 const name = ref('')
 const subject = ref('')
+const categoryId = ref('')
+const categories = ref<TenantEmailTemplateCategoryRow[]>([])
 const htmlContent = ref('')
 const formError = ref('')
 const uploadError = ref('')
@@ -28,6 +31,12 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const subjectInputRef = ref<HTMLInputElement | null>(null)
 const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const lastFocusedField = ref<'subject' | 'html'>('html')
+
+const categoryAssignOptions = computed(() =>
+  buildEmailTemplateCategoryAssignOptions(
+    categories.value.map((c) => ({ id: c.id, name: c.name }))
+  )
+)
 
 const dynamicVariables = ref<TenantDynamicVariableItem[]>([])
 const dynamicVariablesPending = ref(true)
@@ -129,6 +138,23 @@ body{margin:0;padding:0;overflow:auto;background:#f8f4ef;min-height:100%}
 
 const previewDoc = computed(() => editorPreviewSrcdoc(htmlContent.value))
 
+async function loadCategories() {
+  try {
+    const cached = readNuxtPayloadCache(TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY, useNuxtApp()) as
+      | TenantEmailTemplateCategoryRow[]
+      | undefined
+    if (Array.isArray(cached)) {
+      categories.value = cached
+      return
+    }
+    const res = await marketingApi.fetchEmailTemplateCategories()
+    categories.value = res.categories ?? []
+    useNuxtApp().payload.data[TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY] = categories.value
+  } catch {
+    categories.value = []
+  }
+}
+
 async function loadExistingTemplate() {
   if (!isEdit.value) return
   loading.value = true
@@ -137,6 +163,7 @@ async function loadExistingTemplate() {
     const res = await marketingApi.fetchEmailTemplateById(editTemplateId.value)
     name.value = res.template.name?.trim() ?? ''
     subject.value = res.template.subject?.trim() ?? ''
+    categoryId.value = res.template.categoryId?.trim() ?? ''
     htmlContent.value = res.template.htmlTemplate?.trim() ?? ''
   } catch {
     formError.value = 'Could not load this template.'
@@ -146,6 +173,7 @@ async function loadExistingTemplate() {
 }
 
 onMounted(() => {
+  void loadCategories()
   void loadDynamicVariables()
   void loadExistingTemplate()
 })
@@ -226,13 +254,15 @@ async function saveTemplate() {
 
   saving.value = true
   try {
+    const resolvedCategoryId = categoryId.value.trim() || null
     if (isEdit.value) {
       await marketingApi.updateEmailTemplate(editTemplateId.value, {
         name: trimmedName,
         subject: trimmedSubject,
         htmlTemplate: html,
         htmlSource: 'upload',
-        saveToLibrary: true
+        saveToLibrary: true,
+        categoryId: resolvedCategoryId
       })
     } else {
       await marketingApi.createEmailTemplate({
@@ -240,7 +270,8 @@ async function saveTemplate() {
         subject: trimmedSubject,
         htmlTemplate: html,
         htmlSource: 'upload',
-        saveToLibrary: true
+        saveToLibrary: true,
+        categoryId: resolvedCategoryId
       })
     }
     clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
@@ -376,6 +407,25 @@ async function saveTemplate() {
             class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
             @focus="lastFocusedField = 'subject'"
           >
+        </div>
+        <div class="sm:col-span-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="block text-sm font-medium text-slate-700" for="template-category">Category</label>
+            <NuxtLink
+              to="/tenant/email-templates/categories"
+              class="text-xs font-semibold text-primary-600 hover:text-primary-700"
+            >
+              Manage categories
+            </NuxtLink>
+          </div>
+          <TenantFilterSelect
+            id="template-category"
+            v-model="categoryId"
+            label="Category"
+            variant="field"
+            :options="categoryAssignOptions"
+            class="mt-1.5"
+          />
         </div>
       </div>
 

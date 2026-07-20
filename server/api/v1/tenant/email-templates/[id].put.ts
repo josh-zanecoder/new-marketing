@@ -1,7 +1,16 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import type { EmailTemplateCategoryModel } from '@server/types/tenant/emailTemplateCategory.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import {
+  parseOptionalCategoryId,
+  resolveCategoryObjectId
+} from '@server/utils/emailTemplate/emailTemplateCategoryHelpers'
+import {
+  categoryIdToString,
+  loadCategoryNameMap
+} from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -15,7 +24,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const { EmailTemplate } = getTenantClientModels(conn)
+  const { EmailTemplate, EmailTemplateCategory } = getTenantClientModels(conn)
+  const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
   const existing = await (EmailTemplate as EmailTemplateModel).findById(rawId).select('_id').lean()
   if (!existing) {
@@ -33,6 +43,11 @@ export default defineEventHandler(async (event) => {
     set.htmlSource = body.htmlSource
   }
   if (typeof body.saveToLibrary === 'boolean') set.saveToLibrary = body.saveToLibrary
+  if ('categoryId' in body) {
+    const categoryIdRaw = parseOptionalCategoryId(body.categoryId)
+    const categoryId = await resolveCategoryObjectId(categoryModel, categoryIdRaw)
+    if (categoryId !== undefined) set.categoryId = categoryId
+  }
 
   if (!Object.keys(set).length) {
     throw createError({ statusCode: 400, message: 'No valid fields to update' })
@@ -48,6 +63,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Email template not found' })
   }
 
+  const idStr = categoryIdToString(doc.categoryId)
+  const nameById = await loadCategoryNameMap(categoryModel, [idStr])
+
   return {
     ok: true,
     template: {
@@ -56,6 +74,8 @@ export default defineEventHandler(async (event) => {
       subject: doc.subject ?? '',
       description: doc.description ?? '',
       htmlTemplate: doc.htmlTemplate ?? '',
+      categoryId: idStr,
+      categoryName: idStr ? (nameById.get(idStr) ?? null) : null,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     }

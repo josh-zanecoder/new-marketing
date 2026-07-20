@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { Megaphone, Maximize2 } from 'lucide-vue-next'
-import type { TenantEmailTemplateRow } from '~/composables/useTenantMarketingApi'
+import type { TenantEmailTemplateCategoryRow, TenantEmailTemplateRow } from '~/composables/useTenantMarketingApi'
+import {
+  buildEmailTemplateCategoryFilterOptions,
+  matchesEmailTemplateCategoryFilter,
+  type EmailTemplateCategoryFilterValue
+} from '~~/shared/utils/emailTemplateCategory'
 
 definePageMeta({ layout: 'default' })
 
@@ -19,9 +24,11 @@ const PAGE_SIZE = 12
 const pending = ref(true)
 const loadError = ref('')
 const templates = ref<EmailTemplateListRow[]>([])
+const categories = ref<TenantEmailTemplateCategoryRow[]>([])
 const searchQuery = ref('')
 const sortBy = ref<SortOption>('recent')
 const subjectFilter = ref<SubjectFilter>('all')
+const categoryFilter = ref<EmailTemplateCategoryFilterValue>('all')
 const currentPage = ref(1)
 
 const previewOpen = ref(false)
@@ -34,6 +41,12 @@ const subjectFilterSelectOptions = [
   { value: 'with-subject', label: 'With default subject' },
   { value: 'without-subject', label: 'Without subject' }
 ]
+
+const categoryFilterSelectOptions = computed(() =>
+  buildEmailTemplateCategoryFilterOptions(
+    categories.value.map((c) => ({ id: c.id, name: c.name }))
+  )
+)
 
 const sortBySelectOptions = [
   { value: 'recent', label: 'Recently updated' },
@@ -58,10 +71,11 @@ const filteredTemplates = computed(() => {
   } else if (subject === 'without-subject') {
     list = list.filter((t) => !t.subject?.trim())
   }
+  list = list.filter((t) => matchesEmailTemplateCategoryFilter(t.categoryId, categoryFilter.value))
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
     list = list.filter((t) => {
-      const blob = [t.name, t.subject, t.description].filter(Boolean).join(' ').toLowerCase()
+      const blob = [t.name, t.subject, t.description, t.categoryName].filter(Boolean).join(' ').toLowerCase()
       return blob.includes(q)
     })
   }
@@ -96,7 +110,7 @@ const paginationMeta = computed(() => {
   return { from, to, total }
 })
 
-watch([searchQuery, sortBy, subjectFilter], () => {
+watch([searchQuery, sortBy, subjectFilter, categoryFilter], () => {
   currentPage.value = 1
 })
 
@@ -120,6 +134,23 @@ function openPreview(template: EmailTemplateListRow) {
 function closePreview() {
   previewOpen.value = false
   previewTemplate.value = null
+}
+
+async function loadCategories() {
+  try {
+    const cached = readNuxtPayloadCache(TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY, useNuxtApp()) as
+      | TenantEmailTemplateCategoryRow[]
+      | undefined
+    if (Array.isArray(cached)) {
+      categories.value = cached
+      return
+    }
+    const res = await marketingApi.fetchEmailTemplateCategories()
+    categories.value = res.categories ?? []
+    useNuxtApp().payload.data[TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY] = categories.value
+  } catch {
+    categories.value = []
+  }
 }
 
 async function loadTemplates(options?: { force?: boolean }) {
@@ -153,6 +184,7 @@ async function loadTemplates(options?: { force?: boolean }) {
 }
 
 onMounted(() => {
+  void loadCategories()
   void loadTemplates()
 })
 </script>
@@ -169,7 +201,13 @@ onMounted(() => {
           Create templates by pasting or uploading HTML, preview them full size, and start a campaign from any template.
         </p>
       </div>
-      <div class="flex items-center gap-2 sm:shrink-0">
+      <div class="flex flex-wrap items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          to="/tenant/email-templates/categories"
+          class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          Categories
+        </NuxtLink>
         <NuxtLink
           to="/tenant/email-templates/add"
           class="btn-cta"
@@ -209,12 +247,19 @@ onMounted(() => {
           >
         </div>
       </div>
-      <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:shrink-0 lg:items-center">
+      <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:shrink-0 lg:items-center xl:grid-cols-3">
         <TenantFilterSelect
           id="email-templates-subject-filter"
           v-model="subjectFilter"
           label="Subject filter"
           :options="subjectFilterSelectOptions"
+          class="w-full shrink-0 lg:w-[14rem]"
+        />
+        <TenantFilterSelect
+          id="email-templates-category-filter"
+          v-model="categoryFilter"
+          label="Category filter"
+          :options="categoryFilterSelectOptions"
           class="w-full shrink-0 lg:w-[14rem]"
         />
         <TenantFilterSelect
@@ -318,6 +363,13 @@ onMounted(() => {
             </p>
             <p v-else class="mt-1 text-sm italic text-slate-400">
               No default subject
+            </p>
+            <p
+              v-if="template.categoryName?.trim()"
+              class="mt-2 inline-flex w-fit max-w-full truncate rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+              :title="template.categoryName"
+            >
+              {{ template.categoryName }}
             </p>
             <p class="mt-2 text-xs text-slate-400">
               Updated {{ formatUpdated(template.updatedAt) }}
