@@ -1,192 +1,44 @@
 <script setup lang="ts">
-import { Megaphone, Maximize2 } from 'lucide-vue-next'
-import type { TenantEmailTemplateCategoryRow, TenantEmailTemplateRow } from '~/composables/useTenantMarketingApi'
-import {
-  buildEmailTemplateCategoryFilterOptions,
-  matchesEmailTemplateCategoryFilter,
-  type EmailTemplateCategoryFilterValue
-} from '~~/shared/utils/emailTemplateCategory'
+import { Megaphone, Maximize2, Pencil, Trash2 } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'default' })
 
-type EmailTemplateListRow = TenantEmailTemplateRow & {
-  description?: string
-  createdAt?: string | null
-  updatedAt?: string | null
-}
+const {
+  PAGE_SIZE,
+  pending,
+  deletingId,
+  loadError,
+  templates,
+  searchQuery,
+  sortBy,
+  subjectFilter,
+  categoryFilter,
+  currentPage,
+  previewOpen,
+  previewTemplate,
+  templateToDelete,
+  deleteConfirmLoading,
+  deleteModalMessage,
+  subjectFilterSelectOptions,
+  categoryFilterSelectOptions,
+  sortBySelectOptions,
+  filteredTemplates,
+  totalPages,
+  paginatedTemplates,
+  paginationMeta,
+  formatUpdated,
+  makeCampaignHref,
+  editTemplateHref,
+  openPreview,
+  closePreview,
+  loadTemplates,
+  openDeleteModal,
+  cancelDeleteModal,
+  confirmDeleteTemplate,
+  onMountedLoad
+} = useEmailTemplatesPage()
 
-type SortOption = 'recent' | 'name-asc' | 'name-desc'
-type SubjectFilter = 'all' | 'with-subject' | 'without-subject'
-
-const marketingApi = useTenantMarketingApi()
-const PAGE_SIZE = 12
-
-const pending = ref(true)
-const loadError = ref('')
-const templates = ref<EmailTemplateListRow[]>([])
-const categories = ref<TenantEmailTemplateCategoryRow[]>([])
-const searchQuery = ref('')
-const sortBy = ref<SortOption>('recent')
-const subjectFilter = ref<SubjectFilter>('all')
-const categoryFilter = ref<EmailTemplateCategoryFilterValue>('all')
-const currentPage = ref(1)
-
-const previewOpen = ref(false)
-const previewTemplate = ref<EmailTemplateListRow | null>(null)
-
-const EMAIL_TEMPLATES_CACHE_KEY = TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY
-
-const subjectFilterSelectOptions = [
-  { value: 'all', label: 'All templates' },
-  { value: 'with-subject', label: 'With default subject' },
-  { value: 'without-subject', label: 'Without subject' }
-]
-
-const categoryFilterSelectOptions = computed(() =>
-  buildEmailTemplateCategoryFilterOptions(
-    categories.value.map((c) => ({ id: c.id, name: c.name }))
-  )
-)
-
-const sortBySelectOptions = [
-  { value: 'recent', label: 'Recently updated' },
-  { value: 'name-asc', label: 'Name A–Z' },
-  { value: 'name-desc', label: 'Name Z–A' }
-]
-
-function formatUpdated(iso?: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso))
-  } catch {
-    return '—'
-  }
-}
-
-const filteredTemplates = computed(() => {
-  let list = [...templates.value]
-  const subject = subjectFilter.value
-  if (subject === 'with-subject') {
-    list = list.filter((t) => Boolean(t.subject?.trim()))
-  } else if (subject === 'without-subject') {
-    list = list.filter((t) => !t.subject?.trim())
-  }
-  list = list.filter((t) => matchesEmailTemplateCategoryFilter(t.categoryId, categoryFilter.value))
-  const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
-    list = list.filter((t) => {
-      const blob = [t.name, t.subject, t.description, t.categoryName].filter(Boolean).join(' ').toLowerCase()
-      return blob.includes(q)
-    })
-  }
-  if (sortBy.value === 'name-asc') {
-    list.sort((a, b) => a.name.localeCompare(b.name))
-  } else if (sortBy.value === 'name-desc') {
-    list.sort((a, b) => b.name.localeCompare(a.name))
-  } else {
-    list.sort((a, b) => {
-      const aMs = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-      const bMs = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-      return bMs - aMs
-    })
-  }
-  return list
-})
-
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredTemplates.value.length / PAGE_SIZE))
-)
-
-const paginatedTemplates = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredTemplates.value.slice(start, start + PAGE_SIZE)
-})
-
-const paginationMeta = computed(() => {
-  const total = filteredTemplates.value.length
-  if (!total) return { from: 0, to: 0, total: 0 }
-  const from = (currentPage.value - 1) * PAGE_SIZE + 1
-  const to = Math.min(currentPage.value * PAGE_SIZE, total)
-  return { from, to, total }
-})
-
-watch([searchQuery, sortBy, subjectFilter, categoryFilter], () => {
-  currentPage.value = 1
-})
-
-watch(totalPages, (pages) => {
-  if (currentPage.value > pages) currentPage.value = pages
-})
-
-function makeCampaignHref(templateId: string): string {
-  return `/tenant/campaigns/add?templateId=${encodeURIComponent(templateId)}`
-}
-
-function editTemplateHref(templateId: string): string {
-  return `/tenant/email-templates/add?templateId=${encodeURIComponent(templateId)}`
-}
-
-function openPreview(template: EmailTemplateListRow) {
-  previewTemplate.value = template
-  previewOpen.value = true
-}
-
-function closePreview() {
-  previewOpen.value = false
-  previewTemplate.value = null
-}
-
-async function loadCategories() {
-  try {
-    const cached = readNuxtPayloadCache(TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY, useNuxtApp()) as
-      | TenantEmailTemplateCategoryRow[]
-      | undefined
-    if (Array.isArray(cached)) {
-      categories.value = cached
-      return
-    }
-    const res = await marketingApi.fetchEmailTemplateCategories()
-    categories.value = res.categories ?? []
-    useNuxtApp().payload.data[TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY] = categories.value
-  } catch {
-    categories.value = []
-  }
-}
-
-async function loadTemplates(options?: { force?: boolean }) {
-  if (!options?.force) {
-    const cached = readNuxtPayloadCache(EMAIL_TEMPLATES_CACHE_KEY, useNuxtApp()) as
-      | EmailTemplateListRow[]
-      | undefined
-    if (Array.isArray(cached)) {
-      templates.value = cached
-      pending.value = false
-      loadError.value = ''
-      return
-    }
-  }
-
-  pending.value = true
-  loadError.value = ''
-  try {
-    const res = await marketingApi.fetchEmailTemplates()
-    templates.value = (res.templates ?? []) as EmailTemplateListRow[]
-    useNuxtApp().payload.data[EMAIL_TEMPLATES_CACHE_KEY] = templates.value
-  } catch (e: unknown) {
-    loadError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load templates')
-        : 'Failed to load templates'
-    templates.value = []
-  } finally {
-    pending.value = false
-  }
-}
-
-onMounted(() => {
-  void loadCategories()
-  void loadTemplates()
-})
+onMounted(onMountedLoad)
 </script>
 
 <template>
@@ -374,24 +226,37 @@ onMounted(() => {
             <p class="mt-2 text-xs text-slate-400">
               Updated {{ formatUpdated(template.updatedAt) }}
             </p>
-            <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <button
-                type="button"
-                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto"
-                @click="openPreview(template)"
-              >
-                <Maximize2 class="h-4 w-4" aria-hidden="true" />
-                Preview
-              </button>
-              <NuxtLink
-                :to="editTemplateHref(template.id)"
-                class="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto"
-              >
-                Edit
-              </NuxtLink>
+            <div class="mt-4 flex flex-col gap-2">
+              <div class="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800"
+                  @click="openPreview(template)"
+                >
+                  <Maximize2 class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Preview
+                </button>
+                <NuxtLink
+                  :to="editTemplateHref(template.id)"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800"
+                >
+                  <Pencil class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Edit
+                </NuxtLink>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-2 py-2 text-sm font-semibold text-red-700 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+                  :disabled="deletingId === template.id"
+                  :aria-label="`Delete ${template.name}`"
+                  @click="openDeleteModal(template)"
+                >
+                  <Trash2 class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {{ deletingId === template.id ? 'Deleting…' : 'Delete' }}
+                </button>
+              </div>
               <NuxtLink
                 :to="makeCampaignHref(template.id)"
-                class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 sm:w-auto"
+                class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
               >
                 <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />
                 Make campaign
@@ -446,6 +311,17 @@ onMounted(() => {
       :html="previewTemplate?.htmlTemplate ?? ''"
       :template-id="previewTemplate?.id"
       @close="closePreview"
+    />
+
+    <ClientConfirmationModal
+      :open="!!templateToDelete"
+      title="Delete template"
+      :message="deleteModalMessage"
+      confirm-text="Delete"
+      variant="danger"
+      :confirm-loading="deleteConfirmLoading"
+      @confirm="confirmDeleteTemplate"
+      @cancel="cancelDeleteModal"
     />
   </div>
 </template>

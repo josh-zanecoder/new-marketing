@@ -11,6 +11,7 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -27,7 +28,10 @@ export default defineEventHandler(async (event) => {
   const { EmailTemplate, EmailTemplateCategory } = getTenantClientModels(conn)
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
-  const existing = await (EmailTemplate as EmailTemplateModel).findById(rawId).select('_id').lean()
+  const existing = await (EmailTemplate as EmailTemplateModel)
+    .findOne({ _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER })
+    .select('_id')
+    .lean()
   if (!existing) {
     throw createError({ statusCode: 404, message: 'Email template not found' })
   }
@@ -53,8 +57,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No valid fields to update' })
   }
 
-  const doc = await (EmailTemplate as EmailTemplateModel).findByIdAndUpdate(
-    rawId,
+  const doc = await (EmailTemplate as EmailTemplateModel).findOneAndUpdate(
+    { _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER },
     { $set: set },
     { new: true }
   )

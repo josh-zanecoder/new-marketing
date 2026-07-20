@@ -7,6 +7,7 @@ import {
   CUSTOM_MARKETING_GCS_NO_LIST_FOLDER,
   htmlContainsCustomMarketingDataImages
 } from '~~/shared/customMarketingHostedImages'
+import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 export type CampaignTemplateSaveInput = {
   campaignName: string
@@ -86,7 +87,12 @@ export async function resolveCampaignEmailTemplateOnSave(
   }
 
   if (linkId && mongoose.isValidObjectId(linkId)) {
-    const exists = await EmailTemplate.findById(linkId).select('_id').lean()
+    const exists = await EmailTemplate.findOne({
+      _id: linkId,
+      ...ACTIVE_EMAIL_TEMPLATE_FILTER
+    })
+      .select('_id')
+      .lean()
     if (!exists) {
       throw createError({ statusCode: 400, message: 'Selected email template was not found' })
     }

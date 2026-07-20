@@ -51,6 +51,14 @@
         >
           Dynamic variables
         </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'deletedTemplates' }"
+          @click="tab = 'deletedTemplates'"
+        >
+          Deleted templates
+        </button>
       </div>
 
       <TenantTabsOverviewTab
@@ -1160,6 +1168,10 @@
           </Teleport>
         </div>
       </TenantTabsDynamicFieldsTab>
+
+      <TenantTabsDeletedEmailTemplatesTab v-show="tab === 'deletedTemplates'">
+        <TenantAdminDeletedEmailTemplatesPanel :tenant-id="tenant.tenantId" />
+      </TenantTabsDeletedEmailTemplatesTab>
     </template>
 
     <ClientConfirmationModal
@@ -1214,7 +1226,7 @@ const dbName = computed(() =>
   decodeURIComponent(String(route.params.dbName || ''))
 )
 
-const tab = ref<'overview' | 'filters' | 'dynamicVariables'>('overview')
+const tab = ref<'overview' | 'filters' | 'dynamicVariables' | 'deletedTemplates'>('overview')
 
 interface ContactTypeRow {
   id: string
