@@ -20,6 +20,9 @@ export const TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY = 'tenant-recipient-list-inde
 /** Shared key for email templates index page cache. */
 export const TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY = 'tenant-email-templates-index'
 
+/** Shared key for email template categories index page cache. */
+export const TENANT_EMAIL_TEMPLATE_CATEGORIES_CACHE_KEY = 'tenant-email-template-categories'
+
 /** Shared key for contacts index page cache. */
 export const TENANT_CONTACTS_INDEX_CACHE_KEY = 'tenant-contacts-index'
 

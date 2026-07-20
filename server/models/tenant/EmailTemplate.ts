@@ -9,5 +9,9 @@ export const emailTemplateSchema = new mongoose.Schema({
   htmlSource: { type: String, enum: ['editor', 'upload', 'custom'], default: 'editor' },
   /** When false, template is campaign-only and hidden from the design modal library list. */
   saveToLibrary: { type: Boolean, default: true },
-  externalId: { type: String, default: '', trim: true }
+  externalId: { type: String, default: '', trim: true },
+  /** Optional library category (`email_template_categories`). */
+  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplateCategory', default: null }
 }, { timestamps: true })
+
+emailTemplateSchema.index({ categoryId: 1 })

@@ -66,6 +66,17 @@ export interface TenantEmailTemplateRow {
   htmlTemplate: string
   subject?: string
   description?: string
+  categoryId?: string | null
+  categoryName?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface TenantEmailTemplateCategoryRow {
+  id: string
+  name: string
+  description?: string
+  sortOrder?: number
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -260,6 +271,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     description?: string
     htmlSource?: 'editor' | 'upload'
     saveToLibrary?: boolean
+    categoryId?: string | null
   }) {
     return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
       '/api/v1/tenant/email-templates',
@@ -276,11 +288,47 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
       description?: string
       htmlSource?: 'editor' | 'upload'
       saveToLibrary?: boolean
+      categoryId?: string | null
     }
   ) {
     return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
       `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
       tenantFetchInit({ method: 'PUT', body, timeout: 30000 })
+    )
+  }
+
+  async function fetchEmailTemplateCategories() {
+    return $fetch<{ categories: TenantEmailTemplateCategoryRow[] }>(
+      '/api/v1/tenant/email-template-categories',
+      tenantFetchInit()
+    )
+  }
+
+  async function createEmailTemplateCategory(body: {
+    name: string
+    description?: string
+    sortOrder?: number
+  }) {
+    return $fetch<{ ok: boolean; category: TenantEmailTemplateCategoryRow }>(
+      '/api/v1/tenant/email-template-categories',
+      tenantFetchInit({ method: 'POST', body, timeout: 30000 })
+    )
+  }
+
+  async function updateEmailTemplateCategory(
+    categoryId: string,
+    body: { name?: string; description?: string; sortOrder?: number }
+  ) {
+    return $fetch<{ ok: boolean; category: TenantEmailTemplateCategoryRow }>(
+      `/api/v1/tenant/email-template-categories/${encodeURIComponent(categoryId)}`,
+      tenantFetchInit({ method: 'PUT', body, timeout: 30000 })
+    )
+  }
+
+  async function deleteEmailTemplateCategory(categoryId: string) {
+    return $fetch<{ ok: boolean; templatesCleared: number }>(
+      `/api/v1/tenant/email-template-categories/${encodeURIComponent(categoryId)}`,
+      tenantFetchInit({ method: 'DELETE', timeout: 30000 })
     )
   }
 
@@ -490,6 +538,10 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchEmailTemplateById,
     createEmailTemplate,
     updateEmailTemplate,
+    fetchEmailTemplateCategories,
+    createEmailTemplateCategory,
+    updateEmailTemplateCategory,
+    deleteEmailTemplateCategory,
     fetchTenantMe,
     fetchDashboard,
     fetchSendCampaignStatus,

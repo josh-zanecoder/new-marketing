@@ -5,6 +5,7 @@ import { contactTypeSchema } from './ContactType'
 import { contactSchema } from './Contact'
 import { emailDynamicVariableSchema } from './EmailDynamicVariable'
 import { emailTemplateSchema } from './EmailTemplate'
+import { emailTemplateCategorySchema } from './EmailTemplateCategory'
 import { manualRecipientSchema } from './ManualRecipients'
 import { recipientFilterSchema } from './RecipientFilter'
 import { recipientListSchema } from './RecipientList'
@@ -15,6 +16,7 @@ export type TenantClientModels = {
   CampaignRecipient: Model<unknown>
   ManualRecipient: Model<unknown>
   EmailTemplate: Model<unknown>
+  EmailTemplateCategory: Model<unknown>
   EmailDynamicVariable: Model<unknown>
   ContactType: Model<unknown>
   RecipientFilter: Model<unknown>
@@ -34,6 +36,9 @@ export function getTenantClientModels(conn: Connection): TenantClientModels {
       conn.model('ManualRecipient', manualRecipientSchema),
     EmailTemplate:
       conn.models.EmailTemplate || conn.model('EmailTemplate', emailTemplateSchema),
+    EmailTemplateCategory:
+      conn.models.EmailTemplateCategory ||
+      conn.model('EmailTemplateCategory', emailTemplateCategorySchema),
     EmailDynamicVariable:
       conn.models.EmailDynamicVariable ||
       conn.model('EmailDynamicVariable', emailDynamicVariableSchema),
