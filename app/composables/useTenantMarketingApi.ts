@@ -297,6 +297,13 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  async function deleteEmailTemplate(templateId: string) {
+    return $fetch<{ ok: boolean; alreadyDeleted: boolean }>(
+      `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
+      tenantFetchInit({ method: 'DELETE', timeout: 30000 })
+    )
+  }
+
   async function fetchEmailTemplateCategories() {
     return $fetch<{ categories: TenantEmailTemplateCategoryRow[] }>(
       '/api/v1/tenant/email-template-categories',
@@ -538,6 +545,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchEmailTemplateById,
     createEmailTemplate,
     updateEmailTemplate,
+    deleteEmailTemplate,
     fetchEmailTemplateCategories,
     createEmailTemplateCategory,
     updateEmailTemplateCategory,

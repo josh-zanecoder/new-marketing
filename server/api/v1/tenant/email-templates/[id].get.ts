@@ -8,6 +8,7 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -20,7 +21,9 @@ export default defineEventHandler(async (event) => {
   const model = EmailTemplate as EmailTemplateModel
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
-  const doc = await model.findById(rawId).lean<EmailTemplateDoc | null>()
+  const doc = await model
+    .findOne({ _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER })
+    .lean<EmailTemplateDoc | null>()
 
   if (!doc) {
     throw createError({ statusCode: 404, message: 'Email template not found' })

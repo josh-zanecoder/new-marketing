@@ -12,6 +12,8 @@ export interface EmailTemplateDoc {
   saveToLibrary?: boolean
   externalId?: string
   categoryId?: Types.ObjectId | null
+  /** Soft-delete timestamp; null = active. */
+  deletedAt?: Date | null
   /** Legacy field */
   html?: string
   clientId?: string

@@ -15,6 +15,8 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+const slots = useSlots()
+
 function onBackdropClick() {
   if (props.confirmLoading) return
   emit('cancel')
@@ -40,7 +42,7 @@ const confirmButtonClass = computed(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
       @click.self="onBackdropClick"
     >
       <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200/60">
@@ -84,6 +86,9 @@ const confirmButtonClass = computed(() => {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
+            <span v-else-if="slots['confirm-icon']" class="inline-flex shrink-0">
+              <slot name="confirm-icon" />
+            </span>
             {{ confirmLoading ? 'Please wait…' : (confirmText ?? 'Confirm') }}
           </button>
         </div>

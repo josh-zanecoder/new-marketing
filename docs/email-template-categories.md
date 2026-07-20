@@ -10,6 +10,8 @@ Tenant-scoped categories for organizing the email template library in **new-mark
 
 Deleting a category clears `categoryId` on templates that used it (templates become uncategorized).
 
+Templates can also be **soft-deleted** from the library (see [email-template-soft-delete.md](./email-template-soft-delete.md)).
+
 ## Data model
 
 | Collection / field | Purpose |
@@ -27,7 +29,7 @@ API responses include both `categoryId` and resolved `categoryName` for display.
 | `POST` | `/api/v1/tenant/email-template-categories` | Create (`name` required) |
 | `PUT` | `/api/v1/tenant/email-template-categories/:id` | Update |
 | `DELETE` | `/api/v1/tenant/email-template-categories/:id` | Delete + clear template refs |
-| `GET/POST/PUT` | `/api/v1/tenant/email-templates…` | Accept/return `categoryId` / `categoryName` |
+| `GET/POST/PUT/DELETE` | `/api/v1/tenant/email-templates…` | Accept/return `categoryId` / `categoryName`; DELETE soft-deletes |
 
 ## Main code locations
 

@@ -11,7 +11,10 @@ export const emailTemplateSchema = new mongoose.Schema({
   saveToLibrary: { type: Boolean, default: true },
   externalId: { type: String, default: '', trim: true },
   /** Optional library category (`email_template_categories`). */
-  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplateCategory', default: null }
+  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplateCategory', default: null },
+  /** Soft-delete timestamp; null = active in the library. */
+  deletedAt: { type: Date, default: null }
 }, { timestamps: true })
 
 emailTemplateSchema.index({ categoryId: 1 })
+emailTemplateSchema.index({ deletedAt: 1 })

@@ -13,6 +13,7 @@ import {
   isEmailTemplateHtmlStorageRef,
   resolveStoredEmailTemplateHtml
 } from '../../utils/emailTemplate/resolveStoredEmailTemplateHtml'
+import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 async function resolveHtmlForPersist(htmlTemplate: string, meta: Record<string, unknown>) {
   if (!isEmailTemplateHtmlStorageRef(htmlTemplate)) return htmlTemplate
@@ -76,7 +77,8 @@ export async function saveMarketingEmailTemplateFromCreatedEvent(
         name,
         description,
         subject,
-        htmlTemplate: resolvedHtml
+        htmlTemplate: resolvedHtml,
+        deletedAt: null
       }
     },
     { upsert: true }
@@ -116,7 +118,8 @@ export async function saveMarketingEmailTemplateFromUpdatedEvent(
         name,
         description,
         subject,
-        htmlTemplate: resolvedHtml
+        htmlTemplate: resolvedHtml,
+        deletedAt: null
       }
     },
     { upsert: true }
@@ -136,10 +139,13 @@ export async function deleteMarketingEmailTemplateFromDeletedEvent(
   if (!tenantConn) return
 
   const models: TenantClientModels = getTenantClientModels(tenantConn)
-  if (typeof models.EmailTemplate.deleteOne !== 'function') {
+  if (typeof models.EmailTemplate.updateOne !== 'function') {
     logger.warn('EmailTemplate model is not available in tenant models', { tenantId, dBname })
     return
   }
 
-  await models.EmailTemplate.deleteOne({ externalId })
+  await models.EmailTemplate.updateOne(
+    { externalId, ...ACTIVE_EMAIL_TEMPLATE_FILTER },
+    { $set: { deletedAt: new Date() } }
+  )
 }
