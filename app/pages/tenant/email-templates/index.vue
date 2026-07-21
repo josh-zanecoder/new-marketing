@@ -177,7 +177,7 @@ onMounted(() => {
           Create template
         </NuxtLink>
         <TenantRefreshIconButton
-          aria-label="Refresh email templates"
+          label="Refresh email templates"
           :pending="pending"
           @click="() => loadTemplates({ force: true })"
         />

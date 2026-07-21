@@ -21,7 +21,7 @@
           New list
         </NuxtLink>
         <TenantRefreshIconButton
-          aria-label="Refresh recipient lists"
+          label="Refresh recipient lists"
           :pending="pending"
           @click="() => load({ force: true })"
         />

@@ -90,6 +90,14 @@ export const recipientListSchema = new mongoose.Schema(
     membershipOwnerEmails: {
       type: [{ type: String, trim: true, lowercase: true }],
       default: () => []
+    },
+    /**
+     * Soft-removed contacts: kept out of membership across rebuild/sync until cleared.
+     * Used when an operator removes a contact from a dynamic/hybrid list.
+     */
+    excludedContactIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Contact' }],
+      default: () => []
     }
   },
   { timestamps: true, collection: 'recipient_lists' }

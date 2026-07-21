@@ -196,12 +196,39 @@
         >
           <ul class="divide-y divide-zinc-100 lg:hidden">
             <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-4">
-              <p class="truncate text-sm font-semibold text-zinc-900">
-                {{ m.name }}
-              </p>
-              <p class="mt-0.5 truncate text-xs text-zinc-600" :title="m.email">
-                {{ m.email }}
-              </p>
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-semibold text-zinc-900">
+                    {{ m.name }}
+                  </p>
+                  <p class="mt-0.5 truncate text-xs text-zinc-600" :title="m.email">
+                    {{ m.email }}
+                  </p>
+                </div>
+                <div class="flex shrink-0 flex-col items-stretch gap-1.5">
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                    @click="viewMember(m.id)"
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                    @click="editMember(m.id)"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-red-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
+                    @click="openRemoveMember(m)"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
               <div v-if="m.contactType?.length" class="mt-2 flex flex-wrap gap-1">
                 <span
                   v-for="t in m.contactType"
@@ -243,6 +270,9 @@
                   <th scope="col" class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 lg:table-cell lg:px-6">
                     Location
                   </th>
+                  <th scope="col" class="whitespace-nowrap px-4 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:px-6">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-zinc-100">
@@ -279,6 +309,31 @@
                   </td>
                   <td class="hidden max-w-[12rem] truncate px-4 py-3.5 text-zinc-700 lg:table-cell lg:max-w-[16rem] lg:px-6" :title="formatAddress(m.address)">
                     {{ formatAddress(m.address) }}
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-3.5 text-right sm:px-6">
+                    <div class="inline-flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                        @click="viewMember(m.id)"
+                      >
+                        View
+                      </button>
+                      <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                        @click="editMember(m.id)"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-red-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
+                        @click="openRemoveMember(m)"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -331,13 +386,246 @@
       @confirm="confirmDeleteDetail"
       @cancel="deleteConfirmOpen = false"
     />
+    <ClientConfirmationModal
+      :open="removeMemberOpen"
+      title="Remove from list"
+      :message="removeMemberMessage"
+      confirm-text="Remove from list"
+      variant="danger"
+      @confirm="confirmRemoveMember"
+      @cancel="cancelRemoveMember"
+    />
+
+    <Teleport to="body">
+      <div
+        v-if="viewMemberOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="recipient-member-detail-title"
+      >
+        <div
+          class="absolute inset-0 bg-zinc-900/45 backdrop-blur-[2px]"
+          aria-hidden="true"
+          @click="closeViewMember"
+        />
+        <div
+          class="relative flex max-h-[min(92dvh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-zinc-200/80 bg-white shadow-2xl shadow-zinc-900/25 ring-1 ring-zinc-900/[0.04] sm:rounded-2xl"
+        >
+          <div class="flex shrink-0 justify-center pt-2.5 sm:hidden" aria-hidden="true">
+            <span class="h-1 w-10 rounded-full bg-zinc-200" />
+          </div>
+
+          <div
+            v-if="viewMemberLoading"
+            class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20"
+          >
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+              <svg class="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+            <p class="text-sm font-medium text-zinc-500">
+              Loading contact…
+            </p>
+          </div>
+
+          <template v-else-if="viewMemberError">
+            <div class="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+              <p class="max-w-sm text-sm text-red-700" role="alert">
+                {{ viewMemberError }}
+              </p>
+              <button
+                type="button"
+                class="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+                @click="closeViewMember"
+              >
+                Close
+              </button>
+            </div>
+          </template>
+
+          <template v-else-if="viewMemberDetail">
+            <div class="shrink-0 border-b border-zinc-100 bg-gradient-to-br from-zinc-50 via-white to-violet-50/40 px-4 py-5 sm:px-6">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-start gap-4">
+                  <div
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-800 to-violet-700 text-lg font-semibold text-white shadow-md"
+                    aria-hidden="true"
+                  >
+                    {{ viewMemberInitials }}
+                  </div>
+                  <div class="min-w-0 pt-0.5">
+                    <h2
+                      id="recipient-member-detail-title"
+                      class="truncate text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl"
+                    >
+                      {{ viewMemberDetail.name || 'Contact details' }}
+                    </h2>
+                    <p v-if="viewMemberDetail.company" class="mt-1 truncate text-sm text-zinc-500">
+                      {{ viewMemberDetail.company }}
+                    </p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset"
+                        :class="viewMemberDetail.is_unsubscribe
+                          ? 'bg-amber-50 text-amber-800 ring-amber-200/80'
+                          : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'"
+                      >
+                        {{ viewMemberDetail.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
+                      </span>
+                      <span
+                        v-for="(label, idx) in viewMemberDetail.contactTypeLabels"
+                        :key="`${viewMemberDetail.id}-type-${idx}`"
+                        class="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold capitalize text-zinc-800 ring-1 ring-inset ring-zinc-200/80"
+                      >
+                        {{ label }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/80 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
+                  aria-label="Close contact details"
+                  @click="closeViewMember"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-2 sm:grid-cols-2">
+                <a
+                  v-if="viewMemberDetail.email"
+                  :href="`mailto:${viewMemberDetail.email}`"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition hover:border-violet-200 hover:bg-white"
+                >
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Email</span>
+                    <span class="block truncate text-sm font-medium text-zinc-900 group-hover:text-violet-700">{{ viewMemberDetail.email }}</span>
+                  </span>
+                </a>
+                <a
+                  v-if="viewMemberDetail.phone"
+                  :href="`tel:${viewMemberDetail.phone}`"
+                  class="group flex min-w-0 items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/80 px-3.5 py-3 shadow-sm transition hover:border-violet-200 hover:bg-white"
+                >
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Phone</span>
+                    <span class="block truncate text-sm font-medium text-zinc-900 group-hover:text-violet-700">{{ formatUsPhoneNumber(viewMemberDetail.phone) }}</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+              <div class="space-y-4">
+                <section class="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 sm:p-5">
+                  <h3 class="text-sm font-semibold text-zinc-900">
+                    Details
+                  </h3>
+                  <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div v-if="hasDetailValue(viewMemberDetail.status)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Status</dt>
+                      <dd class="mt-1 text-sm font-medium text-zinc-900">{{ viewMemberDetail.status }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewMemberDetail.stage)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Stage</dt>
+                      <dd class="mt-1 text-sm font-medium text-zinc-900">{{ viewMemberDetail.stage }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewMemberDetail.channel)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Channel</dt>
+                      <dd class="mt-1 text-sm font-medium text-zinc-900">{{ viewMemberDetail.channel }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(viewMemberDetail.source)">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Source</dt>
+                      <dd class="mt-1 text-sm font-medium text-zinc-900">{{ viewMemberDetail.source }}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section class="rounded-2xl border border-zinc-200/80 bg-white p-4 sm:p-5">
+                  <h3 class="text-sm font-semibold text-zinc-900">
+                    Address
+                  </h3>
+                  <p v-if="viewMemberAddress" class="mt-3 text-sm leading-relaxed text-zinc-700">
+                    {{ viewMemberAddress }}
+                  </p>
+                  <p v-else class="mt-3 text-sm text-zinc-400">
+                    No address on file
+                  </p>
+                </section>
+
+                <section
+                  v-if="viewMemberDetail.createdAt || viewMemberDetail.updatedAt"
+                  class="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/40 px-4 py-3 sm:px-5"
+                >
+                  <dl class="grid gap-3 sm:grid-cols-2">
+                    <div v-if="viewMemberDetail.createdAt">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Created</dt>
+                      <dd class="mt-1 text-xs font-medium text-zinc-600">{{ formatDate(viewMemberDetail.createdAt) }}</dd>
+                    </div>
+                    <div v-if="viewMemberDetail.updatedAt">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-zinc-400">Updated</dt>
+                      <dd class="mt-1 text-xs font-medium text-zinc-600">{{ formatDate(viewMemberDetail.updatedAt) }}</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </div>
+
+            <div class="flex shrink-0 flex-col gap-2 border-t border-zinc-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 sm:order-2 sm:w-auto"
+                @click="editFromViewMember"
+              >
+                Edit contact
+              </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:order-1 sm:w-auto"
+                @click="closeViewMember"
+              >
+                Close
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Teleport>
+
+    <TenantContactEditModal
+      :open="editMemberOpen"
+      :contact-id="editMemberContactId"
+      @close="closeEditMember"
+      @saved="onMemberSaved"
+    />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { TenantRecipientListDetailPayload } from '~/types/tenantContact'
-import { formatContactAddress } from '~~/shared/utils/contactAddress'
+import type {
+  TenantContactDetail,
+  TenantRecipientListDetailPayload,
+  TenantRecipientListMemberRow
+} from '~/types/tenantContact'
+import { formatContactAddress, normalizeContactCounty } from '~~/shared/utils/contactAddress'
+import { formatUsPhoneNumber } from '~~/shared/utils/usNumberFormatter'
 import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
@@ -352,6 +640,8 @@ function serverAuthHeaders(): { headers?: HeadersInit } {
 }
 
 const route = useRoute()
+const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const listId = computed(() => String(route.params.id ?? ''))
 
 const pending = ref(true)
@@ -362,10 +652,50 @@ const page = ref(1)
 const deleteConfirmOpen = ref(false)
 const deleteDetailPending = ref(false)
 
+const removeMemberOpen = ref(false)
+const removeMemberPending = ref(false)
+const memberPendingRemove = ref<TenantRecipientListMemberRow | null>(null)
+
+const viewMemberOpen = ref(false)
+const viewMemberLoading = ref(false)
+const viewMemberError = ref('')
+const viewMemberDetail = ref<TenantContactDetail | null>(null)
+let viewMemberEscListener: ((e: KeyboardEvent) => void) | null = null
+
+const editMemberOpen = ref(false)
+const editMemberContactId = ref('')
+
 const deleteDetailMessage = computed(() => {
   const name = payload.value?.list?.name?.trim()
   const label = name ? `“${name}”` : 'this list'
   return `Permanently delete ${label}? Campaigns that used it will have the list unlinked (they become manual audience with any saved recipients). This cannot be undone.`
+})
+
+const removeMemberMessage = computed(() => {
+  const m = memberPendingRemove.value
+  const label = m?.name?.trim() || m?.email?.trim() || 'this contact'
+  return `Remove ${label} from this list? They will stay in Contacts, but will not be included in this list (including after sync).`
+})
+
+const viewMemberInitials = computed(() => {
+  const c = viewMemberDetail.value
+  if (!c) return '?'
+  const first = c.firstName?.charAt(0) || c.name?.charAt(0) || ''
+  const last = c.lastName?.charAt(0) || ''
+  const value = `${first}${last}`.toUpperCase()
+  return value || c.email?.charAt(0)?.toUpperCase() || '?'
+})
+
+const viewMemberAddress = computed(() => {
+  const c = viewMemberDetail.value
+  if (!c?.address) return ''
+  return formatContactAddress({
+    street: c.address.street,
+    unit: c.address.unit,
+    city: c.address.city,
+    state: c.address.state,
+    county: normalizeContactCounty(c.address.county)
+  })
 })
 
 type CriteriaSegment =
@@ -434,6 +764,145 @@ function formatAddress(addr: Record<string, unknown>): string {
   return formatted || '—'
 }
 
+function hasDetailValue(value: unknown): boolean {
+  if (value == null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  return String(value).trim().length > 0
+}
+
+async function viewMember(contactId: string) {
+  viewMemberOpen.value = true
+  viewMemberLoading.value = true
+  viewMemberError.value = ''
+  viewMemberDetail.value = null
+  try {
+    const res = await $fetch<{ contact: TenantContactDetail }>(
+      `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}`,
+      {
+        credentials: 'include',
+        ...serverAuthHeaders()
+      }
+    )
+    viewMemberDetail.value = {
+      ...res.contact,
+      contactType: Array.isArray(res.contact.contactType) ? res.contact.contactType : [],
+      contactTypeLabels: Array.isArray(res.contact.contactTypeLabels)
+        ? res.contact.contactTypeLabels
+        : [],
+      primaryTypeLabel: res.contact.primaryTypeLabel ?? '—',
+      is_unsubscribe: res.contact.is_unsubscribe === true,
+      metadata:
+        res.contact.metadata && typeof res.contact.metadata === 'object'
+          ? res.contact.metadata
+          : {}
+    }
+  } catch (e: unknown) {
+    viewMemberError.value =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load contact')
+        : 'Failed to load contact'
+  } finally {
+    viewMemberLoading.value = false
+  }
+}
+
+function closeViewMember() {
+  viewMemberOpen.value = false
+  viewMemberDetail.value = null
+  viewMemberError.value = ''
+}
+
+function editFromViewMember() {
+  const id = viewMemberDetail.value?.id
+  closeViewMember()
+  if (id) editMember(id)
+}
+
+function editMember(contactId: string) {
+  editMemberContactId.value = contactId
+  editMemberOpen.value = true
+}
+
+function closeEditMember() {
+  editMemberOpen.value = false
+  editMemberContactId.value = ''
+}
+
+function onMemberSaved(updated: {
+  id: string
+  firstName: string
+  lastName: string
+  name: string
+  email: string
+  phone: string
+  company: string
+  channel: string
+  contactType: string[]
+  address: {
+    street: string
+    unit: string
+    city: string
+    state: string
+    county: string
+  }
+}) {
+  const items = payload.value?.members?.items
+  if (!items?.length) return
+  const idx = items.findIndex((m) => m.id === updated.id)
+  if (idx < 0) return
+  const existing = items[idx]!
+  items[idx] = {
+    ...existing,
+    firstName: updated.firstName,
+    lastName: updated.lastName,
+    name: updated.name || existing.name,
+    email: updated.email,
+    phone: updated.phone,
+    company: updated.company,
+    channel: updated.channel,
+    contactType: updated.contactType.length ? updated.contactType : existing.contactType,
+    address: {
+      ...existing.address,
+      ...updated.address
+    }
+  }
+}
+
+function openRemoveMember(member: TenantRecipientListMemberRow) {
+  memberPendingRemove.value = member
+  removeMemberOpen.value = true
+}
+
+function cancelRemoveMember() {
+  if (removeMemberPending.value) return
+  removeMemberOpen.value = false
+  memberPendingRemove.value = null
+}
+
+async function confirmRemoveMember() {
+  const list = listId.value
+  const member = memberPendingRemove.value
+  if (!list || !member?.id || removeMemberPending.value) return
+  removeMemberPending.value = true
+  try {
+    await marketingApi.removeRecipientListMember(list, member.id)
+    removeMemberOpen.value = false
+    memberPendingRemove.value = null
+    toast.success('Contact removed from list.')
+    await load(page.value)
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to remove contact')
+        : 'Failed to remove contact'
+    loadError.value = message
+    toast.error(message)
+    removeMemberOpen.value = false
+  } finally {
+    removeMemberPending.value = false
+  }
+}
+
 async function load(p: number) {
   const id = listId.value
   if (!id) {
@@ -455,6 +924,11 @@ async function load(p: number) {
     )
     payload.value = res
     page.value = res.members.page
+    // If this page is empty after a remove but earlier pages exist, step back.
+    if (!res.members.items.length && res.members.page > 1 && res.members.total > 0) {
+      await load(res.members.page - 1)
+      return
+    }
   } catch (e: unknown) {
     loadError.value =
       e && typeof e === 'object' && 'data' in e
@@ -495,6 +969,29 @@ async function confirmDeleteDetail() {
     deleteDetailPending.value = false
   }
 }
+
+watch(viewMemberOpen, (open) => {
+  if (!import.meta.client) return
+  document.body.style.overflow = open ? 'hidden' : ''
+  if (viewMemberEscListener) {
+    window.removeEventListener('keydown', viewMemberEscListener)
+    viewMemberEscListener = null
+  }
+  if (open) {
+    viewMemberEscListener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeViewMember()
+    }
+    window.addEventListener('keydown', viewMemberEscListener)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (viewMemberEscListener) {
+    window.removeEventListener('keydown', viewMemberEscListener)
+    viewMemberEscListener = null
+  }
+  if (import.meta.client) document.body.style.overflow = ''
+})
 
 watch(
   listId,

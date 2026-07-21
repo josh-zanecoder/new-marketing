@@ -11,7 +11,10 @@ import {
   suggestFilterRowsFromCriteria
 } from '@server/utils/recipient/recipientListNormalization'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
-import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
+import {
+  recipientListExcludedContactIds,
+  recipientListStoredMembershipEmails
+} from '@server/utils/recipient/recipientListMutation'
 
 function rowCriterionDisplay(
   filterDoc: Record<string, unknown>,
@@ -181,13 +184,22 @@ export default defineEventHandler(async (event) => {
   )
   const skip = (page - 1) * pageSize
 
+  const excludedContactIds = recipientListExcludedContactIds(
+    doc as { excludedContactIds?: unknown }
+  )
+  const excludedIdSet = new Set(excludedContactIds.map((id) => String(id)))
+
   const memberContactIdsRaw = await RecipientListMember.distinct('contactId', {
-    recipientListId: listId
+    recipientListId: listId,
+    ...(excludedContactIds.length
+      ? { contactId: { $nin: excludedContactIds } }
+      : {})
   })
   const memberObjectIds = memberContactIdsRaw
     .map((id) => {
       if (id == null) return null
       const s = String(id)
+      if (excludedIdSet.has(s)) return null
       return mongoose.isValidObjectId(s) ? new mongoose.Types.ObjectId(s) : null
     })
     .filter((x): x is mongoose.Types.ObjectId => x != null)
@@ -202,7 +214,12 @@ export default defineEventHandler(async (event) => {
           )
         )
 
-  const memberRows = (await RecipientListMember.find({ recipientListId: listId })
+  const memberQuery: Record<string, unknown> = { recipientListId: listId }
+  if (excludedContactIds.length) {
+    memberQuery.contactId = { $nin: excludedContactIds }
+  }
+
+  const memberRows = (await RecipientListMember.find(memberQuery)
     .select('contactId')
     .sort({ createdAt: 1 })
     .skip(skip)

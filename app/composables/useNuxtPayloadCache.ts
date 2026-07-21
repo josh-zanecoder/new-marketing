@@ -7,10 +7,10 @@ export function readNuxtPayloadCache(key: string, nuxtApp: ReturnType<typeof use
 export function clearNuxtPayloadCache(key: string, nuxtApp?: ReturnType<typeof useNuxtApp>) {
   const app = nuxtApp ?? useNuxtApp()
   if (app.payload.data && Object.prototype.hasOwnProperty.call(app.payload.data, key)) {
-    delete app.payload.data[key]
+    Reflect.deleteProperty(app.payload.data, key)
   }
   if (app.static?.data && Object.prototype.hasOwnProperty.call(app.static.data, key)) {
-    delete app.static.data[key]
+    Reflect.deleteProperty(app.static.data, key)
   }
 }
 

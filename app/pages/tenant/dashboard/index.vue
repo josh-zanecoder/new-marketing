@@ -135,7 +135,7 @@ function rowSubtitle(c: TenantDashboardRecentCampaign) {
           New campaign
         </NuxtLink>
         <TenantRefreshIconButton
-          aria-label="Refresh dashboard"
+          label="Refresh dashboard"
           :pending="pending"
           @click="() => refresh()"
         />
