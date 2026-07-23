@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { syncRecipientListsForContactSubscription } from '@server/utils/recipient/syncContactRecipientListMembership'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type SubscriptionPatchLean = Pick<ContactLean, 'isUnsubscribe' | 'updatedAt'>
@@ -20,8 +21,9 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Contact } = getTenantClientModels(conn)
   const auth = event.context.auth as unknown
+  const oid = new mongoose.Types.ObjectId(rawId)
   const filter = mergeTenantOwnerEmailScopeFilter(
-    { _id: new mongoose.Types.ObjectId(rawId), deletedAt: null },
+    { _id: oid, deletedAt: null },
     auth
   )
 
@@ -34,6 +36,8 @@ export default defineEventHandler(async (event) => {
   if (!updated) {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
+
+  await syncRecipientListsForContactSubscription(conn, oid, body.subscribed)
 
   return {
     ok: true,

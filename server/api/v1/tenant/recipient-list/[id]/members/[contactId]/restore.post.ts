@@ -3,12 +3,12 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { recipientListExcludedContactIds } from '@server/utils/recipient/recipientListMutation'
 
 /**
- * Soft-remove a contact from a recipient list.
- * Adds them to `excludedContactIds` so rebuild/sync will not put them back,
- * and deletes the `RecipientListMember` row. Does not delete the Contact or
- * campaign history — use POST .../members/:contactId/restore to put them back.
+ * Restore a soft-removed recipient to the active list.
+ * Clears `excludedContactIds` for this contact and upserts the member row.
+ * Does not change the Contact or campaign history.
  */
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -34,10 +34,21 @@ export default defineEventHandler(async (event) => {
   const list = await RecipientList.findOne(
     mergeTenantOwnerEmailScopeFilter({ _id: listId }, auth)
   )
-    .select('_id listType')
+    .select('_id excludedContactIds')
     .lean()
   if (!list) {
     throw createError({ statusCode: 404, message: 'Recipient list not found' })
+  }
+
+  const excluded = recipientListExcludedContactIds(
+    list as { excludedContactIds?: unknown }
+  )
+  const wasExcluded = excluded.some((id) => String(id) === String(contactId))
+  if (!wasExcluded) {
+    throw createError({
+      statusCode: 404,
+      message: 'Contact is not in the removed recipients for this list'
+    })
   }
 
   const contact = await Contact.findOne(
@@ -49,27 +60,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
-  const listType =
-    (list as { listType?: string }).listType === 'static'
-      ? 'static'
-      : 'hybrid'
-
   await RecipientList.updateOne(
     { _id: listId },
-    {
-      $addToSet: { excludedContactIds: contactId },
-      $set: { listType }
-    }
+    { $pull: { excludedContactIds: contactId } }
   )
 
-  const memberRes = await RecipientListMember.deleteOne({
-    recipientListId: listId,
-    contactId
-  })
+  await RecipientListMember.updateOne(
+    { recipientListId: listId, contactId },
+    { $setOnInsert: { recipientListId: listId, contactId } },
+    { upsert: true }
+  )
 
   return {
     ok: true,
-    removed: (memberRes.deletedCount ?? 0) > 0,
+    restored: true,
     contactId: String(contactId),
     listId: String(listId)
   }

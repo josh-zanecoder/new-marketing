@@ -11,6 +11,10 @@ import {
   unsubscribeResultPayload,
   unsubscribeStatusHtml
 } from '@server/utils/unsubscribeResponses'
+import {
+  findUnsubscribeTokenResponse,
+  unsubscribePreferenceCopy
+} from '@server/utils/unsubscribeTokenResponse'
 
 export default defineEventHandler(async (event) => {
   const token = String(getQuery(event).token ?? '').trim()
@@ -52,8 +56,26 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const marketing = marketingSubscribedFromContact(ctx.contact)
     const emailMasked = maskEmail(String(ctx.contact.email ?? ''))
+    const prior = await findUnsubscribeTokenResponse({ dbName: ctx.dbName, token })
+    if (prior) {
+      const copy = unsubscribePreferenceCopy(prior.marketing)
+      if (json) {
+        return unsubscribeResultPayload({
+          ok: true,
+          preview: true,
+          alreadyUsed: true,
+          title: copy.title,
+          message: copy.message,
+          email: emailMasked,
+          marketing: prior.marketing
+        })
+      }
+      setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+      return unsubscribeStatusHtml(copy.title, copy.message, true)
+    }
+
+    const marketing = marketingSubscribedFromContact(ctx.contact)
 
     if (json) {
       return unsubscribeResultPayload({

@@ -188,6 +188,13 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  async function restoreRecipientListMember(listId: string, contactId: string) {
+    return $fetch<{ ok: boolean; restored: boolean; contactId: string; listId: string }>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}/members/${encodeURIComponent(contactId)}/restore`,
+      tenantFetchInit({ method: 'POST', timeout: 30000 })
+    )
+  }
+
   async function fetchDynamicVariables() {
     return $fetch<{ variables?: TenantDynamicVariableItem[] }>(
       '/api/v1/tenant/dynamic-variables',
@@ -491,6 +498,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchRecipientListResource,
     fetchRecipientListById,
     removeRecipientListMember,
+    restoreRecipientListMember,
     fetchDynamicVariables,
     createContact,
     updateContact,

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionByDbName } from '@server/tenant/connection'
+import { syncRecipientListsForContactSubscription } from '@server/utils/recipient/syncContactRecipientListMembership'
 
 export async function applyMarketingUnsubscribePreference(params: {
   dbName: string
@@ -8,7 +9,7 @@ export async function applyMarketingUnsubscribePreference(params: {
   marketing: boolean
 }): Promise<{ ok: true } | { ok: false; reason: 'not_found' }> {
   const tenantConn = await getTenantConnectionByDbName(params.dbName)
-  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
+  const { Contact } = getTenantClientModels(tenantConn)
   const oid = new mongoose.Types.ObjectId(params.contactId)
 
   const updated = await Contact.updateOne(
@@ -20,9 +21,7 @@ export async function applyMarketingUnsubscribePreference(params: {
     return { ok: false, reason: 'not_found' }
   }
 
-  if (!params.marketing) {
-    await RecipientListMember.deleteMany({ contactId: oid })
-  }
+  await syncRecipientListsForContactSubscription(tenantConn, oid, params.marketing)
 
   return { ok: true }
 }

@@ -3,9 +3,9 @@
     <div class="mx-auto max-w-6xl">
     <NuxtLink
       to="/tenant/recipient-list"
-      class="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-600 transition hover:text-zinc-900 sm:mb-8"
+      class="group mb-6 inline-flex items-center gap-2 text-sm font-medium text-zinc-500 transition hover:text-zinc-900 sm:mb-8"
     >
-      <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100/80 text-zinc-500 transition group-hover:bg-zinc-200/80 group-hover:text-zinc-800">
+      <span class="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition group-hover:border-zinc-300 group-hover:text-zinc-800">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
@@ -31,247 +31,213 @@
     </div>
 
     <template v-else-if="payload">
-      <header class="mb-6 sm:mb-10">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
-          <div class="min-w-0 flex-1 space-y-3 sm:space-y-4">
-            <h1 class="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl lg:text-[2rem] lg:leading-tight">
+      <header class="mb-8 sm:mb-12">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+          <div class="min-w-0 flex-1">
+            <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-[1.75rem] sm:leading-tight">
               {{ payload.list.name }}
             </h1>
-            <div
-              v-if="payload.list.audience"
-              class="flex flex-wrap items-center gap-2 sm:gap-2.5"
-            >
+            <div class="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-sm text-zinc-500">
               <span
-                class="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold capitalize text-zinc-800 ring-1 ring-zinc-200/80"
+                v-if="payload.list.audience"
+                class="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-700"
               >
                 {{ payload.list.audience }}
               </span>
+              <span
+                v-if="payload.list.audience && payload.list.updatedAt"
+                class="text-zinc-300"
+                aria-hidden="true"
+              >·</span>
+              <span v-if="payload.list.updatedAt" class="tabular-nums">
+                Updated {{ formatDate(payload.list.updatedAt) }}
+              </span>
             </div>
-            <p
-              v-if="payload.list.updatedAt"
-              class="flex items-center gap-2 text-sm text-zinc-500"
-            >
-              <svg class="h-4 w-4 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span class="tabular-nums">Last updated {{ formatDate(payload.list.updatedAt) }}</span>
-            </p>
           </div>
-          <div class="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+          <div class="flex w-full shrink-0 flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center">
             <NuxtLink
               :to="`/tenant/recipient-list/edit/${listId}`"
-              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-zinc-900/15 transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 sm:px-5 sm:py-3"
+              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
             >
-              <svg class="h-4 w-4 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
               Edit list
             </NuxtLink>
             <button
               type="button"
-              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 shadow-sm transition hover:border-red-200 hover:bg-red-50/80 sm:px-5 sm:py-3"
+              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
               @click="deleteConfirmOpen = true"
             >
-              <svg class="h-4 w-4 text-red-600/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
               Delete
             </button>
           </div>
         </div>
       </header>
 
-      <section class="mb-8 sm:mb-10">
-        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 class="text-sm font-semibold text-zinc-900">
-              Inclusion criteria
-            </h2>
-            <p class="mt-1 max-w-2xl text-sm text-zinc-600">
-              Registry rules applied on top of the audience. Edit the list to change them.
-            </p>
-          </div>
-          <span
-            v-if="hasListCriteria"
-            class="inline-flex w-fit items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold tabular-nums text-zinc-700 ring-1 ring-zinc-200/80"
-          >
-            {{ criteriaRuleCount }} {{ criteriaRuleCount === 1 ? 'rule' : 'rules' }}
-          </span>
-        </div>
+      <section class="mb-10 sm:mb-12" aria-label="Inclusion criteria">
         <div
           v-if="!hasListCriteria"
-          class="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300/90 bg-gradient-to-b from-zinc-50/50 to-white px-6 py-10 text-center shadow-sm sm:flex-row sm:items-center sm:gap-5 sm:py-9 sm:text-left"
+          class="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-zinc-200 bg-white px-5 py-6 text-center sm:flex-row sm:items-center sm:gap-5 sm:px-6 sm:py-7 sm:text-left"
         >
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm ring-1 ring-zinc-200/80">
-            <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-violet-600">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
           </div>
-          <div>
+          <div class="min-w-0">
             <p class="text-base font-semibold text-zinc-900">
               Audience only
             </p>
-            <p class="mt-1 max-w-md text-sm leading-relaxed text-zinc-600">
+            <p class="mt-1 max-w-xl text-sm leading-relaxed text-zinc-500">
               No extra filters — everyone in this audience can be included (subject to campaign rules).
             </p>
           </div>
         </div>
-        <div
-          v-else
-          class="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-100/80 sm:p-5"
-          role="group"
-          aria-label="List filter criteria"
-        >
-          <p class="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Active filters
-          </p>
-          <div class="flex min-h-[3rem] min-w-0 flex-wrap items-center gap-2 sm:gap-2.5">
-            <template v-for="(seg, i) in criteriaSegments" :key="i">
-              <span
-                v-if="seg.kind === 'criterion'"
-                class="inline-flex max-w-full items-center gap-2 rounded-xl border border-zinc-200/90 bg-gradient-to-b from-zinc-50/80 to-white px-3 py-2 text-sm shadow-sm ring-1 ring-zinc-100/60"
-              >
-                <span class="shrink-0 text-xs font-semibold tracking-wide text-zinc-500">{{ recipientCriterionPropertyLabel(seg.property) }}</span>
-                <span class="shrink-0 rounded-md bg-zinc-900/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">equals</span>
-                <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
-              </span>
-              <span
-                v-else
-                class="inline-flex shrink-0 items-center justify-center rounded-lg bg-violet-100 px-2.5 py-2 text-[11px] font-bold uppercase tracking-wider text-violet-900 ring-1 ring-violet-200/90"
-              >
-                {{ seg.op }}
-              </span>
-            </template>
+        <div v-else class="space-y-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold tracking-tight text-zinc-900">
+                Inclusion criteria
+              </h2>
+              <p class="mt-1 text-sm text-zinc-500">
+                Extra filters on top of the audience. Edit the list to change them.
+              </p>
+            </div>
+            <span class="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs font-semibold tabular-nums text-zinc-600">
+              {{ criteriaRuleCount }} {{ criteriaRuleCount === 1 ? 'rule' : 'rules' }}
+            </span>
+          </div>
+          <div
+            class="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6"
+            role="group"
+            aria-label="List filter criteria"
+          >
+            <div class="flex min-w-0 flex-wrap items-center gap-2.5">
+              <template v-for="(seg, i) in criteriaSegments" :key="i">
+                <span
+                  v-if="seg.kind === 'criterion'"
+                  class="inline-flex max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm"
+                >
+                  <span class="shrink-0 text-xs font-medium text-zinc-500">{{ recipientCriterionPropertyLabel(seg.property) }}</span>
+                  <span class="shrink-0 rounded-md bg-zinc-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">equals</span>
+                  <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
+                </span>
+                <span
+                  v-else
+                  class="inline-flex shrink-0 items-center justify-center rounded-lg bg-zinc-100 px-2.5 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-600"
+                >
+                  {{ seg.op }}
+                </span>
+              </template>
+            </div>
           </div>
         </div>
       </section>
 
-      <section>
-        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section aria-label="Recipients">
+        <div class="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 class="text-sm font-semibold text-zinc-900">
+            <h2 class="text-lg font-semibold tracking-tight text-zinc-900">
               Recipients
             </h2>
-            <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600">
-              <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-900 ring-1 ring-emerald-200/80">
+            <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-zinc-500">
+              <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/15">
                 {{ payload.members.total.toLocaleString() }}
                 {{ payload.members.total === 1 ? 'contact' : 'contacts' }}
               </span>
-              <span class="text-zinc-400">·</span>
-              <span class="text-zinc-500">Matching this list right now</span>
+              <span aria-hidden="true">·</span>
+              <span>Matching this list right now</span>
             </p>
           </div>
           <p
             v-if="pageLoading"
-            class="inline-flex items-center gap-2 text-sm font-medium text-violet-700"
+            class="inline-flex items-center gap-2 text-sm font-medium text-zinc-500"
           >
-            <span class="relative flex h-2 w-2">
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
-              <span class="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
-            </span>
+            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-400" />
             Loading…
           </p>
         </div>
 
         <div
           v-if="!payload.members.total"
-          class="rounded-2xl border border-dashed border-zinc-300/90 bg-zinc-50/30 px-6 py-14 text-center shadow-sm"
+          class="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center"
         >
-          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white text-zinc-400 shadow-sm ring-1 ring-zinc-200/80">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
           <p class="text-sm font-semibold text-zinc-900">
             No matching contacts
           </p>
-          <p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-600">
+          <p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
             Adjust filters or audience, or wait if sync is still in progress.
           </p>
         </div>
 
         <div
           v-else
-          class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-md shadow-zinc-950/[0.06] ring-1 ring-zinc-100/80"
+          class="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
         >
           <ul class="divide-y divide-zinc-100 lg:hidden">
-            <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-4">
-              <div class="flex items-start justify-between gap-3">
+            <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-5">
+              <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-semibold text-zinc-900">
+                  <p class="truncate text-[0.9375rem] font-semibold text-zinc-900">
                     {{ m.name }}
                   </p>
-                  <p class="mt-0.5 truncate text-xs text-zinc-600" :title="m.email">
+                  <p class="mt-1 truncate text-sm text-zinc-500" :title="m.email">
                     {{ m.email }}
                   </p>
+                  <p v-if="m.company" class="mt-3 truncate text-sm text-zinc-500" :title="m.company">
+                    {{ m.company }}
+                  </p>
+                  <p
+                    v-if="formatAddress(m.address) !== '—'"
+                    class="mt-1 line-clamp-2 text-sm text-zinc-500"
+                    :title="formatAddress(m.address)"
+                  >
+                    {{ formatAddress(m.address) }}
+                  </p>
                 </div>
-                <div class="flex shrink-0 flex-col items-stretch gap-1.5">
+                <div class="flex shrink-0 flex-col items-stretch gap-2">
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
                     @click="viewMember(m.id)"
                   >
                     View
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                    class="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
                     @click="editMember(m.id)"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-red-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
+                    class="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                     @click="openRemoveMember(m)"
                   >
                     Remove
                   </button>
                 </div>
               </div>
-              <div v-if="m.contactType?.length" class="mt-2 flex flex-wrap gap-1">
-                <span
-                  v-for="t in m.contactType"
-                  :key="`${m.id}-mobile-${t}`"
-                  class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
-                >
-                  {{ t }}
-                </span>
-              </div>
-              <p v-if="m.company" class="mt-2 truncate text-xs text-zinc-500" :title="m.company">
-                {{ m.company }}
-              </p>
-              <p
-                v-if="formatAddress(m.address) !== '—'"
-                class="mt-1 line-clamp-2 text-xs text-zinc-500"
-                :title="formatAddress(m.address)"
-              >
-                {{ formatAddress(m.address) }}
-              </p>
             </li>
           </ul>
 
           <div class="hidden overflow-x-auto lg:block">
             <table class="min-w-full text-left text-sm">
               <thead>
-                <tr class="border-b border-zinc-200 bg-zinc-50/90">
-                  <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:px-6">
+                <tr class="border-b border-zinc-100 bg-zinc-50/80">
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
                     Name
                   </th>
-                  <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:px-6">
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
                     Email
                   </th>
-                  <th scope="col" class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:px-6">
-                    Kind
-                  </th>
-                  <th scope="col" class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:table-cell sm:px-6">
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
                     Company
                   </th>
-                  <th scope="col" class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-500 lg:table-cell lg:px-6">
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
                     Location
                   </th>
-                  <th scope="col" class="whitespace-nowrap px-4 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-zinc-500 sm:px-6">
-                    Actions
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
+                    <span class="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -279,56 +245,39 @@
                 <tr
                   v-for="m in payload.members.items"
                   :key="m.id"
-                  class="bg-white transition-colors hover:bg-violet-50/30"
+                  class="bg-white transition-colors hover:bg-zinc-50/70"
                 >
-                  <td class="whitespace-nowrap px-4 py-3.5 font-semibold text-zinc-900 sm:px-6">
+                  <td class="whitespace-nowrap px-6 py-5 font-semibold text-zinc-900">
                     {{ m.name }}
                   </td>
-                  <td class="max-w-[14rem] truncate px-4 py-3.5 text-zinc-700 sm:max-w-xs sm:px-6" :title="m.email">
+                  <td class="max-w-[16rem] truncate px-6 py-5 text-zinc-600" :title="m.email">
                     {{ m.email }}
                   </td>
-                  <td class="max-w-[12rem] px-4 py-3.5 sm:px-6">
-                    <div v-if="m.contactType?.length" class="flex flex-wrap gap-1">
-                      <span
-                        v-for="t in m.contactType"
-                        :key="`${m.id}-${t}`"
-                        class="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize text-zinc-800 ring-1 ring-zinc-200/80"
-                      >
-                        {{ t }}
-                      </span>
-                    </div>
-                    <span
-                      v-else
-                      class="text-xs text-zinc-400"
-                    >
-                      —
-                    </span>
-                  </td>
-                  <td class="hidden max-w-[10rem] truncate px-4 py-3.5 text-zinc-700 sm:table-cell sm:max-w-[12rem] sm:px-6" :title="m.company || undefined">
+                  <td class="max-w-[12rem] truncate px-6 py-5 text-zinc-600" :title="m.company || undefined">
                     {{ m.company || '—' }}
                   </td>
-                  <td class="hidden max-w-[12rem] truncate px-4 py-3.5 text-zinc-700 lg:table-cell lg:max-w-[16rem] lg:px-6" :title="formatAddress(m.address)">
+                  <td class="max-w-[18rem] truncate px-6 py-5 text-zinc-600" :title="formatAddress(m.address)">
                     {{ formatAddress(m.address) }}
                   </td>
-                  <td class="whitespace-nowrap px-4 py-3.5 text-right sm:px-6">
-                    <div class="inline-flex items-center justify-end gap-1.5">
+                  <td class="whitespace-nowrap px-6 py-5 text-right">
+                    <div class="inline-flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
                         @click="viewMember(m.id)"
                       >
                         View
                       </button>
                       <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50"
+                        class="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
                         @click="editMember(m.id)"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-lg border border-red-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
+                        class="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                         @click="openRemoveMember(m)"
                       >
                         Remove
@@ -342,36 +291,122 @@
 
           <div
             v-if="payload.members.totalPages > 1"
-            class="flex items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50/70 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
+            class="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-4 sm:px-6"
           >
-            <p class="min-w-0 text-xs tabular-nums text-zinc-600 sm:text-sm">
-              <span class="font-semibold text-zinc-900">{{ payload.members.page }}</span>
-              <span class="text-zinc-300"> / </span>
-              <span>{{ payload.members.totalPages }}</span>
-              <span class="hidden text-zinc-400 sm:inline"> · {{ payload.members.pageSize }}/page</span>
+            <p class="min-w-0 text-sm tabular-nums text-zinc-500">
+              Page
+              <span class="font-semibold text-zinc-800">{{ payload.members.page }}</span>
+              of {{ payload.members.totalPages }}
             </p>
-            <nav class="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="Recipients pagination">
+            <nav class="flex shrink-0 items-center gap-2" aria-label="Recipients pagination">
               <button
                 type="button"
-                class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-sm"
+                class="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="page <= 1 || pageLoading"
                 @click="goPage(page - 1)"
               >
-                <span class="sm:hidden">Prev</span>
-                <span class="hidden sm:inline">Previous</span>
+                Previous
               </button>
-              <span class="whitespace-nowrap px-1 text-xs font-medium tabular-nums text-zinc-500 sm:hidden">
-                {{ page }}/{{ payload.members.totalPages }}
-              </span>
               <button
                 type="button"
-                class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-sm"
+                class="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="page >= payload.members.totalPages || pageLoading"
                 @click="goPage(page + 1)"
               >
                 Next
               </button>
             </nav>
+          </div>
+        </div>
+      </section>
+
+      <section
+        v-if="(payload.removedMembers?.total ?? 0) > 0"
+        class="mt-10 sm:mt-12"
+        aria-label="Removed recipients"
+      >
+        <div class="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold tracking-tight text-zinc-900">
+              Removed from this list
+            </h2>
+            <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-zinc-500">
+              <span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900 ring-1 ring-inset ring-amber-600/15">
+                {{ (payload.removedMembers?.total ?? 0).toLocaleString() }}
+                {{ (payload.removedMembers?.total ?? 0) === 1 ? 'contact' : 'contacts' }}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>Soft-removed — restore anytime without losing campaign history</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="overflow-hidden rounded-2xl border border-amber-200/70 bg-white">
+          <ul class="divide-y divide-zinc-100 lg:hidden">
+            <li
+              v-for="m in payload.removedMembers?.items ?? []"
+              :key="`removed-mobile-${m.id}`"
+              class="p-5"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[0.9375rem] font-semibold text-zinc-900">
+                    {{ m.name }}
+                  </p>
+                  <p class="mt-1 truncate text-sm text-zinc-500" :title="m.email">
+                    {{ m.email }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  @click="openRestoreMember(m)"
+                >
+                  Restore
+                </button>
+              </div>
+            </li>
+          </ul>
+
+          <div class="hidden overflow-x-auto lg:block">
+            <table class="min-w-full text-left text-sm">
+              <thead>
+                <tr class="border-b border-zinc-100 bg-amber-50/50">
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
+                    Name
+                  </th>
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
+                    Email
+                  </th>
+                  <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
+                    <span class="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-100">
+                <tr
+                  v-for="m in payload.removedMembers?.items ?? []"
+                  :key="`removed-${m.id}`"
+                  class="bg-white transition-colors hover:bg-zinc-50/70"
+                >
+                  <td class="whitespace-nowrap px-6 py-5 font-semibold text-zinc-900">
+                    {{ m.name }}
+                  </td>
+                  <td class="max-w-[16rem] truncate px-6 py-5 text-zinc-600" :title="m.email">
+                    {{ m.email }}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-5 text-right">
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                      @click="openRestoreMember(m)"
+                    >
+                      Restore
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -388,12 +423,20 @@
     />
     <ClientConfirmationModal
       :open="removeMemberOpen"
-      title="Remove from list"
+      title="Remove recipient"
       :message="removeMemberMessage"
-      confirm-text="Remove from list"
+      confirm-text="Remove"
       variant="danger"
       @confirm="confirmRemoveMember"
       @cancel="cancelRemoveMember"
+    />
+    <ClientConfirmationModal
+      :open="restoreMemberOpen"
+      title="Restore recipient"
+      :message="restoreMemberMessage"
+      confirm-text="Restore"
+      @confirm="confirmRestoreMember"
+      @cancel="cancelRestoreMember"
     />
 
     <Teleport to="body">
@@ -656,6 +699,10 @@ const removeMemberOpen = ref(false)
 const removeMemberPending = ref(false)
 const memberPendingRemove = ref<TenantRecipientListMemberRow | null>(null)
 
+const restoreMemberOpen = ref(false)
+const restoreMemberPending = ref(false)
+const memberPendingRestore = ref<TenantRecipientListMemberRow | null>(null)
+
 const viewMemberOpen = ref(false)
 const viewMemberLoading = ref(false)
 const viewMemberError = ref('')
@@ -674,7 +721,13 @@ const deleteDetailMessage = computed(() => {
 const removeMemberMessage = computed(() => {
   const m = memberPendingRemove.value
   const label = m?.name?.trim() || m?.email?.trim() || 'this contact'
-  return `Remove ${label} from this list? They will stay in Contacts, but will not be included in this list (including after sync).`
+  return `Remove ${label} from this list? This is a soft remove — they stay in Contacts, campaign history is preserved, and you can restore them later. They will not appear in this active list until restored.`
+})
+
+const restoreMemberMessage = computed(() => {
+  const m = memberPendingRestore.value
+  const label = m?.name?.trim() || m?.email?.trim() || 'this contact'
+  return `Restore ${label} to this list? They will appear in the active recipients again.`
 })
 
 const viewMemberInitials = computed(() => {
@@ -888,7 +941,7 @@ async function confirmRemoveMember() {
     await marketingApi.removeRecipientListMember(list, member.id)
     removeMemberOpen.value = false
     memberPendingRemove.value = null
-    toast.success('Contact removed from list.')
+    toast.success('Recipient removed from list.')
     await load(page.value)
   } catch (e: unknown) {
     const message =
@@ -900,6 +953,41 @@ async function confirmRemoveMember() {
     removeMemberOpen.value = false
   } finally {
     removeMemberPending.value = false
+  }
+}
+
+function openRestoreMember(member: TenantRecipientListMemberRow) {
+  memberPendingRestore.value = member
+  restoreMemberOpen.value = true
+}
+
+function cancelRestoreMember() {
+  if (restoreMemberPending.value) return
+  restoreMemberOpen.value = false
+  memberPendingRestore.value = null
+}
+
+async function confirmRestoreMember() {
+  const list = listId.value
+  const member = memberPendingRestore.value
+  if (!list || !member?.id || restoreMemberPending.value) return
+  restoreMemberPending.value = true
+  try {
+    await marketingApi.restoreRecipientListMember(list, member.id)
+    restoreMemberOpen.value = false
+    memberPendingRestore.value = null
+    toast.success('Recipient restored to list.')
+    await load(page.value)
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to restore contact')
+        : 'Failed to restore contact'
+    loadError.value = message
+    toast.error(message)
+    restoreMemberOpen.value = false
+  } finally {
+    restoreMemberPending.value = false
   }
 }
 

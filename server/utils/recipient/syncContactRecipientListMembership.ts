@@ -213,6 +213,24 @@ export async function syncContactRecipientListMembership(
   )
 }
 
+/**
+ * Keep recipient-list membership aligned with subscription:
+ * - unsubscribe → remove from every list
+ * - subscribe → re-add to matching non-static lists (criteria + exclusions)
+ */
+export async function syncRecipientListsForContactSubscription(
+  tenantConn: Connection,
+  contactId: mongoose.Types.ObjectId,
+  subscribed: boolean
+): Promise<void> {
+  const { RecipientListMember } = getTenantClientModels(tenantConn)
+  if (!subscribed) {
+    await RecipientListMember.deleteMany({ contactId })
+    return
+  }
+  await syncContactRecipientListMembership(tenantConn, contactId)
+}
+
 /** Runs list-membership sync without blocking the HTTP response. */
 export function scheduleContactRecipientListMembershipSync(
   tenantConn: Connection,
