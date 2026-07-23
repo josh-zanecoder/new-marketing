@@ -21,7 +21,7 @@ const analyticsPanelRef = ref<InstanceType<typeof TenantMarketingAnalyticsPanel>
         </p>
       </div>
       <TenantRefreshIconButton
-        aria-label="Refresh marketing analytics"
+        label="Refresh marketing analytics"
         :pending="analyticsPanelRef?.pending"
         @click="() => analyticsPanelRef?.refresh?.()"
       />

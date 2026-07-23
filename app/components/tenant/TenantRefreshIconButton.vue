@@ -1,7 +1,8 @@
 <script setup lang="ts">
 defineProps<{
   pending?: boolean
-  ariaLabel: string
+  /** Accessible name for the icon-only refresh control. */
+  label: string
 }>()
 
 const emit = defineEmits<{
@@ -13,7 +14,7 @@ const emit = defineEmits<{
   <button
     type="button"
     class="btn-outline !p-2.5"
-    :aria-label="ariaLabel"
+    :aria-label="label"
     :disabled="pending"
     @click="emit('click')"
   >

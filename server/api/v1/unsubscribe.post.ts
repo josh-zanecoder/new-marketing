@@ -9,6 +9,11 @@ import {
   unsubscribeResultPayload,
   unsubscribeStatusHtml
 } from '@server/utils/unsubscribeResponses'
+import {
+  claimUnsubscribeTokenResponse,
+  releaseUnsubscribeTokenClaim,
+  unsubscribePreferenceCopy
+} from '@server/utils/unsubscribeTokenResponse'
 
 function parseMarketingValue(raw: unknown): boolean | null {
   if (typeof raw === 'boolean') return raw
@@ -99,6 +104,28 @@ export default defineEventHandler(async (event) => {
       return unsubscribeStatusHtml(copy.title, copy.message, false)
     }
 
+    const claim = await claimUnsubscribeTokenResponse({
+      dbName: ctx.dbName,
+      token,
+      contactId: ctx.contactId,
+      marketing
+    })
+
+    if (!claim.claimed) {
+      const copy = unsubscribePreferenceCopy(claim.response.marketing)
+      if (json) {
+        return unsubscribeResultPayload({
+          ok: true,
+          alreadyUsed: true,
+          title: copy.title,
+          message: copy.message,
+          marketing: claim.response.marketing
+        })
+      }
+      setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+      return unsubscribeStatusHtml(copy.title, copy.message, true)
+    }
+
     const result = await applyMarketingUnsubscribePreference({
       dbName: ctx.dbName,
       contactId: ctx.contactId,
@@ -106,6 +133,7 @@ export default defineEventHandler(async (event) => {
     })
 
     if (!result.ok) {
+      await releaseUnsubscribeTokenClaim({ dbName: ctx.dbName, token }).catch(() => {})
       if (json) {
         return unsubscribeResultPayload({
           ok: false,
@@ -121,22 +149,19 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    const successTitle = marketing ? 'Preferences saved' : 'You are unsubscribed'
-    const successMessage = marketing
-      ? 'You will continue to receive marketing emails from us at this address.'
-      : 'You will no longer receive marketing emails from us at this address.'
+    const copy = unsubscribePreferenceCopy(marketing)
 
     if (json) {
       return unsubscribeResultPayload({
         ok: true,
-        title: successTitle,
-        message: successMessage,
+        title: copy.title,
+        message: copy.message,
         marketing
       })
     }
 
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeStatusHtml(successTitle, successMessage, true)
+    return unsubscribeStatusHtml(copy.title, copy.message, true)
   } catch {
     if (json) {
       return unsubscribeResultPayload({

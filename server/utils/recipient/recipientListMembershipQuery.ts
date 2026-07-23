@@ -16,6 +16,7 @@ import {
   mergeContactOwnerScopeFilter,
   mergeTenantOwnerEmailScopeFilter
 } from '@server/utils/contactOwnerFilter'
+import { recipientListExcludedContactIds } from '@server/utils/recipient/recipientListMutation'
 
 const MEMBER_INSERT_BATCH = 1000
 
@@ -464,8 +465,16 @@ export async function rebuildRecipientListMembers(
   membershipOwnerEmails: string[],
   storedCriterionJoins?: RecipientListCriterionJoin[] | null
 ): Promise<number> {
-  const { Contact, RecipientListMember } = getTenantClientModels(tenantConn)
+  const { Contact, RecipientList, RecipientListMember } = getTenantClientModels(tenantConn)
   await RecipientListMember.deleteMany({ recipientListId: listId })
+
+  const listLean = await RecipientList.findById(listId)
+    .select('excludedContactIds')
+    .lean()
+  const excludedIds = recipientListExcludedContactIds(
+    (listLean ?? {}) as { excludedContactIds?: unknown }
+  )
+  const excludedSet = new Set(excludedIds.map((id) => String(id)))
 
   const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
   const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
@@ -492,6 +501,7 @@ export async function rebuildRecipientListMembers(
   let batch: { recipientListId: typeof listId; contactId: unknown }[] = []
 
   for await (const doc of cursor) {
+    if (excludedSet.has(String(doc._id))) continue
     batch.push({ recipientListId: listId, contactId: doc._id })
     if (batch.length >= MEMBER_INSERT_BATCH) {
       await RecipientListMember.insertMany(batch, { ordered: false })

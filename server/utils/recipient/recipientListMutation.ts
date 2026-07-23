@@ -222,3 +222,21 @@ export function recipientListOwnerEmailForContactScope(doc: {
   const t = e.trim().toLowerCase()
   return t || undefined
 }
+
+/** Soft-excluded contact ids stored on a recipient list (survives rebuild/sync). */
+export function recipientListExcludedContactIds(doc: {
+  excludedContactIds?: unknown
+}): mongoose.Types.ObjectId[] {
+  const raw = doc.excludedContactIds
+  if (!Array.isArray(raw)) return []
+  const out: mongoose.Types.ObjectId[] = []
+  const seen = new Set<string>()
+  for (const x of raw) {
+    if (x == null) continue
+    const s = String(x)
+    if (!mongoose.isValidObjectId(s) || seen.has(s)) continue
+    seen.add(s)
+    out.push(new mongoose.Types.ObjectId(s))
+  }
+  return out
+}

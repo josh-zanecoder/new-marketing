@@ -11,7 +11,10 @@ import {
   suggestFilterRowsFromCriteria
 } from '@server/utils/recipient/recipientListNormalization'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
-import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
+import {
+  recipientListExcludedContactIds,
+  recipientListStoredMembershipEmails
+} from '@server/utils/recipient/recipientListMutation'
 
 function rowCriterionDisplay(
   filterDoc: Record<string, unknown>,
@@ -181,13 +184,22 @@ export default defineEventHandler(async (event) => {
   )
   const skip = (page - 1) * pageSize
 
+  const excludedContactIds = recipientListExcludedContactIds(
+    doc as { excludedContactIds?: unknown }
+  )
+  const excludedIdSet = new Set(excludedContactIds.map((id) => String(id)))
+
   const memberContactIdsRaw = await RecipientListMember.distinct('contactId', {
-    recipientListId: listId
+    recipientListId: listId,
+    ...(excludedContactIds.length
+      ? { contactId: { $nin: excludedContactIds } }
+      : {})
   })
   const memberObjectIds = memberContactIdsRaw
     .map((id) => {
       if (id == null) return null
       const s = String(id)
+      if (excludedIdSet.has(s)) return null
       return mongoose.isValidObjectId(s) ? new mongoose.Types.ObjectId(s) : null
     })
     .filter((x): x is mongoose.Types.ObjectId => x != null)
@@ -202,7 +214,12 @@ export default defineEventHandler(async (event) => {
           )
         )
 
-  const memberRows = (await RecipientListMember.find({ recipientListId: listId })
+  const memberQuery: Record<string, unknown> = { recipientListId: listId }
+  if (excludedContactIds.length) {
+    memberQuery.contactId = { $nin: excludedContactIds }
+  }
+
+  const memberRows = (await RecipientListMember.find(memberQuery)
     .select('contactId')
     .sort({ createdAt: 1 })
     .skip(skip)
@@ -260,6 +277,58 @@ export default defineEventHandler(async (event) => {
       }
     })
 
+  const removedContactIds = excludedContactIds.slice(0, MAX_PAGE_SIZE)
+  const removedContacts: ContactRow[] =
+    removedContactIds.length === 0
+      ? []
+      : ((await Contact.find(
+          mergeTenantOwnerEmailScopeFilter(
+            {
+              _id: { $in: removedContactIds },
+              $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+            },
+            auth
+          )
+        )
+          .select({
+            firstName: 1,
+            lastName: 1,
+            name: 1,
+            email: 1,
+            phone: 1,
+            contactType: 1,
+            company: 1,
+            channel: 1,
+            source: 1,
+            address: 1
+          })
+          .lean()
+          .exec()) as ContactRow[])
+
+  const removedById = new Map(removedContacts.map((c) => [String(c._id), c]))
+  const removedItems = removedContactIds
+    .map((cid) => removedById.get(String(cid)))
+    .filter(Boolean)
+    .map((c) => {
+      const { firstName, lastName } = contactFirstLastFromDoc(c!)
+      return {
+        id: String(c!._id),
+        firstName,
+        lastName,
+        name: formatContactFullName(firstName, lastName),
+        email: c!.email ?? '',
+        phone: c!.phone ?? '',
+        contactType:
+          Array.isArray(c!.contactType) && c!.contactType.length
+            ? [...new Set(c!.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean))]
+            : [],
+        company: c!.company ?? '',
+        channel: c!.channel ?? '',
+        source: c!.source ?? '',
+        address: c!.address ?? {}
+      }
+    })
+
   return {
     list: {
       id: String(doc._id),
@@ -287,6 +356,10 @@ export default defineEventHandler(async (event) => {
       page,
       pageSize,
       totalPages: Math.max(1, Math.ceil(memberTotal / pageSize))
+    },
+    removedMembers: {
+      items: removedItems,
+      total: excludedContactIds.length
     }
   }
 })

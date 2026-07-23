@@ -142,6 +142,11 @@ export interface TenantRecipientListDetailPayload {
     pageSize: number
     totalPages: number
   }
+  /** Soft-removed recipients (excluded from active list; restorable). */
+  removedMembers?: {
+    items: TenantRecipientListMemberRow[]
+    total: number
+  }
 }
 
 /** Manual campaign contact picker (subset of catalog with required name/email). */

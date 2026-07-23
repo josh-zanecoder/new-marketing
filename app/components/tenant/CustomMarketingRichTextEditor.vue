@@ -544,10 +544,12 @@ const {
                     </div>
                   </div>
                 </div>
+                <!-- eslint-disable vue/no-v-html -- intentional HTML email preview -->
                 <div
                   class="custom-marketing-editor__inbox-body custom-marketing-editor__content custom-marketing-editor__preview-body"
                   v-html="previewBodyHtml"
                 />
+                <!-- eslint-enable vue/no-v-html -->
               </div>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
 import {
   pickJoinsForQuery,
+  recipientListExcludedContactIds,
   recipientListOwnerEmailForContactScope,
   recipientListStoredMembershipEmails
 } from '@server/utils/recipient/recipientListMutation'
@@ -118,6 +119,13 @@ async function syncContactToList(
 ): Promise<void> {
   const { Contact, RecipientListMember } = models
   const listId = listDoc._id
+
+  const excluded = recipientListExcludedContactIds(listDoc)
+  if (excluded.some((id) => String(id) === String(contactId))) {
+    await RecipientListMember.deleteOne({ recipientListId: listId, contactId })
+    return
+  }
+
   const normalized = normalizeRecipientListDoc(listDoc)
   const { audience, filters, filterMode } = normalized
 
@@ -203,6 +211,24 @@ export async function syncContactRecipientListMembership(
   await Promise.all(
     lists.map((listDoc) => syncContactToList(models, contactId, listDoc, filterById))
   )
+}
+
+/**
+ * Keep recipient-list membership aligned with subscription:
+ * - unsubscribe → remove from every list
+ * - subscribe → re-add to matching non-static lists (criteria + exclusions)
+ */
+export async function syncRecipientListsForContactSubscription(
+  tenantConn: Connection,
+  contactId: mongoose.Types.ObjectId,
+  subscribed: boolean
+): Promise<void> {
+  const { RecipientListMember } = getTenantClientModels(tenantConn)
+  if (!subscribed) {
+    await RecipientListMember.deleteMany({ contactId })
+    return
+  }
+  await syncContactRecipientListMembership(tenantConn, contactId)
 }
 
 /** Runs list-membership sync without blocking the HTTP response. */
