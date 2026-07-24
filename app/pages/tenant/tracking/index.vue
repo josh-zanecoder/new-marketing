@@ -21,7 +21,7 @@ const trackingPanelRef = ref<InstanceType<typeof TenantBrevoTrackingEventsPanel>
         </p>
       </div>
       <TenantRefreshIconButton
-        aria-label="Refresh tracking"
+        label="Refresh tracking"
         :pending="trackingPanelRef?.pending"
         @click="() => trackingPanelRef?.refresh?.()"
       />

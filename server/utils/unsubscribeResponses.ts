@@ -1,3 +1,25 @@
+export function unsubscribeResultPayload(params: {
+  ok: boolean
+  title: string
+  message: string
+  email?: string
+  marketing?: boolean
+  preview?: boolean
+  alreadyUsed?: boolean
+  reason?: string
+}) {
+  return {
+    ok: params.ok,
+    title: params.title,
+    message: params.message,
+    ...(params.email !== undefined ? { email: params.email } : {}),
+    ...(params.marketing !== undefined ? { marketing: params.marketing } : {}),
+    ...(params.preview ? { preview: true } : {}),
+    ...(params.alreadyUsed ? { alreadyUsed: true } : {}),
+    ...(params.reason ? { reason: params.reason } : {})
+  }
+}
+
 export function unsubscribePreviewHtml(params: {
   token: string
   emailMasked: string
@@ -39,8 +61,8 @@ export function unsubscribePreviewHtml(params: {
       <input type="hidden" name="token" value="${escapeHtml(params.token)}" />
       <fieldset>
         <legend>Marketing emails</legend>
-        <label class="option"><input type="radio" name="marketing" value="true" ${yesChecked} required /> Yes, keep sending marketing emails</label>
-        <label class="option"><input type="radio" name="marketing" value="false" ${noChecked} required /> No, unsubscribe from marketing emails</label>
+        <label class="option"><input type="radio" name="marketing" value="false" ${noChecked} required /> Yes, unsubscribe from marketing emails</label>
+        <label class="option"><input type="radio" name="marketing" value="true" ${yesChecked} required /> No, keep sending marketing emails</label>
       </fieldset>
       <label class="confirm">
         <input type="checkbox" name="confirm" value="true" required />

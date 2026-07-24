@@ -22,7 +22,7 @@
           Add contact
         </button>
         <TenantRefreshIconButton
-          aria-label="Refresh contacts"
+          label="Refresh contacts"
           :pending="pending"
           @click="() => load({ force: true })"
         />
@@ -960,6 +960,7 @@ function typeKeyBadgeClass(kind: string): string {
 
 const PAGE_SIZE = 25
 
+const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 
@@ -1749,8 +1750,35 @@ async function load(options?: { force?: boolean }) {
 }
 
 onMounted(() => {
-  load()
+  void load().then(() => {
+    void openContactFromRouteQuery()
+  })
 })
+
+async function openContactFromRouteQuery() {
+  if (!import.meta.client) return
+  const viewId = typeof route.query.view === 'string' ? route.query.view.trim() : ''
+  const editId = typeof route.query.edit === 'string' ? route.query.edit.trim() : ''
+  if (!viewId && !editId) return
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.view
+  delete nextQuery.edit
+  await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
+
+  if (editId) {
+    await openEditContactModal(editId)
+  } else if (viewId) {
+    await openContactDetail(viewId)
+  }
+}
+
+watch(
+  () => [route.query.view, route.query.edit] as const,
+  () => {
+    void openContactFromRouteQuery()
+  }
+)
 
 onBeforeUnmount(() => {
   if (contactModalEscListener) {

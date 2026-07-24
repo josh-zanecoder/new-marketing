@@ -447,7 +447,7 @@ onUnmounted(() => {
           Create campaign
         </NuxtLink>
         <TenantRefreshIconButton
-          aria-label="Refresh campaigns"
+          label="Refresh campaigns"
           :pending="campaignsIndexPending"
           @click="() => refreshCampaigns()"
         />

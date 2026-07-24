@@ -1,6 +1,19 @@
 import { applyMarketingUnsubscribePreference } from '@server/utils/applyMarketingUnsubscribePreference'
-import { resolveUnsubscribeContext, wantsJsonResponse } from '@server/utils/unsubscribeRequest'
-import { unsubscribeStatusHtml } from '@server/utils/unsubscribeResponses'
+import {
+  resolveUnsubscribeContext,
+  resolveUnsubscribeFailure,
+  unsubscribeFailureCopy,
+  wantsJsonResponse
+} from '@server/utils/unsubscribeRequest'
+import {
+  unsubscribeResultPayload,
+  unsubscribeStatusHtml
+} from '@server/utils/unsubscribeResponses'
+import {
+  claimUnsubscribeTokenResponse,
+  releaseUnsubscribeTokenClaim,
+  unsubscribePreferenceCopy
+} from '@server/utils/unsubscribeTokenResponse'
 
 function parseMarketingValue(raw: unknown): boolean | null {
   if (typeof raw === 'boolean') return raw
@@ -33,11 +46,11 @@ export default defineEventHandler(async (event) => {
 
   if (!token) {
     if (json) {
-      return {
+      return unsubscribeResultPayload({
         ok: false,
         title: 'Invalid link',
         message: 'This unsubscribe link is missing required parameters.'
-      }
+      })
     }
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
     return unsubscribeStatusHtml(
@@ -49,11 +62,11 @@ export default defineEventHandler(async (event) => {
 
   if (marketing === null) {
     if (json) {
-      return {
+      return unsubscribeResultPayload({
         ok: false,
         title: 'Invalid request',
         message: 'Marketing preference (true or false) is required.'
-      }
+      })
     }
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
     return unsubscribeStatusHtml('Invalid request', 'Marketing preference is required.', false)
@@ -61,11 +74,11 @@ export default defineEventHandler(async (event) => {
 
   if (!confirmed) {
     if (json) {
-      return {
+      return unsubscribeResultPayload({
         ok: false,
         title: 'Confirmation required',
         message: 'Please confirm you want to update your email preferences.'
-      }
+      })
     }
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
     return unsubscribeStatusHtml(
@@ -78,20 +91,40 @@ export default defineEventHandler(async (event) => {
   try {
     const ctx = await resolveUnsubscribeContext(token)
     if (!ctx) {
+      const reason = await resolveUnsubscribeFailure(token)
+      const copy = unsubscribeFailureCopy(reason)
       if (json) {
-        return {
+        return unsubscribeResultPayload({
           ok: false,
-          title: 'Invalid or expired link',
-          message:
-            'This unsubscribe link is not valid. You may already be unsubscribed, or the link may have expired.'
-        }
+          title: copy.title,
+          message: copy.message,
+          reason
+        })
       }
       setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-      return unsubscribeStatusHtml(
-        'Invalid or expired link',
-        'This unsubscribe link is not valid. You may already be unsubscribed, or the link may have expired.',
-        false
-      )
+      return unsubscribeStatusHtml(copy.title, copy.message, false)
+    }
+
+    const claim = await claimUnsubscribeTokenResponse({
+      dbName: ctx.dbName,
+      token,
+      contactId: ctx.contactId,
+      marketing
+    })
+
+    if (!claim.claimed) {
+      const copy = unsubscribePreferenceCopy(claim.response.marketing)
+      if (json) {
+        return unsubscribeResultPayload({
+          ok: true,
+          alreadyUsed: true,
+          title: copy.title,
+          message: copy.message,
+          marketing: claim.response.marketing
+        })
+      }
+      setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+      return unsubscribeStatusHtml(copy.title, copy.message, true)
     }
 
     const result = await applyMarketingUnsubscribePreference({
@@ -101,12 +134,13 @@ export default defineEventHandler(async (event) => {
     })
 
     if (!result.ok) {
+      await releaseUnsubscribeTokenClaim({ dbName: ctx.dbName, token }).catch(() => {})
       if (json) {
-        return {
+        return unsubscribeResultPayload({
           ok: false,
           title: 'Not found',
           message: 'We could not find this contact. You may already be unsubscribed.'
-        }
+        })
       }
       setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
       return unsubscribeStatusHtml(
@@ -116,20 +150,26 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    const successTitle = marketing ? 'Preferences saved' : 'You are unsubscribed'
-    const successMessage = marketing
-      ? 'You will continue to receive marketing emails from us at this address.'
-      : 'You will no longer receive marketing emails from us at this address.'
+    const copy = unsubscribePreferenceCopy(marketing)
 
     if (json) {
-      return { ok: true, title: successTitle, message: successMessage, marketing }
+      return unsubscribeResultPayload({
+        ok: true,
+        title: copy.title,
+        message: copy.message,
+        marketing
+      })
     }
 
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return unsubscribeStatusHtml(successTitle, successMessage, true)
+    return unsubscribeStatusHtml(copy.title, copy.message, true)
   } catch {
     if (json) {
-      return { ok: false, title: 'Something went wrong', message: 'Please try again later.' }
+      return unsubscribeResultPayload({
+        ok: false,
+        title: 'Something went wrong',
+        message: 'Please try again later.'
+      })
     }
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
     return unsubscribeStatusHtml('Something went wrong', 'Please try again later.', false)

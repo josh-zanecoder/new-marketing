@@ -10,6 +10,7 @@ import { manualRecipientSchema } from './ManualRecipients'
 import { recipientFilterSchema } from './RecipientFilter'
 import { recipientListSchema } from './RecipientList'
 import { recipientListMemberSchema } from './RecipientListMember'
+import { unsubscribeTokenResponseSchema } from './UnsubscribeTokenResponse'
 
 export type TenantClientModels = {
   Campaign: Model<unknown>
@@ -23,6 +24,7 @@ export type TenantClientModels = {
   Contact: Model<unknown>
   RecipientList: Model<unknown>
   RecipientListMember: Model<unknown>
+  UnsubscribeTokenResponse: Model<unknown>
 }
 
 export function getTenantClientModels(conn: Connection): TenantClientModels {
@@ -53,6 +55,9 @@ export function getTenantClientModels(conn: Connection): TenantClientModels {
       conn.model('RecipientList', recipientListSchema),
     RecipientListMember:
       conn.models.RecipientListMember ||
-      conn.model('RecipientListMember', recipientListMemberSchema)
+      conn.model('RecipientListMember', recipientListMemberSchema),
+    UnsubscribeTokenResponse:
+      conn.models.UnsubscribeTokenResponse ||
+      conn.model('UnsubscribeTokenResponse', unsubscribeTokenResponseSchema)
   } as TenantClientModels
 }

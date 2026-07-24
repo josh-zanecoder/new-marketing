@@ -24,8 +24,9 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Contact } = getTenantClientModels(conn)
   const auth = event.context.auth as unknown
+  const oid = new mongoose.Types.ObjectId(rawId)
   const filter = mergeTenantOwnerEmailScopeFilter(
-    { _id: new mongoose.Types.ObjectId(rawId), deletedAt: null },
+    { _id: oid, deletedAt: null },
     auth
   )
 
@@ -39,11 +40,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
-  const contactId = new mongoose.Types.ObjectId(rawId)
   if (body.subscribed) {
-    await onContactSubscribed(conn, contactId)
+    await onContactSubscribed(conn, oid)
   } else {
-    await onContactUnsubscribed(conn, contactId)
+    await onContactUnsubscribed(conn, oid)
   }
 
   return {
