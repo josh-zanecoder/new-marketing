@@ -9,14 +9,14 @@ import type {
 } from '@server/types/tenant/recipientList.model'
 import { LAST_RESORT_CONTACT_TYPE_KEY } from '@server/utils/contact/resolveDefaultContactTypeKey'
 import { parseAudienceKey } from '@server/utils/recipient/recipientListAudience'
+import {
+  recipientFilterPropertyValueTokens,
+  splitRecipientFilterValueList
+} from '~~/shared/utils/recipientFilterPropertyValue'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
 
 export function tokenizePropertyValue(raw: unknown): string[] {
-  if (raw == null || typeof raw !== 'string') return []
-  return raw
-    .split(/[\n,;]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  return splitRecipientFilterValueList(raw)
 }
 
 function asAudience(raw: unknown): string {
@@ -131,7 +131,7 @@ export function registryDocToCriteria(doc: {
   propertyValue?: string
 }): RecipientListCriterion[] {
   const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(doc)
-  const tokens = tokenizePropertyValue(doc.propertyValue)
+  const tokens = recipientFilterPropertyValueTokens(doc.propertyValue, property, propertyType)
   if (property === 'none' || !tokens.length) return []
 
   switch (property) {

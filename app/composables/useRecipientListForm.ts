@@ -1,11 +1,12 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, isRef, toValue } from 'vue'
 import type { FilterSelectOption } from '~/components/tenant/FilterSelect.vue'
-import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import {
   recipientFilterPropertyLabel,
-  recipientFilterPropertyTypeLabel
+  recipientFilterPropertyTypeLabel,
+  recipientFilterValueDisplay
 } from '~/utils/recipientFilterDisplay'
+import { recipientFilterPropertyValueTokens } from '~~/shared/utils/recipientFilterPropertyValue'
 
 export interface RegistryFilterRow {
   id: string
@@ -14,6 +15,10 @@ export interface RegistryFilterRow {
   property: string
   propertyType: string
   propertyValue: string
+  /** Admin sourced this filter's values from the contacts instead of typing one. */
+  valuesFromContacts?: boolean
+  /** Distinct contact values to choose from when `valuesFromContacts` is set. */
+  valueOptions?: string[]
   enabled: boolean
 }
 
@@ -77,14 +82,14 @@ export type RecipientListFormSharedReturn = {
   canSubmitForm: ComputedRef<boolean>
   submitBlockReasons: ComputedRef<string[]>
   recipientFilterSelectOptions: (rowIdx: number) => FilterSelectOption[]
-  registryValueSelectOptions: (tokens: string[]) => FilterSelectOption[]
+  registryValueSelectOptions: (row: RecipientListFilterRow) => FilterSelectOption[]
   onRowFilterChange: (row: RecipientListFilterRow) => void
   addFilterRow: () => void
   removeFilterRow: (idx: number) => void
   filterOptionLabel: (f: RegistryFilterRow) => string
   matchRuleFieldLabel: (row: RecipientListFilterRow) => string
-  /** Display-only: spaces instead of underscores for chips and read-only values. */
-  registryValueDisplay: (raw: string) => string
+  /** Display-only: the single saved value of this row's filter, prettified when it is a registry key. */
+  rowRegistryValueDisplay: (row: RecipientListFilterRow) => string
 }
 
 export type RecipientListFormCreateReturn = RecipientListFormSharedReturn & {
@@ -269,17 +274,25 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     return f != null && f.property !== 'none'
   }
 
-  function tokenizePropertyValue(raw: string): string[] {
-    return raw
-      .split(/[\n,;]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+  /** Contact-sourced options stand in for the admin-typed value, so the row behaves the same way. */
+  function filterTokens(f: RegistryFilterRow): string[] {
+    if (f.valuesFromContacts) {
+      return (f.valueOptions ?? []).map((v) => String(v ?? '').trim()).filter(Boolean)
+    }
+    return recipientFilterPropertyValueTokens(f.propertyValue ?? '', f.property, f.propertyType)
   }
 
   function rowRegistryTokens(row: RecipientListFilterRow): string[] {
     const f = rowFilter(row)
     if (!f || f.property === 'none') return []
-    return tokenizePropertyValue(f.propertyValue ?? '')
+    return filterTokens(f)
+  }
+
+  function rowRegistryValueDisplay(row: RecipientListFilterRow): string {
+    const f = rowFilter(row)
+    if (!f) return ''
+    const token = rowRegistryTokens(row)[0] ?? ''
+    return recipientFilterValueDisplay(token, f.property, f.propertyType)
   }
 
   function propertyValuePlaceholderFor(row: RecipientListFilterRow): string {
@@ -339,10 +352,19 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     return items
   }
 
-  function registryValueSelectOptions(tokens: string[]): FilterSelectOption[] {
+  function registryValueSelectOptions(row: RecipientListFilterRow): FilterSelectOption[] {
+    const f = rowFilter(row)
+    if (!f) return [{ value: '', label: CHOOSE_VALUE_LABEL }]
+    const tokens = rowRegistryTokens(row)
+    /** A saved value no longer offered (e.g. that company left the contacts) must not vanish. */
+    const saved = row.listPropertyValue.trim()
+    if (saved && !tokens.includes(saved)) tokens.push(saved)
     return [
       { value: '', label: CHOOSE_VALUE_LABEL },
-      ...tokens.map((opt) => ({ value: opt, label: formatRegistryLabelForDisplay(opt) }))
+      ...tokens.map((opt) => ({
+        value: opt,
+        label: recipientFilterValueDisplay(opt, f.property, f.propertyType)
+      }))
     ]
   }
 
@@ -358,7 +380,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     row.listPropertyValue = ''
     const f = rowFilter(row)
     if (!f || f.property === 'none') return
-    const tokens = tokenizePropertyValue(f.propertyValue ?? '')
+    const tokens = filterTokens(f)
     if (tokens.length === 1) {
       row.listPropertyValue = tokens[0] ?? ''
     }
@@ -446,8 +468,10 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     for (const row of form.filterRows) {
       const f = rowFilter(row)
       if (!f || f.property === 'none') continue
-      const tokens = tokenizePropertyValue(f.propertyValue ?? '')
-      if (!row.listPropertyValue.trim() && tokens.length === 1) {
+      const tokens = filterTokens(f)
+      /** A lone token is shown read-only, so the saved value has to track it — including rows
+       * stored back when a comma in a single-value filter still split it into several tokens. */
+      if (tokens.length === 1) {
         row.listPropertyValue = tokens[0] ?? ''
       }
     }
@@ -594,7 +618,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     removeFilterRow,
     filterOptionLabel,
     matchRuleFieldLabel,
-    registryValueDisplay: formatRegistryLabelForDisplay
+    rowRegistryValueDisplay
   }
 
   if (options.mode === 'create') {

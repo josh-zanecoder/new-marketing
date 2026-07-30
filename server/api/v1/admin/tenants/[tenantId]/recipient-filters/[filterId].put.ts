@@ -6,7 +6,8 @@ import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
   normalizeRecipientFilterPropertyFields,
-  normalizeRecipientFilterPropertyValue
+  normalizeRecipientFilterPropertyValue,
+  normalizeRecipientFilterValuesFromContacts
 } from '@server/utils/recipient/recipientFilterValidation'
 
 function normalizeContactType(input: unknown): string {
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event) => {
     property?: unknown
     propertyType?: unknown
     propertyValue?: unknown
+    valuesFromContacts?: unknown
     enabled?: boolean
   }>(event)
 
@@ -42,9 +44,6 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'name cannot be empty' })
     }
     patch.name = n
-  }
-  if (body?.propertyValue !== undefined) {
-    patch.propertyValue = normalizeRecipientFilterPropertyValue(body.propertyValue)
   }
   if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
 
@@ -77,27 +76,41 @@ export default defineEventHandler(async (event) => {
     patch.contactType = contactType
   }
 
+  const existing = await Model.findOne({ _id: filterId }).lean().exec()
+  if (!existing) {
+    throw createError({ statusCode: 404, message: 'Filter not found' })
+  }
+  const ex = existing as {
+    property?: string
+    propertyType?: string | null
+    propertyValue?: string
+    valuesFromContacts?: boolean
+  }
+
+  const rawProp = body?.property !== undefined ? body.property : ex.property ?? 'none'
+  const rawType =
+    body?.propertyType !== undefined ? body.propertyType : ex.propertyType ?? 'none'
+  const { property, propertyType } = normalizeRecipientFilterPropertyFields(rawProp, rawType)
   if (body?.property !== undefined || body?.propertyType !== undefined) {
-    const existing = await Model.findOne({ _id: filterId }).lean().exec()
-    if (!existing) {
-      throw createError({ statusCode: 404, message: 'Filter not found' })
-    }
-    const ex = existing as {
-      property?: string
-      propertyType?: string | null
-    }
-    const rawProp =
-      body.property !== undefined ? body.property : ex.property ?? 'none'
-    const rawType =
-      body.propertyType !== undefined
-        ? body.propertyType
-        : ex.propertyType ?? 'none'
-    const { property, propertyType } = normalizeRecipientFilterPropertyFields(
-      rawProp,
-      rawType
-    )
     patch.property = property
     patch.propertyType = propertyType
+  }
+
+  /** Re-checked against the resulting property: switching to e.g. Street turns the option off. */
+  const wasFromContacts = ex.valuesFromContacts === true
+  const valuesFromContacts = normalizeRecipientFilterValuesFromContacts(
+    body?.valuesFromContacts !== undefined ? body.valuesFromContacts : wasFromContacts,
+    property,
+    propertyType
+  )
+  if (valuesFromContacts !== wasFromContacts) {
+    patch.valuesFromContacts = valuesFromContacts
+  }
+
+  if (valuesFromContacts) {
+    if (String(ex.propertyValue ?? '') !== '') patch.propertyValue = ''
+  } else if (body?.propertyValue !== undefined) {
+    patch.propertyValue = normalizeRecipientFilterPropertyValue(body.propertyValue)
   }
 
   if (!Object.keys(patch).length) {
@@ -128,6 +141,7 @@ export default defineEventHandler(async (event) => {
         property: canon.property,
         propertyType: canon.propertyType,
         propertyValue: saved.propertyValue,
+        valuesFromContacts: saved.valuesFromContacts === true,
         enabled: saved.enabled
       }
     }

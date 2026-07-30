@@ -1,4 +1,5 @@
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
+import { recipientFilterValueIsRegistryKey } from '~~/shared/utils/recipientFilterPropertyValue'
 import {
   recipientFilterAddressPropertyTypeOptions,
   recipientFilterContactProfilePropertyTypeOptions,
@@ -46,6 +47,21 @@ export function recipientCriterionPropertyLabel(raw: string): string {
   if (key === 'related_partner_name') return 'Partner name'
   if (key === 'relationship_partner') return 'Partner'
   return formatRegistryLabelForDisplay(raw)
+}
+
+/**
+ * Saved property value as shown to users. Registry slugs read better with spaces, but literal
+ * contact data (company names, emails, streets) has to keep its own punctuation.
+ */
+export function recipientFilterValueDisplay(
+  raw: string,
+  property: string,
+  propertyType?: string | null
+): string {
+  if (recipientFilterValueIsRegistryKey(property, propertyType)) {
+    return formatRegistryLabelForDisplay(raw)
+  }
+  return String(raw ?? '').trim()
 }
 
 export function propertyFieldLabel(value: string): string {

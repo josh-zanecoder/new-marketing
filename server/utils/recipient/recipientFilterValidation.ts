@@ -5,6 +5,7 @@ import type {
 } from '@server/types/registry/recipientFilter.types'
 import { LAST_RESORT_CONTACT_TYPE_KEY } from '@server/utils/contact/resolveDefaultContactTypeKey'
 import { parseAudienceKey } from '@server/utils/recipient/recipientListAudience'
+import { recipientFilterSupportsContactValues } from '~~/shared/utils/recipientFilterContactField'
 
 const PROPERTIES = new Set<RecipientFilterProperty>([
   'none',
@@ -145,4 +146,14 @@ export function canonicalRecipientFilterFieldsFromDoc(doc: {
 export function normalizeRecipientFilterPropertyValue(raw: unknown): string {
   if (typeof raw !== 'string') return ''
   return raw.trim().slice(0, 2000)
+}
+
+/** Ignored for properties whose contact values would not make a usable dropdown. */
+export function normalizeRecipientFilterValuesFromContacts(
+  raw: unknown,
+  property: RecipientFilterProperty,
+  propertyType: RecipientFilterPropertyType
+): boolean {
+  if (raw !== true) return false
+  return recipientFilterSupportsContactValues(property, propertyType)
 }

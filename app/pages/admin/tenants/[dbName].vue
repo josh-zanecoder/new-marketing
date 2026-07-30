@@ -509,9 +509,11 @@
                     {{ recipientFilterTypeLabel(f) }}
                   </UiRfRecordField>
                   <UiRfRecordField label="Values" full-width>
+                    <span v-if="f.valuesFromContacts" class="value-chip">From contacts</span>
                     <UiRfTableCellChips
+                      v-else
                       :items="f.valueTokens"
-                      :format-item="formatRegistryLabelForDisplay"
+                      :format-item="f.formatValueToken"
                     />
                   </UiRfRecordField>
 
@@ -580,9 +582,11 @@
                           />
                         </td>
                         <td class="td-values rf-table__col-values">
+                          <span v-if="f.valuesFromContacts" class="value-chip">From contacts</span>
                           <UiRfTableCellChips
+                            v-else
                             :items="f.valueTokens"
-                            :format-item="formatRegistryLabelForDisplay"
+                            :format-item="f.formatValueToken"
                           />
                         </td>
                         <td>
@@ -755,7 +759,30 @@
                     </select>
                   </div>
 
-                  <div class="compact-modal-field compact-modal-field--full">
+                  <div
+                    v-if="formSupportsContactValues"
+                    class="compact-modal-field compact-modal-field--full compact-modal-toggles"
+                  >
+                    <label class="toggle-row">
+                      <input
+                        v-model="form.valuesFromContacts"
+                        type="checkbox"
+                        class="toggle-check"
+                      >
+                      <span class="toggle-label">{{ contactValuesLabel }}</span>
+                    </label>
+                  </div>
+
+                  <div v-if="form.valuesFromContacts" class="compact-modal-field compact-modal-field--full">
+                    <span class="compact-modal-label">Property value</span>
+                    <p class="mt-1.5 text-xs text-slate-500">
+                      Tenants pick from the
+                      {{ propertyFieldLabel(form.property).toLowerCase() }} values found on their
+                      {{ contactTypeTableLabel(form.contactType) }} contacts, so no value is set here.
+                    </p>
+                  </div>
+
+                  <div v-else class="compact-modal-field compact-modal-field--full">
                     <label for="rf-property-value" class="compact-modal-label">
                       Property value
                       <span class="compact-modal-label-hint">(optional)</span>
@@ -765,8 +792,11 @@
                       v-model="form.propertyValue"
                       type="text"
                       class="compact-modal-input"
-                      placeholder="e.g. TX or AL, AK, AZ"
+                      :placeholder="propertyValuePlaceholder"
                     >
+                    <p class="mt-1.5 text-xs text-slate-500">
+                      {{ propertyValueHint }}
+                    </p>
                   </div>
 
                   <div class="compact-modal-field compact-modal-field--full compact-modal-toggles">
@@ -1201,8 +1231,14 @@ import {
 import {
   propertyFieldLabel,
   recipientFilterPropertyTypeForSave,
-  recipientFilterTypeLabel
+  recipientFilterTypeLabel,
+  recipientFilterValueDisplay
 } from '~/utils/recipientFilterDisplay'
+import {
+  recipientFilterPropertyAcceptsValueList,
+  recipientFilterPropertyValueTokens
+} from '~~/shared/utils/recipientFilterPropertyValue'
+import { recipientFilterSupportsContactValues } from '~~/shared/utils/recipientFilterContactField'
 import {
   dynamicVariablesTableClass,
   recipientFiltersDataViewTableClass as tenantDataViewTableClass,
@@ -1259,6 +1295,7 @@ interface FilterRow {
   property: string
   propertyType: string
   propertyValue: string
+  valuesFromContacts: boolean
   enabled: boolean
 }
 
@@ -1286,18 +1323,12 @@ const contactTypesPending = ref(false)
 const dynamicVariables = ref<DynamicVariableRow[]>([])
 const dynamicPending = ref(false)
 
-function propertyValueTokens(raw: string | null | undefined): string[] {
-  if (raw == null || !String(raw).trim()) return []
-  return String(raw)
-    .split(/[\n,;]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
 const filtersDisplay = computed(() =>
   filters.value.map((f) => ({
     ...f,
-    valueTokens: propertyValueTokens(f.propertyValue)
+    valueTokens: recipientFilterPropertyValueTokens(f.propertyValue, f.property, f.propertyType),
+    formatValueToken: (item: string) =>
+      recipientFilterValueDisplay(item, f.property, f.propertyType)
   }))
 )
 
@@ -1376,7 +1407,38 @@ const form = reactive({
   property: 'none' as RecipientFilterPropertyFieldValue,
   propertyType: 'state' as RecipientFilterPropertyTypeValue,
   propertyValue: '',
+  valuesFromContacts: false,
   enabled: true
+})
+
+const formAcceptsValueList = computed(() =>
+  recipientFilterPropertyAcceptsValueList(form.property, form.propertyType)
+)
+
+const propertyValuePlaceholder = computed(() =>
+  formAcceptsValueList.value ? 'e.g. TX or AL, AK, AZ' : 'e.g. NEXA Mortgage, LLC'
+)
+
+const propertyValueHint = computed(() =>
+  formAcceptsValueList.value
+    ? 'Separate multiple values with commas or new lines.'
+    : 'Matched as one exact value, including commas and other punctuation.'
+)
+
+const formSupportsContactValues = computed(() =>
+  recipientFilterSupportsContactValues(
+    form.property,
+    recipientFilterPropertyTypeForSave(form.property, form.propertyType)
+  )
+)
+
+const contactValuesLabel = computed(
+  () => `Use the ${propertyFieldLabel(form.property).toLowerCase()} values from this tenant's contacts`
+)
+
+/** Keep the option off for properties whose contact values would not make a usable dropdown. */
+watch(formSupportsContactValues, (supported) => {
+  if (!supported) form.valuesFromContacts = false
 })
 
 const contactTypeForm = reactive({
@@ -1602,6 +1664,7 @@ function fillForm(f: FilterRow) {
   form.property = resolveRecipientFilterPropertyField(f.property)
   form.propertyType = resolveRecipientFilterPropertyType(form.property, f.propertyType)
   form.propertyValue = f.propertyValue ?? ''
+  form.valuesFromContacts = f.valuesFromContacts === true
 }
 
 function resetForm() {
@@ -1611,6 +1674,7 @@ function resetForm() {
   form.property = 'none'
   form.propertyType = 'state'
   form.propertyValue = ''
+  form.valuesFromContacts = false
   form.enabled = true
   formError.value = ''
 }
@@ -1772,7 +1836,8 @@ async function saveFilter() {
       contactType: form.contactType,
       property: form.property,
       propertyType: recipientFilterPropertyTypeForSave(form.property, form.propertyType),
-      propertyValue: form.propertyValue,
+      propertyValue: form.valuesFromContacts ? '' : form.propertyValue,
+      valuesFromContacts: form.valuesFromContacts,
       enabled: form.enabled
     }
     if (editingId.value) {

@@ -12,6 +12,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
+import { recipientFilterContactValueOptions } from '@server/utils/recipient/recipientFilterContactValues'
 import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
 
 const CONTACT_LIMIT = 3000
@@ -44,11 +45,13 @@ function serializeRegistryFilter(
     property?: string
     propertyType?: string | null
     propertyValue?: string
+    valuesFromContacts?: boolean
     enabled: boolean
     createdAt?: Date
     updatedAt?: Date
   },
-  registryTenantId: string | null
+  registryTenantId: string | null,
+  valueOptions: string[] = []
 ) {
   const { property, propertyType } = canonicalRecipientFilterFieldsFromDoc(f)
   return {
@@ -59,6 +62,9 @@ function serializeRegistryFilter(
     property,
     propertyType,
     propertyValue: f.propertyValue ?? '',
+    valuesFromContacts: f.valuesFromContacts === true,
+    /** Populated from the tenant's contacts when `valuesFromContacts` is set. */
+    valueOptions,
     enabled: f.enabled,
     createdAt: f.createdAt?.toISOString?.() ?? null,
     updatedAt: f.updatedAt?.toISOString?.() ?? null
@@ -117,12 +123,20 @@ async function buildRecipientListFormMetadata(params: {
     })
   )
 
-  const recipientFilters = (params.filterDocsRaw as unknown[]).map((d) =>
-    serializeRegistryFilter(
-      d as unknown as Parameters<typeof serializeRegistryFilter>[0],
-      params.tenantId
+  const valueOptionsByFilterId = await recipientFilterContactValueOptions({
+    tenantConn: params.tenantConn,
+    contactFilter: contactFilter as Record<string, unknown>,
+    filterDocs: params.filterDocsRaw
+  })
+
+  const recipientFilters = (params.filterDocsRaw as unknown[]).map((d) => {
+    const doc = d as unknown as Parameters<typeof serializeRegistryFilter>[0]
+    return serializeRegistryFilter(
+      doc,
+      params.tenantId,
+      valueOptionsByFilterId.get(String(doc._id)) ?? []
     )
-  )
+  })
 
   return { contactTypes, contactCounts, recipientFilters }
 }

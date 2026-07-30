@@ -293,13 +293,16 @@
 import type { TenantRecipientListCriterion } from '~/types/tenantContact'
 import { Megaphone, Pencil, Trash2 } from 'lucide-vue-next'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
-import { recipientCriterionPropertyLabel } from '~/utils/recipientFilterDisplay'
+import {
+  recipientCriterionPropertyLabel,
+  recipientFilterValueDisplay
+} from '~/utils/recipientFilterDisplay'
 
 definePageMeta({ layout: 'default' })
 
 function criterionChipLabel(c: TenantRecipientListCriterion): string {
   const p = recipientCriterionPropertyLabel(c.property)
-  const v = formatRegistryLabelForDisplay(c.value)
+  const v = recipientFilterValueDisplay(c.value, c.property)
   return `${p} = ${v}`
 }
 

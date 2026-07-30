@@ -6,7 +6,8 @@ import { getTenantConnectionByTenantId } from '@server/tenant/connection'
 import {
   canonicalRecipientFilterFieldsFromDoc,
   normalizeRecipientFilterPropertyFields,
-  normalizeRecipientFilterPropertyValue
+  normalizeRecipientFilterPropertyValue,
+  normalizeRecipientFilterValuesFromContacts
 } from '@server/utils/recipient/recipientFilterValidation'
 
 function normalizeContactType(input: unknown): string {
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
     property?: unknown
     propertyType?: unknown
     propertyValue?: unknown
+    valuesFromContacts?: unknown
     enabled?: boolean
   }>(event)
 
@@ -47,7 +49,15 @@ export default defineEventHandler(async (event) => {
     body?.property,
     body?.propertyType
   )
-  const propertyValue = normalizeRecipientFilterPropertyValue(body?.propertyValue)
+  const valuesFromContacts = normalizeRecipientFilterValuesFromContacts(
+    body?.valuesFromContacts,
+    property,
+    propertyType
+  )
+  /** Contact-sourced options replace the typed value, so keep only one of the two. */
+  const propertyValue = valuesFromContacts
+    ? ''
+    : normalizeRecipientFilterPropertyValue(body?.propertyValue)
   const enabled = body?.enabled !== false
 
   const tenantConn = await getTenantConnectionByTenantId(tenantId)
@@ -77,6 +87,7 @@ export default defineEventHandler(async (event) => {
       property,
       propertyType,
       propertyValue,
+      valuesFromContacts,
       enabled
     })
     const saved = doc.toObject() as unknown as RecipientFilterDoc & {
@@ -92,6 +103,7 @@ export default defineEventHandler(async (event) => {
         property: canon.property,
         propertyType: canon.propertyType,
         propertyValue: saved.propertyValue,
+        valuesFromContacts: saved.valuesFromContacts === true,
         enabled: saved.enabled
       }
     }

@@ -7,7 +7,8 @@
         Each row is stored by <strong>tenant ID</strong>. Set a <strong>contact type</strong>, then optionally add a
         <strong>property</strong>. For <strong>Address</strong> or <strong>Contact profile</strong>, pick a
         <strong>property type</strong> (e.g. state vs city, or type vs sub type), then enter
-        <strong>property values</strong> — separate multiple keys with commas or new lines.
+        <strong>property values</strong>. State, Source, Contact profile and Partner accept several keys separated by
+        commas or new lines; the other properties match one value exactly, punctuation included.
       </p>
     </div>
 

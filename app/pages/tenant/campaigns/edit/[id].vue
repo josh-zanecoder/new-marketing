@@ -1843,13 +1843,4 @@ async function handleCreate() {
     }
   }
 }
-
-function previewSrcdoc(html: string, scale = 0.45) {
-  // Don't escape - escaping " breaks inline styles (style="...")
-  return `<!DOCTYPE html><html><head><meta charset=utf-8><style>
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);min-height:100%;display:flex;justify-content:center;align-items:flex-start}
-#preview-wrap{transform:scale(${scale});transform-origin:center top;width:600px}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
-}
 </script>

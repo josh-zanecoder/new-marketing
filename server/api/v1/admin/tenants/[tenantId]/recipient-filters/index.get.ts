@@ -11,6 +11,7 @@ function serialize(
     property?: string
     propertyType?: string | null
     propertyValue?: string
+    valuesFromContacts?: boolean
     enabled: boolean
     createdAt?: Date
     updatedAt?: Date
@@ -26,6 +27,7 @@ function serialize(
     property,
     propertyType,
     propertyValue: f.propertyValue ?? '',
+    valuesFromContacts: f.valuesFromContacts === true,
     enabled: f.enabled,
     createdAt: f.createdAt?.toISOString?.() ?? null,
     updatedAt: f.updatedAt?.toISOString?.() ?? null

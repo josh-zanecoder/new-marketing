@@ -26,12 +26,27 @@ const emit = defineEmits<{
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
+const searchQuery = ref('')
 
 const selectedLabel = computed(() => {
   const match = props.options.find((option) => option.value === model.value)
   if (match) return match.label
   return props.options[0]?.label ?? 'Select…'
+})
+
+/** Show search once the list is long enough that scrolling alone is awkward. */
+const searchable = computed(() => props.options.length > 6)
+
+const filteredOptions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return props.options
+  return props.options.filter((option) => {
+    const label = String(option.label ?? '').toLowerCase()
+    const value = String(option.value ?? '').toLowerCase()
+    return label.includes(q) || value.includes(q)
+  })
 })
 
 const triggerClass = computed(() => {
@@ -62,7 +77,7 @@ function updatePanelPosition() {
   const rect = root.getBoundingClientRect()
   const viewportPadding = 8
   const gap = 8
-  const maxPanelHeight = 240
+  const maxPanelHeight = searchable.value ? 320 : 240
   const spaceBelow = window.innerHeight - rect.bottom - viewportPadding
   const spaceAbove = rect.top - viewportPadding
   const openUp = spaceBelow < Math.min(maxPanelHeight, 160) && spaceAbove > spaceBelow
@@ -118,6 +133,13 @@ function onViewportChange() {
   updatePanelPosition()
 }
 
+function onSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.stopPropagation()
+    open.value = false
+  }
+}
+
 watch(
   () => props.disabled,
   (isDisabled) => {
@@ -128,10 +150,15 @@ watch(
 watch(open, (isOpen) => {
   if (!import.meta.client) return
   if (isOpen) {
-    nextTick(() => updatePanelPosition())
+    searchQuery.value = ''
+    nextTick(() => {
+      updatePanelPosition()
+      if (searchable.value) searchInputRef.value?.focus()
+    })
     window.addEventListener('scroll', onViewportChange, true)
     window.addEventListener('resize', onViewportChange)
   } else {
+    searchQuery.value = ''
     window.removeEventListener('scroll', onViewportChange, true)
     window.removeEventListener('resize', onViewportChange)
   }
@@ -186,34 +213,77 @@ onBeforeUnmount(() => {
       <div
         v-show="open"
         ref="panelRef"
-        class="fixed z-[200] overflow-y-auto overscroll-contain rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
+        class="fixed z-[200] flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
         :style="panelStyle"
         role="listbox"
         :aria-label="label"
       >
-        <button
-          v-for="option in options"
-          :key="`${option.value}-${option.label}`"
-          type="button"
-          class="flex w-full min-w-0 items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-          :class="model === option.value ? 'bg-primary-50/80 font-semibold text-primary-900' : 'font-medium text-slate-800'"
-          role="option"
-          :aria-selected="model === option.value"
-          :disabled="disabled"
-          @click="selectOption(option.value)"
+        <div
+          v-if="searchable"
+          class="sticky top-0 z-10 shrink-0 border-b border-slate-100 bg-white p-2"
         >
-          <span class="min-w-0 truncate">{{ option.label }}</span>
-          <svg
-            v-if="model === option.value"
-            class="h-4 w-4 shrink-0 text-primary-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
+          <label class="sr-only" :for="`${id}-search`">Search {{ label }}</label>
+          <div class="relative">
+            <svg
+              class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"
+              />
+            </svg>
+            <input
+              :id="`${id}-search`"
+              ref="searchInputRef"
+              v-model="searchQuery"
+              type="search"
+              autocomplete="off"
+              placeholder="Search…"
+              class="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              @keydown="onSearchKeydown"
+              @click.stop
+              @mousedown.stop
+            >
+          </div>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
+          <p
+            v-if="!filteredOptions.length"
+            class="px-4 py-3 text-sm text-slate-500"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
-        </button>
+            No matches
+          </p>
+          <button
+            v-for="option in filteredOptions"
+            :key="`${option.value}-${option.label}`"
+            type="button"
+            class="flex w-full min-w-0 items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+            :class="model === option.value ? 'bg-primary-50/80 font-semibold text-primary-900' : 'font-medium text-slate-800'"
+            role="option"
+            :aria-selected="model === option.value"
+            :disabled="disabled"
+            @click="selectOption(option.value)"
+          >
+            <span class="min-w-0 truncate">{{ option.label }}</span>
+            <svg
+              v-if="model === option.value"
+              class="h-4 w-4 shrink-0 text-primary-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
       </div>
     </Teleport>
   </div>

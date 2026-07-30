@@ -42,6 +42,8 @@ export interface RecipientFilterLean {
   property: RecipientFilterProperty
   propertyType: RecipientFilterPropertyType
   propertyValue: string
+  /** When true the tenant picks from the distinct contact values for this property. */
+  valuesFromContacts: boolean
   enabled: boolean
   createdAt?: Date
   updatedAt?: Date

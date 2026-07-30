@@ -22,7 +22,6 @@ export function unwrapTenantMePayload(payload: unknown): TenantMeCampaignSender 
 
 export function useDefaultCampaignSender() {
   const marketingApi = useTenantMarketingApi()
-  const { data: authUser } = useMarketingMe()
   const defaultSenderName = ref(DEFAULT_CAMPAIGN_SENDER_NAME)
   const defaultSenderEmail = ref(DEFAULT_CAMPAIGN_SENDER_EMAIL)
   const loaded = ref(false)

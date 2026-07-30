@@ -282,14 +282,14 @@
                             v-model="row.listPropertyValue"
                             label="Value"
                             variant="field"
-                            :options="registryValueSelectOptions(rowRegistryTokens(row))"
+                            :options="registryValueSelectOptions(row)"
                           />
                         </template>
                         <p
                           v-else-if="showPropertyRowFor(row) && rowRegistryTokens(row).length === 1"
                           class="break-words rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:text-[15px]"
                         >
-                          {{ registryValueDisplay(rowRegistryTokens(row)[0] ?? '') }}
+                          {{ rowRegistryValueDisplay(row) }}
                         </p>
                         <input
                           v-else-if="showPropertyRowFor(row)"
@@ -383,7 +383,7 @@ const {
   addFilterRow,
   removeFilterRow,
   matchRuleFieldLabel,
-  registryValueDisplay,
+  rowRegistryValueDisplay,
   submitUpdate
 } = useRecipientListForm({
   mode: 'edit',

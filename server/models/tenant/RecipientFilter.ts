@@ -49,6 +49,8 @@ export const recipientFilterSchema = new mongoose.Schema(
       default: 'none'
     },
     propertyValue: { type: String, default: '' },
+    /** Offer the tenant the distinct contact values for this property instead of `propertyValue`. */
+    valuesFromContacts: { type: Boolean, default: false },
     enabled: { type: Boolean, default: true }
   },
   { timestamps: true, collection: 'recipient_filters' }
