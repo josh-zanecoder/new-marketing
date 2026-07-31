@@ -17,9 +17,16 @@ describe('brevoEventReportQuery', () => {
     assert.equal(result.endDate, '2026-06-19')
   })
 
-  it('buildBrevoEventReportTagsFilter serializes a db tag array for Brevo', () => {
+  it('buildBrevoEventReportTagsFilter prefers campaign over db', () => {
     assert.equal(
-      buildBrevoEventReportTagsFilter('forge_capital_lending_db'),
+      buildBrevoEventReportTagsFilter({
+        dbName: 'forge_capital_lending_db',
+        campaignId: '6a689f1c8c900ea63a4d8de8'
+      }),
+      JSON.stringify(['campaign:6a689f1c8c900ea63a4d8de8'])
+    )
+    assert.equal(
+      buildBrevoEventReportTagsFilter({ dbName: 'forge_capital_lending_db' }),
       JSON.stringify(['db:forge_capital_lending_db'])
     )
   })

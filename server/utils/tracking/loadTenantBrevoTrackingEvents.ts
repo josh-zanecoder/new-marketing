@@ -24,6 +24,7 @@ export async function loadTenantBrevoTrackingEvents(
   const fromYmd = options.fromYmd ?? null
   const toYmd = options.toYmd ?? null
   const userEmails = options.userEmails === undefined ? null : options.userEmails
+  const campaignId = options.campaignId ?? null
 
   if (userEmails != null && userEmails.length === 0) {
     return { events: [] }
@@ -32,7 +33,8 @@ export async function loadTenantBrevoTrackingEvents(
   const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
     fromYmd,
     toYmd,
-    dbName
+    dbName,
+    campaignId
   })
   if (error) {
     return { events: [], error }
@@ -41,7 +43,7 @@ export async function loadTenantBrevoTrackingEvents(
   let events = filterBrevoEventsForTenant(rawEvents, {
     dbName,
     marketingTenantId,
-    campaignId: options.campaignId ?? null,
+    campaignId,
     userEmails
   })
 

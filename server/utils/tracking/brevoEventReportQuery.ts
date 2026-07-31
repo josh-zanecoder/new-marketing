@@ -36,9 +36,21 @@ function clampBrevoDateRange(
   return { startDate: toYmdLocal(start), endDate }
 }
 
-/** Brevo `tags` query — serialized array; campaign/tenant matching stays in app filters. */
-export function buildBrevoEventReportTagsFilter(dbName: string): string {
-  return JSON.stringify([`db:${dbName.trim()}`])
+/**
+ * Brevo `tags` query value: serialized JSON array of tag tokens.
+ * Prefer the most specific token available (`campaign:` > `db:`).
+ */
+export function buildBrevoEventReportTagsFilter(options: {
+  dbName?: string | null
+  campaignId?: string | null
+}): string | undefined {
+  const campaignId = options.campaignId?.trim()
+  if (campaignId) return JSON.stringify([`campaign:${campaignId}`])
+
+  const dbName = options.dbName?.trim()
+  if (dbName) return JSON.stringify([`db:${dbName}`])
+
+  return undefined
 }
 
 export function resolveBrevoEventReportRequest(
