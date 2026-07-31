@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildBrevoEventReportTagsFilter,
+  joinBrevoEventReportTags,
   resolveBrevoEventReportRequest
 } from '../brevoEventReportQuery'
 
@@ -17,17 +18,21 @@ describe('brevoEventReportQuery', () => {
     assert.equal(result.endDate, '2026-06-19')
   })
 
-  it('buildBrevoEventReportTagsFilter prefers campaign over db', () => {
+  it('buildBrevoEventReportTagsFilter uses plain comma-style tokens (not JSON)', () => {
     assert.equal(
       buildBrevoEventReportTagsFilter({
         dbName: 'forge_capital_lending_db',
         campaignId: '6a689f1c8c900ea63a4d8de8'
       }),
-      JSON.stringify(['campaign:6a689f1c8c900ea63a4d8de8'])
+      'campaign:6a689f1c8c900ea63a4d8de8'
     )
     assert.equal(
       buildBrevoEventReportTagsFilter({ dbName: 'forge_capital_lending_db' }),
-      JSON.stringify(['db:forge_capital_lending_db'])
+      'db:forge_capital_lending_db'
     )
+  })
+
+  it('joinBrevoEventReportTags matches Brevo multi-tag docs', () => {
+    assert.equal(joinBrevoEventReportTags(['one', 'two', 'three']), 'one, two, three')
   })
 })

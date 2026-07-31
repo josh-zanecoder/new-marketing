@@ -1,5 +1,8 @@
 const BREVO_MAX_DATE_RANGE_DAYS = 90
 
+/** Brevo `getEmailEventReport` page size — OpenAPI maximum is 5000 (default 2500). */
+export const BREVO_EVENTS_PAGE_LIMIT = 5000
+
 function toYmdLocal(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -37,22 +40,52 @@ function clampBrevoDateRange(
 }
 
 /**
- * Brevo `tags` query value: serialized JSON array of tag tokens.
- * Prefer the most specific token available (`campaign:` > `db:`).
+ * Single tag token used when sending (`campaign:…` or `db:…`).
+ * Prefer campaign when present — matches Brevo Logs tag filter.
+ */
+export function buildBrevoEventReportTagToken(options: {
+  dbName?: string | null
+  campaignId?: string | null
+}): string | undefined {
+  const campaignId = options.campaignId?.trim()
+  if (campaignId) return `campaign:${campaignId}`
+
+  const dbName = options.dbName?.trim()
+  if (dbName) return `db:${dbName}`
+
+  return undefined
+}
+
+/**
+ * Brevo `tags` query for GET /smtp/statistics/events.
+ *
+ * Official OpenAPI: “serialized and urlencoded array. To pass multiple tags,
+ * a format of string separated by commas is used such as **one, two, three**”.
+ * So a single tag is the plain token (e.g. `campaign:abc`), not a JSON array.
+ *
+ * @see https://developers.brevo.com/reference/get-email-event-report
  */
 export function buildBrevoEventReportTagsFilter(options: {
   dbName?: string | null
   campaignId?: string | null
 }): string | undefined {
-  const campaignId = options.campaignId?.trim()
-  if (campaignId) return JSON.stringify([`campaign:${campaignId}`])
-
-  const dbName = options.dbName?.trim()
-  if (dbName) return JSON.stringify([`db:${dbName}`])
-
-  return undefined
+  return buildBrevoEventReportTagToken(options)
 }
 
+/**
+ * Join multiple tag tokens the way Brevo documents (`"one, two, three"`).
+ */
+export function joinBrevoEventReportTags(tokens: string[]): string | undefined {
+  const parts = tokens.map((t) => t.trim()).filter(Boolean)
+  if (!parts.length) return undefined
+  return parts.join(', ')
+}
+
+/**
+ * Maps UI / API `from`+`to` to Brevo date params.
+ * Docs: omit dates → last 30 days; `days` max 90 and incompatible with start/end.
+ * We pass `days: 90` when the UI “Last 90 days” preset has no explicit range.
+ */
 export function resolveBrevoEventReportRequest(
   fromYmd: string | null,
   toYmd: string | null,
