@@ -7,7 +7,7 @@ import { loadTenantBrevoTrackingEvents } from '@server/utils/tracking/loadTenant
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
 
 export default defineEventHandler(async (event) => {
-  const { dbName, marketingTenantId } = await resolveTrackingTenantContext(event)
+  const { dbName, marketingTenantId, userEmails } = await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
   const fromYmd = normalizeYmdQuery(event, 'from')
@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
   const { events, error } = await loadTenantBrevoTrackingEvents(dbName, marketingTenantId, {
     campaignId,
     fromYmd,
-    toYmd
+    toYmd,
+    userEmails
   })
 
   if (error) {

@@ -10,6 +10,7 @@ import {
   type BrevoTrackingEmailEvent
 } from './brevoTenantEvents'
 import { loadTenantBrevoTrackingEvents } from './loadTenantBrevoTrackingEvents'
+import { resolveTrackingUserEmails } from './resolveTrackingTenantContext'
 
 export async function loadScopedBrevoTrackingEvents(
   event: H3Event,
@@ -32,7 +33,8 @@ export async function loadScopedBrevoTrackingEvents(
   const { events, error } = await loadTenantBrevoTrackingEvents(dbName, marketingTenantId, {
     campaignId,
     fromYmd,
-    toYmd
+    toYmd,
+    userEmails: resolveTrackingUserEmails(tenantAuth)
   })
 
   return { events, fromYmd, toYmd, campaignId, error }

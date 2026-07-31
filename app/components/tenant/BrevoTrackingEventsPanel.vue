@@ -182,7 +182,7 @@ const events = computed(() => report.value?.events ?? [])
 
 function parseTagSegments(tagStr: string | undefined): string[] {
   if (!tagStr?.trim()) return []
-  return tagStr.split(',').map((p) => p.trim()).filter(Boolean)
+  return tagStr.split(/[,|]/).map((p) => p.trim()).filter(Boolean)
 }
 
 function parseCampaignIdFromTag(tag: string | undefined): string | null {

@@ -11,6 +11,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['server/**/*.test.ts'],
-    exclude: ['server/utils/tracking/**']
+    exclude: ['server/utils/tracking/__tests__/**']
   }
 })

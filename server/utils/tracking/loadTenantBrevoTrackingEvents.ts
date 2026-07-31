@@ -1,6 +1,5 @@
-import { fetchCachedBrevoEventReport } from '@server/utils/tracking/brevoEventReportCache'
+import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
 import {
-  extractBrevoEventsFromReport,
   filterBrevoEventsByDateRange,
   filterBrevoEventsForTenant,
   type BrevoTrackingEmailEvent
@@ -10,6 +9,11 @@ export interface LoadTenantBrevoTrackingEventsOptions {
   campaignId?: string | null
   fromYmd?: string | null
   toYmd?: string | null
+  /**
+   * `null` = tenant-wide. Non-null = filter by Brevo `user:` tags.
+   * Empty array yields no events.
+   */
+  userEmails?: string[] | null
 }
 
 export async function loadTenantBrevoTrackingEvents(
@@ -19,21 +23,27 @@ export async function loadTenantBrevoTrackingEvents(
 ): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
   const fromYmd = options.fromYmd ?? null
   const toYmd = options.toYmd ?? null
+  const userEmails = options.userEmails === undefined ? null : options.userEmails
 
-  const { report, error } = await fetchCachedBrevoEventReport(
-    fromYmd && toYmd ? { startDate: fromYmd, endDate: toYmd } : {},
-    { dbName }
-  )
+  if (userEmails != null && userEmails.length === 0) {
+    return { events: [] }
+  }
+
+  const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
+    fromYmd,
+    toYmd,
+    dbName
+  })
   if (error) {
     return { events: [], error }
   }
 
-  let events = filterBrevoEventsForTenant(
-    extractBrevoEventsFromReport(report),
+  let events = filterBrevoEventsForTenant(rawEvents, {
     dbName,
     marketingTenantId,
-    options.campaignId ?? null
-  )
+    campaignId: options.campaignId ?? null,
+    userEmails
+  })
 
   events = filterBrevoEventsByDateRange(events, fromYmd, toYmd)
   return { events }

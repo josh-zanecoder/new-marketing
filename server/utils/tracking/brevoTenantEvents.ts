@@ -12,7 +12,8 @@ const MONGO_OBJECT_ID_RE = /^[a-f\d]{24}$/i
 
 export function parseTagSegments(tagStr: string | undefined): string[] {
   if (!tagStr?.trim()) return []
-  return tagStr.split(',').map((p) => p.trim()).filter(Boolean)
+  // Brevo UI often shows tags joined with `|`; the events API typically uses commas.
+  return tagStr.split(/[,|]/).map((p) => p.trim()).filter(Boolean)
 }
 
 export function normalizeCampaignIdQuery(event: H3Event): string | null {
@@ -69,6 +70,28 @@ function eventTagMatchesCampaign(tagStr: string | undefined, campaignId: string)
   return parseTagSegments(tagStr).includes(`campaign:${campaignId}`)
 }
 
+/**
+ * Match Brevo `user:` tags against allowed emails (case-insensitive).
+ * Send prefers email for the user tag; name-only tags will not match email scope.
+ */
+export function eventTagMatchesUsers(
+  tagStr: string | undefined,
+  userEmails: string[]
+): boolean {
+  if (!userEmails.length) return false
+  const allowed = new Set(
+    userEmails.map((e) => e.trim().toLowerCase()).filter(Boolean)
+  )
+  if (!allowed.size) return false
+
+  for (const part of parseTagSegments(tagStr)) {
+    if (!part.toLowerCase().startsWith('user:')) continue
+    const value = part.slice('user:'.length).trim().toLowerCase()
+    if (value && allowed.has(value)) return true
+  }
+  return false
+}
+
 export function extractBrevoEventsFromReport(report: unknown): BrevoTrackingEmailEvent[] {
   if (report == null || typeof report !== 'object') return []
   const raw = (report as { events?: unknown }).events
@@ -76,15 +99,50 @@ export function extractBrevoEventsFromReport(report: unknown): BrevoTrackingEmai
   return raw.filter((item): item is BrevoTrackingEmailEvent => item != null && typeof item === 'object')
 }
 
+export interface FilterBrevoEventsForTenantOptions {
+  dbName: string
+  marketingTenantId?: string | null
+  /** When set, keep only events tagged `campaign:{id}` (campaign detail tracking). */
+  campaignId?: string | null
+  /**
+   * When non-null, restrict to events tagged `user:{email}` in this list.
+   * `null` / omitted = tenant-wide (no user filter). `[]` = match nothing.
+   */
+  userEmails?: string[] | null
+}
+
+/**
+ * Layered tracking filter:
+ * 1. tenant (`db:` or `tenant:`) — always
+ * 2. user (`user:`) — when the session is not tenant-wide
+ * 3. campaign (`campaign:`) — when a campaign is opened
+ */
 export function filterBrevoEventsForTenant(
   events: BrevoTrackingEmailEvent[],
-  dbName: string,
-  marketingTenantId: string | null,
-  campaignId: string | null
+  dbNameOrOptions: string | FilterBrevoEventsForTenantOptions,
+  marketingTenantId?: string | null,
+  campaignId?: string | null,
+  userEmails?: string[] | null
 ): BrevoTrackingEmailEvent[] {
+  const opts: FilterBrevoEventsForTenantOptions =
+    typeof dbNameOrOptions === 'string'
+      ? {
+          dbName: dbNameOrOptions,
+          marketingTenantId: marketingTenantId ?? null,
+          campaignId: campaignId ?? null,
+          userEmails
+        }
+      : dbNameOrOptions
+
+  const dbName = opts.dbName
+  const tenantId = opts.marketingTenantId ?? null
+  const campaign = opts.campaignId ?? null
+  const users = opts.userEmails
+
   return events.filter((item) => {
-    if (!eventTagMatchesTenant(item.tag, dbName, marketingTenantId)) return false
-    if (campaignId && !eventTagMatchesCampaign(item.tag, campaignId)) return false
+    if (!eventTagMatchesTenant(item.tag, dbName, tenantId)) return false
+    if (users != null && !eventTagMatchesUsers(item.tag, users)) return false
+    if (campaign && !eventTagMatchesCampaign(item.tag, campaign)) return false
     return true
   })
 }

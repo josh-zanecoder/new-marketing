@@ -5,12 +5,14 @@ import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import {
   eventMatchesAnyAdminTenant,
-  extractBrevoEventsFromReport,
+  filterBrevoEventsByDateRange,
   filterBrevoEventsForTenant,
   normalizeCampaignIdQuery,
+  normalizeYmdQuery,
+  parseTagSegments,
   type BrevoTrackingEmailEvent
 } from '@server/utils/tracking/brevoTenantEvents'
-import { getTransactionalEmailEventReport } from '@server/services/brevo.service'
+import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
 
 export type AdminTrackingTenant = {
   dbName: string
@@ -68,7 +70,7 @@ export function filterBrevoEventsForAdminTenants(
 
   return events.filter((item) => {
     if (campaignId) {
-      const parts = item.tag?.split(',').map((p) => p.trim()) ?? []
+      const parts = parseTagSegments(item.tag)
       if (!parts.includes(`campaign:${campaignId}`)) return false
     }
     return eventMatchesAnyAdminTenant(item.tag, tenants)
@@ -84,22 +86,24 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
     throw createError({ statusCode: 403, message: 'Unknown tenant for admin tracking' })
   }
 
-  const { report, error } = await getTransactionalEmailEventReport({})
+  const fromYmd = normalizeYmdQuery(event, 'from')
+  const toYmd = normalizeYmdQuery(event, 'to')
+  const campaignId = normalizeCampaignIdQuery(event)
+
+  const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
+    fromYmd,
+    toYmd,
+    // Resolve tenant Brevo key when viewing one tenant; otherwise use default key.
+    ...(tenants.length === 1 ? { dbName: tenants[0]!.dbName } : {})
+  })
   if (error) {
     throw createError({ statusCode: 502, statusMessage: error })
   }
 
-  const campaignId = normalizeCampaignIdQuery(event)
-  const events = filterBrevoEventsForAdminTenants(
-    extractBrevoEventsFromReport(report),
-    tenants,
-    campaignId
-  )
+  let events = filterBrevoEventsForAdminTenants(rawEvents, tenants, campaignId)
+  events = filterBrevoEventsByDateRange(events, fromYmd, toYmd)
 
   return {
-    report: {
-      ...(report != null && typeof report === 'object' ? report : {}),
-      events
-    }
+    report: { events }
   }
 }
