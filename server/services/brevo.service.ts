@@ -79,12 +79,31 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function brevoHttpStatus(e: unknown): number | undefined {
+  if (!e || typeof e !== 'object') return undefined
+  const o = e as { statusCode?: unknown; response?: { status?: unknown } }
+  if (typeof o.statusCode === 'number') return o.statusCode
+  if (typeof o.response?.status === 'number') return o.response.status
+  return undefined
+}
+
+/** True when an error string from Brevo looks like rate limiting. */
+export function isBrevoRateLimitErrorMessage(msg: string): boolean {
+  return /\b429\b/.test(msg) || /too many requests/i.test(msg) || /rate limit/i.test(msg)
+}
+
 function isBrevoRateLimitError(e: unknown): boolean {
-  if (e && typeof e === 'object' && 'statusCode' in e) {
-    if ((e as { statusCode?: unknown }).statusCode === 429) return true
-  }
+  if (brevoHttpStatus(e) === 429) return true
+  return isBrevoRateLimitErrorMessage(extractBrevoError(e))
+}
+
+/** Retry transient upstream failures (rate limit + gateway). */
+function isBrevoRetryableFetchError(e: unknown): boolean {
+  if (isBrevoRateLimitError(e)) return true
+  const status = brevoHttpStatus(e)
+  if (status === 502 || status === 503 || status === 504) return true
   const msg = extractBrevoError(e)
-  return /\b429\b/.test(msg) || /too many requests/i.test(msg)
+  return /\b50[234]\b/.test(msg) || /bad gateway|service unavailable|gateway timeout/i.test(msg)
 }
 
 /**
@@ -265,6 +284,11 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
   }
 }
 
+/**
+ * Single page of transactional email events.
+ * Retries 429 / transient 502–504 using Brevo reset headers + exponential backoff.
+ * All log-fetching code should call this (or {@link fetchTenantBrevoEmailEvents}) — never the SDK directly.
+ */
 export async function getTransactionalEmailEventReport(
   params: GetEmailEventReportRequest = {},
   options?: { apiKey?: string; dbName?: string | null }
@@ -275,18 +299,23 @@ export async function getTransactionalEmailEventReport(
     return { error: 'Brevo API key is not configured' }
   }
 
-  const maxRetries = 3
+  const maxRetries = 4
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const report = await client.transactionalEmails.getEmailEventReport(params)
       return { report }
     } catch (e: unknown) {
-      if (isBrevoRateLimitError(e) && attempt < maxRetries) {
-        const resetSec = brevoRateLimitResetSeconds(e)
-        const waitMs = (resetSec + Math.pow(2, attempt) + Math.random()) * 1000
-        console.warn('[Brevo] getEmailEventReport rate limited (429); backing off', {
+      if (isBrevoRetryableFetchError(e) && attempt < maxRetries) {
+        const rateLimited = isBrevoRateLimitError(e)
+        const resetSec = rateLimited ? brevoRateLimitResetSeconds(e) : 0
+        const waitMs = rateLimited
+          ? (resetSec + Math.pow(2, attempt) + Math.random()) * 1000
+          : (Math.pow(2, attempt) + Math.random()) * 1000
+        console.warn('[Brevo] getEmailEventReport retryable error; backing off', {
           attempt: attempt + 1,
-          resetSec,
+          rateLimited,
+          status: brevoHttpStatus(e),
+          resetSec: rateLimited ? resetSec : undefined,
           waitMs: Math.round(waitMs)
         })
         await sleepMs(waitMs)

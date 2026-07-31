@@ -66,4 +66,34 @@ describe('fetchTenantBrevoEmailEvents', () => {
     expect(getReport.mock.calls[0]?.[0]).not.toHaveProperty('tags')
     expect(getReport).toHaveBeenCalledTimes(1)
   })
+
+  it('coalesces concurrent identical fetches into one Brevo walk', async () => {
+    let resolveReport!: (v: { report: unknown }) => void
+    getReport.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveReport = resolve
+        })
+    )
+
+    const a = fetchTenantBrevoEmailEvents({
+      dbName: 'forge_capital_lending_db',
+      campaignId: 'abc'
+    })
+    const b = fetchTenantBrevoEmailEvents({
+      dbName: 'forge_capital_lending_db',
+      campaignId: 'abc'
+    })
+
+    resolveReport!({
+      report: {
+        events: [{ messageId: 'm1', event: 'requests', tag: 'campaign:abc' }]
+      }
+    })
+
+    const [ra, rb] = await Promise.all([a, b])
+    expect(getReport).toHaveBeenCalledTimes(1)
+    expect(ra.events).toHaveLength(1)
+    expect(rb.events).toHaveLength(1)
+  })
 })

@@ -4,6 +4,7 @@ import {
 } from '@server/utils/tracking/brevoTenantEvents'
 import { loadTenantBrevoTrackingEvents } from '@server/utils/tracking/loadTenantBrevoTrackingEvents'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
+import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 export default defineEventHandler(async (event) => {
   const { dbName, marketingTenantId, userEmails } = await resolveTrackingTenantContext(event)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (error) {
-    throw createError({ statusCode: 502, statusMessage: error })
+    throwBrevoTrackingFetchError(error)
   }
 
   return { report: { events } }

@@ -17,6 +17,8 @@ import {
  * @see https://developers.brevo.com/reference/get-email-event-report
  */
 const BREVO_MAX_PAGINATION_OFFSET = 50_000
+/** Space out page requests so bursts don't trip Brevo rate limits. */
+const PAGE_GAP_MS = 200
 /** Cache expensive event reports; Brevo docs recommend avoiding polling storms. */
 const CACHE_TTL_MS = 5 * 60_000
 
@@ -41,6 +43,14 @@ interface CacheEntry {
 }
 
 const eventsCache = new Map<string, CacheEntry>()
+const inflightFetches = new Map<
+  string,
+  Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }>
+>()
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function buildCacheKey(params: FetchBrevoEmailEventsParams, tags: string | undefined): string {
   const dateQuery = resolveBrevoEventReportRequest(params.fromYmd ?? null, params.toYmd ?? null)
@@ -90,6 +100,7 @@ async function fetchPages(
     merged.push(...batch)
     if (batch.length < BREVO_EVENTS_PAGE_LIMIT) break
     offset += BREVO_EVENTS_PAGE_LIMIT
+    await sleepMs(PAGE_GAP_MS)
   }
 
   if (lastError && merged.length === 0) {
@@ -98,9 +109,27 @@ async function fetchPages(
   return { events: merged, ...(lastError ? { error: lastError } : {}) }
 }
 
+async function fetchTenantBrevoEmailEventsUncached(
+  params: FetchBrevoEmailEventsParams,
+  tags: string | undefined
+): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
+  const dateQuery = resolveBrevoEventReportRequest(params.fromYmd ?? null, params.toYmd ?? null)
+  const clientOpts = { dbName: params.dbName, apiKey: params.apiKey }
+
+  let result = await fetchPages(dateQuery, tags, clientOpts)
+
+  // If the tag filter yields nothing (format/delay), one untagged fallback — still a single walk.
+  if (tags && !result.error && result.events.length === 0) {
+    result = await fetchPages(dateQuery, undefined, clientOpts)
+  }
+
+  return result
+}
+
 /**
  * Fetch Brevo transactional events with minimal API calls:
  * one tagged (or untagged) paginated walk — then in-app tenant/user/campaign filters apply.
+ * Dedupes concurrent identical requests and caches successful responses.
  */
 export async function fetchTenantBrevoEmailEvents(
   params: FetchBrevoEmailEventsParams = {}
@@ -112,26 +141,27 @@ export async function fetchTenantBrevoEmailEvents(
     return { events: cached.events }
   }
 
-  const dateQuery = resolveBrevoEventReportRequest(params.fromYmd ?? null, params.toYmd ?? null)
-  const clientOpts = { dbName: params.dbName, apiKey: params.apiKey }
+  const existing = inflightFetches.get(cacheKey)
+  if (existing) return existing
 
-  let result = await fetchPages(dateQuery, tags, clientOpts)
+  const promise = (async () => {
+    const result = await fetchTenantBrevoEmailEventsUncached(params, tags)
+    if (!result.error) {
+      eventsCache.set(cacheKey, {
+        events: result.events,
+        expiresAt: Date.now() + CACHE_TTL_MS
+      })
+    }
+    return result
+  })().finally(() => {
+    inflightFetches.delete(cacheKey)
+  })
 
-  // If the tag filter yields nothing (format/delay), one untagged fallback — still a single walk.
-  if (tags && !result.error && result.events.length === 0) {
-    result = await fetchPages(dateQuery, undefined, clientOpts)
-  }
-
-  if (!result.error) {
-    eventsCache.set(cacheKey, {
-      events: result.events,
-      expiresAt: Date.now() + CACHE_TTL_MS
-    })
-  }
-
-  return result
+  inflightFetches.set(cacheKey, promise)
+  return promise
 }
 
 export function clearBrevoEmailEventsCacheForTests(): void {
   eventsCache.clear()
+  inflightFetches.clear()
 }

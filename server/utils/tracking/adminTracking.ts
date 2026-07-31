@@ -13,6 +13,7 @@ import {
   type BrevoTrackingEmailEvent
 } from '@server/utils/tracking/brevoTenantEvents'
 import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
+import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 export type AdminTrackingTenant = {
   dbName: string
@@ -93,11 +94,14 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
     fromYmd,
     toYmd,
+    campaignId,
     // Resolve tenant Brevo key when viewing one tenant; otherwise use default key.
-    ...(tenants.length === 1 ? { dbName: tenants[0]!.dbName } : {})
+    ...(tenants.length === 1 ? { dbName: tenants[0]!.dbName } : {}),
+    // Multi-tenant admin with no campaign: untagged walk (still rate-safe paginated).
+    ...(tenants.length !== 1 && !campaignId ? { tags: '' } : {})
   })
   if (error) {
-    throw createError({ statusCode: 502, statusMessage: error })
+    throwBrevoTrackingFetchError(error)
   }
 
   let events = filterBrevoEventsForAdminTenants(rawEvents, tenants, campaignId)
