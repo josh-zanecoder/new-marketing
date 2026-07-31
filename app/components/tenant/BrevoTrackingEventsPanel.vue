@@ -338,19 +338,27 @@ const availableEventTypes = computed(() => {
   return [...s].sort((a, b) => a.localeCompare(b))
 })
 
-const messageCountByEventType = computed(() => {
+/** Raw event counts (matches Brevo log totals), not unique messages. */
+const eventCountByType = computed(() => {
   const m = new Map<string, number>()
   for (const g of groupsAfterSearchDate.value) {
-    const types = new Set(g.events.map((e) => (e.event || '').trim()).filter(Boolean))
-    for (const t of types) {
+    for (const e of g.events) {
+      const t = (e.event || '').trim()
+      if (!t) continue
       m.set(t, (m.get(t) ?? 0) + 1)
     }
   }
   return m
 })
 
-function countMessagesWithEventType(t: string): number {
-  return messageCountByEventType.value.get(t) ?? 0
+const totalEventCount = computed(() => {
+  let n = 0
+  for (const count of eventCountByType.value.values()) n += count
+  return n
+})
+
+function countEventsOfType(t: string): number {
+  return eventCountByType.value.get(t) ?? 0
 }
 
 function toggleEventFilter(name: string) {
@@ -551,7 +559,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               @click="clearEventFilters"
             >
               All
-              <span class="ml-1 tabular-nums opacity-90">({{ groupsAfterSearchDate.length }})</span>
+              <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
             </button>
             <button
               v-for="t in availableEventTypes"
@@ -566,7 +574,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               @click="toggleEventFilter(t)"
             >
               {{ t }}
-              <span class="ml-1 tabular-nums opacity-90">({{ countMessagesWithEventType(t) }})</span>
+              <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
             </button>
           </div>
         </div>
