@@ -75,6 +75,36 @@ function extractBrevoError(e: unknown): string {
   return 'Unknown Brevo error'
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isBrevoRateLimitError(e: unknown): boolean {
+  if (e && typeof e === 'object' && 'statusCode' in e) {
+    if ((e as { statusCode?: unknown }).statusCode === 429) return true
+  }
+  const msg = extractBrevoError(e)
+  return /\b429\b/.test(msg) || /too many requests/i.test(msg)
+}
+
+/**
+ * Read `x-sib-ratelimit-reset` (seconds until the window resets).
+ * @see https://developers.brevo.com/docs/limit-headers
+ */
+function brevoRateLimitResetSeconds(e: unknown): number {
+  if (!e || typeof e !== 'object') return 60
+  const raw = (e as { rawResponse?: { headers?: { get?: (k: string) => string | null } } })
+    .rawResponse
+  const headers = raw?.headers
+  if (headers && typeof headers.get === 'function') {
+    const reset =
+      headers.get('x-sib-ratelimit-reset') || headers.get('X-Sib-Ratelimit-Reset')
+    const n = reset ? Number.parseInt(reset, 10) : NaN
+    if (Number.isFinite(n) && n > 0) return Math.min(n, 120)
+  }
+  return 60
+}
+
 export async function sendCampaignBatchWithMessageVersions(params: {
   sender: SendEmailParams['sender']
   replyTo?: SendEmailParams['replyTo']
@@ -245,12 +275,28 @@ export async function getTransactionalEmailEventReport(
     return { error: 'Brevo API key is not configured' }
   }
 
-  try {
-    const report = await client.transactionalEmails.getEmailEventReport(params)
-    return { report }
-  } catch (e: unknown) {
-    const err = extractBrevoError(e)
-    console.error('[Brevo] getEmailEventReport failed:', err)
-    return { error: err }
+  const maxRetries = 3
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const report = await client.transactionalEmails.getEmailEventReport(params)
+      return { report }
+    } catch (e: unknown) {
+      if (isBrevoRateLimitError(e) && attempt < maxRetries) {
+        const resetSec = brevoRateLimitResetSeconds(e)
+        const waitMs = (resetSec + Math.pow(2, attempt) + Math.random()) * 1000
+        console.warn('[Brevo] getEmailEventReport rate limited (429); backing off', {
+          attempt: attempt + 1,
+          resetSec,
+          waitMs: Math.round(waitMs)
+        })
+        await sleepMs(waitMs)
+        continue
+      }
+      const err = extractBrevoError(e)
+      console.error('[Brevo] getEmailEventReport failed:', err)
+      return { error: err }
+    }
   }
+
+  return { error: 'Brevo rate limit exceeded' }
 }

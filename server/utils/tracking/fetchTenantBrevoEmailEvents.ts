@@ -11,46 +11,14 @@ import {
 } from './brevoTenantEvents'
 
 /**
- * Brevo Logs UI ↔ API `event` values (export/webhook docs).
- * @see https://developers.brevo.com/docs/bulk-fetch-all-your-transactional-activity
+ * Keep pagination modest: tagged + limit 5000 pages.
+ * Do NOT fan out per event type / untagged backfills — that burns Brevo rate limits (429).
+ * @see https://developers.brevo.com/docs/limit-headers
  * @see https://developers.brevo.com/reference/get-email-event-report
- *
- * Logs label          → API event
- * Sent                → requests
- * Delivered           → delivered
- * First opening       → unique_opened
- * Opened              → opened
- * Loaded by proxy     → loadedByProxy
- * Clicked             → clicks
- * Soft bounce         → softBounces
- * Hard bounce         → hardBounces
- * Error               → error
- * Blocked             → blocked
- * Deferred            → deferred
- * Invalid Email       → invalid
- * Complaint           → spam
- * Unsubscribed        → unsubscribed
  */
-const BREVO_SCOPED_EVENT_TYPES = [
-  'requests',
-  'delivered',
-  'unique_opened',
-  'opened',
-  'clicks',
-  'softBounces',
-  'hardBounces',
-  'deferred',
-  'blocked',
-  'spam',
-  'invalid',
-  'unsubscribed',
-  'error',
-  'loadedByProxy'
-] as const
-
-/** Cap how far we page; with tag + per-event scoping this is plenty for a campaign. */
-const BREVO_MAX_PAGINATION_OFFSET = 100_000
-const CACHE_TTL_MS = 45_000
+const BREVO_MAX_PAGINATION_OFFSET = 50_000
+/** Cache expensive event reports; Brevo docs recommend avoiding polling storms. */
+const CACHE_TTL_MS = 5 * 60_000
 
 export { resolveBrevoEventReportRequest } from './brevoEventReportQuery'
 
@@ -61,8 +29,8 @@ export interface FetchBrevoEmailEventsParams {
   apiKey?: string
   campaignId?: string | null
   /**
-   * Override Brevo `tags` query (comma-separated per docs).
-   * Empty string skips the Brevo tag filter.
+   * Override Brevo `tags` (comma-separated per docs).
+   * Empty string = no tag filter.
    */
   tags?: string | null
 }
@@ -79,7 +47,7 @@ function buildCacheKey(params: FetchBrevoEmailEventsParams, tags: string | undef
   const dbSeg = params.dbName?.trim() || ''
   const keySeg = params.apiKey?.trim() ? 'explicit' : 'resolved'
   const tagsSeg = tags?.trim() || 'notags'
-  return `${dbSeg}|${keySeg}|${tagsSeg}|${JSON.stringify(dateQuery)}|v2-per-event`
+  return `${dbSeg}|${keySeg}|${tagsSeg}|${JSON.stringify(dateQuery)}|v4-rate-safe`
 }
 
 function resolveTagsParam(params: FetchBrevoEmailEventsParams): string | undefined {
@@ -91,36 +59,10 @@ function resolveTagsParam(params: FetchBrevoEmailEventsParams): string | undefin
   })
 }
 
-function eventDedupeKey(e: BrevoTrackingEmailEvent): string {
-  const link =
-    e && typeof e === 'object' && 'link' in e && typeof (e as { link?: unknown }).link === 'string'
-      ? (e as { link: string }).link
-      : ''
-  return [e.messageId ?? '', e.event ?? '', e.date ?? '', e.email ?? '', link].join('|')
-}
-
-function mergeUnique(
-  into: BrevoTrackingEmailEvent[],
-  seen: Set<string>,
-  batch: BrevoTrackingEmailEvent[]
-): void {
-  for (const ev of batch) {
-    const key = eventDedupeKey(ev)
-    if (seen.has(key)) continue
-    seen.add(key)
-    into.push(ev)
-  }
-}
-
 async function fetchPages(
   dateQuery: ReturnType<typeof resolveBrevoEventReportRequest>,
   tags: string | undefined,
-  options: {
-    dbName?: string | null
-    apiKey?: string
-    /** Documented enum value, or `unique_opened` (Logs “First opening”). */
-    event?: string
-  }
+  options: { dbName?: string | null; apiKey?: string }
 ): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
   const merged: BrevoTrackingEmailEvent[] = []
   let offset = 0
@@ -132,20 +74,13 @@ async function fetchPages(
       limit: BREVO_EVENTS_PAGE_LIMIT,
       offset,
       sort: 'desc',
-      ...(tags ? { tags } : {}),
-      ...(options.event
-        ? { event: options.event as GetEmailEventReportRequest['event'] }
-        : {})
+      ...(tags ? { tags } : {})
     }
     const { report, error } = await getTransactionalEmailEventReport(request, {
       dbName: options.dbName,
       apiKey: options.apiKey
     })
     if (error) {
-      // `unique_opened` is in export/webhook docs but may 400 on the events filter enum.
-      if (options.event === 'unique_opened') {
-        return { events: merged }
-      }
       lastError = error
       break
     }
@@ -164,35 +99,9 @@ async function fetchPages(
 }
 
 /**
- * Tag-scoped fetch: one paginated walk per Logs/API event so mixed streams cannot
- * truncate clicks/opens. Then one unfiltered pass to catch any leftover types.
+ * Fetch Brevo transactional events with minimal API calls:
+ * one tagged (or untagged) paginated walk — then in-app tenant/user/campaign filters apply.
  */
-async function fetchScopedByEventTypes(
-  dateQuery: ReturnType<typeof resolveBrevoEventReportRequest>,
-  tags: string,
-  options: { dbName?: string | null; apiKey?: string }
-): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
-  const merged: BrevoTrackingEmailEvent[] = []
-  const seen = new Set<string>()
-  let lastError: string | undefined
-
-  for (const event of BREVO_SCOPED_EVENT_TYPES) {
-    const page = await fetchPages(dateQuery, tags, { ...options, event })
-    if (page.error) lastError = page.error
-    mergeUnique(merged, seen, page.events)
-  }
-
-  // Catch-all (no event filter) picks up any types not in the enum walk.
-  const catchAll = await fetchPages(dateQuery, tags, options)
-  if (catchAll.error) lastError = catchAll.error
-  mergeUnique(merged, seen, catchAll.events)
-
-  if (lastError && merged.length === 0) {
-    return { events: [], error: lastError }
-  }
-  return { events: merged, ...(lastError ? { error: lastError } : {}) }
-}
-
 export async function fetchTenantBrevoEmailEvents(
   params: FetchBrevoEmailEventsParams = {}
 ): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
@@ -206,14 +115,10 @@ export async function fetchTenantBrevoEmailEvents(
   const dateQuery = resolveBrevoEventReportRequest(params.fromYmd ?? null, params.toYmd ?? null)
   const clientOpts = { dbName: params.dbName, apiKey: params.apiKey }
 
-  let result: { events: BrevoTrackingEmailEvent[]; error?: string }
+  let result = await fetchPages(dateQuery, tags, clientOpts)
 
-  if (tags) {
-    result = await fetchScopedByEventTypes(dateQuery, tags, clientOpts)
-    if (!result.error && result.events.length === 0) {
-      result = await fetchPages(dateQuery, undefined, clientOpts)
-    }
-  } else {
+  // If the tag filter yields nothing (format/delay), one untagged fallback — still a single walk.
+  if (tags && !result.error && result.events.length === 0) {
     result = await fetchPages(dateQuery, undefined, clientOpts)
   }
 

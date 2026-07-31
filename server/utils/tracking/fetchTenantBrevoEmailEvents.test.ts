@@ -17,57 +17,45 @@ describe('fetchTenantBrevoEmailEvents', () => {
     getReport.mockReset()
   })
 
-  it('uses comma-style campaign tag and pages clicks with limit 5000', async () => {
-    getReport.mockImplementation(async (req) => {
-      if (req?.event === 'clicks' && req?.tags === 'campaign:6a689f1c8c900ea63a4d8de8') {
-        return {
-          report: {
-            events: Array.from({ length: 350 }, (_, i) => ({
-              messageId: `m${i}`,
-              event: 'clicks',
-              date: `2026-07-29T12:${String(i % 60).padStart(2, '0')}:00.000Z`,
-              email: `u${i}@example.com`,
-              tag: 'campaign:6a689f1c8c900ea63a4d8de8'
-            }))
-          }
+  it('paginates a single tagged walk with limit 5000 (rate-limit safe)', async () => {
+    getReport
+      .mockResolvedValueOnce({
+        report: {
+          events: Array.from({ length: 5000 }, (_, i) => ({
+            messageId: `m${i}`,
+            event: 'requests',
+            tag: 'campaign:6a6a5af2aa7754831b29b296'
+          }))
         }
-      }
-      return { report: { events: [] } }
-    })
+      })
+      .mockResolvedValueOnce({
+        report: {
+          events: [
+            {
+              messageId: 'tail',
+              event: 'clicks',
+              tag: 'campaign:6a6a5af2aa7754831b29b296'
+            }
+          ]
+        }
+      })
 
     const { events, error } = await fetchTenantBrevoEmailEvents({
       dbName: 'forge_capital_lending_db',
-      campaignId: '6a689f1c8c900ea63a4d8de8'
+      campaignId: '6a6a5af2aa7754831b29b296'
     })
 
     expect(error).toBeUndefined()
-    expect(events.filter((e) => e.event === 'clicks')).toHaveLength(350)
-
-    const clickCall = getReport.mock.calls.find((c) => c[0]?.event === 'clicks')
-    expect(clickCall?.[0]).toMatchObject({
+    expect(events).toHaveLength(5001)
+    expect(getReport).toHaveBeenCalledTimes(2)
+    expect(getReport.mock.calls[0]?.[0]).toMatchObject({
       days: 90,
       limit: 5000,
       offset: 0,
       sort: 'desc',
-      tags: 'campaign:6a689f1c8c900ea63a4d8de8',
-      event: 'clicks'
+      tags: 'campaign:6a6a5af2aa7754831b29b296'
     })
-  })
-
-  it('falls back without tags when scoped queries are empty', async () => {
-    getReport.mockImplementation(async (req) => {
-      if (!req?.tags) {
-        return {
-          report: {
-            events: [{ messageId: 'a', event: 'opened', tag: 'db:tenant_a' }]
-          }
-        }
-      }
-      return { report: { events: [] } }
-    })
-
-    const { events } = await fetchTenantBrevoEmailEvents({ dbName: 'tenant_a' })
-    expect(events).toHaveLength(1)
+    expect(getReport.mock.calls[0]?.[0]).not.toHaveProperty('event')
   })
 
   it('skips Brevo tags filter when tags is empty string', async () => {
@@ -76,7 +64,6 @@ describe('fetchTenantBrevoEmailEvents', () => {
     await fetchTenantBrevoEmailEvents({ tags: '' })
 
     expect(getReport.mock.calls[0]?.[0]).not.toHaveProperty('tags')
-    expect(getReport.mock.calls[0]?.[0]).not.toHaveProperty('event')
     expect(getReport).toHaveBeenCalledTimes(1)
   })
 })
