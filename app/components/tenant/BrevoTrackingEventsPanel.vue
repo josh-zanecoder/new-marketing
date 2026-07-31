@@ -412,8 +412,12 @@ function eventBadgeClass(ev: string | undefined): string {
   if (e === 'requests' || e === 'sent') return 'bg-sky-50 text-sky-800 ring-sky-200/80'
   if (e.includes('bounce') || e === 'hard_bounces' || e === 'soft_bounces')
     return 'bg-red-50 text-red-800 ring-red-200/80'
-  if (e.includes('open') || e === 'unique_opened') return 'bg-violet-50 text-violet-800 ring-violet-200/80'
+  if (e === 'unique_opened' || e.includes('open'))
+    return 'bg-violet-50 text-violet-800 ring-violet-200/80'
   if (e.includes('click')) return 'bg-amber-50 text-amber-800 ring-amber-200/80'
+  if (e === 'spam' || e === 'complaint') return 'bg-orange-50 text-orange-900 ring-orange-200/80'
+  if (e === 'blocked' || e === 'invalid' || e === 'error')
+    return 'bg-red-50 text-red-800 ring-red-200/80'
   return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
 }
 

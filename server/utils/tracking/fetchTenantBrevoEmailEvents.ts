@@ -11,12 +11,30 @@ import {
 } from './brevoTenantEvents'
 
 /**
- * Documented `event` enum for GET /smtp/statistics/events.
+ * Brevo Logs UI ↔ API `event` values (export/webhook docs).
+ * @see https://developers.brevo.com/docs/bulk-fetch-all-your-transactional-activity
  * @see https://developers.brevo.com/reference/get-email-event-report
+ *
+ * Logs label          → API event
+ * Sent                → requests
+ * Delivered           → delivered
+ * First opening       → unique_opened
+ * Opened              → opened
+ * Loaded by proxy     → loadedByProxy
+ * Clicked             → clicks
+ * Soft bounce         → softBounces
+ * Hard bounce         → hardBounces
+ * Error               → error
+ * Blocked             → blocked
+ * Deferred            → deferred
+ * Invalid Email       → invalid
+ * Complaint           → spam
+ * Unsubscribed        → unsubscribed
  */
 const BREVO_SCOPED_EVENT_TYPES = [
   'requests',
   'delivered',
+  'unique_opened',
   'opened',
   'clicks',
   'softBounces',
@@ -100,7 +118,8 @@ async function fetchPages(
   options: {
     dbName?: string | null
     apiKey?: string
-    event?: (typeof BREVO_SCOPED_EVENT_TYPES)[number]
+    /** Documented enum value, or `unique_opened` (Logs “First opening”). */
+    event?: string
   }
 ): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
   const merged: BrevoTrackingEmailEvent[] = []
@@ -114,13 +133,19 @@ async function fetchPages(
       offset,
       sort: 'desc',
       ...(tags ? { tags } : {}),
-      ...(options.event ? { event: options.event } : {})
+      ...(options.event
+        ? { event: options.event as GetEmailEventReportRequest['event'] }
+        : {})
     }
     const { report, error } = await getTransactionalEmailEventReport(request, {
       dbName: options.dbName,
       apiKey: options.apiKey
     })
     if (error) {
+      // `unique_opened` is in export/webhook docs but may 400 on the events filter enum.
+      if (options.event === 'unique_opened') {
+        return { events: merged }
+      }
       lastError = error
       break
     }
@@ -139,8 +164,8 @@ async function fetchPages(
 }
 
 /**
- * Tag-scoped fetch: one paginated walk per documented `event` value so clicks/opens
- * are not truncated by a mixed stream (matches filtering by event in Brevo Logs).
+ * Tag-scoped fetch: one paginated walk per Logs/API event so mixed streams cannot
+ * truncate clicks/opens. Then one unfiltered pass to catch any leftover types.
  */
 async function fetchScopedByEventTypes(
   dateQuery: ReturnType<typeof resolveBrevoEventReportRequest>,
@@ -156,6 +181,11 @@ async function fetchScopedByEventTypes(
     if (page.error) lastError = page.error
     mergeUnique(merged, seen, page.events)
   }
+
+  // Catch-all (no event filter) picks up any types not in the enum walk.
+  const catchAll = await fetchPages(dateQuery, tags, options)
+  if (catchAll.error) lastError = catchAll.error
+  mergeUnique(merged, seen, catchAll.events)
 
   if (lastError && merged.length === 0) {
     return { events: [], error: lastError }
