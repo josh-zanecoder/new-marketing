@@ -6,6 +6,9 @@ import {
 } from '~/utils/marketingAnalyticsChart'
 
 const selectedCampaignId = ref('')
+const selectedUserEmail = ref('')
+
+const { data: me } = useMarketingMe()
 
 const {
   datePreset,
@@ -17,13 +20,32 @@ const {
   resetDateRange
 } = useBrevoTrackingDateRange()
 
+/**
+ * Whether the session may pass `?userEmail=` (before analytics loads).
+ * Matches server `resolveTrackingUserScope`.
+ */
+const canFilterByUserTag = computed(() => {
+  if (me.value?.authType === 'firebase') {
+    return me.value.role === 'tenant'
+  }
+  if (me.value?.authType !== 'apiKey') return false
+  if (me.value.tenantWideContacts === true) return true
+  const owners = me.value.contactOwnerEmails?.length ?? 0
+  return owners === 0 || owners > 1
+})
+
 const analyticsQuery = computed(() => {
   const query: Record<string, string> = {}
   const range = effectiveDateRange.value
   if (range.from) query.from = range.from
   if (range.to) query.to = range.to
+  query.tzOffset = String(new Date().getTimezoneOffset())
   const campaignId = selectedCampaignId.value.trim()
   if (campaignId) query.campaignId = campaignId
+  if (canFilterByUserTag.value) {
+    const userEmail = selectedUserEmail.value.trim().toLowerCase()
+    if (userEmail) query.userEmail = userEmail
+  }
   return query
 })
 
@@ -58,13 +80,40 @@ const campaignOptions = computed(() => {
     .sort((a, b) => a.name.localeCompare(b.name))
 })
 
+const userFilterOptions = computed(() => {
+  const users = analytics.value?.tagUsers ?? []
+  const selected = selectedUserEmail.value.trim().toLowerCase()
+  const emails = new Set(users.map((e) => e.trim().toLowerCase()).filter(Boolean))
+  if (me.value?.authType === 'apiKey') {
+    for (const e of me.value.contactOwnerEmails ?? []) {
+      const t = e.trim().toLowerCase()
+      if (t.includes('@')) emails.add(t)
+    }
+  }
+  if (selected) emails.add(selected)
+  return [
+    { value: '', label: 'All users' },
+    ...[...emails]
+      .sort((a, b) => a.localeCompare(b))
+      .map((email) => ({ value: email, label: email }))
+  ]
+})
+
+const showUserFilter = computed(
+  () => analytics.value?.allowUserTagFilter === true || canFilterByUserTag.value
+)
+
 const hasActiveFilters = computed(
-  () => dateRangeFilterActive.value || !!selectedCampaignId.value.trim()
+  () =>
+    dateRangeFilterActive.value ||
+    !!selectedCampaignId.value.trim() ||
+    !!selectedUserEmail.value.trim()
 )
 
 function clearAllFilters() {
   resetDateRange()
   selectedCampaignId.value = ''
+  selectedUserEmail.value = ''
 }
 
 defineExpose({ refresh, pending })
@@ -111,6 +160,17 @@ defineExpose({ refresh, pending })
           v-model="selectedCampaignId"
           :campaigns="campaignOptions"
         />
+
+        <div v-if="showUserFilter" class="w-full shrink-0 lg:w-72">
+          <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
+          <TenantFilterSelect
+            id="marketing-analytics-user-filter"
+            v-model="selectedUserEmail"
+            label="Filter by user"
+            variant="tracking"
+            :options="userFilterOptions"
+          />
+        </div>
       </div>
     </section>
 

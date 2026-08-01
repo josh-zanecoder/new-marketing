@@ -42,6 +42,27 @@ export function normalizeYmdQuery(event: H3Event, key: 'from' | 'to'): string | 
   return s
 }
 
+/**
+ * Browser `Date#getTimezoneOffset()` (minutes to add to local to get UTC).
+ * Example: UTC+8 → `-480`. Used so server-side day filters match the UI.
+ */
+export function normalizeTzOffsetQuery(event: H3Event): number | null {
+  const q = getQuery(event) as Record<string, unknown>
+  const raw = q.tzOffset
+  const s =
+    typeof raw === 'string'
+      ? raw.trim()
+      : Array.isArray(raw) && typeof raw[0] === 'string'
+        ? raw[0].trim()
+        : typeof raw === 'number'
+          ? String(raw)
+          : ''
+  if (!s || !/^-?\d{1,4}$/.test(s)) return null
+  const n = Number(s)
+  if (!Number.isFinite(n) || n < -840 || n > 840) return null
+  return n
+}
+
 function eventTagMatchesTenant(
   tagStr: string | undefined,
   dbName: string,
@@ -90,6 +111,37 @@ export function eventTagMatchesUsers(
     if (value && allowed.has(value)) return true
   }
   return false
+}
+
+/** Distinct `user:{email}` values from events (email-shaped only; sorted). */
+export function extractUserEmailsFromBrevoEvents(
+  events: readonly BrevoTrackingEmailEvent[]
+): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of events) {
+    for (const part of parseTagSegments(item.tag)) {
+      if (!part.toLowerCase().startsWith('user:')) continue
+      const value = part.slice('user:'.length).trim().toLowerCase()
+      if (!value.includes('@') || seen.has(value)) continue
+      seen.add(value)
+      out.push(value)
+    }
+  }
+  return out.sort((a, b) => a.localeCompare(b))
+}
+
+export function normalizeUserEmailQuery(event: H3Event): string | null {
+  const q = getQuery(event) as Record<string, unknown>
+  const raw = q.userEmail
+  const s =
+    typeof raw === 'string'
+      ? raw.trim().toLowerCase()
+      : Array.isArray(raw) && typeof raw[0] === 'string'
+        ? raw[0].trim().toLowerCase()
+        : ''
+  if (!s || !s.includes('@') || s.length > 320) return null
+  return s
 }
 
 export function extractBrevoEventsFromReport(report: unknown): BrevoTrackingEmailEvent[] {
@@ -147,35 +199,57 @@ export function filterBrevoEventsForTenant(
   })
 }
 
-function inputYmdToStartMs(ymd: string): number | null {
-  if (!ymd.trim()) return null
-  const [y, m, d] = ymd.split('-').map(Number)
-  if (!y || !m || !d) return null
-  return new Date(y, m - 1, d).getTime()
-}
-
 function localDayStartMs(iso: string): number {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return NaN
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }
 
+/**
+ * Calendar-day start for an event instant in the client's timezone.
+ * @param tzOffsetMinutes - `Date#getTimezoneOffset()` from the browser
+ */
+function clientLocalDayStartMs(iso: string, tzOffsetMinutes: number): number {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return NaN
+  const shifted = new Date(d.getTime() - tzOffsetMinutes * 60_000)
+  return Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate()
+  )
+}
+
+function ymdToClientDayMs(ymd: string, tzOffsetMinutes: number | null): number | null {
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!y || !m || !d) return null
+  if (tzOffsetMinutes == null) return new Date(y, m - 1, d).getTime()
+  return Date.UTC(y, m - 1, d)
+}
+
 export function filterBrevoEventsByDateRange(
   events: BrevoTrackingEmailEvent[],
   fromYmd: string | null,
-  toYmd: string | null
+  toYmd: string | null,
+  tzOffsetMinutes?: number | null
 ): BrevoTrackingEmailEvent[] {
   if (!fromYmd && !toYmd) return events
+
+  const offset =
+    typeof tzOffsetMinutes === 'number' && Number.isFinite(tzOffsetMinutes)
+      ? tzOffsetMinutes
+      : null
 
   return events.filter((ev) => {
     const iso = ev.date
     if (!iso?.trim()) return !fromYmd && !toYmd
 
-    const day = localDayStartMs(iso)
+    const day =
+      offset == null ? localDayStartMs(iso) : clientLocalDayStartMs(iso, offset)
     if (Number.isNaN(day)) return true
 
-    const fromMs = fromYmd ? inputYmdToStartMs(fromYmd) : null
-    const toMs = toYmd ? inputYmdToStartMs(toYmd) : null
+    const fromMs = fromYmd ? ymdToClientDayMs(fromYmd, offset) : null
+    const toMs = toYmd ? ymdToClientDayMs(toYmd, offset) : null
     if (fromMs != null && day < fromMs) return false
     if (toMs != null && day > toMs) return false
     return true

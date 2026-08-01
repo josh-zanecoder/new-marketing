@@ -3,8 +3,6 @@ import type TenantBrevoTrackingEventsPanel from '~/components/tenant/BrevoTracki
 
 definePageMeta({ layout: 'default' })
 
-await useBrevoTrackingReport()
-
 const trackingPanelRef = ref<InstanceType<typeof TenantBrevoTrackingEventsPanel> | null>(null)
 </script>
 

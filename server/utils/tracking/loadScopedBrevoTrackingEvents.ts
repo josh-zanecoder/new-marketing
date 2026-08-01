@@ -39,3 +39,4 @@ export async function loadScopedBrevoTrackingEvents(
 
   return { events, fromYmd, toYmd, campaignId, error }
 }
+

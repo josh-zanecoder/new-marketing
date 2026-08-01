@@ -21,6 +21,8 @@ interface BrevoEmailEvent {
 
 interface BrevoEventReport {
   events?: BrevoEmailEvent[]
+  tagUsers?: string[]
+  allowUserTagFilter?: boolean
 }
 
 interface MessageEventGroup {
@@ -68,6 +70,8 @@ const props = withDefaults(
 const adminTenantFilter = defineModel<string>('adminTenantFilter', { default: '' })
 
 const route = useRoute()
+const { data: me } = useMarketingMe()
+const selectedUserEmail = ref('')
 
 const {
   datePreset,
@@ -79,6 +83,22 @@ const {
   resetDateRange
 } = useBrevoTrackingDateRange()
 
+/**
+ * Whether the session may pass `?userEmail=` (before report loads).
+ * Matches server `resolveTrackingUserScope`: unrestricted tenants + multi-owner API keys.
+ */
+const canFilterByUserTag = computed(() => {
+  if (props.adminTracking) return false
+  if (me.value?.authType === 'firebase') {
+    return me.value.role === 'tenant'
+  }
+  if (me.value?.authType !== 'apiKey') return false
+  if (me.value.tenantWideContacts === true) return true
+  const owners = me.value.contactOwnerEmails?.length ?? 0
+  // Empty scope = unrestricted (same as server); >1 = narrow within team.
+  return owners === 0 || owners > 1
+})
+
 const trackingQuery = computed(() => {
   const q: Record<string, string> = {}
   const c = props.campaignId?.trim()
@@ -87,9 +107,14 @@ const trackingQuery = computed(() => {
   const to = effectiveDateRange.value.to?.trim()
   if (from) q.from = from
   if (to) q.to = to
+  q.tzOffset = String(new Date().getTimezoneOffset())
   if (props.adminTracking) {
     const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
     if (db) q.tenantDbName = db
+  }
+  if (canFilterByUserTag.value) {
+    const userEmail = selectedUserEmail.value.trim().toLowerCase()
+    if (userEmail) q.userEmail = userEmail
   }
   return q
 })
@@ -127,34 +152,46 @@ const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
 
 defineExpose({ refresh, pending })
 
+/** Campaign names for the Campaign column — skip on campaign-detail tracking tabs. */
+const needCampaignNames = !props.hideCampaignColumn
+const isAdminTracking = props.adminTracking === true
+
 const campaignsScope = computed(() =>
-  props.adminTracking
+  isAdminTracking
     ? `admin-${(props.adminTenantDb ?? adminTenantFilter.value).trim() || 'all'}`
-    : props.adminTenantDb?.trim() || 'self'
+    : 'self'
 )
 
 const campaignsQuery = computed(() => {
-  if (!props.adminTracking) return {}
+  if (!isAdminTracking) return {}
   const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
   return db ? { tenantDbName: db } : {}
 })
 
-const { data: campaignsListData } = useFetch<{ campaigns: Array<{ id: string; name: string }> }>(
-  () => (props.adminTracking ? '/api/v1/admin/campaigns' : '/api/v1/tenant/campaigns'),
+const { data: adminCampaignsListData } = useFetch<{
+  campaigns: Array<{ id: string; name: string }>
+}>(
+  () => (isAdminTracking && needCampaignNames ? '/api/v1/admin/campaigns' : ''),
   {
     query: campaignsQuery,
-    key: computed(() => `tenant-brevo-tracking-campaign-names-${campaignsScope.value}`),
-    headers: adminTenantHeaders,
-    watch: [campaignsScope, campaignsQuery, adminTenantFilter, () => props.adminTenantDb],
-    lazy: !props.adminTracking
+    key: computed(() => `admin-brevo-tracking-campaign-names-${campaignsScope.value}`),
+    immediate: isAdminTracking && needCampaignNames,
+    watch:
+      isAdminTracking && needCampaignNames
+        ? [campaignsScope, campaignsQuery, adminTenantFilter, () => props.adminTenantDb]
+        : false,
+    lazy: true
   }
 )
 
-const { campaignDisplayLabel: tenantCampaignDisplayLabel } = useTenantCampaignsList({ lazy: true })
+const { campaignDisplayLabel: tenantCampaignDisplayLabel } = useTenantCampaignsList({
+  lazy: true,
+  immediate: !isAdminTracking && needCampaignNames
+})
 
-const campaignNameById = computed(() => {
+const adminCampaignNameById = computed(() => {
   const m = new Map<string, string>()
-  for (const c of campaignsListData.value?.campaigns ?? []) {
+  for (const c of adminCampaignsListData.value?.campaigns ?? []) {
     const id = c.id?.trim()
     if (id) m.set(id, (c.name ?? '').trim() || id)
   }
@@ -162,10 +199,11 @@ const campaignNameById = computed(() => {
 })
 
 function campaignDisplayLabel(campaignId: string | null): string {
-  if (props.adminTracking) {
+  if (!needCampaignNames) return ''
+  if (isAdminTracking) {
     if (!campaignId?.trim()) return ''
     const id = campaignId.trim()
-    return campaignNameById.value.get(id) ?? id
+    return adminCampaignNameById.value.get(id) ?? id
   }
   return tenantCampaignDisplayLabel(campaignId)
 }
@@ -179,6 +217,32 @@ const report = computed((): BrevoEventReport | null => {
 })
 
 const events = computed(() => report.value?.events ?? [])
+
+const userFilterOptions = computed(() => {
+  const users = report.value?.tagUsers ?? []
+  const selected = selectedUserEmail.value.trim().toLowerCase()
+  const emails = new Set(users.map((e) => e.trim().toLowerCase()).filter(Boolean))
+  // Also surface contact-owner emails so the picker isn't empty before tags load.
+  if (me.value?.authType === 'apiKey') {
+    for (const e of me.value.contactOwnerEmails ?? []) {
+      const t = e.trim().toLowerCase()
+      if (t.includes('@')) emails.add(t)
+    }
+  }
+  if (selected) emails.add(selected)
+  return [
+    { value: '', label: 'All users' },
+    ...[...emails]
+      .sort((a, b) => a.localeCompare(b))
+      .map((email) => ({ value: email, label: email }))
+  ]
+})
+
+const showUserFilter = computed(
+  () =>
+    !props.adminTracking &&
+    (report.value?.allowUserTagFilter === true || canFilterByUserTag.value)
+)
 
 function parseTagSegments(tagStr: string | undefined): string[] {
   if (!tagStr?.trim()) return []
@@ -433,14 +497,18 @@ const {
   commitPageInput
 } = useClientPagination(tableRows, tablePageSize)
 
-watch([searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes, adminTenantFilter], () => {
-  currentPage.value = 1
-})
+watch(
+  [searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes, adminTenantFilter, selectedUserEmail],
+  () => {
+    currentPage.value = 1
+  }
+)
 
 function clearAllFilters() {
   searchQuery.value = ''
   resetDateRange()
   clearEventFilters()
+  selectedUserEmail.value = ''
   if (props.adminTracking && !props.adminTenantDb) {
     adminTenantFilter.value = ''
   }
@@ -451,6 +519,7 @@ const hasActiveFilters = computed(
     !!searchQuery.value.trim() ||
     dateRangeFilterActive.value ||
     selectedEventTypes.value.length > 0 ||
+    !!selectedUserEmail.value.trim() ||
     (props.adminTracking && !props.adminTenantDb && !!adminTenantFilter.value.trim())
 )
 
@@ -522,13 +591,25 @@ const EVENT_FILTER_SKELETON_COUNT = 4
             variant="tracking"
             :options="adminTenantFilterOptions"
           />
-          <TenantBrevoTrackingDateRangePicker
-            v-model:preset="datePreset"
-            v-model:custom-from="customDateFrom"
-            v-model:custom-to="customDateTo"
-            :label="dateRangeLabel"
-          />
-          <button
+          <div v-if="showUserFilter" class="w-full shrink-0 sm:w-72">
+            <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
+            <TenantFilterSelect
+              id="tenant-tracking-user-filter"
+              v-model="selectedUserEmail"
+              label="Filter by user"
+              variant="tracking"
+              :options="userFilterOptions"
+            />
+          </div>
+          <div class="w-full shrink-0 sm:w-auto">
+            <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
+            <TenantBrevoTrackingDateRangePicker
+              v-model:preset="datePreset"
+              v-model:custom-from="customDateFrom"
+              v-model:custom-to="customDateTo"
+              :label="dateRangeLabel"
+            />
+          </div>          <button
             v-if="hasActiveFilters"
             type="button"
             class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"

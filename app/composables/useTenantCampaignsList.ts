@@ -5,12 +5,17 @@ export interface TenantCampaignListItem {
 
 const TENANT_CAMPAIGNS_LIST_KEY = TENANT_CAMPAIGNS_LIST_CACHE_KEY
 
-export function useTenantCampaignsList(options?: { lazy?: boolean }) {
+export function useTenantCampaignsList(options?: {
+  lazy?: boolean
+  /** When false, do not fetch until `execute()` / refresh (e.g. campaign-detail tracking). */
+  immediate?: boolean
+}) {
   const fetchResult = useFetch<{ campaigns: TenantCampaignListItem[] }>(
     '/api/v1/tenant/campaigns',
     {
       key: TENANT_CAMPAIGNS_LIST_KEY,
       lazy: options?.lazy ?? false,
+      immediate: options?.immediate ?? true,
       getCachedData: (key, nuxtApp) => readNuxtPayloadCache(key, nuxtApp)
     }
   )

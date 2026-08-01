@@ -24,6 +24,10 @@ export interface MarketingAnalyticsTimeseriesPoint {
 export interface MarketingAnalyticsPayload {
   summary: MarketingAnalyticsSummary
   timeseries: MarketingAnalyticsTimeseriesPoint[]
+  /** Distinct `user:{email}` tags in the ownership-scoped event set (before optional user filter). */
+  tagUsers?: string[]
+  /** Session may pass `userEmail` to narrow analytics (tenant-wide contacts only). */
+  allowUserTagFilter?: boolean
 }
 
 export interface MarketingAnalyticsMetricCard {

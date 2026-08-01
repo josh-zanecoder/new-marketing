@@ -54,14 +54,14 @@ const triggerClass = computed(() => {
     return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-2.5 pl-3 pr-10 text-left text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
   }
   if (props.variant === 'tracking') {
-    return 'inline-flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:w-auto sm:justify-start sm:gap-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+    return 'inline-flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-2xl border border-zinc-200/90 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-800 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 disabled:cursor-not-allowed disabled:opacity-50'
   }
   return 'relative flex w-full min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-white py-3.5 pl-4 pr-10 text-left text-[0.9375rem] font-medium text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500'
 })
 
 const rootClass = computed(() =>
   props.variant === 'tracking'
-    ? 'relative w-full shrink-0 sm:w-fit'
+    ? 'relative w-full min-w-0 shrink-0'
     : 'relative min-w-0 w-full max-w-full'
 )
 
@@ -85,13 +85,26 @@ function updatePanelPosition() {
     ? Math.min(maxPanelHeight, spaceAbove - gap)
     : Math.min(maxPanelHeight, spaceBelow - gap)
 
-  const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - rect.width - viewportPadding))
+  // Email / long labels: don't shrink the menu to a short selected label like "All users".
+  const longestLabelChars = props.options.reduce(
+    (max, option) => Math.max(max, String(option.label ?? '').length),
+    0
+  )
+  const contentMinWidth = Math.min(360, Math.max(220, longestLabelChars * 8 + 48))
+  const panelWidth = Math.min(
+    window.innerWidth - viewportPadding * 2,
+    Math.max(rect.width, props.variant === 'tracking' ? contentMinWidth : rect.width)
+  )
+  const left = Math.max(
+    viewportPadding,
+    Math.min(rect.left, window.innerWidth - panelWidth - viewportPadding)
+  )
 
   if (openUp) {
     panelStyle.value = {
       bottom: `${window.innerHeight - rect.top + gap}px`,
       left: `${left}px`,
-      width: `${rect.width}px`,
+      width: `${panelWidth}px`,
       maxHeight: `${Math.max(maxHeight, 120)}px`
     }
     return
@@ -100,7 +113,7 @@ function updatePanelPosition() {
   panelStyle.value = {
     top: `${rect.bottom + gap}px`,
     left: `${left}px`,
-    width: `${rect.width}px`,
+    width: `${panelWidth}px`,
     maxHeight: `${Math.max(maxHeight, 120)}px`
   }
 }

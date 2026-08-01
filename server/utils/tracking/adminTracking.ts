@@ -8,6 +8,7 @@ import {
   filterBrevoEventsByDateRange,
   filterBrevoEventsForTenant,
   normalizeCampaignIdQuery,
+  normalizeTzOffsetQuery,
   normalizeYmdQuery,
   parseTagSegments,
   type BrevoTrackingEmailEvent
@@ -90,6 +91,7 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   const fromYmd = normalizeYmdQuery(event, 'from')
   const toYmd = normalizeYmdQuery(event, 'to')
   const campaignId = normalizeCampaignIdQuery(event)
+  const tzOffsetMinutes = normalizeTzOffsetQuery(event)
 
   const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
     fromYmd,
@@ -105,7 +107,7 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   }
 
   let events = filterBrevoEventsForAdminTenants(rawEvents, tenants, campaignId)
-  events = filterBrevoEventsByDateRange(events, fromYmd, toYmd)
+  events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
 
   return {
     report: { events }

@@ -3,6 +3,7 @@ export type BrevoTrackingDatePresetId =
   | 'today'
   | 'yesterday'
   | 'last7days'
+  | 'last30days'
   | 'mtd'
   | 'lastMonth'
   | 'lastYear'
@@ -13,18 +14,20 @@ export interface BrevoTrackingDateRange {
   to: string | null
 }
 
+/** Default for Tracking, campaign tracking, and Marketing Analytics. */
+export const BREVO_TRACKING_DEFAULT_PRESET: BrevoTrackingDatePresetId = 'last7days'
+
+/** Sidebar shortcuts — Brevo Logs / Statistics style. */
 export const BREVO_TRACKING_DATE_PRESET_OPTIONS: {
   id: BrevoTrackingDatePresetId
   label: string
 }[] = [
-  { id: 'all', label: 'Last 90 days' },
   { id: 'today', label: 'Today' },
   { id: 'yesterday', label: 'Yesterday' },
-  { id: 'last7days', label: 'Last 7 days' },
-  { id: 'mtd', label: 'Month to date' },
-  { id: 'lastMonth', label: 'Last month' },
-  { id: 'lastYear', label: 'Last year' },
-  { id: 'custom', label: 'Custom range' }
+  { id: 'last7days', label: 'Last 7 Days' },
+  { id: 'last30days', label: 'Last 30 Days' },
+  { id: 'mtd', label: 'This Month' },
+  { id: 'lastMonth', label: 'Last Month' }
 ]
 
 export function toYmdLocal(d: Date): string {
@@ -34,6 +37,12 @@ export function toYmdLocal(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+export function formatSlashYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-')
+  if (!y || !m || !d) return ymd
+  return `${m}/${d}/${y}`
+}
+
 export function presetToBrevoTrackingRange(
   preset: BrevoTrackingDatePresetId,
   now: Date = new Date()
@@ -41,7 +50,12 @@ export function presetToBrevoTrackingRange(
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const ymdToday = toYmdLocal(today)
 
-  if (preset === 'all' || preset === 'custom') return { from: null, to: null }
+  if (preset === 'custom') return { from: null, to: null }
+  if (preset === 'all') {
+    const start = new Date(today)
+    start.setDate(start.getDate() - 89)
+    return { from: toYmdLocal(start), to: ymdToday }
+  }
   if (preset === 'today') return { from: ymdToday, to: ymdToday }
 
   if (preset === 'yesterday') {
@@ -54,6 +68,12 @@ export function presetToBrevoTrackingRange(
   if (preset === 'last7days') {
     const start = new Date(today)
     start.setDate(start.getDate() - 6)
+    return { from: toYmdLocal(start), to: ymdToday }
+  }
+
+  if (preset === 'last30days') {
+    const start = new Date(today)
+    start.setDate(start.getDate() - 29)
     return { from: toYmdLocal(start), to: ymdToday }
   }
 
@@ -141,25 +161,31 @@ export function ymdRangeToDates(from: string, to: string): [Date, Date] | null {
 export function formatBrevoTrackingDateRangeLabel(
   preset: BrevoTrackingDatePresetId,
   customFrom: string,
-  customTo: string
+  customTo: string,
+  now: Date = new Date()
 ): string {
-  if (preset !== 'custom') {
-    return (
-      BREVO_TRACKING_DATE_PRESET_OPTIONS.find((option) => option.id === preset)?.label ??
-      'Last 90 days'
-    )
-  }
+  const range =
+    preset === 'custom'
+      ? {
+          from: customFrom.trim() || null,
+          to: customTo.trim() || null
+        }
+      : presetToBrevoTrackingRange(preset, now)
 
-  const from = customFrom.trim()
-  const to = customTo.trim()
-  if (!from && !to) return 'Custom range'
-  if (from && to) return `${formatYmdDisplay(from)} – ${formatYmdDisplay(to)}`
-  if (from) return `From ${formatYmdDisplay(from)}`
-  return `Until ${formatYmdDisplay(to)}`
+  if (range.from && range.to) {
+    return `${formatSlashYmd(range.from)} - ${formatSlashYmd(range.to)}`
+  }
+  if (range.from) return formatSlashYmd(range.from)
+  if (range.to) return formatSlashYmd(range.to)
+
+  return (
+    BREVO_TRACKING_DATE_PRESET_OPTIONS.find((option) => option.id === preset)?.label ??
+    'Last 7 Days'
+  )
 }
 
 export function useBrevoTrackingDateRange() {
-  const datePreset = ref<BrevoTrackingDatePresetId>('all')
+  const datePreset = ref<BrevoTrackingDatePresetId>(BREVO_TRACKING_DEFAULT_PRESET)
   const customDateFrom = ref('')
   const customDateTo = ref('')
 
@@ -173,8 +199,9 @@ export function useBrevoTrackingDateRange() {
     return presetToBrevoTrackingRange(datePreset.value, new Date())
   })
 
+  /** True when the range differs from the default Last 7 Days. */
   const dateRangeFilterActive = computed(() => {
-    if (datePreset.value === 'all') return false
+    if (datePreset.value === BREVO_TRACKING_DEFAULT_PRESET) return false
     if (datePreset.value === 'custom') {
       return !!(customDateFrom.value.trim() || customDateTo.value.trim())
     }
@@ -190,7 +217,7 @@ export function useBrevoTrackingDateRange() {
   )
 
   function resetDateRange() {
-    datePreset.value = 'all'
+    datePreset.value = BREVO_TRACKING_DEFAULT_PRESET
     customDateFrom.value = ''
     customDateTo.value = ''
   }

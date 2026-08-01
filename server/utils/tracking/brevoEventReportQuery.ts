@@ -10,6 +10,15 @@ function toYmdLocal(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** Brevo rejects endDate after "current date" (UTC calendar day). */
+function brevoUtcTodayYmd(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10)
+}
+
+function minYmd(a: string, b: string): string {
+  return a <= b ? a : b
+}
+
 function parseYmd(ymd: string): Date | null {
   const [y, m, d] = ymd.split('-').map(Number)
   if (!y || !m || !d) return null
@@ -21,22 +30,56 @@ function clampBrevoDateRange(
   toYmd: string | null,
   now: Date = new Date()
 ): { startDate: string; endDate: string } {
-  const end = toYmd ? parseYmd(toYmd) : new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const endDate = toYmdLocal(end ?? new Date())
+  const utcToday = brevoUtcTodayYmd(now)
+  const endDate = minYmd(toYmd && /^\d{4}-\d{2}-\d{2}$/.test(toYmd) ? toYmd : utcToday, utcToday)
 
   let start: Date
   if (fromYmd) {
-    start = parseYmd(fromYmd) ?? new Date(endDate)
+    start = parseYmd(fromYmd) ?? parseYmd(endDate)!
   } else {
-    start = new Date(endDate)
+    start = parseYmd(endDate)!
     start.setDate(start.getDate() - (BREVO_MAX_DATE_RANGE_DAYS - 1))
   }
 
-  const maxStart = new Date(endDate)
+  const maxStart = parseYmd(endDate)!
   maxStart.setDate(maxStart.getDate() - (BREVO_MAX_DATE_RANGE_DAYS - 1))
   if (start.getTime() < maxStart.getTime()) start = maxStart
 
+  const end = parseYmd(endDate)!
+  if (start.getTime() > end.getTime()) start = new Date(end)
+
   return { startDate: toYmdLocal(start), endDate }
+}
+
+/**
+ * Widen Brevo fetch window for UTC day-boundary skew.
+ * Always pull one day earlier; only extend endDate when it stays ≤ UTC today
+ * (Brevo rejects "End date should not be greater than current date").
+ * Callers still apply an exact local YMD filter after fetch.
+ */
+export function expandBrevoFetchDateRange(
+  startDate: string,
+  endDate: string,
+  now: Date = new Date()
+): {
+  startDate: string
+  endDate: string
+} {
+  const start = parseYmd(startDate)
+  const end = parseYmd(endDate)
+  if (!start || !end) return { startDate, endDate }
+
+  start.setDate(start.getDate() - 1)
+
+  const utcToday = brevoUtcTodayYmd(now)
+  const paddedEnd = new Date(end)
+  paddedEnd.setDate(paddedEnd.getDate() + 1)
+  const paddedEndYmd = toYmdLocal(paddedEnd)
+
+  return {
+    startDate: toYmdLocal(start),
+    endDate: minYmd(paddedEndYmd, utcToday)
+  }
 }
 
 /**
@@ -84,7 +127,9 @@ export function joinBrevoEventReportTags(tokens: string[]): string | undefined {
 /**
  * Maps UI / API `from`+`to` to Brevo date params.
  * Docs: omit dates → last 30 days; `days` max 90 and incompatible with start/end.
- * We pass `days: 90` when the UI “Last 90 days” preset has no explicit range.
+ * We pass `days: 90` when the UI has no explicit from/to (fallback).
+ * Tracking / analytics UI defaults to Last 7 Days and sends concrete dates.
+ * Returned start/end are padded ±1 day for Brevo UTC day boundaries.
  */
 export function resolveBrevoEventReportRequest(
   fromYmd: string | null,
@@ -94,5 +139,6 @@ export function resolveBrevoEventReportRequest(
   if (!fromYmd && !toYmd) {
     return { days: BREVO_MAX_DATE_RANGE_DAYS }
   }
-  return clampBrevoDateRange(fromYmd, toYmd, now)
+  const clamped = clampBrevoDateRange(fromYmd, toYmd, now)
+  return expandBrevoFetchDateRange(clamped.startDate, clamped.endDate, now)
 }
