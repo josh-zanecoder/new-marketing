@@ -361,7 +361,13 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
 }
 
 const searchQuery = ref('')
-const selectedEventTypes = ref<string[]>([])
+/** Default to Brevo send requests (empty array = All). */
+const DEFAULT_EVENT_TYPE_FILTER = ['requests'] as const
+const selectedEventTypes = ref<string[]>([...DEFAULT_EVENT_TYPE_FILTER])
+
+function isDefaultEventTypeFilter(sel: string[]): boolean {
+  return sel.length === 1 && sel[0] === 'requests'
+}
 
 function groupMatchesDateRange(g: MessageEventGroup): boolean {
   const range = effectiveDateRange.value
@@ -399,7 +405,11 @@ const availableEventTypes = computed(() => {
       if (ev) s.add(ev)
     }
   }
-  return [...s].sort((a, b) => a.localeCompare(b))
+  return [...s].sort((a, b) => {
+    if (a === 'requests') return -1
+    if (b === 'requests') return 1
+    return a.localeCompare(b)
+  })
 })
 
 /** Raw event counts (matches Brevo log totals), not unique messages. */
@@ -431,8 +441,13 @@ function toggleEventFilter(name: string) {
   else selectedEventTypes.value = selectedEventTypes.value.filter((_, j) => j !== i)
 }
 
+/** Event type pill “All” — no type filter. */
 function clearEventFilters() {
   selectedEventTypes.value = []
+}
+
+function resetEventTypeFilter() {
+  selectedEventTypes.value = [...DEFAULT_EVENT_TYPE_FILTER]
 }
 
 const tableRows = computed((): TrackingTableRow[] => {
@@ -507,7 +522,7 @@ watch(
 function clearAllFilters() {
   searchQuery.value = ''
   resetDateRange()
-  clearEventFilters()
+  resetEventTypeFilter()
   selectedUserEmail.value = ''
   if (props.adminTracking && !props.adminTenantDb) {
     adminTenantFilter.value = ''
@@ -518,7 +533,7 @@ const hasActiveFilters = computed(
   () =>
     !!searchQuery.value.trim() ||
     dateRangeFilterActive.value ||
-    selectedEventTypes.value.length > 0 ||
+    !isDefaultEventTypeFilter(selectedEventTypes.value) ||
     !!selectedUserEmail.value.trim() ||
     (props.adminTracking && !props.adminTenantDb && !!adminTenantFilter.value.trim())
 )
