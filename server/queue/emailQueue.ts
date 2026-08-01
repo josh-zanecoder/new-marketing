@@ -3,8 +3,10 @@ import { isCampaignCloudTasksEnabled } from '../config/campaignCloudTasks'
 import { getBullMqConnectionOptions } from '../lib/bullmq'
 import {
   enqueueCampaignBatchCloudTask,
+  enqueueScheduledCampaignCloudTask,
   hasCampaignBatchCloudTasks,
-  removeCampaignBatchCloudTasks
+  removeCampaignBatchCloudTasks,
+  removeScheduledCampaignCloudTasks
 } from './campaignCloudTasksQueue'
 import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 import { getTenantConnectionByDbName } from '../tenant/connection'
@@ -140,7 +142,11 @@ async function hasInFlightSendingRecipients(
   }
 }
 
-/** True when a batch or scheduled-start job is waiting, delayed, or active for this campaign. */
+/**
+ * True when a send is actually in progress (batch work / Sending recipients).
+ * A delayed schedule trigger alone is not "active" — otherwise overdue reconcile
+ * and Send now stay blocked while a stuck/retrying schedule task sits in the queue.
+ */
 export async function hasActiveCampaignSendJob(
   campaignId: string,
   dbName: string
@@ -148,6 +154,9 @@ export async function hasActiveCampaignSendJob(
   if (isCampaignCloudTasksEnabled()) {
     if (await hasInFlightSendingRecipients(campaignId, dbName)) return true
     if (await hasCampaignBatchCloudTasks(campaignId, dbName)) return true
+    // Do not consult BullMQ when Cloud Tasks is the transport — zombie Redis
+    // delayed schedule jobs were blocking overdue sends forever.
+    return false
   }
 
   const queue = getEmailQueue()
@@ -156,10 +165,7 @@ export async function hasActiveCampaignSendJob(
     const jobs = await queue.getJobs([state], 0, 200)
     if (
       jobs.some((job) =>
-        matchesCampaignJob(job, campaignId, dbName, [
-          EMAIL_JOB_PROCESS_BATCH,
-          EMAIL_JOB_START_SCHEDULED
-        ])
+        matchesCampaignJob(job, campaignId, dbName, [EMAIL_JOB_PROCESS_BATCH])
       )
     ) {
       return true
@@ -234,6 +240,28 @@ export async function enqueueScheduledCampaignStart(
   dbName: string,
   delayMs: number
 ) {
+  if (isCampaignCloudTasksEnabled()) {
+    await removeScheduledCampaignCloudTasks(campaignId, dbName)
+    // Best-effort clear legacy BullMQ schedule jobs left from the migration.
+    try {
+      const legacy = await getEmailQueue().getJob(scheduledCampaignJobId(dbName, campaignId))
+      if (legacy) {
+        const state = await legacy.getState()
+        await removeBullJobSafely(legacy, state, { campaignId, dbName })
+      }
+    } catch {
+      /* ignore Redis cleanup failures */
+    }
+    const result = await enqueueScheduledCampaignCloudTask({ campaignId, dbName, delayMs })
+    logQueue('enqueueScheduledCampaignStart.cloudTasks', {
+      campaignId,
+      dbName,
+      delayMs,
+      taskId: result.taskId
+    })
+    return null
+  }
+
   const jobId = scheduledCampaignJobId(dbName, campaignId)
   const queue = getEmailQueue()
   const existing = await queue.getJob(jobId)
@@ -309,6 +337,26 @@ export async function removeScheduledCampaignJob(
   dbName: string,
   campaignId: string
 ): Promise<RemoveScheduledCampaignJobResult> {
+  if (isCampaignCloudTasksEnabled()) {
+    const removedCt = await removeScheduledCampaignCloudTasks(campaignId, dbName)
+    // Also clear any leftover BullMQ schedule job from before the CT migration.
+    try {
+      const jobId = scheduledCampaignJobId(dbName, campaignId)
+      const job = await getEmailQueue().getJob(jobId)
+      if (job) {
+        const state = await job.getState()
+        await removeBullJobSafely(job, state, { campaignId, dbName })
+      }
+    } catch {
+      /* ignore */
+    }
+    logQueue('removeScheduledCampaignJob.cloudTasks', { campaignId, dbName, removedCt })
+    return {
+      removed: true,
+      reason: removedCt > 0 ? 'removed' : 'not_found'
+    }
+  }
+
   const jobId = scheduledCampaignJobId(dbName, campaignId)
   const job = await getEmailQueue().getJob(jobId)
   if (!job) {

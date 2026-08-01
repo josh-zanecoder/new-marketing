@@ -76,6 +76,7 @@ export type AdminCampaignIndexItem = {
   status: string
   scheduledAt?: string
   recipients: { email: string; contactId?: string }[]
+  recipientsCount: number
   createdAt: string
   updatedAt: string
 }

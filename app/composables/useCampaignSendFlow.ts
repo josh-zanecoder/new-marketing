@@ -3,9 +3,14 @@ import type { Campaign, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 
 function hasSendableRecipients(c: Campaign): boolean {
-  if (c.recipientsType === 'manual') return (c.recipients?.length ?? 0) > 0
+  if (c.recipientsType === 'manual') {
+    return (c.recipientsCount ?? c.recipients?.length ?? 0) > 0
+  }
   if (c.recipientsType === 'list') {
-    return (c.recipients?.length ?? 0) > 0 || !!c.recipientsListId?.trim()
+    return (
+      !!c.recipientsListId?.trim() ||
+      (c.recipientsCount ?? c.recipients?.length ?? 0) > 0
+    )
   }
   return false
 }

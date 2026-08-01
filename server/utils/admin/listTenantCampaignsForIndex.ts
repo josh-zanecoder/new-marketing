@@ -1,11 +1,7 @@
-import mongoose from 'mongoose'
 import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
-import type { ContactLean, ContactModel } from '@server/types/tenant/contact.model'
-import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
-import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 
 export type TenantCampaignIndexRow = {
   id: string
@@ -16,16 +12,22 @@ export type TenantCampaignIndexRow = {
   subject: string
   status: string
   scheduledAt?: string
+  /** Always empty on list — load detail for emails. */
   recipients: { email: string; contactId?: string }[]
+  /** Manual recipient row count (for send gating). List-type uses recipientsListId. */
+  recipientsCount: number
   createdAt: string
   updatedAt: string
 }
 
-/** Same shape as GET `/api/v1/tenant/campaigns` for one tenant connection. */
+/**
+ * Lean campaign index for one tenant — same shape as GET `/api/v1/tenant/campaigns`.
+ * Does not resolve recipient emails (that made the campaigns page laggy).
+ */
 export async function listTenantCampaignsForIndex(
   conn: Connection
 ): Promise<TenantCampaignIndexRow[]> {
-  const { Campaign, ManualRecipient, Contact } = getTenantClientModels(conn)
+  const { Campaign, ManualRecipient } = getTenantClientModels(conn)
 
   const campaigns = await (Campaign as CampaignModel)
     .find({})
@@ -34,69 +36,36 @@ export async function listTenantCampaignsForIndex(
     )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
+
   const campaignIds = campaigns.map((c) => c._id)
-
-  const recipientDocs = await (ManualRecipient as ManualRecipientModel)
-    .find({ campaign: { $in: campaignIds } })
-    .select('campaign contact')
-    .lean<ManualRecipientLean[]>()
-  const allContactIds = [
-    ...new Set(
-      recipientDocs.map((r) => String(r.contact)).filter((id) => mongoose.isValidObjectId(id))
-    )
-  ].map((s) => new mongoose.Types.ObjectId(s))
-  const contacts =
-    allContactIds.length > 0
-      ? await (Contact as ContactModel)
-          .find(withMarketableContactFilter({ _id: { $in: allContactIds } }))
-          .select('email')
-          .lean<ContactLean[]>()
-      : []
-  const emailByContactId = new Map(contacts.map((c) => [String(c._id), (c.email ?? '').trim()]))
-
-  const recipientsByCampaign = new Map<string, { email: string; contactId: string }[]>()
-  for (const r of recipientDocs) {
-    const id = String(r.campaign)
-    if (!recipientsByCampaign.has(id)) recipientsByCampaign.set(id, [])
-    const email = emailByContactId.get(String(r.contact)) ?? ''
-    if (!email.trim()) continue
-    recipientsByCampaign.get(id)!.push({
-      email,
-      contactId: String(r.contact)
-    })
+  const manualCountByCampaign = new Map<string, number>()
+  if (campaignIds.length > 0) {
+    const counts = await (ManualRecipient as ManualRecipientModel).aggregate<{
+      _id: unknown
+      n: number
+    }>([{ $match: { campaign: { $in: campaignIds } } }, { $group: { _id: '$campaign', n: { $sum: 1 } } }])
+    for (const row of counts) {
+      manualCountByCampaign.set(String(row._id), row.n)
+    }
   }
-  const listEmailCache = new Map<string, string[]>()
 
-  return Promise.all(
-    campaigns.map(async (c) => {
-      const id = String(c._id)
-      let recipients: { email: string; contactId?: string }[] = []
-
-      if (c.recipientsType === 'list' && String(c.recipientsListId ?? '').trim()) {
-        const listId = String(c.recipientsListId)
-        let emails = listEmailCache.get(listId)
-        if (!emails) {
-          emails = await resolveRecipientListEmails(conn, listId)
-          listEmailCache.set(listId, emails)
-        }
-        recipients = emails.map((email) => ({ email }))
-      } else if (c.recipientsType === 'manual' || c.recipientsType === 'list') {
-        recipients = recipientsByCampaign.get(id) || []
-      }
-
-      return {
-        id,
-        name: c.name,
-        sender: c.sender,
-        recipientsType: c.recipientsType,
-        recipientsListId: c.recipientsListId,
-        subject: c.subject,
-        status: c.status,
-        scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
-        recipients,
-        createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : '',
-        updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString() : ''
-      }
-    })
-  )
+  return campaigns.map((c) => {
+    const id = String(c._id)
+    const recipientsCount =
+      c.recipientsType === 'manual' ? (manualCountByCampaign.get(id) ?? 0) : 0
+    return {
+      id,
+      name: c.name,
+      sender: c.sender,
+      recipientsType: c.recipientsType,
+      recipientsListId: c.recipientsListId,
+      subject: c.subject,
+      status: c.status,
+      scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,
+      recipients: [],
+      recipientsCount,
+      createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : '',
+      updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString() : ''
+    }
+  })
 }

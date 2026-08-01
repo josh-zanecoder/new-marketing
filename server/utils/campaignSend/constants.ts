@@ -1,6 +1,9 @@
 /** HTTP path Cloud Tasks POSTs for each campaign send chunk. */
 export const CAMPAIGN_SEND_TASK_PATH = '/api/internal/campaign-sends/batch'
 
+/** HTTP path Cloud Tasks POSTs when a scheduled campaign's delay elapses. */
+export const CAMPAIGN_SCHEDULE_TASK_PATH = '/api/internal/campaign-sends/start-scheduled'
+
 /** Recipients per BullMQ batch job (Brevo messageVersions limit; aligned with mortdash ratesheet max chunk). */
 export const CAMPAIGN_SEND_BATCH_SIZE = 100
 

@@ -43,14 +43,8 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
     for (const doc of overdue) {
       const campaignId = String(doc._id)
       try {
-        if (await hasActiveCampaignSendJob(campaignId, dbName)) {
-          console.log('[ScheduleReconcile] skip (queue job already active)', {
-            dbName,
-            campaignId
-          })
-          continue
-        }
-
+        // Drop the delayed schedule trigger first. A retrying/stuck Cloud Task must
+        // not keep status=Scheduled forever (hasActive used to treat it as "sending").
         const removed = await removeScheduledCampaignJob(dbName, campaignId)
         if (!removed.removed && (removed.reason === 'active' || removed.reason === 'locked')) {
           console.log('[ScheduleReconcile] skip (scheduled job in flight)', {
@@ -58,6 +52,14 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
             campaignId,
             reason: removed.reason,
             state: removed.state
+          })
+          continue
+        }
+
+        if (await hasActiveCampaignSendJob(campaignId, dbName)) {
+          console.log('[ScheduleReconcile] skip (queue job already active)', {
+            dbName,
+            campaignId
           })
           continue
         }

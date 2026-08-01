@@ -22,8 +22,9 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/logout',
   '/api/v1/auth/tenant-handoff',
   '/api/v1/unsubscribe',
-  /** Cloud Tasks campaign batch worker (authenticated via X-Campaign-Send-Worker-Secret). */
-  '/api/internal/campaign-sends/batch'
+  /** Cloud Tasks campaign workers (authenticated via X-Campaign-Send-Worker-Secret). */
+  '/api/internal/campaign-sends/batch',
+  '/api/internal/campaign-sends/start-scheduled'
 ]
 
 const ADMIN_API_PREFIX = '/api/v1/admin'

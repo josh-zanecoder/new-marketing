@@ -34,6 +34,11 @@ export interface Campaign {
   /** ISO 8601; set when the campaign is scheduled to send later. */
   scheduledAt?: string
   recipients: CampaignRecipient[]
+  /**
+   * Present on list responses: manual recipient row count (emails not loaded).
+   * Detail responses may omit this and use `recipients.length` instead.
+   */
+  recipientsCount?: number
   createdAt: string
   updatedAt: string
 }
