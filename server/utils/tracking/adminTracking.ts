@@ -3,17 +3,15 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
 import {
-  eventMatchesAnyAdminTenant,
-  filterBrevoEventsByDateRange,
-  filterBrevoEventsForTenant,
   normalizeCampaignIdQuery,
   normalizeTzOffsetQuery,
   normalizeYmdQuery,
-  parseTagSegments,
   type BrevoTrackingEmailEvent
 } from '@server/utils/tracking/brevoTenantEvents'
-import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
+import { loadStoredTenantBrevoTrackingEvents } from '@server/utils/tracking/loadStoredTenantBrevoTrackingEvents'
+import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 export type AdminTrackingTenant = {
@@ -58,33 +56,20 @@ export async function listAdminTrackingTenants(
   return tenants
 }
 
-export function filterBrevoEventsForAdminTenants(
-  events: BrevoTrackingEmailEvent[],
-  tenants: AdminTrackingTenant[],
-  campaignId: string | null
-): BrevoTrackingEmailEvent[] {
-  if (!tenants.length) return []
-
-  if (tenants.length === 1) {
-    const tenant = tenants[0]!
-    return filterBrevoEventsForTenant(events, tenant.dbName, tenant.marketingTenantId, campaignId)
-  }
-
-  return events.filter((item) => {
-    if (campaignId) {
-      const parts = parseTagSegments(item.tag)
-      if (!parts.includes(`campaign:${campaignId}`)) return false
-    }
-    return eventMatchesAnyAdminTenant(item.tag, tenants)
-  })
-}
-
+/**
+ * Admin tracking reads the selected tenant's synced Mongo events.
+ * Multi-tenant (no tenantDbName) returns an empty report — sync requires a single tenant.
+ */
 export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   report: Record<string, unknown> & { events: BrevoTrackingEmailEvent[] }
 }> {
   const tenantDbName = normalizeAdminTenantDbQuery(event)
+  if (!tenantDbName) {
+    return { report: { events: [], tagUsers: [], allowUserTagFilter: false } }
+  }
+
   const tenants = await listAdminTrackingTenants(tenantDbName)
-  if (tenantDbName && !tenants.length) {
+  if (!tenants.length) {
     throw createError({ statusCode: 403, message: 'Unknown tenant for admin tracking' })
   }
 
@@ -92,24 +77,78 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   const toYmd = normalizeYmdQuery(event, 'to')
   const campaignId = normalizeCampaignIdQuery(event)
   const tzOffsetMinutes = normalizeTzOffsetQuery(event)
+  const q = getQuery(event) as Record<string, unknown>
+  const brevoEventTypes = normalizeBrevoEventTypesQuery(q.event ?? q.events)
 
-  const { events: rawEvents, error } = await fetchTenantBrevoEmailEvents({
+  const { events, tagUsers } = await loadStoredTenantBrevoTrackingEvents(tenantDbName, {
+    campaignId,
     fromYmd,
     toYmd,
-    campaignId,
-    // Resolve tenant Brevo key when viewing one tenant; otherwise use default key.
-    ...(tenants.length === 1 ? { dbName: tenants[0]!.dbName } : {}),
-    // Multi-tenant admin with no campaign: untagged walk (still rate-safe paginated).
-    ...(tenants.length !== 1 && !campaignId ? { tags: '' } : {})
+    tzOffsetMinutes,
+    userEmails: null,
+    filterUserEmails: null,
+    brevoEventTypes: brevoEventTypes.length ? brevoEventTypes : null
   })
-  if (error) {
-    throwBrevoTrackingFetchError(error)
-  }
-
-  let events = filterBrevoEventsForAdminTenants(rawEvents, tenants, campaignId)
-  events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
 
   return {
-    report: { events }
+    report: { events, tagUsers, allowUserTagFilter: false }
+  }
+}
+
+export async function syncAdminTrackingReport(event: H3Event): Promise<{
+  ok: true
+  fetched: number
+  upserted: number
+  modified: number
+}> {
+  const tenantDbName = normalizeAdminTenantDbQuery(event)
+  if (!tenantDbName) {
+    throw createError({
+      statusCode: 400,
+      message: 'Select a tenant before refreshing tracking'
+    })
+  }
+
+  const tenants = await listAdminTrackingTenants(tenantDbName)
+  if (!tenants.length) {
+    throw createError({ statusCode: 403, message: 'Unknown tenant for admin tracking' })
+  }
+
+  const body = (await readBody(event).catch(() => null)) as Record<string, unknown> | null
+  const q = getQuery(event) as Record<string, unknown>
+  const fromRaw = body?.from ?? q.from
+  const toRaw = body?.to ?? q.to
+  const campaignRaw = body?.campaignId ?? q.campaignId
+
+  const fromYmd =
+    typeof fromRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fromRaw.trim())
+      ? fromRaw.trim()
+      : normalizeYmdQuery(event, 'from')
+  const toYmd =
+    typeof toRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(toRaw.trim())
+      ? toRaw.trim()
+      : normalizeYmdQuery(event, 'to')
+  const campaignId =
+    typeof campaignRaw === 'string' && /^[a-f\d]{24}$/i.test(campaignRaw.trim())
+      ? campaignRaw.trim()
+      : normalizeCampaignIdQuery(event)
+
+  const result = await syncTenantBrevoTrackingEvents({
+    dbName: tenantDbName,
+    marketingTenantId: tenants[0]?.marketingTenantId ?? null,
+    fromYmd,
+    toYmd,
+    campaignId
+  })
+
+  if (result.error) {
+    throwBrevoTrackingFetchError(result.error)
+  }
+
+  return {
+    ok: true as const,
+    fetched: result.fetched,
+    upserted: result.upserted,
+    modified: result.modified
   }
 }

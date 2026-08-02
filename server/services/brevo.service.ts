@@ -1,5 +1,9 @@
 import { BrevoClient } from '@getbrevo/brevo'
-import type { GetEmailEventReportRequest } from '@getbrevo/brevo/transactionalEmails'
+import type {
+  GetAggregatedSmtpReportRequest,
+  GetEmailEventReportRequest,
+  GetSmtpReportRequest
+} from '@getbrevo/brevo/transactionalEmails'
 import {
   buildCampaignBrevoBatchRequest,
   type CampaignBatchMessageVersion
@@ -284,6 +288,79 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
   }
 }
 
+async function withBrevoFetchRetry<T>(
+  label: string,
+  run: () => Promise<T>
+): Promise<{ data?: T; error?: string }> {
+  const maxRetries = 4
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return { data: await run() }
+    } catch (e: unknown) {
+      if (isBrevoRetryableFetchError(e) && attempt < maxRetries) {
+        const rateLimited = isBrevoRateLimitError(e)
+        const resetSec = rateLimited ? brevoRateLimitResetSeconds(e) : 0
+        const waitMs = rateLimited
+          ? (resetSec + Math.pow(2, attempt) + Math.random()) * 1000
+          : (Math.pow(2, attempt) + Math.random()) * 1000
+        console.warn(`[Brevo] ${label} retryable error; backing off`, {
+          attempt: attempt + 1,
+          rateLimited,
+          status: brevoHttpStatus(e),
+          resetSec: rateLimited ? resetSec : undefined,
+          waitMs: Math.round(waitMs)
+        })
+        await sleepMs(waitMs)
+        continue
+      }
+      const err = extractBrevoError(e)
+      console.error(`[Brevo] ${label} failed:`, err)
+      return { error: err }
+    }
+  }
+  return { error: 'Brevo rate limit exceeded' }
+}
+
+/**
+ * Aggregated SMTP statistics (`GET /smtp/statistics/aggregatedReport`).
+ * Optional `tag` scopes to a single Brevo tag (e.g. `campaign:{id}`).
+ */
+export async function getAggregatedSmtpReport(
+  params: GetAggregatedSmtpReportRequest = {},
+  options?: { apiKey?: string; dbName?: string | null }
+): Promise<{ report?: unknown; error?: string }> {
+  const client = await resolveClient(options)
+  if (!client) {
+    console.error('[Brevo] API key is not configured')
+    return { error: 'Brevo API key is not configured' }
+  }
+  const result = await withBrevoFetchRetry('getAggregatedSmtpReport', () =>
+    client.transactionalEmails.getAggregatedSmtpReport(params)
+  )
+  if (result.error) return { error: result.error }
+  return { report: result.data }
+}
+
+/**
+ * One page of daily SMTP statistics (`GET /smtp/statistics/reports`).
+ * Brevo page size is small (~10); callers should paginate.
+ */
+export async function getSmtpDailyReport(
+  params: GetSmtpReportRequest = {},
+  options?: { apiKey?: string; dbName?: string | null }
+): Promise<{ report?: unknown; error?: string }> {
+  const client = await resolveClient(options)
+  if (!client) {
+    console.error('[Brevo] API key is not configured')
+    return { error: 'Brevo API key is not configured' }
+  }
+  const result = await withBrevoFetchRetry('getSmtpReport', () =>
+    client.transactionalEmails.getSmtpReport(params)
+  )
+  if (result.error) return { error: result.error }
+  return { report: result.data }
+}
+
 /**
  * Single page of transactional email events.
  * Retries 429 / transient 502–504 using Brevo reset headers + exponential backoff.
@@ -299,33 +376,9 @@ export async function getTransactionalEmailEventReport(
     return { error: 'Brevo API key is not configured' }
   }
 
-  const maxRetries = 4
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const report = await client.transactionalEmails.getEmailEventReport(params)
-      return { report }
-    } catch (e: unknown) {
-      if (isBrevoRetryableFetchError(e) && attempt < maxRetries) {
-        const rateLimited = isBrevoRateLimitError(e)
-        const resetSec = rateLimited ? brevoRateLimitResetSeconds(e) : 0
-        const waitMs = rateLimited
-          ? (resetSec + Math.pow(2, attempt) + Math.random()) * 1000
-          : (Math.pow(2, attempt) + Math.random()) * 1000
-        console.warn('[Brevo] getEmailEventReport retryable error; backing off', {
-          attempt: attempt + 1,
-          rateLimited,
-          status: brevoHttpStatus(e),
-          resetSec: rateLimited ? resetSec : undefined,
-          waitMs: Math.round(waitMs)
-        })
-        await sleepMs(waitMs)
-        continue
-      }
-      const err = extractBrevoError(e)
-      console.error('[Brevo] getEmailEventReport failed:', err)
-      return { error: err }
-    }
-  }
-
-  return { error: 'Brevo rate limit exceeded' }
+  const result = await withBrevoFetchRetry('getEmailEventReport', () =>
+    client.transactionalEmails.getEmailEventReport(params)
+  )
+  if (result.error) return { error: result.error }
+  return { report: result.data }
 }

@@ -35,6 +35,8 @@ export interface FetchBrevoEmailEventsParams {
    * Empty string = no tag filter.
    */
   tags?: string | null
+  /** When true, skip the in-memory report cache (Refresh / sync). */
+  skipCache?: boolean
 }
 
 interface CacheEntry {
@@ -136,13 +138,17 @@ export async function fetchTenantBrevoEmailEvents(
 ): Promise<{ events: BrevoTrackingEmailEvent[]; error?: string }> {
   const tags = resolveTagsParam(params)
   const cacheKey = buildCacheKey(params, tags)
-  const cached = eventsCache.get(cacheKey)
-  if (cached && cached.expiresAt > Date.now()) {
-    return { events: cached.events }
-  }
+  if (!params.skipCache) {
+    const cached = eventsCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return { events: cached.events }
+    }
 
-  const existing = inflightFetches.get(cacheKey)
-  if (existing) return existing
+    const existing = inflightFetches.get(cacheKey)
+    if (existing) return existing
+  } else {
+    eventsCache.delete(cacheKey)
+  }
 
   const promise = (async () => {
     const result = await fetchTenantBrevoEmailEventsUncached(params, tags)
@@ -157,7 +163,9 @@ export async function fetchTenantBrevoEmailEvents(
     inflightFetches.delete(cacheKey)
   })
 
-  inflightFetches.set(cacheKey, promise)
+  if (!params.skipCache) {
+    inflightFetches.set(cacheKey, promise)
+  }
   return promise
 }
 

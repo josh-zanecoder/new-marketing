@@ -4,15 +4,15 @@ import {
   normalizeUserEmailQuery,
   normalizeYmdQuery
 } from '@server/utils/tracking/brevoTenantEvents'
-import { loadTenantBrevoTrackingEvents } from '@server/utils/tracking/loadTenantBrevoTrackingEvents'
+import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
+import { loadStoredTenantBrevoTrackingEvents } from '@server/utils/tracking/loadStoredTenantBrevoTrackingEvents'
 import {
   mergeTrackingUserEmails,
   resolveTrackingTenantContext
 } from '@server/utils/tracking/resolveTrackingTenantContext'
-import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 export default defineEventHandler(async (event) => {
-  const { dbName, marketingTenantId, userEmails, allowUserTagFilter } =
+  const { dbName, userEmails, allowUserTagFilter } =
     await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
@@ -20,28 +20,23 @@ export default defineEventHandler(async (event) => {
   const toYmd = normalizeYmdQuery(event, 'to')
   const tzOffsetMinutes = normalizeTzOffsetQuery(event)
   const requestedUserEmail = normalizeUserEmailQuery(event)
+  const q = getQuery(event) as Record<string, unknown>
+  const brevoEventTypes = normalizeBrevoEventTypesQuery(q.event ?? q.events)
   const { ownershipEmails, filterEmails } = mergeTrackingUserEmails(
     userEmails,
     requestedUserEmail,
     allowUserTagFilter
   )
 
-  const { events, tagUsers, error } = await loadTenantBrevoTrackingEvents(
-    dbName,
-    marketingTenantId,
-    {
-      campaignId,
-      fromYmd,
-      toYmd,
-      tzOffsetMinutes,
-      userEmails: ownershipEmails,
-      filterUserEmails: filterEmails
-    }
-  )
-
-  if (error) {
-    throwBrevoTrackingFetchError(error)
-  }
+  const { events, tagUsers } = await loadStoredTenantBrevoTrackingEvents(dbName, {
+    campaignId,
+    fromYmd,
+    toYmd,
+    tzOffsetMinutes,
+    userEmails: ownershipEmails,
+    filterUserEmails: filterEmails,
+    brevoEventTypes: brevoEventTypes.length ? brevoEventTypes : null
+  })
 
   return {
     report: {

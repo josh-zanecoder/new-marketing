@@ -28,8 +28,10 @@ const props = withDefaults(
     selectedEventTypes: string[]
     cardClass?: string
     loading?: boolean
+    /** Tighter header / chart height for campaign Logs. */
+    compact?: boolean
   }>(),
-  { loading: false, cardClass: DEFAULT_CARD_CLASS }
+  { loading: false, cardClass: DEFAULT_CARD_CLASS, compact: false }
 )
 
 const chartOption = computed(() =>
@@ -57,28 +59,35 @@ const hasChartData = computed(() => {
     :aria-busy="loading"
     aria-label="Event activity chart"
   >
-    <div class="border-b border-zinc-100 px-4 py-3.5 sm:px-6 sm:py-4">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-        Event activity
-      </h2>
-      <p class="mt-1 text-sm text-zinc-500">
+    <div
+      class="border-b border-zinc-100"
+      :class="compact ? 'px-4 py-2.5 sm:px-5' : 'px-4 py-3.5 sm:px-6 sm:py-4'"
+    >
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Event activity
+        </h2>
+      </div>
+      <p v-if="!compact" class="mt-1 text-sm text-zinc-500">
         Daily event counts for the selected date range and event filters.
       </p>
     </div>
 
-    <div :class="CHART_BODY_CLASS">
+    <div :class="compact ? 'px-1 py-2 sm:px-4 sm:py-3' : CHART_BODY_CLASS">
       <TenantChartSkeleton v-if="loading" />
 
       <ClientOnly v-else>
         <VChart
           v-if="hasChartData"
-          class="h-56 w-full min-h-[14rem] sm:h-72 sm:min-h-[18rem]"
+          class="w-full"
+          :class="compact ? 'h-44 min-h-[11rem] sm:h-52 sm:min-h-[13rem]' : 'h-56 min-h-[14rem] sm:h-72 sm:min-h-[18rem]'"
           :option="chartOption"
           autoresize
         />
         <div
           v-else
-          class="flex flex-col items-center px-4 py-12 text-center sm:px-6 sm:py-16"
+          class="flex flex-col items-center px-4 text-center sm:px-6"
+          :class="compact ? 'py-8' : 'py-12 sm:py-16'"
         >
           <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -3,6 +3,8 @@ import { storeToRefs } from 'pinia'
 import type { Campaign } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
+import type TenantBrevoCampaignSmtpStatsPanel from '~/components/tenant/BrevoCampaignSmtpStatsPanel.vue'
+import type TenantBrevoTrackingEventsPanel from '~/components/tenant/BrevoTrackingEventsPanel.vue'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
 
@@ -35,6 +37,30 @@ const id = route.params.id as string
 const sendControlBusy = ref(false)
 const resumeConfirmOpen = ref(false)
 const restartConfirmOpen = ref(false)
+
+const campaignStatsPanelRef = ref<InstanceType<typeof TenantBrevoCampaignSmtpStatsPanel> | null>(
+  null
+)
+const campaignTrackingPanelRef = ref<InstanceType<typeof TenantBrevoTrackingEventsPanel> | null>(
+  null
+)
+
+const campaignStatsPending = computed(
+  () =>
+    unref(campaignStatsPanelRef.value?.pending as boolean | Ref<boolean> | undefined) ?? false
+)
+const campaignLogsPending = computed(
+  () =>
+    unref(campaignTrackingPanelRef.value?.pending as boolean | Ref<boolean> | undefined) ?? false
+)
+
+function onRefreshCampaignStats() {
+  void campaignStatsPanelRef.value?.refresh?.()
+}
+
+function onRefreshCampaignLogs() {
+  void campaignTrackingPanelRef.value?.refresh?.()
+}
 
 const cachedDetail = campaignStore.getCampaignDetailCache(id)
 const detailAsync = useAsyncData(
@@ -443,10 +469,11 @@ async function handleUnschedule() {
   }
 }
 
-type CampaignViewTab = 'details' | 'tracking'
+type CampaignViewTab = 'details' | 'tracking' | 'logs'
 
 function campaignViewTabFromQuery(view: unknown): CampaignViewTab | null {
   if (view === 'tracking') return 'tracking'
+  if (view === 'logs') return 'logs'
   if (view === 'details') return 'details'
   return null
 }
@@ -766,6 +793,19 @@ function setCampaignViewTab(tab: CampaignViewTab) {
           >
             Tracking
           </button>
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors sm:px-4 sm:text-[15px]"
+            :class="
+              campaignViewTab === 'logs'
+                ? 'border-primary-600 text-primary-900'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+            "
+            :aria-current="campaignViewTab === 'logs' ? 'page' : undefined"
+            @click="setCampaignViewTab('logs')"
+          >
+            Logs
+          </button>
         </nav>
 
         <div
@@ -923,14 +963,44 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 
         <section
           v-if="campaignViewTab === 'tracking'"
-          class="min-w-0 space-y-4 sm:space-y-6"
+          class="min-w-0 space-y-3 sm:space-y-4"
           aria-label="Campaign send tracking"
         >
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-zinc-900">Tracking</h2>
+            <TenantRefreshIconButton
+              label="Refresh campaign statistics"
+              :pending="campaignStatsPending"
+              @click="onRefreshCampaignStats"
+            />
+          </div>
+
+          <TenantBrevoCampaignSmtpStatsPanel
+            ref="campaignStatsPanelRef"
+            :key="`campaign-stats-${id}`"
+            :campaign-id="id"
+          />
+        </section>
+
+        <section
+          v-if="campaignViewTab === 'logs'"
+          class="min-w-0 space-y-3 sm:space-y-4"
+          aria-label="Campaign send logs"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-zinc-900">Message logs</h2>
+            <TenantRefreshIconButton
+              label="Refresh campaign logs"
+              :pending="campaignLogsPending"
+              @click="onRefreshCampaignLogs"
+            />
+          </div>
+
           <TenantBrevoTrackingEventsPanel
+            ref="campaignTrackingPanelRef"
             :key="`campaign-tracking-${id}`"
             :campaign-id="id"
             hide-campaign-column
-            panel-hint="Delivery, opens, and clicks for this campaign."
           />
         </section>
       </div>

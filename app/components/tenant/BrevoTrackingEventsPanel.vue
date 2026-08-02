@@ -72,6 +72,13 @@ const adminTenantFilter = defineModel<string>('adminTenantFilter', { default: ''
 const route = useRoute()
 const { data: me } = useMarketingMe()
 const selectedUserEmail = ref('')
+/** Default to Brevo send requests (empty array = All). */
+const DEFAULT_EVENT_TYPE_FILTER = ['requests'] as const
+const selectedEventTypes = ref<string[]>([...DEFAULT_EVENT_TYPE_FILTER])
+
+function isDefaultEventTypeFilter(sel: string[]): boolean {
+  return sel.length === 1 && sel[0] === 'requests'
+}
 
 const {
   datePreset,
@@ -112,7 +119,8 @@ const trackingQuery = computed(() => {
     const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
     if (db) q.tenantDbName = db
   }
-  if (canFilterByUserTag.value) {
+  // Campaign Logs are campaign-scoped — no optional User filter.
+  if (!c && canFilterByUserTag.value) {
     const userEmail = selectedUserEmail.value.trim().toLowerCase()
     if (userEmail) q.userEmail = userEmail
   }
@@ -130,6 +138,8 @@ const trackingScope = computed(() =>
     ? `admin-${(props.adminTenantDb ?? adminTenantFilter.value).trim() || 'all'}`
     : props.adminTenantDb?.trim() || 'self'
 )
+
+const syncing = ref(false)
 
 const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
   () => (props.adminTracking ? '/api/v1/admin/tracking' : '/api/v1/tracking'),
@@ -150,7 +160,46 @@ const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
   }
 )
 
-defineExpose({ refresh, pending })
+const isLoading = computed(() => pending.value || syncing.value)
+
+async function refreshFromBrevo() {
+  if (syncing.value) return
+  if (props.adminTracking) {
+    const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
+    if (!db) return
+  }
+
+  syncing.value = true
+  try {
+    const body: Record<string, string> = {}
+    const from = effectiveDateRange.value.from?.trim()
+    const to = effectiveDateRange.value.to?.trim()
+    if (from) body.from = from
+    if (to) body.to = to
+    const campaignId = props.campaignId?.trim()
+    if (campaignId) body.campaignId = campaignId
+
+    const syncUrl = props.adminTracking ? '/api/v1/admin/tracking/sync' : '/api/v1/tracking/sync'
+    const syncQuery: Record<string, string> = {}
+    if (props.adminTracking) {
+      const db = (props.adminTenantDb ?? adminTenantFilter.value).trim()
+      if (db) syncQuery.tenantDbName = db
+    }
+
+    await $fetch(syncUrl, {
+      method: 'POST',
+      body,
+      query: Object.keys(syncQuery).length ? syncQuery : undefined,
+      headers: adminTenantHeaders.value,
+      credentials: 'include'
+    })
+    await refresh()
+  } finally {
+    syncing.value = false
+  }
+}
+
+defineExpose({ refresh: refreshFromBrevo, pending: isLoading })
 
 /** Campaign names for the Campaign column — skip on campaign-detail tracking tabs. */
 const needCampaignNames = !props.hideCampaignColumn
@@ -241,6 +290,7 @@ const userFilterOptions = computed(() => {
 const showUserFilter = computed(
   () =>
     !props.adminTracking &&
+    !props.campaignId?.trim() &&
     (report.value?.allowUserTagFilter === true || canFilterByUserTag.value)
 )
 
@@ -361,13 +411,6 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
 }
 
 const searchQuery = ref('')
-/** Default to Brevo send requests (empty array = All). */
-const DEFAULT_EVENT_TYPE_FILTER = ['requests'] as const
-const selectedEventTypes = ref<string[]>([...DEFAULT_EVENT_TYPE_FILTER])
-
-function isDefaultEventTypeFilter(sel: string[]): boolean {
-  return sel.length === 1 && sel[0] === 'requests'
-}
 
 function groupMatchesDateRange(g: MessageEventGroup): boolean {
   const range = effectiveDateRange.value
@@ -376,6 +419,7 @@ function groupMatchesDateRange(g: MessageEventGroup): boolean {
 }
 
 function groupMatchesSearch(g: MessageEventGroup): boolean {
+  if (props.campaignId?.trim()) return true
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return true
   const campaign = parseCampaignIdFromTag(groupTagSample(g) || g.events[0]?.tag)
@@ -392,6 +436,9 @@ function groupMatchesSearch(g: MessageEventGroup): boolean {
     .toLowerCase()
   return parts.includes(q) || parts.split(/\s+/).some((w) => w.includes(q))
 }
+
+const showSearchFilter = computed(() => !props.campaignId?.trim())
+const isCampaignScoped = computed(() => Boolean(props.campaignId?.trim()))
 
 const groupsAfterSearchDate = computed(() =>
   messageGroups.value.filter((g) => groupMatchesDateRange(g) && groupMatchesSearch(g))
@@ -531,7 +578,7 @@ function clearAllFilters() {
 
 const hasActiveFilters = computed(
   () =>
-    !!searchQuery.value.trim() ||
+    (showSearchFilter.value && !!searchQuery.value.trim()) ||
     dateRangeFilterActive.value ||
     !isDefaultEventTypeFilter(selectedEventTypes.value) ||
     !!selectedUserEmail.value.trim() ||
@@ -548,19 +595,19 @@ const emptyStateTitle = computed(() => {
 
 const emptyStateMessage = computed(() => {
   if (props.campaignId?.trim()) {
-    return 'After this campaign sends, delivery, opens, and clicks will appear here. Try the main Tracking page if you expect older activity.'
+    return 'Click Refresh to pull the latest events from Brevo for this campaign, or try the main Tracking page for older activity.'
   }
   if (props.adminTracking && adminTenantFilter.value.trim()) {
-    return 'Try another tenant or switch back to All tenants if you expect cross-tenant activity.'
+    return 'Click Refresh to sync this tenant from Brevo, or try another tenant.'
   }
   if (props.adminTracking) {
-    return 'After tenants send campaigns, delivery, opens, and clicks will show up here. Filter by tenant to narrow results.'
+    return 'Select a tenant, then click Refresh to sync events from Brevo into Marketing.'
   }
-  return 'After you send campaigns, opens, clicks, and delivery events will show up here.'
+  return 'Click Refresh to sync delivery, opens, and clicks from Brevo for the selected date range.'
 })
 
-const reportLoadFailed = computed(() => Boolean(error.value) && !pending.value)
-const showEmptyReport = computed(() => !pending.value && events.value.length === 0)
+const reportLoadFailed = computed(() => Boolean(error.value) && !isLoading.value)
+const showEmptyReport = computed(() => !isLoading.value && events.value.length === 0)
 
 const EVENT_FILTER_SKELETON_COUNT = 4
 </script>
@@ -579,78 +626,46 @@ const EVENT_FILTER_SKELETON_COUNT = 4
     </div>
 
     <template v-else>
-      <div class="mb-4 space-y-3 sm:mb-6 sm:space-y-4">
-        <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
+      <div
+        :class="isCampaignScoped ? 'mb-3' : 'mb-4 space-y-3 sm:mb-6 sm:space-y-4'"
+      >
+        <p v-if="panelHint?.trim()" class="mb-3 text-sm text-zinc-500">
           {{ panelHint }}
         </p>
-        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
-          <div class="relative min-w-0 w-full sm:w-80 md:w-96">
-            <label class="sr-only" for="brevo-tracking-search">Search events</label>
-            <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-zinc-400 sm:left-4 sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              id="brevo-tracking-search"
-              v-model="searchQuery"
-              type="search"
-              autocomplete="off"
-              placeholder="Subject, email, campaign…"
-              class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:pl-12"
-            >
-          </div>
-          <TenantFilterSelect
-            v-if="adminTenantFilterOptions.length"
-            id="admin-tracking-tenant-filter"
-            v-model="adminTenantFilter"
-            label="Filter by tenant"
-            variant="tracking"
-            :options="adminTenantFilterOptions"
-          />
-          <div v-if="showUserFilter" class="w-full shrink-0 sm:w-72">
-            <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
-            <TenantFilterSelect
-              id="tenant-tracking-user-filter"
-              v-model="selectedUserEmail"
-              label="Filter by user"
-              variant="tracking"
-              :options="userFilterOptions"
-            />
-          </div>
-          <div class="w-full shrink-0 sm:w-auto">
-            <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
+
+        <!-- Campaign Logs: single compact toolbar -->
+        <div
+          v-if="isCampaignScoped"
+          class="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4"
+        >
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <TenantBrevoTrackingDateRangePicker
               v-model:preset="datePreset"
               v-model:custom-from="customDateFrom"
               v-model:custom-to="customDateTo"
               :label="dateRangeLabel"
             />
-          </div>          <button
-            v-if="hasActiveFilters"
-            type="button"
-            class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
-            @click="clearAllFilters"
-          >
-            Clear filters
-          </button>
-        </div>
-        <div v-if="pending" class="animate-pulse">
-          <div class="mb-2 h-3 w-16 rounded bg-zinc-100" />
-          <div class="flex flex-wrap gap-2">
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              class="inline-flex h-9 items-center rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+              @click="clearAllFilters"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div v-if="isLoading" class="flex flex-wrap gap-1.5 animate-pulse">
             <div
               v-for="n in EVENT_FILTER_SKELETON_COUNT"
               :key="`filter-${n}`"
-              class="h-8 w-24 rounded-full bg-zinc-100"
+              class="h-8 w-20 rounded-full bg-zinc-100"
             />
           </div>
-        </div>
-        <div v-else-if="availableEventTypes.length">
-          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-            Event type
-          </p>
-          <div class="flex flex-wrap gap-2">
+          <div v-else-if="availableEventTypes.length" class="flex min-w-0 flex-wrap gap-1.5">
             <button
               type="button"
-              class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+              class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
               :class="
                 selectedEventTypes.length === 0
                   ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
@@ -665,7 +680,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               v-for="t in availableEventTypes"
               :key="t"
               type="button"
-              class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+              class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
               :class="
                 selectedEventTypes.includes(t)
                   ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
@@ -678,6 +693,109 @@ const EVENT_FILTER_SKELETON_COUNT = 4
             </button>
           </div>
         </div>
+
+        <!-- Main Tracking / admin: stacked filters -->
+        <template v-else>
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+            <div
+              v-if="showSearchFilter"
+              class="relative min-w-0 w-full sm:w-80 md:w-96"
+            >
+              <label class="sr-only" for="brevo-tracking-search">Search events</label>
+              <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-zinc-400 sm:left-4 sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                id="brevo-tracking-search"
+                v-model="searchQuery"
+                type="search"
+                autocomplete="off"
+                placeholder="Subject, email, campaign…"
+                class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:pl-12"
+              >
+            </div>
+            <TenantFilterSelect
+              v-if="adminTenantFilterOptions.length"
+              id="admin-tracking-tenant-filter"
+              v-model="adminTenantFilter"
+              label="Filter by tenant"
+              variant="tracking"
+              :options="adminTenantFilterOptions"
+            />
+            <div v-if="showUserFilter" class="w-full shrink-0 sm:w-72">
+              <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
+              <TenantFilterSelect
+                id="tenant-tracking-user-filter"
+                v-model="selectedUserEmail"
+                label="Filter by user"
+                variant="tracking"
+                :options="userFilterOptions"
+              />
+            </div>
+            <div class="w-full shrink-0 sm:w-auto">
+              <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
+              <TenantBrevoTrackingDateRangePicker
+                v-model:preset="datePreset"
+                v-model:custom-from="customDateFrom"
+                v-model:custom-to="customDateTo"
+                :label="dateRangeLabel"
+              />
+            </div>
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
+              @click="clearAllFilters"
+            >
+              Clear filters
+            </button>
+          </div>
+          <div v-if="isLoading" class="animate-pulse">
+            <div class="mb-2 h-3 w-16 rounded bg-zinc-100" />
+            <div class="flex flex-wrap gap-2">
+              <div
+                v-for="n in EVENT_FILTER_SKELETON_COUNT"
+                :key="`filter-${n}`"
+                class="h-8 w-24 rounded-full bg-zinc-100"
+              />
+            </div>
+          </div>
+          <div v-else-if="availableEventTypes.length">
+            <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              Event type
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.length === 0
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                "
+                @click="clearEventFilters"
+              >
+                All
+                <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
+              </button>
+              <button
+                v-for="t in availableEventTypes"
+                :key="t"
+                type="button"
+                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.includes(t)
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                "
+                @click="toggleEventFilter(t)"
+              >
+                {{ t }}
+                <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
+              </button>
+            </div>
+          </div>
+        </template>
       </div>
 
       <div
@@ -697,16 +815,17 @@ const EVENT_FILTER_SKELETON_COUNT = 4
         </p>
       </div>
 
-      <div v-else class="space-y-2 sm:space-y-4" :aria-busy="pending">
+      <div v-else class="space-y-2 sm:space-y-3" :aria-busy="isLoading">
         <TenantBrevoTrackingLineChart
           :events="events"
           :date-range="effectiveDateRange"
           :selected-event-types="selectedEventTypes"
-          :loading="pending"
+          :loading="isLoading"
+          :compact="isCampaignScoped"
         />
 
         <div :class="cardClass">
-          <TenantBrevoTrackingTableSkeleton v-if="pending" />
+          <TenantBrevoTrackingTableSkeleton v-if="isLoading" />
 
           <div
             v-else-if="tableRows.length === 0"
@@ -721,7 +840,11 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               No messages match your filters
             </p>
             <p class="mt-1 text-sm text-zinc-500">
-              Try clearing search, widening the date range, or resetting event types.
+              {{
+                showSearchFilter
+                  ? 'Try clearing search, widening the date range, or resetting event types.'
+                  : 'Try widening the date range or resetting event types.'
+              }}
             </p>
             <button
               v-if="hasActiveFilters"

@@ -4,6 +4,14 @@ import type TenantBrevoTrackingEventsPanel from '~/components/tenant/BrevoTracki
 definePageMeta({ layout: 'default' })
 
 const trackingPanelRef = ref<InstanceType<typeof TenantBrevoTrackingEventsPanel> | null>(null)
+
+const trackingPending = computed(
+  () => unref(trackingPanelRef.value?.pending as boolean | Ref<boolean> | undefined) ?? false
+)
+
+function onRefreshTracking() {
+  void trackingPanelRef.value?.refresh?.()
+}
 </script>
 
 <template>
@@ -15,13 +23,13 @@ const trackingPanelRef = ref<InstanceType<typeof TenantBrevoTrackingEventsPanel>
           Tracking
         </h1>
         <p class="max-w-2xl text-sm text-zinc-500 sm:text-[15px]">
-          Delivery, opens, and clicks from your sends—filtered to this workspace. Data comes from Brevo and is grouped by message.
+          Delivery, opens, and clicks from your sends—stored in this workspace. Click Refresh to pull the latest from Brevo.
         </p>
       </div>
       <TenantRefreshIconButton
         label="Refresh tracking"
-        :pending="trackingPanelRef?.pending"
-        @click="() => trackingPanelRef?.refresh?.()"
+        :pending="trackingPending"
+        @click="onRefreshTracking"
       />
     </header>
     <TenantBrevoTrackingEventsPanel ref="trackingPanelRef" />
