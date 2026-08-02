@@ -737,6 +737,7 @@ const contactsCatalogPending = ref(false)
 const contactsCatalogError = ref('')
 const contactsCatalogTruncated = ref(false)
 let recipientListResourcePromise: Promise<Awaited<ReturnType<typeof marketingApi.fetchRecipientListResource>>> | null = null
+let recipientListsIndexPromise: Promise<Awaited<ReturnType<typeof marketingApi.fetchRecipientListResource>>> | null = null
 
 function fetchRecipientListResourceOnce() {
   if (!recipientListResourcePromise) {
@@ -746,6 +747,18 @@ function fetchRecipientListResourceOnce() {
     })
   }
   return recipientListResourcePromise
+}
+
+function fetchRecipientListsIndexOnce() {
+  if (!recipientListsIndexPromise) {
+    recipientListsIndexPromise = marketingApi
+      .fetchRecipientListResource({ scope: 'index' })
+      .catch((e) => {
+        recipientListsIndexPromise = null
+        throw e
+      })
+  }
+  return recipientListsIndexPromise
 }
 
 /** Display names/emails for manual recipient contact ids. */
@@ -941,7 +954,7 @@ async function loadRecipientLists() {
   recipientListsPending.value = true
   recipientListsError.value = ''
   try {
-    const res = await fetchRecipientListResourceOnce()
+    const res = await fetchRecipientListsIndexOnce()
     recipientLists.value = Array.isArray(res.lists) ? res.lists : []
   } catch {
     recipientListsError.value = 'Could not load recipient lists.'

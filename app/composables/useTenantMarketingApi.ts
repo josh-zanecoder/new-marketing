@@ -179,8 +179,12 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     }
   }
 
-  async function fetchRecipientListResource() {
-    return $fetch<TenantRecipientListResponse>('/api/v1/tenant/recipient-list', tenantFetchInit())
+  async function fetchRecipientListResource(opts?: { scope?: 'index' | 'form' }) {
+    const scope = opts?.scope
+    return $fetch<TenantRecipientListResponse>(
+      '/api/v1/tenant/recipient-list',
+      tenantFetchInit(scope ? { query: { scope } } : undefined)
+    )
   }
 
   async function fetchRecipientListById(listId: string, opts?: { page?: number; limit?: number }) {
