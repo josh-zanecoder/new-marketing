@@ -3,6 +3,7 @@ import { ensureTenantDatabaseInitialized } from '@server/tenant/provisioning'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import {
   normalizeBrevoApiKeyInput,
+  normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
   normalizeCampaignSenderNameInput
 } from '@server/utils/registry/tenantAdminRow'
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
+    brevoWebhookSecret?: string | null
   }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()
@@ -60,6 +62,10 @@ export default defineEventHandler(async (event) => {
       : null
   const brevoApiKey =
     body?.brevoApiKey !== undefined ? normalizeBrevoApiKeyInput(body.brevoApiKey) : null
+  const brevoWebhookSecret =
+    body?.brevoWebhookSecret !== undefined
+      ? normalizeBrevoWebhookSecretInput(body.brevoWebhookSecret)
+      : null
 
   const registryConn = await getRegistryConnection()
   const { dbName, apiKey, tenantId: resolvedTenantId } =
@@ -78,6 +84,7 @@ export default defineEventHandler(async (event) => {
     defaultCampaignSenderName
   }
   if (brevoApiKey) $set.brevoApiKey = brevoApiKey
+  if (brevoWebhookSecret) $set.brevoWebhookSecret = brevoWebhookSecret
 
   await registryConn.collection('clients').updateOne({ dbName }, { $set })
   invalidateTenantTopicCacheForDbName(dbName)

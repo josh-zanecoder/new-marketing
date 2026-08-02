@@ -9,6 +9,7 @@ import {
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import {
   normalizeBrevoApiKeyInput,
+  normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
   normalizeCampaignSenderNameInput,
   toTenantAdminRow
@@ -41,6 +42,12 @@ export default defineEventHandler(async (event) => {
      * Non-empty string sets/replaces the tenant key.
      */
     brevoApiKey?: string | null
+    /**
+     * Optional. Omit to leave unchanged.
+     * `null` or `""` clears the custom secret (use env `BREVO_WEBHOOK_SECRET`).
+     * Non-empty string sets/replaces the tenant webhook secret.
+     */
+    brevoWebhookSecret?: string | null
   }>(event)
 
   const displayName = body?.name?.trim()
@@ -144,6 +151,11 @@ export default defineEventHandler(async (event) => {
     const nextKey = normalizeBrevoApiKeyInput(body?.brevoApiKey)
     if (nextKey) $set.brevoApiKey = nextKey
     else $unset.brevoApiKey = ''
+  }
+  if (Object.prototype.hasOwnProperty.call(body ?? {}, 'brevoWebhookSecret')) {
+    const nextSecret = normalizeBrevoWebhookSecretInput(body?.brevoWebhookSecret)
+    if (nextSecret) $set.brevoWebhookSecret = nextSecret
+    else $unset.brevoWebhookSecret = ''
   }
 
   const update: { $set: Record<string, unknown>; $unset?: Record<string, ''> } = { $set }

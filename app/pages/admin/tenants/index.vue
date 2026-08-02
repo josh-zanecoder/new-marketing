@@ -428,6 +428,8 @@ async function fetchTenants() {
         defaultCampaignSenderName: string | null
         brevoApiKeyConfigured?: boolean
         brevoApiKeyPrefix?: string | null
+        brevoWebhookSecretConfigured?: boolean
+        brevoWebhookSecretPrefix?: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -444,6 +446,8 @@ async function fetchTenants() {
       defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
       brevoApiKeyConfigured: Boolean(t.brevoApiKeyConfigured),
       brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
+      brevoWebhookSecretConfigured: Boolean(t.brevoWebhookSecretConfigured),
+      brevoWebhookSecretPrefix: t.brevoWebhookSecretPrefix ?? null,
       status: 'Ready'
     }))
   } catch {
@@ -458,6 +462,7 @@ async function handleAddTenantSubmit(payload: {
   defaultCampaignSenderEmail?: string | null
   defaultCampaignSenderName?: string | null
   brevoApiKey?: string | null
+  brevoWebhookSecret?: string | null
 }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
@@ -480,6 +485,7 @@ async function handleEditTenantSubmit(payload: {
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
   brevoApiKey?: string | null
+  brevoWebhookSecret?: string | null
 }) {
   const row = editingTenant.value
   if (!row) return

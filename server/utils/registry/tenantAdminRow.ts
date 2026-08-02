@@ -70,6 +70,30 @@ export function parseRegistryBrevoApiKey(doc: RegistryTenantDoc): {
   }
 }
 
+/** Normalize admin webhook-secret input: empty → null (use env). */
+export function normalizeBrevoWebhookSecretInput(
+  raw: string | null | undefined
+): string | null {
+  return normalizeBrevoApiKeyInput(raw)
+}
+
+export function parseRegistryBrevoWebhookSecret(doc: RegistryTenantDoc): {
+  brevoWebhookSecret: string | null
+  brevoWebhookSecretConfigured: boolean
+  brevoWebhookSecretPrefix: string | null
+} {
+  const raw = doc.brevoWebhookSecret
+  const brevoWebhookSecret =
+    typeof raw === 'string' && raw.trim() ? raw.trim() : null
+  return {
+    brevoWebhookSecret,
+    brevoWebhookSecretConfigured: Boolean(brevoWebhookSecret),
+    brevoWebhookSecretPrefix: brevoWebhookSecret
+      ? maskBrevoApiKeyPrefix(brevoWebhookSecret)
+      : null
+  }
+}
+
 export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null {
   const name = typeof doc.name === 'string' ? doc.name : ''
   const email = typeof doc.email === 'string' ? doc.email : null
@@ -102,6 +126,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const { defaultCampaignSenderEmail, defaultCampaignSenderName } =
     parseRegistryCampaignSenderFields(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
+  const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
+    parseRegistryBrevoWebhookSecret(doc)
 
   if (!name || !dbName || !createdAt) return null
   return {
@@ -116,6 +142,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     defaultCampaignSenderEmail,
     defaultCampaignSenderName,
     brevoApiKeyConfigured,
-    brevoApiKeyPrefix
+    brevoApiKeyPrefix,
+    brevoWebhookSecretConfigured,
+    brevoWebhookSecretPrefix
   }
 }

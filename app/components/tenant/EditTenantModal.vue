@@ -159,6 +159,41 @@
             </label>
           </div>
 
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-brevo-webhook-secret" class="compact-modal-label">
+              Brevo webhook secret <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              <template v-if="props.tenant?.brevoWebhookSecretConfigured">
+                Custom secret set
+                <span v-if="props.tenant.brevoWebhookSecretPrefix" class="font-mono">
+                  ({{ props.tenant.brevoWebhookSecretPrefix }})
+                </span>
+                — leave blank to keep, or clear to use env
+                <span class="font-mono">BREVO_WEBHOOK_SECRET</span>.
+              </template>
+              <template v-else>
+                Using env <span class="font-mono">BREVO_WEBHOOK_SECRET</span>. Paste a secret to override for this tenant.
+              </template>
+            </p>
+            <input
+              id="edit-tenant-brevo-webhook-secret"
+              v-model="brevoWebhookSecret"
+              type="password"
+              autocomplete="off"
+              placeholder="Webhook shared secret"
+              class="compact-modal-input compact-modal-input--mono"
+              :disabled="clearBrevoWebhookSecret"
+            >
+            <label
+              v-if="props.tenant?.brevoWebhookSecretConfigured"
+              class="mt-2 flex items-center gap-2 text-xs text-slate-600"
+            >
+              <input v-model="clearBrevoWebhookSecret" type="checkbox" class="rounded border-slate-300">
+              Clear custom secret (use env default)
+            </label>
+          </div>
+
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
           </div>
@@ -221,6 +256,8 @@ const emit = defineEmits<{
     defaultCampaignSenderName: string | null
     /** Omit = keep; `null` = clear to env; string = set/replace. */
     brevoApiKey?: string | null
+    /** Omit = keep; `null` = clear to env; string = set/replace. */
+    brevoWebhookSecret?: string | null
   }]
 }>()
 
@@ -232,6 +269,8 @@ const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
 const brevoApiKey = ref('')
 const clearBrevoApiKey = ref(false)
+const brevoWebhookSecret = ref('')
+const clearBrevoWebhookSecret = ref(false)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -246,6 +285,8 @@ function loadFromTenant(t: AdminTenantRow) {
   crmAppUrl.value = t.crmAppUrl ?? ''
   brevoApiKey.value = ''
   clearBrevoApiKey.value = false
+  brevoWebhookSecret.value = ''
+  clearBrevoWebhookSecret.value = false
 }
 
 function resetLocal() {
@@ -329,6 +370,7 @@ function handleSubmit() {
     defaultCampaignSenderName: string | null
     defaultCampaignSenderEmail: string | null
     brevoApiKey?: string | null
+    brevoWebhookSecret?: string | null
   } = {
     name: trimmedName,
     email: trimmedEmail.toLowerCase(),
@@ -344,6 +386,12 @@ function handleSubmit() {
     payload.brevoApiKey = null
   } else if (brevoApiKey.value.trim()) {
     payload.brevoApiKey = brevoApiKey.value.trim()
+  }
+
+  if (clearBrevoWebhookSecret.value) {
+    payload.brevoWebhookSecret = null
+  } else if (brevoWebhookSecret.value.trim()) {
+    payload.brevoWebhookSecret = brevoWebhookSecret.value.trim()
   }
 
   emit('submit', payload)

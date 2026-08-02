@@ -1285,6 +1285,8 @@ interface TenantDetail {
   defaultCampaignSenderName: string | null
   brevoApiKeyConfigured?: boolean
   brevoApiKeyPrefix?: string | null
+  brevoWebhookSecretConfigured?: boolean
+  brevoWebhookSecretPrefix?: string | null
 }
 
 interface FilterRow {

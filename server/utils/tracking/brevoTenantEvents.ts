@@ -6,6 +6,11 @@ export interface BrevoTrackingEmailEvent {
   messageId?: string
   event?: string
   tag?: string
+  subject?: string
+  from?: string
+  ip?: string
+  link?: string
+  reason?: string
 }
 
 const MONGO_OBJECT_ID_RE = /^[a-f\d]{24}$/i

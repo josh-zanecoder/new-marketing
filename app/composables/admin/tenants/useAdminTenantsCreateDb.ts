@@ -43,6 +43,7 @@ export function useAdminTenantsCreateDb() {
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
+    brevoWebhookSecret?: string | null
   }): Promise<CreateTenantDbResult> {
     resetError()
 
@@ -64,6 +65,9 @@ export function useAdminTenantsCreateDb() {
             defaultCampaignSenderName: payload.defaultCampaignSenderName ?? null,
             ...(payload.brevoApiKey?.trim()
               ? { brevoApiKey: payload.brevoApiKey.trim() }
+              : {}),
+            ...(payload.brevoWebhookSecret?.trim()
+              ? { brevoWebhookSecret: payload.brevoWebhookSecret.trim() }
               : {})
           }
         }
@@ -112,6 +116,7 @@ export function useAdminTenantsCreateDb() {
       defaultCampaignSenderEmail: string | null
       defaultCampaignSenderName: string | null
       brevoApiKey?: string | null
+      brevoWebhookSecret?: string | null
     }
   ): Promise<{ ok: boolean }> {
     resetError()

@@ -8,6 +8,11 @@ export const brevoTrackingEventSchema = new mongoose.Schema(
     messageId: { type: String, required: true, trim: true },
     event: { type: String, required: true, trim: true },
     tag: { type: String, default: '', trim: true },
+    subject: { type: String, default: '', trim: true },
+    from: { type: String, default: '', trim: true },
+    ip: { type: String, default: '', trim: true },
+    link: { type: String, default: '', trim: true },
+    reason: { type: String, default: '', trim: true },
     /** Parsed from `date` for range queries. */
     eventAt: { type: Date, default: null },
     campaignId: { type: String, default: '', trim: true },

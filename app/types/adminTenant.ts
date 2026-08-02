@@ -19,5 +19,9 @@ export interface AdminTenantRow {
   brevoApiKeyConfigured: boolean
   /** Masked prefix of the custom Brevo key (never the full secret). */
   brevoApiKeyPrefix: string | null
+  /** True when a custom Brevo webhook secret is stored for this tenant. */
+  brevoWebhookSecretConfigured: boolean
+  /** Masked prefix of the custom Brevo webhook secret (never the full secret). */
+  brevoWebhookSecretPrefix: string | null
   status: string
 }

@@ -22,6 +22,11 @@ export interface RegistryTenantDoc {
   defaultCampaignSenderEmail?: unknown
   /** Optional per-tenant Brevo transactional API key; empty/missing → env `BREVO_API_KEY`. */
   brevoApiKey?: unknown
+  /**
+   * Optional per-tenant Brevo transactional webhook secret; empty/missing → env
+   * `BREVO_WEBHOOK_SECRET`.
+   */
+  brevoWebhookSecret?: unknown
 }
 
 /** Admin list row for a registered tenant (registry). */
@@ -48,4 +53,8 @@ export interface TenantAdminRow {
   brevoApiKeyConfigured: boolean
   /** Masked prefix of the custom Brevo key (never the full secret). */
   brevoApiKeyPrefix: string | null
+  /** True when a custom Brevo webhook secret is stored for this tenant. */
+  brevoWebhookSecretConfigured: boolean
+  /** Masked prefix of the custom Brevo webhook secret (never the full secret). */
+  brevoWebhookSecretPrefix: string | null
 }

@@ -41,6 +41,11 @@ export function brevoEventToTrackingDoc(ev: BrevoTrackingEmailEvent) {
     messageId,
     event,
     tag,
+    subject: (ev.subject || '').trim(),
+    from: (ev.from || '').trim(),
+    ip: (ev.ip || '').trim(),
+    link: (ev.link || '').trim(),
+    reason: (ev.reason || '').trim(),
     eventAt: Number.isFinite(eventAtMs) ? new Date(eventAtMs) : null,
     campaignId: parseCampaignIdFromBrevoTag(tag),
     userEmail: parseUserEmailFromBrevoTag(tag)

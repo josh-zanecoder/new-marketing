@@ -27,19 +27,32 @@ export interface LoadStoredTenantBrevoTrackingEventsOptions {
   brevoEventTypes?: BrevoEmailEventType[] | null
 }
 
-function docToEvent(doc: {
+type StoredTrackingEventLean = {
   email?: string
   date?: string
   messageId?: string
   event?: string
   tag?: string
-}): BrevoTrackingEmailEvent {
+  userEmail?: string
+  subject?: string
+  from?: string
+  ip?: string
+  link?: string
+  reason?: string
+}
+
+function docToEvent(doc: StoredTrackingEventLean): BrevoTrackingEmailEvent {
   return {
     email: doc.email || undefined,
     date: doc.date || undefined,
     messageId: doc.messageId || undefined,
     event: doc.event || undefined,
-    tag: doc.tag || undefined
+    tag: doc.tag || undefined,
+    subject: doc.subject || undefined,
+    from: doc.from || undefined,
+    ip: doc.ip || undefined,
+    link: doc.link || undefined,
+    reason: doc.reason || undefined
   }
 }
 
@@ -126,22 +139,33 @@ export async function loadStoredTenantBrevoTrackingEvents(
     eventFilter.event = { $in: eventTypeValues }
   }
 
-  const eventSelect = { email: 1, date: 1, messageId: 1, event: 1, tag: 1, userEmail: 1, _id: 0 }
+  const eventSelect = {
+    email: 1,
+    date: 1,
+    messageId: 1,
+    event: 1,
+    tag: 1,
+    userEmail: 1,
+    subject: 1,
+    from: 1,
+    ip: 1,
+    link: 1,
+    reason: 1,
+    _id: 0
+  }
 
   // No optional user filter: one find — derive tagUsers from the same docs (same cost as before).
   // With optional user filter: parallel distinct (cheap) + narrow events find.
   if (!hasOptionalUserFilter) {
-    const docs = await BrevoTrackingEvent.find(eventFilter)
+    const docs = (await BrevoTrackingEvent.find(eventFilter)
       .select(eventSelect)
       .lean()
-      .exec()
+      .exec()) as unknown as StoredTrackingEventLean[]
 
-    let events = (docs as Array<Record<string, string>>).map(docToEvent)
+    let events = docs.map(docToEvent)
     events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
 
-    const fromField = normalizeTagUsers(
-      (docs as Array<{ userEmail?: string }>).map((d) => d.userEmail || '')
-    )
+    const fromField = normalizeTagUsers(docs.map((d) => d.userEmail || ''))
     const tagUsers =
       fromField.length > 0
         ? fromField
@@ -152,10 +176,14 @@ export async function loadStoredTenantBrevoTrackingEvents(
 
   const [distinctUsers, docs] = await Promise.all([
     BrevoTrackingEvent.distinct('userEmail', scopeFilter) as Promise<string[]>,
-    BrevoTrackingEvent.find(eventFilter).select(eventSelect).lean().exec()
+    BrevoTrackingEvent.find(eventFilter)
+      .select(eventSelect)
+      .lean()
+      .exec()
+      .then((rows) => rows as unknown as StoredTrackingEventLean[])
   ])
 
-  let events = (docs as Array<Record<string, string>>).map(docToEvent)
+  let events = docs.map(docToEvent)
   events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
 
   return {

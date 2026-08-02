@@ -22,6 +22,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/auth/logout',
   '/api/v1/auth/tenant-handoff',
   '/api/v1/unsubscribe',
+  /** Brevo transactional delivery webhooks (per-tenant or env BREVO_WEBHOOK_SECRET). */
+  '/api/v1/webhooks/brevo',
   /** Cloud Tasks campaign workers (authenticated via X-Campaign-Send-Worker-Secret). */
   '/api/internal/campaign-sends/batch',
   '/api/internal/campaign-sends/start-scheduled'

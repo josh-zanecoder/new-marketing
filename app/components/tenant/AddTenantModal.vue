@@ -126,6 +126,23 @@
             >
           </div>
 
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-brevo-webhook-secret" class="compact-modal-label">
+              Brevo webhook secret <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              Leave blank to use env <span class="font-mono">BREVO_WEBHOOK_SECRET</span>.
+            </p>
+            <input
+              id="add-tenant-brevo-webhook-secret"
+              v-model="brevoWebhookSecret"
+              type="password"
+              autocomplete="off"
+              placeholder="Webhook shared secret"
+              class="compact-modal-input compact-modal-input--mono"
+            >
+          </div>
+
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
           </div>
@@ -184,6 +201,7 @@ const emit = defineEmits<{
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
+    brevoWebhookSecret?: string | null
   }]
 }>()
 
@@ -193,6 +211,7 @@ const defaultCampaignSenderName = ref('')
 const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
 const brevoApiKey = ref('')
+const brevoWebhookSecret = ref('')
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -205,6 +224,7 @@ function resetForm() {
   defaultCampaignSenderEmail.value = ''
   crmAppUrl.value = ''
   brevoApiKey.value = ''
+  brevoWebhookSecret.value = ''
   errorMessage.value = null
   stopSubmitting()
 }
@@ -270,7 +290,10 @@ function handleSubmit() {
       ? trimmedSenderEmail.toLowerCase()
       : null,
     ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {}),
-    ...(brevoApiKey.value.trim() ? { brevoApiKey: brevoApiKey.value.trim() } : {})
+    ...(brevoApiKey.value.trim() ? { brevoApiKey: brevoApiKey.value.trim() } : {}),
+    ...(brevoWebhookSecret.value.trim()
+      ? { brevoWebhookSecret: brevoWebhookSecret.value.trim() }
+      : {})
   })
 }
 </script>

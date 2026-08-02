@@ -381,6 +381,7 @@ async function onCampaignLinkClick(event: MouseEvent, campaignId: string | null)
   }
 
   event.preventDefault()
+  event.stopPropagation()
   await navigateToCampaign(campaignId)
 }
 
@@ -621,6 +622,22 @@ function eventBadgeClass(ev: string | undefined): string {
   if (e === 'blocked' || e === 'invalid' || e === 'error')
     return 'bg-red-50 text-red-800 ring-red-200/80'
   return 'bg-zinc-100 text-zinc-700 ring-zinc-200/80'
+}
+
+const historyRow = ref<TrackingTableRow | null>(null)
+const historyOpen = computed({
+  get: () => historyRow.value != null,
+  set: (open: boolean) => {
+    if (!open) historyRow.value = null
+  }
+})
+
+function openMessageHistory(row: TrackingTableRow) {
+  historyRow.value = row
+}
+
+function closeMessageHistory() {
+  historyRow.value = null
 }
 
 const TRACKING_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
@@ -975,66 +992,80 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                 :key="`mobile-${row.messageId}-${idx}`"
                 class="p-4"
               >
-                <div class="space-y-2">
-                  <div :class="{ hidden: hideCampaignColumn }">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Campaign</p>
-                    <NuxtLink
-                      v-if="row.campaignId && isMongoId(row.campaignId)"
-                      :to="campaignPagePath(row.campaignId)"
-                      class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
-                      :title="campaignDisplayLabel(row.campaignId)"
-                      @click="onCampaignLinkClick($event, row.campaignId)"
-                    >
-                      {{ campaignDisplayLabel(row.campaignId) }}
-                    </NuxtLink>
-                    <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
-                      {{ row.campaignId }}
-                    </p>
-                    <p v-else class="mt-0.5 text-sm text-zinc-400">No campaign</p>
-                  </div>
-                  <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
-                    <p
-                      class="mt-0.5 break-all text-sm text-zinc-800"
-                      :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
-                    >
-                      {{ row.recipientEmail?.trim() || '—' }}
-                    </p>
-                  </div>
-                  <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
-                    <p
-                      class="mt-0.5 line-clamp-2 text-sm"
-                      :class="row.subject ? 'text-zinc-900' : 'text-zinc-400'"
-                    >
-                      {{ displaySubject(row.subject) }}
-                    </p>
-                  </div>
-                  <p class="text-xs tabular-nums text-zinc-500">
-                    {{ formatEventDate(row.latestIso) }}
-                  </p>
-                  <div class="flex flex-wrap items-center gap-1.5 pt-1">
-                    <UiHoverTip
-                      v-for="ev in visibleEventTypes(row.eventTypesOrdered).shown"
-                      :key="ev"
-                      :text="brevoEventTypeTooltip(ev)"
-                    >
-                      <span
-                        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
-                        :class="eventBadgeClass(ev)"
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1 space-y-2">
+                    <div :class="{ hidden: hideCampaignColumn }">
+                      <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Campaign</p>
+                      <NuxtLink
+                        v-if="row.campaignId && isMongoId(row.campaignId)"
+                        :to="campaignPagePath(row.campaignId)"
+                        class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
+                        :title="campaignDisplayLabel(row.campaignId)"
+                        @click="onCampaignLinkClick($event, row.campaignId)"
                       >
-                        {{ ev }}
-                      </span>
-                    </UiHoverTip>
-                    <UiHoverTip
-                      v-if="visibleEventTypes(row.eventTypesOrdered).overflow"
-                      :text="overflowEventTooltip(row.eventTypesOrdered)"
-                    >
-                      <span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200/80 sm:text-xs">
-                        +{{ visibleEventTypes(row.eventTypesOrdered).overflow }}
-                      </span>
-                    </UiHoverTip>
+                        {{ campaignDisplayLabel(row.campaignId) }}
+                      </NuxtLink>
+                      <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
+                        {{ row.campaignId }}
+                      </p>
+                      <p v-else class="mt-0.5 text-sm text-zinc-400">No campaign</p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
+                      <p
+                        class="mt-0.5 break-all text-sm text-zinc-800"
+                        :class="{ 'text-zinc-400': !row.recipientEmail?.trim() }"
+                      >
+                        {{ row.recipientEmail?.trim() || '—' }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
+                      <p
+                        class="mt-0.5 line-clamp-2 text-sm"
+                        :class="row.subject ? 'text-zinc-900' : 'text-zinc-400'"
+                      >
+                        {{ displaySubject(row.subject) }}
+                      </p>
+                    </div>
+                    <p class="text-xs tabular-nums text-zinc-500">
+                      {{ formatEventDate(row.latestIso) }}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                      <UiHoverTip
+                        v-for="ev in visibleEventTypes(row.eventTypesOrdered).shown"
+                        :key="ev"
+                        :text="brevoEventTypeTooltip(ev)"
+                      >
+                        <span
+                          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
+                          :class="eventBadgeClass(ev)"
+                        >
+                          {{ ev }}
+                        </span>
+                      </UiHoverTip>
+                      <UiHoverTip
+                        v-if="visibleEventTypes(row.eventTypesOrdered).overflow"
+                        :text="overflowEventTooltip(row.eventTypesOrdered)"
+                      >
+                        <span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200/80 sm:text-xs">
+                          +{{ visibleEventTypes(row.eventTypesOrdered).overflow }}
+                        </span>
+                      </UiHoverTip>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                    aria-label="View message history"
+                    title="View history"
+                    @click="openMessageHistory(row)"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
                 </div>
               </li>
             </ul>
@@ -1061,6 +1092,9 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     </th>
                     <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 sm:px-6">
                       Events
+                    </th>
+                    <th scope="col" class="w-12 px-3 py-3.5 sm:px-4">
+                      <span class="sr-only">History</span>
                     </th>
                   </tr>
                 </thead>
@@ -1126,6 +1160,20 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                           </span>
                         </UiHoverTip>
                       </div>
+                    </td>
+                    <td class="px-3 py-4 align-middle sm:px-4">
+                      <button
+                        type="button"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                        aria-label="View message history"
+                        title="View history"
+                        @click="openMessageHistory(row)"
+                      >
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -1202,5 +1250,14 @@ const EVENT_FILTER_SKELETON_COUNT = 4
         </div>
       </div>
     </template>
+
+    <TenantBrevoTrackingMessageHistoryModal
+      :open="historyOpen"
+      :recipient-email="historyRow?.recipientEmail"
+      :subject="historyRow?.subject"
+      :message-id="historyRow?.messageId"
+      :events="historyRow?.events ?? []"
+      @close="closeMessageHistory"
+    />
   </div>
 </template>
