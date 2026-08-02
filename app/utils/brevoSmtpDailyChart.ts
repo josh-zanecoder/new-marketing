@@ -119,7 +119,8 @@ export function buildBrevoSmtpDailyChartOption(
       right: 12,
       top: 36,
       bottom: 8,
-      containLabel: true
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel'
     },
     xAxis: {
       type: 'category',

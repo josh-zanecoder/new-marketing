@@ -188,7 +188,8 @@ export function buildBrevoTrackingChartOption(
       right: 16,
       top: 16,
       bottom: series.length > 1 ? 48 : 16,
-      containLabel: true
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel'
     },
     xAxis: {
       type: 'category',

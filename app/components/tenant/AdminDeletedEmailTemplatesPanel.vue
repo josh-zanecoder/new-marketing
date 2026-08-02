@@ -46,7 +46,7 @@ const {
       </div>
       <div class="flex shrink-0 items-center gap-3 self-start">
         <TenantRefreshIconButton
-          aria-label="Refresh deleted templates"
+          label="Refresh deleted templates"
           :pending="pending"
           @click="loadDeletedTemplates"
         />

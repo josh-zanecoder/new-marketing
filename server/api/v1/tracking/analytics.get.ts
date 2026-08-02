@@ -49,6 +49,7 @@ export default defineEventHandler(async (event) => {
   return {
     analytics: {
       ...analytics,
+      events,
       tagUsers,
       allowUserTagFilter
     }

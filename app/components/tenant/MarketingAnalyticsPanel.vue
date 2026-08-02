@@ -68,6 +68,7 @@ const { data: campaignsListData } = useTenantCampaignsList()
 const analytics = computed(() => data.value?.analytics)
 const metricCards = computed(() => buildMarketingAnalyticsMetricCards(analytics.value?.summary))
 const timeseries = computed(() => analytics.value?.timeseries ?? [])
+const recipientEvents = computed(() => analytics.value?.events ?? [])
 
 const campaignOptions = computed(() => {
   const list = campaignsListData.value?.campaigns ?? []
@@ -131,7 +132,7 @@ defineExpose({ refresh, pending })
             Filters
           </h2>
           <p class="mt-0.5 text-xs text-zinc-500">
-            Refine metrics and the performance chart
+            Refine metrics, chart, and recipients
           </p>
         </div>
         <div v-if="hasActiveFilters" class="flex shrink-0 items-center gap-2">
@@ -190,6 +191,11 @@ defineExpose({ refresh, pending })
     <TenantMarketingAnalyticsChart
       :points="timeseries"
       :date-range="effectiveDateRange"
+      :loading="pending"
+    />
+
+    <TenantMarketingAnalyticsRecipientsTable
+      :events="recipientEvents"
       :loading="pending"
     />
   </div>

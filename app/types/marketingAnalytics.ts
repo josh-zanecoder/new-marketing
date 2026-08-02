@@ -24,6 +24,15 @@ export interface MarketingAnalyticsTimeseriesPoint {
 export interface MarketingAnalyticsPayload {
   summary: MarketingAnalyticsSummary
   timeseries: MarketingAnalyticsTimeseriesPoint[]
+  /** Raw events for the recipients table (same scope as summary/chart). */
+  events?: Array<{
+    email?: string
+    date?: string
+    messageId?: string
+    event?: string
+    subject?: string
+    tag?: string
+  }>
   /** Distinct `user:{email}` tags in the ownership-scoped event set (before optional user filter). */
   tagUsers?: string[]
   /** Session may pass `userEmail` to narrow analytics (tenant-wide contacts only). */

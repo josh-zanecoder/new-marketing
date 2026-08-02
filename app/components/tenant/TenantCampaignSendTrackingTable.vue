@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { brevoEventTypeTooltip } from '~/utils/brevoEventTypeTooltip'
+
 interface BrevoEmailEvent {
   email?: string
   date?: string
@@ -135,34 +137,40 @@ function eventBadgeClass(ev: string | undefined): string {
       >
         <p class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Filter by event</p>
         <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium ring-1 transition"
-            :class="
-              selectedEventTypes.length === 0
-                ? 'bg-zinc-900 text-white ring-zinc-900'
-                : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
-            "
-            @click="clearEventFilters"
-          >
-            All
-            <span class="ml-1 tabular-nums opacity-90">({{ recipientRows.length }})</span>
-          </button>
-          <button
+          <UiHoverTip :text="brevoEventTypeTooltip('all')">
+            <button
+              type="button"
+              class="rounded-full px-3 py-1 text-xs font-medium ring-1 transition"
+              :class="
+                selectedEventTypes.length === 0
+                  ? 'bg-zinc-900 text-white ring-zinc-900'
+                  : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
+              "
+              @click="clearEventFilters"
+            >
+              All
+              <span class="ml-1 tabular-nums opacity-90">({{ recipientRows.length }})</span>
+            </button>
+          </UiHoverTip>
+          <UiHoverTip
             v-for="t in availableEventTypes"
             :key="t"
-            type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium capitalize ring-1 transition"
-            :class="
-              selectedEventTypes.includes(t)
-                ? 'bg-zinc-900 text-white ring-zinc-900'
-                : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
-            "
-            @click="toggleEventFilter(t)"
+            :text="brevoEventTypeTooltip(t)"
           >
-            {{ t }}
-            <span class="ml-1 tabular-nums opacity-90">({{ recipientCountForEventType(t) }})</span>
-          </button>
+            <button
+              type="button"
+              class="rounded-full px-3 py-1 text-xs font-medium capitalize ring-1 transition"
+              :class="
+                selectedEventTypes.includes(t)
+                  ? 'bg-zinc-900 text-white ring-zinc-900'
+                  : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
+              "
+              @click="toggleEventFilter(t)"
+            >
+              {{ t }}
+              <span class="ml-1 tabular-nums opacity-90">({{ recipientCountForEventType(t) }})</span>
+            </button>
+          </UiHoverTip>
         </div>
       </div>
 
@@ -193,14 +201,18 @@ function eventBadgeClass(ev: string | undefined): string {
               </td>
               <td class="px-5 py-3.5 sm:px-6">
                 <div class="flex flex-wrap gap-1.5">
-                  <span
+                  <UiHoverTip
                     v-for="ev in row.eventTypes"
                     :key="ev"
-                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
-                    :class="eventBadgeClass(ev)"
+                    :text="brevoEventTypeTooltip(ev)"
                   >
-                    {{ ev }}
-                  </span>
+                    <span
+                      class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                      :class="eventBadgeClass(ev)"
+                    >
+                      {{ ev }}
+                    </span>
+                  </UiHoverTip>
                 </div>
               </td>
             </tr>

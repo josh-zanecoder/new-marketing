@@ -4,6 +4,7 @@ import {
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
 import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
+import { brevoEventTypeTooltip } from '~/utils/brevoEventTypeTooltip'
 
 interface BrevoEmailEvent {
   email?: string
@@ -72,12 +73,12 @@ const adminTenantFilter = defineModel<string>('adminTenantFilter', { default: ''
 const route = useRoute()
 const { data: me } = useMarketingMe()
 const selectedUserEmail = ref('')
-/** Default to Brevo send requests (empty array = All). */
+/** Prefer send requests when present; otherwise All (`[]`). */
 const DEFAULT_EVENT_TYPE_FILTER = ['requests'] as const
 const selectedEventTypes = ref<string[]>([...DEFAULT_EVENT_TYPE_FILTER])
 
-function isDefaultEventTypeFilter(sel: string[]): boolean {
-  return sel.length === 1 && sel[0] === 'requests'
+function preferredEventTypeFilter(availableTypes: string[]): string[] {
+  return availableTypes.includes('requests') ? [...DEFAULT_EVENT_TYPE_FILTER] : []
 }
 
 const {
@@ -491,6 +492,33 @@ const availableEventTypes = computed(() => {
   })
 })
 
+function isDefaultEventTypeFilter(sel: string[]): boolean {
+  const preferred = preferredEventTypeFilter(availableEventTypes.value)
+  if (preferred.length === 0) return sel.length === 0
+  return sel.length === 1 && sel[0] === 'requests'
+}
+
+/**
+ * When the date/user range no longer includes selected types (e.g. stuck on
+ * `requests` after narrowing to a day with only opens), drop missing types.
+ * If nothing remains, fall back to requests when present, else All.
+ */
+watch(
+  [availableEventTypes, isLoading],
+  ([types, loading]) => {
+    if (loading) return
+    if (!types.length) return
+
+    const sel = selectedEventTypes.value
+    if (!sel.length) return
+
+    const next = sel.filter((t) => types.includes(t))
+    if (next.length === sel.length) return
+
+    selectedEventTypes.value = next.length ? next : preferredEventTypeFilter(types)
+  }
+)
+
 /** Raw event counts (matches Brevo log totals), not unique messages. */
 const eventCountByType = computed(() => {
   const m = new Map<string, number>()
@@ -526,7 +554,7 @@ function clearEventFilters() {
 }
 
 function resetEventTypeFilter() {
-  selectedEventTypes.value = [...DEFAULT_EVENT_TYPE_FILTER]
+  selectedEventTypes.value = preferredEventTypeFilter(availableEventTypes.value)
 }
 
 const tableRows = computed((): TrackingTableRow[] => {
@@ -627,15 +655,15 @@ const emptyStateTitle = computed(() => {
 
 const emptyStateMessage = computed(() => {
   if (props.campaignId?.trim()) {
-    return 'No events for this campaign in the selected date range. Refresh will try Brevo again.'
+    return 'No events for this campaign in the selected date range. Refresh will try again.'
   }
   if (props.adminTracking && adminTenantFilter.value.trim()) {
-    return 'Click Refresh to sync this tenant from Brevo, or try another tenant.'
+    return 'Click Refresh to sync this tenant, or try another tenant.'
   }
   if (props.adminTracking) {
-    return 'Select a tenant, then click Refresh to sync events from Brevo into Marketing.'
+    return 'Select a tenant, then click Refresh to sync events into Marketing.'
   }
-  return 'Click Refresh to sync delivery, opens, and clicks from Brevo for the selected date range.'
+  return 'Click Refresh to sync delivery, opens, and clicks for the selected date range.'
 })
 
 const reportLoadFailed = computed(() => Boolean(error.value) && !isLoading.value)
@@ -695,34 +723,40 @@ const EVENT_FILTER_SKELETON_COUNT = 4
             v-else-if="availableEventTypes.length"
             class="flex max-w-full flex-wrap gap-1.5"
           >
-            <button
-              type="button"
-              class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
-              :class="
-                selectedEventTypes.length === 0
-                  ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                  : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-              "
-              @click="clearEventFilters"
-            >
-              All
-              <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
-            </button>
-            <button
+            <UiHoverTip :text="brevoEventTypeTooltip('all')">
+              <button
+                type="button"
+                class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.length === 0
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                "
+                @click="clearEventFilters"
+              >
+                All
+                <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
+              </button>
+            </UiHoverTip>
+            <UiHoverTip
               v-for="t in availableEventTypes"
               :key="t"
-              type="button"
-              class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
-              :class="
-                selectedEventTypes.includes(t)
-                  ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                  : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-              "
-              @click="toggleEventFilter(t)"
+              :text="brevoEventTypeTooltip(t)"
             >
-              {{ t }}
-              <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
-            </button>
+              <button
+                type="button"
+                class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.includes(t)
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                "
+                @click="toggleEventFilter(t)"
+              >
+                {{ t }}
+                <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
+              </button>
+            </UiHoverTip>
           </div>
         </div>
 
@@ -797,34 +831,40 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               Event type
             </p>
             <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
-                :class="
-                  selectedEventTypes.length === 0
-                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-                "
-                @click="clearEventFilters"
-              >
-                All
-                <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
-              </button>
-              <button
+              <UiHoverTip :text="brevoEventTypeTooltip('all')">
+                <button
+                  type="button"
+                  class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                  :class="
+                    selectedEventTypes.length === 0
+                      ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                      : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                  "
+                  @click="clearEventFilters"
+                >
+                  All
+                  <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
+                </button>
+              </UiHoverTip>
+              <UiHoverTip
                 v-for="t in availableEventTypes"
                 :key="t"
-                type="button"
-                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
-                :class="
-                  selectedEventTypes.includes(t)
-                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-                "
-                @click="toggleEventFilter(t)"
+                :text="brevoEventTypeTooltip(t)"
               >
-                {{ t }}
-                <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
-              </button>
+                <button
+                  type="button"
+                  class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                  :class="
+                    selectedEventTypes.includes(t)
+                      ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                      : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                  "
+                  @click="toggleEventFilter(t)"
+                >
+                  {{ t }}
+                  <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
+                </button>
+              </UiHoverTip>
             </div>
           </div>
         </template>
@@ -930,14 +970,18 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     {{ formatEventDate(row.latestIso) }}
                   </p>
                   <div class="flex flex-wrap gap-1.5 pt-1">
-                    <span
+                    <UiHoverTip
                       v-for="ev in row.eventTypesOrdered"
                       :key="ev"
-                      class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
-                      :class="eventBadgeClass(ev)"
+                      :text="brevoEventTypeTooltip(ev)"
                     >
-                      {{ ev }}
-                    </span>
+                      <span
+                        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
+                        :class="eventBadgeClass(ev)"
+                      >
+                        {{ ev }}
+                      </span>
+                    </UiHoverTip>
                   </div>
                 </div>
               </li>
@@ -1003,14 +1047,18 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     </td>
                     <td class="px-5 py-4 align-top sm:px-6">
                       <div class="flex flex-wrap gap-1.5">
-                        <span
+                        <UiHoverTip
                           v-for="ev in row.eventTypesOrdered"
                           :key="ev"
-                          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
-                          :class="eventBadgeClass(ev)"
+                          :text="brevoEventTypeTooltip(ev)"
                         >
-                          {{ ev }}
-                        </span>
+                          <span
+                            class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
+                            :class="eventBadgeClass(ev)"
+                          >
+                            {{ ev }}
+                          </span>
+                        </UiHoverTip>
                       </div>
                     </td>
                   </tr>

@@ -17,7 +17,7 @@ const analyticsPanelRef = ref<InstanceType<typeof TenantMarketingAnalyticsPanel>
           Marketing Analytics
         </h1>
         <p class="max-w-2xl text-sm text-zinc-500 sm:text-[15px]">
-          Campaign performance from Brevo delivery and engagement events—volume, delivery, opens, clicks, bounces, and unsubscribes.
+          Campaign performance from delivery and engagement events—volume, delivery, opens, clicks, bounces, and unsubscribes.
         </p>
       </div>
       <TenantRefreshIconButton

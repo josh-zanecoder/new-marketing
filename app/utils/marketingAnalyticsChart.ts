@@ -139,7 +139,8 @@ export function buildMarketingAnalyticsChartOption(
       right: 4,
       top: 44,
       bottom: 64,
-      containLabel: true
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel'
     },
     xAxis: {
       type: 'category',

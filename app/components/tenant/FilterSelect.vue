@@ -222,9 +222,8 @@ onBeforeUnmount(() => {
       </svg>
     </button>
 
-    <Teleport to="body">
+    <Teleport v-if="open" to="body">
       <div
-        v-show="open"
         ref="panelRef"
         class="fixed z-[200] flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
         :style="panelStyle"

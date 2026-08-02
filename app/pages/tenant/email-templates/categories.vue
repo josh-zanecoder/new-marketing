@@ -44,7 +44,7 @@ onMounted(() => {
           Back to templates
         </NuxtLink>
         <TenantRefreshIconButton
-          aria-label="Refresh categories"
+          label="Refresh categories"
           :pending="pending"
           @click="() => loadCategories({ force: true })"
         />
