@@ -70,6 +70,7 @@ export function resolveTrackingUserEmails(auth: unknown): string[] | null {
 /**
  * Combine session ownership with an optional `userEmail` query.
  * Contact-owned sessions cannot widen past `ownerEmails`.
+ * Selected user goes in `filterEmails` so `tagUsers` can still list the full ownership window.
  */
 export function mergeTrackingUserEmails(
   ownerEmails: string[] | null,
@@ -82,7 +83,7 @@ export function mergeTrackingUserEmails(
       requestedUserEmail &&
       ownerEmails.includes(requestedUserEmail)
     ) {
-      return { ownershipEmails: [requestedUserEmail], filterEmails: null }
+      return { ownershipEmails: ownerEmails, filterEmails: [requestedUserEmail] }
     }
     return { ownershipEmails: ownerEmails, filterEmails: null }
   }

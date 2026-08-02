@@ -173,7 +173,7 @@ export default defineEventHandler(async (event) => {
                 ...(tenantUserPhone ? { tenantUserPhone } : {}),
                 ...(tenantUserRole ? { tenantUserRole } : {}),
                 ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
-                ...(!tenantWideContacts && contactOwnerEmails?.length
+                ...(contactOwnerEmails?.length
                   ? { contactOwnerScope: contactOwnerEmails }
                   : {})
               }

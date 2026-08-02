@@ -140,6 +140,8 @@ const trackingScope = computed(() =>
 )
 
 const syncing = ref(false)
+/** Avoid re-hitting Brevo when campaign DB is empty and sync also returned nothing. */
+const autoSyncedKeys = ref(new Set<string>())
 
 const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
   () => (props.adminTracking ? '/api/v1/admin/tracking' : '/api/v1/tracking'),
@@ -161,6 +163,14 @@ const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
 )
 
 const isLoading = computed(() => pending.value || syncing.value)
+
+function campaignAutoSyncKey(): string | null {
+  const campaignId = props.campaignId?.trim()
+  if (!campaignId) return null
+  const from = effectiveDateRange.value.from?.trim() || ''
+  const to = effectiveDateRange.value.to?.trim() || ''
+  return `${trackingScope.value}|${campaignId}|${from}|${to}`
+}
 
 async function refreshFromBrevo() {
   if (syncing.value) return
@@ -200,6 +210,34 @@ async function refreshFromBrevo() {
 }
 
 defineExpose({ refresh: refreshFromBrevo, pending: isLoading })
+
+/**
+ * Campaign Logs: if Mongo has no events for this campaign/range, pull from Brevo once.
+ */
+watch(
+  [pending, data, error, () => props.campaignId, effectiveDateRange, trackingScope],
+  () => {
+    if (!import.meta.client) return
+    if (!props.campaignId?.trim()) return
+    if (pending.value || syncing.value) return
+    if (error.value) return
+
+    const report = data.value?.report
+    const events =
+      report && typeof report === 'object' && report !== null && 'events' in report
+        ? (report as { events?: unknown[] }).events
+        : undefined
+    if (!Array.isArray(events) || events.length > 0) return
+
+    const key = campaignAutoSyncKey()
+    if (!key || autoSyncedKeys.value.has(key)) return
+
+    const next = new Set(autoSyncedKeys.value)
+    next.add(key)
+    autoSyncedKeys.value = next
+    void refreshFromBrevo()
+  }
+)
 
 /** Campaign names for the Campaign column — skip on campaign-detail tracking tabs. */
 const needCampaignNames = !props.hideCampaignColumn
@@ -271,13 +309,7 @@ const userFilterOptions = computed(() => {
   const users = report.value?.tagUsers ?? []
   const selected = selectedUserEmail.value.trim().toLowerCase()
   const emails = new Set(users.map((e) => e.trim().toLowerCase()).filter(Boolean))
-  // Also surface contact-owner emails so the picker isn't empty before tags load.
-  if (me.value?.authType === 'apiKey') {
-    for (const e of me.value.contactOwnerEmails ?? []) {
-      const t = e.trim().toLowerCase()
-      if (t.includes('@')) emails.add(t)
-    }
-  }
+  // Keep the current selection visible even if it falls outside this range's tags.
   if (selected) emails.add(selected)
   return [
     { value: '', label: 'All users' },
@@ -595,7 +627,7 @@ const emptyStateTitle = computed(() => {
 
 const emptyStateMessage = computed(() => {
   if (props.campaignId?.trim()) {
-    return 'Click Refresh to pull the latest events from Brevo for this campaign, or try the main Tracking page for older activity.'
+    return 'No events for this campaign in the selected date range. Refresh will try Brevo again.'
   }
   if (props.adminTracking && adminTenantFilter.value.trim()) {
     return 'Click Refresh to sync this tenant from Brevo, or try another tenant.'
@@ -633,12 +665,9 @@ const EVENT_FILTER_SKELETON_COUNT = 4
           {{ panelHint }}
         </p>
 
-        <!-- Campaign Logs: single compact toolbar -->
-        <div
-          v-if="isCampaignScoped"
-          class="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4"
-        >
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <!-- Campaign Logs: date on its own row, event pills below (avoids overlap) -->
+        <div v-if="isCampaignScoped" class="space-y-2.5">
+          <div class="flex flex-wrap items-center gap-2">
             <TenantBrevoTrackingDateRangePicker
               v-model:preset="datePreset"
               v-model:custom-from="customDateFrom"
@@ -662,7 +691,10 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               class="h-8 w-20 rounded-full bg-zinc-100"
             />
           </div>
-          <div v-else-if="availableEventTypes.length" class="flex min-w-0 flex-wrap gap-1.5">
+          <div
+            v-else-if="availableEventTypes.length"
+            class="flex max-w-full flex-wrap gap-1.5"
+          >
             <button
               type="button"
               class="rounded-full px-3 py-1.5 text-xs font-medium capitalize ring-1 transition"

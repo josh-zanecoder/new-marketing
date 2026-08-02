@@ -228,6 +228,7 @@ defineExpose({
     <TenantBrevoSmtpDailyChart
       v-else
       :daily="stats?.daily ?? []"
+      :date-range="effectiveDateRange"
       :loading="pending && !stats"
     />
 

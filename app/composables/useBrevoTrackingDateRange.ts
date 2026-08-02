@@ -4,6 +4,7 @@ export type BrevoTrackingDatePresetId =
   | 'yesterday'
   | 'last7days'
   | 'last30days'
+  | 'last90days'
   | 'mtd'
   | 'lastMonth'
   | 'lastYear'
@@ -26,6 +27,7 @@ export const BREVO_TRACKING_DATE_PRESET_OPTIONS: {
   { id: 'yesterday', label: 'Yesterday' },
   { id: 'last7days', label: 'Last 7 Days' },
   { id: 'last30days', label: 'Last 30 Days' },
+  { id: 'last90days', label: 'Last 90 Days' },
   { id: 'mtd', label: 'This Month' },
   { id: 'lastMonth', label: 'Last Month' }
 ]
@@ -51,7 +53,7 @@ export function presetToBrevoTrackingRange(
   const ymdToday = toYmdLocal(today)
 
   if (preset === 'custom') return { from: null, to: null }
-  if (preset === 'all') {
+  if (preset === 'all' || preset === 'last90days') {
     const start = new Date(today)
     start.setDate(start.getDate() - 89)
     return { from: toYmdLocal(start), to: ymdToday }

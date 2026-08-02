@@ -13,8 +13,6 @@ export type MarketingMeApiKeyUser = {
   authType: 'apiKey'
   role: 'tenant'
   tenantName: string
-  dbName: string
-  tenantId?: string
   /** Handoff `crmAppUrl` — exact CRM/Retail URL for “Back” (includes path). */
   crmAppUrl?: string
   /** Forwarded operator id (`x-tenant-user-id` / legacy `x-crm-user-id`). */

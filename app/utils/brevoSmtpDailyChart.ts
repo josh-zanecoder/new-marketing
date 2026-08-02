@@ -6,7 +6,11 @@ import type {
   TooltipComponentOption
 } from 'echarts/components'
 import type { BrevoSmtpDailyRow } from '~/types/brevoSmtpStats'
-import { inputYmdToStartMs } from '~/composables/useBrevoTrackingDateRange'
+import {
+  inputYmdToStartMs,
+  toYmdLocal,
+  type BrevoTrackingDateRange
+} from '~/composables/useBrevoTrackingDateRange'
 
 export type BrevoSmtpDailyChartOption = ComposeOption<
   LineSeriesOption | GridComponentOption | TooltipComponentOption | LegendComponentOption
@@ -16,6 +20,62 @@ function formatAxisLabel(ymd: string): string {
   const ms = inputYmdToStartMs(ymd)
   if (ms == null) return ymd
   return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function enumerateDays(fromYmd: string, toYmd: string): string[] {
+  const fromMs = inputYmdToStartMs(fromYmd)
+  const toMs = inputYmdToStartMs(toYmd)
+  if (fromMs == null || toMs == null || fromMs > toMs) return []
+
+  const out: string[] = []
+  const cursor = new Date(fromMs)
+  const end = new Date(toMs)
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(toYmdLocal(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return out
+}
+
+function emptyDailyRow(date: string): BrevoSmtpDailyRow {
+  return {
+    date,
+    requests: 0,
+    delivered: 0,
+    hardBounces: 0,
+    softBounces: 0,
+    opens: 0,
+    uniqueOpens: 0,
+    clicks: 0,
+    uniqueClicks: 0,
+    blocked: 0,
+    invalid: 0,
+    spamReports: 0,
+    unsubscribed: 0
+  }
+}
+
+/**
+ * Brevo daily SMTP reports omit zero-activity days. Pad the selected range so the
+ * chart x-axis matches Metrics/Logs (e.g. Last 7 Days), not only "today".
+ */
+export function fillBrevoSmtpDailyRange(
+  daily: BrevoSmtpDailyRow[],
+  range: BrevoTrackingDateRange | null | undefined
+): BrevoSmtpDailyRow[] {
+  const byDate = new Map(daily.map((row) => [row.date, row]))
+
+  const from = range?.from?.trim() || null
+  const to = range?.to?.trim() || null
+  if (from && to) {
+    return enumerateDays(from, to).map((ymd) => byDate.get(ymd) ?? emptyDailyRow(ymd))
+  }
+
+  if (daily.length === 0) return []
+  const sorted = [...daily].sort((a, b) => a.date.localeCompare(b.date))
+  return enumerateDays(sorted[0].date, sorted[sorted.length - 1].date).map(
+    (ymd) => byDate.get(ymd) ?? emptyDailyRow(ymd)
+  )
 }
 
 const SERIES: Array<{
@@ -32,9 +92,11 @@ const SERIES: Array<{
 ]
 
 export function buildBrevoSmtpDailyChartOption(
-  daily: BrevoSmtpDailyRow[]
+  daily: BrevoSmtpDailyRow[],
+  range?: BrevoTrackingDateRange | null
 ): BrevoSmtpDailyChartOption {
-  const labels = daily.map((r) => r.date)
+  const rows = fillBrevoSmtpDailyRange(daily, range)
+  const labels = rows.map((r) => r.date)
   const axisLabels = labels.map(formatAxisLabel)
 
   return {
@@ -81,7 +143,7 @@ export function buildBrevoSmtpDailyChartOption(
       symbolSize: 6,
       lineStyle: { width: 2, color: s.color },
       itemStyle: { color: s.color },
-      data: daily.map((row) =>
+      data: rows.map((row) =>
         s.key === 'bounced' ? row.hardBounces + row.softBounces : Number(row[s.key] ?? 0)
       )
     }))

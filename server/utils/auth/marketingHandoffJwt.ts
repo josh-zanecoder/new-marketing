@@ -90,15 +90,6 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
     ...(crmFromJwt ? { crmAppUrl: crmFromJwt } : {})
   }
 
-  if (tenantWideContacts) {
-    return {
-      apiKey,
-      marketingTenantId: sub,
-      ...profileExtras,
-      tenantWideContacts
-    }
-  }
-
   let allowedOwnerEmails: string[] | undefined
   const rawOwners = payload.ownerEmails
   if (Array.isArray(rawOwners)) {
@@ -116,6 +107,7 @@ export function parseMarketingHandoffToken(token: string): HandoffParseResult {
     apiKey,
     marketingTenantId: sub,
     ...profileExtras,
+    ...(tenantWideContacts ? { tenantWideContacts } : {}),
     ...(allowedOwnerEmails ? { allowedOwnerEmails } : {})
   }
 }

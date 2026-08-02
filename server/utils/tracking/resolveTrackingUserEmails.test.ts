@@ -94,7 +94,7 @@ describe('mergeTrackingUserEmails', () => {
     })
   })
 
-  it('narrows forced ownership to an in-scope requested user', () => {
+  it('narrows events via filterEmails while keeping full ownership for tagUsers', () => {
     expect(
       mergeTrackingUserEmails(
         ['alice@example.com', 'bob@example.com'],
@@ -102,8 +102,8 @@ describe('mergeTrackingUserEmails', () => {
         true
       )
     ).toEqual({
-      ownershipEmails: ['bob@example.com'],
-      filterEmails: null
+      ownershipEmails: ['alice@example.com', 'bob@example.com'],
+      filterEmails: ['bob@example.com']
     })
   })
 

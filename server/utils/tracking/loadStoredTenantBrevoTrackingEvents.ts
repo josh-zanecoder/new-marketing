@@ -14,7 +14,15 @@ export interface LoadStoredTenantBrevoTrackingEventsOptions {
   fromYmd?: string | null
   toYmd?: string | null
   tzOffsetMinutes?: number | null
+  /**
+   * Forced ownership scope (`null` = tenant-wide).
+   * Empty array yields no events.
+   */
   userEmails?: string[] | null
+  /**
+   * Optional UI User filter. Narrows `events` only — `tagUsers` stays the full
+   * date/campaign/ownership window so the dropdown does not collapse to one email.
+   */
   filterUserEmails?: string[] | null
   brevoEventTypes?: BrevoEmailEventType[] | null
 }
@@ -33,6 +41,28 @@ function docToEvent(doc: {
     event: doc.event || undefined,
     tag: doc.tag || undefined
   }
+}
+
+function normalizeTagUsers(emails: string[]): string[] {
+  return [
+    ...new Set(
+      emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes('@'))
+    )
+  ].sort((a, b) => a.localeCompare(b))
+}
+
+function buildEventTypeFilter(
+  brevoEventTypes: BrevoEmailEventType[] | null
+): string[] | null {
+  if (!brevoEventTypes?.length) return null
+  const types = new Set<string>(brevoEventTypes)
+  if (types.has('requests')) types.add('sent')
+  if (types.has('opened')) {
+    types.add('unique_opened')
+    types.add('open')
+  }
+  if (types.has('clicks')) types.add('click')
+  return [...types]
 }
 
 /**
@@ -61,67 +91,75 @@ export async function loadStoredTenantBrevoTrackingEvents(
   const conn = await getTenantConnectionByDbName(dbName)
   const { BrevoTrackingEvent } = getTenantClientModels(conn)
 
-  const ownershipEmails =
-    filterUserEmails != null && filterUserEmails.length
-      ? filterUserEmails
-      : userEmails
-
-  const baseFilter: FilterQuery<Record<string, unknown>> = {}
-  if (campaignId) baseFilter.campaignId = campaignId
-  if (ownershipEmails != null) {
-    if (!ownershipEmails.length) return { events: [], tagUsers: [] }
-    baseFilter.userEmail = { $in: ownershipEmails.map((e) => e.trim().toLowerCase()) }
+  /** Date + campaign + session ownership — used for both events and tagUsers. */
+  const scopeFilter: FilterQuery<Record<string, unknown>> = {}
+  if (campaignId) scopeFilter.campaignId = campaignId
+  if (userEmails != null) {
+    if (!userEmails.length) return { events: [], tagUsers: [] }
+    scopeFilter.userEmail = { $in: userEmails.map((e) => e.trim().toLowerCase()) }
   }
 
   const bounds = parseYmdToUtcBounds(fromYmd, toYmd, tzOffsetMinutes)
   if (bounds) {
-    baseFilter.eventAt = { $gte: bounds.start, $lte: bounds.end }
+    scopeFilter.eventAt = { $gte: bounds.start, $lte: bounds.end }
   }
 
-  const eventFilter: FilterQuery<Record<string, unknown>> = { ...baseFilter }
-  if (brevoEventTypes?.length) {
-    // Include common UI aliases stored from Brevo payloads.
-    const types = new Set<string>(brevoEventTypes)
-    if (types.has('requests')) types.add('sent')
-    if (types.has('opened')) {
-      types.add('unique_opened')
-      types.add('open')
+  const eventTypeValues = buildEventTypeFilter(brevoEventTypes)
+  const hasOptionalUserFilter = filterUserEmails != null
+
+  if (hasOptionalUserFilter && !filterUserEmails.length) {
+    // Still need tagUsers for the dropdown; distinct is index-backed and cheap.
+    const distinctUsers = (await BrevoTrackingEvent.distinct(
+      'userEmail',
+      scopeFilter
+    )) as string[]
+    return { events: [], tagUsers: normalizeTagUsers(distinctUsers) }
+  }
+
+  const eventFilter: FilterQuery<Record<string, unknown>> = { ...scopeFilter }
+  if (hasOptionalUserFilter && filterUserEmails.length) {
+    eventFilter.userEmail = {
+      $in: filterUserEmails.map((e) => e.trim().toLowerCase())
     }
-    if (types.has('clicks')) types.add('click')
-    eventFilter.event = { $in: [...types] }
+  }
+  if (eventTypeValues) {
+    eventFilter.event = { $in: eventTypeValues }
   }
 
-  const docs = await BrevoTrackingEvent.find(eventFilter)
-    .select({ email: 1, date: 1, messageId: 1, event: 1, tag: 1, _id: 0 })
-    .lean()
-    .exec()
+  const eventSelect = { email: 1, date: 1, messageId: 1, event: 1, tag: 1, userEmail: 1, _id: 0 }
+
+  // No optional user filter: one find — derive tagUsers from the same docs (same cost as before).
+  // With optional user filter: parallel distinct (cheap) + narrow events find.
+  if (!hasOptionalUserFilter) {
+    const docs = await BrevoTrackingEvent.find(eventFilter)
+      .select(eventSelect)
+      .lean()
+      .exec()
+
+    let events = (docs as Array<Record<string, string>>).map(docToEvent)
+    events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
+
+    const fromField = normalizeTagUsers(
+      (docs as Array<{ userEmail?: string }>).map((d) => d.userEmail || '')
+    )
+    const tagUsers =
+      fromField.length > 0
+        ? fromField
+        : extractUserEmailsFromBrevoEvents(events)
+
+    return { events, tagUsers }
+  }
+
+  const [distinctUsers, docs] = await Promise.all([
+    BrevoTrackingEvent.distinct('userEmail', scopeFilter) as Promise<string[]>,
+    BrevoTrackingEvent.find(eventFilter).select(eventSelect).lean().exec()
+  ])
 
   let events = (docs as Array<Record<string, string>>).map(docToEvent)
   events = filterBrevoEventsByDateRange(events, fromYmd, toYmd, tzOffsetMinutes)
 
-  // tagUsers: distinct users in the date/campaign/ownership window (all event types).
-  const tagUserDocs = await BrevoTrackingEvent.find(baseFilter)
-    .select({ userEmail: 1, tag: 1, _id: 0 })
-    .lean()
-    .exec()
-  const tagUsersFromField = [
-    ...new Set(
-      (tagUserDocs as Array<{ userEmail?: string }>)
-        .map((d) => (d.userEmail || '').trim().toLowerCase())
-        .filter((e) => e.includes('@'))
-    )
-  ].sort((a, b) => a.localeCompare(b))
-
-  const tagUsers =
-    tagUsersFromField.length > 0
-      ? tagUsersFromField
-      : extractUserEmailsFromBrevoEvents(
-          (tagUserDocs as Array<{ tag?: string }>).map((d) => ({ tag: d.tag }))
-        )
-
-  if (filterUserEmails != null && !filterUserEmails.length) {
-    return { events: [], tagUsers }
+  return {
+    events,
+    tagUsers: normalizeTagUsers(distinctUsers)
   }
-
-  return { events, tagUsers }
 }

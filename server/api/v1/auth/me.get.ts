@@ -13,8 +13,6 @@ export default defineEventHandler((event) => {
         authType: 'apiKey' as const,
         role: 'tenant' as const,
         tenantName: auth.tenantName,
-        dbName: auth.dbName,
-        ...(auth.tenantId ? { tenantId: auth.tenantId } : {}),
         ...(auth.crmAppUrl ? { crmAppUrl: auth.crmAppUrl } : {}),
         ...(auth.tenantUserId ? { tenantUserId: auth.tenantUserId } : {}),
         ...(auth.tenantUserEmail ? { email: auth.tenantUserEmail } : {}),

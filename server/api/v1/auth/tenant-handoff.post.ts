@@ -71,11 +71,8 @@ export default defineEventHandler(async (event) => {
     ...(handoffPhone ? { handoffPhone } : {}),
     ...(handoffRole ? { handoffRole } : {}),
     ...(handoffCrmAppUrl ? { handoffCrmAppUrl } : {}),
-    ...(tenantWideContacts === true
-      ? { tenantWideContacts: true }
-      : allowedOwnerEmails?.length
-        ? { contactOwnerEmails: allowedOwnerEmails }
-        : {})
+    ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
+    ...(allowedOwnerEmails?.length ? { contactOwnerEmails: allowedOwnerEmails } : {})
   })
 
   const base = marketingTenantHandoffCookieBase()
