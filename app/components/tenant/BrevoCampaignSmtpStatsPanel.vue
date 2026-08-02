@@ -14,9 +14,27 @@ const props = defineProps<{
 
 type TopView = 'metrics' | 'chart'
 
+const EVENT_FILTER_TYPES = [
+  'requests',
+  'delivered',
+  'opened',
+  'clicks',
+  'hardBounces',
+  'softBounces',
+  'deferred',
+  'blocked',
+  'invalid',
+  'spam',
+  'unsubscribed',
+  'loadedByProxy',
+  'error'
+] as const
+
 const EVENTS_PAGE_SIZE = 10
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
+/** Empty = all event types. */
+const selectedEventTypes = ref<string[]>([])
 
 const {
   datePreset,
@@ -26,9 +44,14 @@ const {
   dateRangeLabel
 } = useBrevoTrackingDateRange()
 
-watch(effectiveDateRange, () => {
+watch([effectiveDateRange, selectedEventTypes], () => {
   eventsPage.value = 1
 })
+
+/** Brevo events API accepts a single type — use it when exactly one is selected. */
+const apiEventType = computed(() =>
+  selectedEventTypes.value.length === 1 ? selectedEventTypes.value[0] : ''
+)
 
 const statsQuery = computed(() => {
   const q: Record<string, string> = {
@@ -40,6 +63,7 @@ const statsQuery = computed(() => {
   const to = effectiveDateRange.value.to?.trim()
   if (from) q.from = from
   if (to) q.to = to
+  if (apiEventType.value) q.event = apiEventType.value
   return q
 })
 
@@ -61,7 +85,43 @@ const {
   metricsGridCells
 } = useBrevoSmtpStatsDashboard(stats)
 
-const eventItems = computed(() => stats.value?.events.items ?? [])
+const eventTypeCounts = computed(() => {
+  const a = stats.value?.aggregated
+  if (!a) return {} as Record<string, number>
+  return {
+    requests: a.requests,
+    delivered: a.delivered,
+    opened: a.opens,
+    clicks: a.clicks,
+    hardBounces: a.hardBounces,
+    softBounces: a.softBounces,
+    blocked: a.blocked,
+    invalid: a.invalid,
+    spam: a.spamReports,
+    unsubscribed: a.unsubscribed
+  } as Record<string, number>
+})
+
+const eventFilterOptions = computed(() => {
+  const counts = eventTypeCounts.value
+  const selected = new Set(selectedEventTypes.value)
+  return EVENT_FILTER_TYPES.filter((t) => (counts[t] ?? 0) > 0 || selected.has(t)).map((t) => ({
+    value: t,
+    label: `${formatBrevoSmtpEventLabel(t)}${(counts[t] ?? 0) > 0 ? ` (${counts[t]})` : ''}`
+  }))
+})
+
+function normalizeEventToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s-]+/g, '')
+}
+
+const eventItems = computed(() => {
+  const items = stats.value?.events.items ?? []
+  const sel = selectedEventTypes.value
+  if (!sel.length || sel.length === 1) return items
+  const wanted = new Set(sel.map(normalizeEventToken))
+  return items.filter((ev) => wanted.has(normalizeEventToken(ev.event || '')))
+})
 const eventsHasMore = computed(() => stats.value?.events.hasMore === true)
 
 function goEventsPage(page: number) {
@@ -92,7 +152,7 @@ defineExpose({
 
 <template>
   <div class="space-y-3 sm:space-y-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div
         class="inline-flex w-fit rounded-full border border-zinc-200/90 bg-zinc-100/80 p-0.5 shadow-sm shadow-zinc-950/[0.03]"
         role="tablist"
@@ -128,13 +188,26 @@ defineExpose({
         </button>
       </div>
 
-      <TenantBrevoTrackingDateRangePicker
-        v-model:preset="datePreset"
-        v-model:custom-from="customDateFrom"
-        v-model:custom-to="customDateTo"
-        :label="dateRangeLabel"
-        class="shrink-0"
-      />
+      <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
+        <div class="w-full shrink-0 sm:w-56">
+          <span class="mb-1.5 block text-xs font-medium text-zinc-500">Event type</span>
+          <TenantFilterMultiSelect
+            id="campaign-tracking-event-filter"
+            v-model="selectedEventTypes"
+            label="Filter by event type"
+            variant="tracking"
+            :options="eventFilterOptions"
+            :disabled="pending && !stats"
+          />
+        </div>
+        <TenantBrevoTrackingDateRangePicker
+          v-model:preset="datePreset"
+          v-model:custom-from="customDateFrom"
+          v-model:custom-to="customDateTo"
+          :label="dateRangeLabel"
+          class="shrink-0"
+        />
+      </div>
     </div>
 
     <p v-if="statsRangeTitleLong" class="text-xs text-zinc-500">
@@ -229,6 +302,7 @@ defineExpose({
       v-else
       :daily="stats?.daily ?? []"
       :date-range="effectiveDateRange"
+      :selected-event-types="selectedEventTypes"
       :loading="pending && !stats"
     />
 
@@ -239,7 +313,7 @@ defineExpose({
       <div class="border-b border-zinc-100 px-4 py-3 sm:px-5">
         <p class="text-sm font-semibold text-zinc-800">Messages</p>
         <p class="mt-0.5 text-xs text-zinc-500">
-          Latest Brevo events ({{ EVENTS_PAGE_SIZE }} per page)
+          Latest events ({{ EVENTS_PAGE_SIZE }} per page)
         </p>
       </div>
 

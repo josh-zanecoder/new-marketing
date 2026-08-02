@@ -9,50 +9,43 @@ defineProps<{
 
 <template>
   <section aria-label="Key metrics">
-    <div class="mb-4 flex items-end justify-between gap-3">
-      <div>
-        <h2 class="text-sm font-semibold text-zinc-900">
-          Key metrics
-        </h2>
-        <p class="mt-0.5 text-xs text-zinc-500">
-          Totals and rates for the selected filters
-        </p>
-      </div>
-    </div>
-
     <div
       v-if="loading"
-      class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 xl:grid-cols-3"
     >
       <div
         v-for="n in 6"
         :key="n"
-        class="animate-pulse rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-5"
+        class="animate-pulse rounded-xl border border-zinc-200/90 bg-white px-3.5 py-3"
       >
-        <div class="h-10 w-10 rounded-xl bg-zinc-100" />
-        <div class="mt-4 h-4 w-24 rounded bg-zinc-100" />
-        <div class="mt-3 h-8 w-20 rounded bg-zinc-100" />
+        <div class="flex items-center gap-3">
+          <div class="h-8 w-8 shrink-0 rounded-lg bg-zinc-100" />
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="h-3 w-20 rounded bg-zinc-100" />
+            <div class="h-5 w-14 rounded bg-zinc-100" />
+          </div>
+        </div>
       </div>
     </div>
 
     <div
       v-else
-      class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 xl:grid-cols-3"
     >
       <article
         v-for="card in cards"
         :key="card.id"
-        class="rounded-2xl border p-4 shadow-sm shadow-zinc-950/[0.04] ring-1 ring-zinc-900/[0.02] sm:p-5"
+        class="rounded-xl border px-3.5 py-3 shadow-sm shadow-zinc-950/[0.03] ring-1 ring-zinc-900/[0.02]"
         :class="card.cardClass"
       >
-        <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3">
           <div
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
             :class="card.iconBgClass"
           >
             <svg
               v-if="card.id === 'sent'"
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -63,7 +56,7 @@ defineProps<{
             </svg>
             <svg
               v-else-if="card.id === 'delivered'"
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -74,7 +67,7 @@ defineProps<{
             </svg>
             <svg
               v-else-if="card.id === 'open-rate'"
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -86,7 +79,7 @@ defineProps<{
             </svg>
             <svg
               v-else-if="card.id === 'click-rate'"
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -97,7 +90,7 @@ defineProps<{
             </svg>
             <svg
               v-else-if="card.id === 'bounce-rate'"
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -108,7 +101,7 @@ defineProps<{
             </svg>
             <svg
               v-else
-              class="h-5 w-5"
+              class="h-4 w-4"
               :class="card.iconClass"
               fill="none"
               stroke="currentColor"
@@ -118,17 +111,25 @@ defineProps<{
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
-        </div>
 
-        <p class="mt-3 text-xs font-medium text-zinc-500 sm:mt-4 sm:text-sm">
-          {{ card.label }}
-        </p>
-        <p class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight sm:mt-2 sm:text-3xl" :class="card.accentClass">
-          {{ card.value }}
-        </p>
-        <p v-if="card.hint" class="mt-1.5 line-clamp-2 text-[11px] text-zinc-500 sm:mt-2 sm:text-xs">
-          {{ card.hint }}
-        </p>
+          <div class="min-w-0 flex-1">
+            <p class="text-[11px] font-medium leading-tight text-zinc-500">
+              {{ card.label }}
+            </p>
+            <p
+              class="mt-0.5 text-xl font-semibold tabular-nums tracking-tight leading-none"
+              :class="card.accentClass"
+            >
+              {{ card.value }}
+            </p>
+            <p
+              v-if="card.hint"
+              class="mt-1 line-clamp-1 text-[10px] leading-tight text-zinc-500"
+            >
+              {{ card.hint }}
+            </p>
+          </div>
+        </div>
       </article>
     </div>
   </section>

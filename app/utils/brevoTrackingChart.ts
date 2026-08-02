@@ -176,18 +176,25 @@ export function buildBrevoTrackingChartOption(
   return {
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'line' }
+      axisPointer: { type: 'line' },
+      confine: true,
+      extraCssText: 'max-width: 16rem; white-space: normal; z-index: 10;'
     },
     legend: {
       show: series.length > 1,
       bottom: 0,
-      type: 'scroll'
+      type: 'scroll',
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 12,
+      textStyle: { color: '#52525b', fontSize: 11 }
     },
     grid: {
-      left: 12,
-      right: 16,
-      top: 16,
-      bottom: series.length > 1 ? 48 : 16,
+      left: 4,
+      right: 8,
+      top: 20,
+      // Extra bottom room so the first x label never collides with y=0.
+      bottom: series.length > 1 ? 56 : 36,
       outerBoundsMode: 'same',
       outerBoundsContain: 'axisLabel'
     },
@@ -196,13 +203,26 @@ export function buildBrevoTrackingChartOption(
       boundaryGap: false,
       data: labels.map(formatAxisLabel),
       axisLine: { lineStyle: { color: '#e4e4e7' } },
-      axisLabel: { color: '#71717a', fontSize: 11 }
+      axisLabel: {
+        color: '#71717a',
+        fontSize: 11,
+        hideOverlap: true,
+        margin: 12
+      },
+      axisTick: { alignWithLabel: true }
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
+      min: 0,
+      splitNumber: 4,
       splitLine: { lineStyle: { color: '#f4f4f5' } },
-      axisLabel: { color: '#71717a', fontSize: 11 }
+      axisLabel: {
+        color: '#71717a',
+        fontSize: 11,
+        margin: 10,
+        hideOverlap: true
+      }
     },
     series
   }

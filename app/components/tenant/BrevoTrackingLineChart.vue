@@ -19,8 +19,6 @@ use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent
 const DEFAULT_CARD_CLASS =
   'overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]'
 
-const CHART_BODY_CLASS = 'px-1 py-3 sm:px-4 sm:py-5'
-
 const props = withDefaults(
   defineProps<{
     events: BrevoTrackingChartEvent[]
@@ -28,7 +26,7 @@ const props = withDefaults(
     selectedEventTypes: string[]
     cardClass?: string
     loading?: boolean
-    /** Tighter header / chart height for campaign Logs. */
+    /** Tighter header / chart height for campaign Tracking. */
     compact?: boolean
   }>(),
   { loading: false, cardClass: DEFAULT_CARD_CLASS, compact: false }
@@ -61,33 +59,35 @@ const hasChartData = computed(() => {
   >
     <div
       class="border-b border-zinc-100"
-      :class="compact ? 'px-4 py-2.5 sm:px-5' : 'px-4 py-3.5 sm:px-6 sm:py-4'"
+      :class="compact ? 'px-4 py-2.5 sm:px-5' : 'px-4 py-3 sm:px-6'"
     >
-      <div class="flex items-baseline justify-between gap-3">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          Event activity
-        </h2>
-      </div>
-      <p v-if="!compact" class="mt-1 text-sm text-zinc-500">
-        Daily event counts for the selected date range and event filters.
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        Event activity
+      </h2>
+      <p v-if="!compact" class="mt-0.5 text-sm text-zinc-500">
+        Daily counts for the selected range and filters.
       </p>
     </div>
 
-    <div :class="compact ? 'px-1 py-2 sm:px-4 sm:py-3' : CHART_BODY_CLASS">
+    <div :class="compact ? 'px-1 py-2 sm:px-4 sm:py-3' : 'px-1 py-3 sm:px-4 sm:py-4'">
       <TenantChartSkeleton v-if="loading" />
 
       <ClientOnly v-else>
         <VChart
           v-if="hasChartData"
           class="w-full"
-          :class="compact ? 'h-44 min-h-[11rem] sm:h-52 sm:min-h-[13rem]' : 'h-56 min-h-[14rem] sm:h-72 sm:min-h-[18rem]'"
+          :class="
+            compact
+              ? 'h-52 min-h-[13rem] sm:h-60 sm:min-h-[15rem]'
+              : 'h-56 min-h-[14rem] sm:h-72 sm:min-h-[18rem]'
+          "
           :option="chartOption"
           autoresize
         />
         <div
           v-else
           class="flex flex-col items-center px-4 text-center sm:px-6"
-          :class="compact ? 'py-8' : 'py-12 sm:py-16'"
+          :class="compact ? 'py-8' : 'py-12 sm:py-14'"
         >
           <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -95,10 +95,10 @@ const hasChartData = computed(() => {
             </svg>
           </div>
           <p class="mt-4 text-sm font-medium text-zinc-900">
-            No chart data for this range
+            No activity in this range
           </p>
           <p class="mt-1 max-w-sm text-sm text-zinc-500">
-            Adjust the date range or event filters to see activity over time.
+            Widen the date range or choose different event types.
           </p>
         </div>
 

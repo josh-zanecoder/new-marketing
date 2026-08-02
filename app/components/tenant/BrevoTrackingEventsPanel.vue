@@ -419,7 +419,21 @@ function groupLatestIso(g: MessageEventGroup): string {
 
 function groupSubject(g: MessageEventGroup): string {
   const sub = g.events.find((e) => e.subject?.trim())?.subject
-  return (sub || g.events[0]?.subject || '').trim() || '—'
+  return (sub || g.events[0]?.subject || '').trim()
+}
+
+function displaySubject(subject: string | undefined): string {
+  return subject?.trim() || 'No subject'
+}
+
+function visibleEventTypes(types: string[]): { shown: string[]; overflow: number } {
+  const max = 3
+  if (types.length <= max) return { shown: types, overflow: 0 }
+  return { shown: types.slice(0, max), overflow: types.length - max }
+}
+
+function overflowEventTooltip(types: string[]): string {
+  return types.slice(3).join(', ')
 }
 
 function groupRecipient(g: MessageEventGroup): string {
@@ -470,8 +484,10 @@ function groupMatchesSearch(g: MessageEventGroup): boolean {
   return parts.includes(q) || parts.split(/\s+/).some((w) => w.includes(q))
 }
 
-const showSearchFilter = computed(() => !props.campaignId?.trim())
 const isCampaignScoped = computed(() => Boolean(props.campaignId?.trim()))
+const searchPlaceholder = computed(() =>
+  isCampaignScoped.value ? 'Recipient or subject…' : 'Subject, email, campaign…'
+)
 
 const groupsAfterSearchDate = computed(() =>
   messageGroups.value.filter((g) => groupMatchesDateRange(g) && groupMatchesSearch(g))
@@ -638,7 +654,7 @@ function clearAllFilters() {
 
 const hasActiveFilters = computed(
   () =>
-    (showSearchFilter.value && !!searchQuery.value.trim()) ||
+    !!searchQuery.value.trim() ||
     dateRangeFilterActive.value ||
     !isDefaultEventTypeFilter(selectedEventTypes.value) ||
     !!selectedUserEmail.value.trim() ||
@@ -687,29 +703,57 @@ const EVENT_FILTER_SKELETON_COUNT = 4
 
     <template v-else>
       <div
-        :class="isCampaignScoped ? 'mb-3' : 'mb-4 space-y-3 sm:mb-6 sm:space-y-4'"
+        :class="isCampaignScoped ? 'mb-2.5 space-y-2.5 sm:mb-3' : 'mb-3 space-y-3 sm:mb-4'"
       >
-        <p v-if="panelHint?.trim()" class="mb-3 text-sm text-zinc-500">
+        <p v-if="panelHint?.trim()" class="text-sm text-zinc-500">
           {{ panelHint }}
         </p>
 
-        <!-- Campaign Logs: date on its own row, event pills below (avoids overlap) -->
+        <!-- Campaign Tracking: search + date + clear + refresh, then event pills -->
         <div v-if="isCampaignScoped" class="space-y-2.5">
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2.5">
+            <div class="order-1 flex items-center justify-end gap-2 sm:order-3 sm:ml-auto">
+              <button
+                v-if="hasActiveFilters"
+                type="button"
+                class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-zinc-200/90 bg-white text-zinc-500 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+                aria-label="Clear filters"
+                title="Clear filters"
+                @click="clearAllFilters"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <slot name="toolbar-actions" />
+            </div>
+            <div class="relative order-2 min-w-0 w-full sm:order-1 sm:min-w-[14rem] sm:flex-1 sm:max-w-sm">
+              <label class="sr-only" for="brevo-campaign-tracking-search">Search events</label>
+              <svg
+                class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                id="brevo-campaign-tracking-search"
+                v-model="searchQuery"
+                type="search"
+                autocomplete="off"
+                :placeholder="searchPlaceholder"
+                class="w-full rounded-2xl border border-zinc-200/90 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+              >
+            </div>
             <TenantBrevoTrackingDateRangePicker
               v-model:preset="datePreset"
               v-model:custom-from="customDateFrom"
               v-model:custom-to="customDateTo"
               :label="dateRangeLabel"
+              class="order-3 w-full shrink-0 sm:order-2 sm:w-auto"
             />
-            <button
-              v-if="hasActiveFilters"
-              type="button"
-              class="inline-flex h-9 items-center rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-              @click="clearAllFilters"
-            >
-              Clear
-            </button>
           </div>
 
           <div v-if="isLoading" class="flex flex-wrap gap-1.5 animate-pulse">
@@ -722,6 +766,8 @@ const EVENT_FILTER_SKELETON_COUNT = 4
           <div
             v-else-if="availableEventTypes.length"
             class="flex max-w-full flex-wrap gap-1.5"
+            role="group"
+            aria-label="Event type"
           >
             <UiHoverTip :text="brevoEventTypeTooltip('all')">
               <button
@@ -730,7 +776,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                 :class="
                   selectedEventTypes.length === 0
                     ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                    : 'bg-transparent text-zinc-500 ring-zinc-200/80 hover:bg-zinc-50 hover:text-zinc-700'
                 "
                 @click="clearEventFilters"
               >
@@ -760,13 +806,10 @@ const EVENT_FILTER_SKELETON_COUNT = 4
           </div>
         </div>
 
-        <!-- Main Tracking / admin: stacked filters -->
+        <!-- Main Tracking / admin: one filter bar, then pills -->
         <template v-else>
-          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
-            <div
-              v-if="showSearchFilter"
-              class="relative min-w-0 w-full sm:w-80 md:w-96"
-            >
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+            <div class="relative min-w-0 w-full sm:min-w-[16rem] sm:flex-1 sm:max-w-md">
               <label class="sr-only" for="brevo-tracking-search">Search events</label>
               <svg class="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-zinc-400 sm:left-4 sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -776,8 +819,8 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                 v-model="searchQuery"
                 type="search"
                 autocomplete="off"
-                placeholder="Subject, email, campaign…"
-                class="w-full rounded-2xl border border-zinc-200/90 bg-white py-3 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:pl-12"
+                :placeholder="searchPlaceholder"
+                class="w-full rounded-2xl border border-zinc-200/90 bg-white py-2.5 pl-11 pr-4 text-sm text-zinc-900 shadow-sm shadow-zinc-950/5 placeholder:text-zinc-400 transition focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 sm:py-3 sm:pl-12"
               >
             </div>
             <TenantFilterSelect
@@ -788,7 +831,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               variant="tracking"
               :options="adminTenantFilterOptions"
             />
-            <div v-if="showUserFilter" class="w-full shrink-0 sm:w-72">
+            <div v-if="showUserFilter" class="w-full shrink-0 sm:w-64 md:w-72">
               <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
               <TenantFilterSelect
                 id="tenant-tracking-user-filter"
@@ -810,62 +853,63 @@ const EVENT_FILTER_SKELETON_COUNT = 4
             <button
               v-if="hasActiveFilters"
               type="button"
-              class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
+              class="inline-flex h-11 w-11 shrink-0 items-center justify-center self-end rounded-2xl border border-zinc-200/90 bg-white text-zinc-500 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+              aria-label="Clear filters"
+              title="Clear filters"
               @click="clearAllFilters"
             >
-              Clear filters
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
-          <div v-if="isLoading" class="animate-pulse">
-            <div class="mb-2 h-3 w-16 rounded bg-zinc-100" />
-            <div class="flex flex-wrap gap-2">
-              <div
-                v-for="n in EVENT_FILTER_SKELETON_COUNT"
-                :key="`filter-${n}`"
-                class="h-8 w-24 rounded-full bg-zinc-100"
-              />
-            </div>
+          <div v-if="isLoading" class="flex flex-wrap gap-2 animate-pulse">
+            <div
+              v-for="n in EVENT_FILTER_SKELETON_COUNT"
+              :key="`filter-${n}`"
+              class="h-8 w-24 rounded-full bg-zinc-100"
+            />
           </div>
-          <div v-else-if="availableEventTypes.length">
-            <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Event type
-            </p>
-            <div class="flex flex-wrap gap-2">
-              <UiHoverTip :text="brevoEventTypeTooltip('all')">
-                <button
-                  type="button"
-                  class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
-                  :class="
-                    selectedEventTypes.length === 0
-                      ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                      : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-                  "
-                  @click="clearEventFilters"
-                >
-                  All
-                  <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
-                </button>
-              </UiHoverTip>
-              <UiHoverTip
-                v-for="t in availableEventTypes"
-                :key="t"
-                :text="brevoEventTypeTooltip(t)"
+          <div
+            v-else-if="availableEventTypes.length"
+            class="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Event type"
+          >
+            <UiHoverTip :text="brevoEventTypeTooltip('all')">
+              <button
+                type="button"
+                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.length === 0
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-transparent text-zinc-500 ring-zinc-200/80 hover:bg-zinc-50 hover:text-zinc-700'
+                "
+                @click="clearEventFilters"
               >
-                <button
-                  type="button"
-                  class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
-                  :class="
-                    selectedEventTypes.includes(t)
-                      ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
-                      : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
-                  "
-                  @click="toggleEventFilter(t)"
-                >
-                  {{ t }}
-                  <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
-                </button>
-              </UiHoverTip>
-            </div>
+                All
+                <span class="ml-1 tabular-nums opacity-90">({{ totalEventCount }})</span>
+              </button>
+            </UiHoverTip>
+            <UiHoverTip
+              v-for="t in availableEventTypes"
+              :key="t"
+              :text="brevoEventTypeTooltip(t)"
+            >
+              <button
+                type="button"
+                class="rounded-full px-3.5 py-1.5 text-xs font-medium capitalize ring-1 transition"
+                :class="
+                  selectedEventTypes.includes(t)
+                    ? 'bg-zinc-900 text-white ring-zinc-900 shadow-sm'
+                    : 'bg-white text-zinc-700 ring-zinc-200/90 shadow-sm shadow-zinc-950/5 hover:bg-zinc-50'
+                "
+                @click="toggleEventFilter(t)"
+              >
+                {{ t }}
+                <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
+              </button>
+            </UiHoverTip>
           </div>
         </template>
       </div>
@@ -887,7 +931,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
         </p>
       </div>
 
-      <div v-else class="space-y-2 sm:space-y-3" :aria-busy="isLoading">
+      <div v-else class="space-y-2" :aria-busy="isLoading">
         <TenantBrevoTrackingLineChart
           :events="events"
           :date-range="effectiveDateRange"
@@ -912,11 +956,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
               No messages match your filters
             </p>
             <p class="mt-1 text-sm text-zinc-500">
-              {{
-                showSearchFilter
-                  ? 'Try clearing search, widening the date range, or resetting event types.'
-                  : 'Try widening the date range or resetting event types.'
-              }}
+              Try clearing search, widening the date range, or resetting event types.
             </p>
             <button
               v-if="hasActiveFilters"
@@ -942,6 +982,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                       v-if="row.campaignId && isMongoId(row.campaignId)"
                       :to="campaignPagePath(row.campaignId)"
                       class="mt-0.5 block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2"
+                      :title="campaignDisplayLabel(row.campaignId)"
                       @click="onCampaignLinkClick($event, row.campaignId)"
                     >
                       {{ campaignDisplayLabel(row.campaignId) }}
@@ -949,7 +990,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     <p v-else-if="row.campaignId" class="mt-0.5 truncate font-mono text-xs text-zinc-700">
                       {{ row.campaignId }}
                     </p>
-                    <p v-else class="mt-0.5 text-sm text-zinc-400">—</p>
+                    <p v-else class="mt-0.5 text-sm text-zinc-400">No campaign</p>
                   </div>
                   <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Recipient</p>
@@ -962,16 +1003,19 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                   </div>
                   <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Subject</p>
-                    <p class="mt-0.5 line-clamp-2 text-sm text-zinc-900">
-                      {{ row.subject }}
+                    <p
+                      class="mt-0.5 line-clamp-2 text-sm"
+                      :class="row.subject ? 'text-zinc-900' : 'text-zinc-400'"
+                    >
+                      {{ displaySubject(row.subject) }}
                     </p>
                   </div>
                   <p class="text-xs tabular-nums text-zinc-500">
                     {{ formatEventDate(row.latestIso) }}
                   </p>
-                  <div class="flex flex-wrap gap-1.5 pt-1">
+                  <div class="flex flex-wrap items-center gap-1.5 pt-1">
                     <UiHoverTip
-                      v-for="ev in row.eventTypesOrdered"
+                      v-for="ev in visibleEventTypes(row.eventTypesOrdered).shown"
                       :key="ev"
                       :text="brevoEventTypeTooltip(ev)"
                     >
@@ -980,6 +1024,14 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                         :class="eventBadgeClass(ev)"
                       >
                         {{ ev }}
+                      </span>
+                    </UiHoverTip>
+                    <UiHoverTip
+                      v-if="visibleEventTypes(row.eventTypesOrdered).overflow"
+                      :text="overflowEventTooltip(row.eventTypesOrdered)"
+                    >
+                      <span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200/80 sm:text-xs">
+                        +{{ visibleEventTypes(row.eventTypesOrdered).overflow }}
                       </span>
                     </UiHoverTip>
                   </div>
@@ -1018,12 +1070,12 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     :key="`${row.messageId}-${idx}`"
                     class="transition-colors hover:bg-zinc-50/80"
                   >
-                    <td class="px-5 py-4 align-top sm:px-6" :class="{ hidden: hideCampaignColumn }">
+                    <td class="max-w-[12rem] px-5 py-4 align-top sm:px-6" :class="{ hidden: hideCampaignColumn }">
                       <NuxtLink
                         v-if="row.campaignId && isMongoId(row.campaignId)"
                         :to="campaignPagePath(row.campaignId)"
-                        class="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
-                        :title="row.campaignId"
+                        class="block truncate font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 transition hover:text-zinc-600 hover:decoration-zinc-400"
+                        :title="campaignDisplayLabel(row.campaignId)"
                         @click="onCampaignLinkClick($event, row.campaignId)"
                       >
                         {{ campaignDisplayLabel(row.campaignId) }}
@@ -1031,7 +1083,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                       <span v-else-if="row.campaignId" class="font-mono text-xs text-zinc-700">{{
                         row.campaignId
                       }}</span>
-                      <span v-else class="text-zinc-400">—</span>
+                      <span v-else class="text-zinc-400">No campaign</span>
                     </td>
                     <td
                       class="max-w-[14rem] break-all px-5 py-4 align-top text-sm text-zinc-800 sm:px-6"
@@ -1039,16 +1091,22 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                     >
                       {{ row.recipientEmail?.trim() || '—' }}
                     </td>
-                    <td class="max-w-xs px-5 py-4 align-top text-zinc-900 sm:px-6" :title="row.subject">
-                      <span class="line-clamp-2 leading-snug">{{ row.subject }}</span>
+                    <td
+                      class="max-w-xs px-5 py-4 align-top sm:px-6"
+                      :title="row.subject || undefined"
+                    >
+                      <span
+                        class="line-clamp-2 leading-snug"
+                        :class="row.subject ? 'text-zinc-900' : 'text-zinc-400'"
+                      >{{ displaySubject(row.subject) }}</span>
                     </td>
                     <td class="whitespace-nowrap px-5 py-4 align-top tabular-nums text-zinc-600 sm:px-6">
                       {{ formatEventDate(row.latestIso) }}
                     </td>
                     <td class="px-5 py-4 align-top sm:px-6">
-                      <div class="flex flex-wrap gap-1.5">
+                      <div class="flex flex-wrap items-center gap-1.5">
                         <UiHoverTip
-                          v-for="ev in row.eventTypesOrdered"
+                          v-for="ev in visibleEventTypes(row.eventTypesOrdered).shown"
                           :key="ev"
                           :text="brevoEventTypeTooltip(ev)"
                         >
@@ -1057,6 +1115,14 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                             :class="eventBadgeClass(ev)"
                           >
                             {{ ev }}
+                          </span>
+                        </UiHoverTip>
+                        <UiHoverTip
+                          v-if="visibleEventTypes(row.eventTypesOrdered).overflow"
+                          :text="overflowEventTooltip(row.eventTypesOrdered)"
+                        >
+                          <span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200/80">
+                            +{{ visibleEventTypes(row.eventTypesOrdered).overflow }}
                           </span>
                         </UiHoverTip>
                       </div>

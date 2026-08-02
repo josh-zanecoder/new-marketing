@@ -3,9 +3,10 @@ import {
   getSmtpDailyReport,
   getTransactionalEmailEventReport
 } from '@server/services/brevo.service'
+import type { BrevoEmailEventType } from '@server/utils/tracking/brevoEventType'
 import {
   buildBrevoEventReportTagToken,
-  buildBrevoEventReportTagsFilter
+  joinBrevoEventReportTags
 } from './brevoEventReportQuery'
 
 /** Match ratesheet: Brevo daily reports page size; values above ~10 can return out_of_range. */
@@ -252,26 +253,44 @@ function mapStatsEventItem(raw: Record<string, unknown>): BrevoSmtpStatsEventIte
 
 /**
  * Ratesheet-style Brevo stats: aggregated SMTP report + daily series + paginated events.
- * Pass `campaignId` to scope with Brevo tag `campaign:{id}`.
+ * Pass `campaignId` and/or `userEmail` to scope Brevo tags (`campaign:…`, `user:…`).
+ * Without those, scopes to `db:{dbName}` for tenant-wide analytics.
  */
 export async function fetchBrevoTransactionalStats(params: {
   dbName: string
   campaignId?: string | null
+  userEmail?: string | null
+  /** Brevo events API single-type filter (omit = all types). */
+  eventType?: BrevoEmailEventType | null
   startDate: string
   endDate: string
   eventsLimit?: number
   eventsOffset?: number
 }): Promise<{ stats?: BrevoTransactionalStatsResult; error?: string }> {
   const range = clampBrevoSmtpDateRange(params.startDate, params.endDate)
+  const campaignId = params.campaignId?.trim() || null
+  const userEmail = params.userEmail?.trim().toLowerCase() || null
+  const userTag = userEmail?.includes('@') ? `user:${userEmail}` : null
+
+  // Aggregated + daily accept a single tag. Prefer campaign, then user, then db.
   const tag =
     buildBrevoEventReportTagToken({
-      campaignId: params.campaignId,
-      dbName: params.campaignId ? null : params.dbName
-    }) ?? undefined
-  const tagsFilter = buildBrevoEventReportTagsFilter({
-    campaignId: params.campaignId,
-    dbName: params.campaignId ? null : params.dbName
-  })
+      campaignId,
+      dbName: campaignId || userTag ? null : params.dbName
+    }) ??
+    userTag ??
+    undefined
+
+  // Events can take multiple tags (AND). Include campaign/user when set; else db.
+  const eventTagTokens: string[] = []
+  if (campaignId) eventTagTokens.push(`campaign:${campaignId}`)
+  if (userTag) eventTagTokens.push(userTag)
+  if (!eventTagTokens.length) {
+    const dbTag = buildBrevoEventReportTagToken({ dbName: params.dbName })
+    if (dbTag) eventTagTokens.push(dbTag)
+  }
+  const tagsFilter = joinBrevoEventReportTags(eventTagTokens)
+
   const eventsLimit = Math.min(
     BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
     Math.max(1, params.eventsLimit ?? BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX)
@@ -300,6 +319,7 @@ export async function fetchBrevoTransactionalStats(params: {
         startDate: range.startDate,
         endDate: range.endDate,
         ...(tagsFilter ? { tags: tagsFilter } : {}),
+        ...(params.eventType ? { event: params.eventType } : {}),
         sort: 'desc'
       },
       { dbName: params.dbName }

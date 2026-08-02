@@ -23,7 +23,7 @@ function onRefreshTracking() {
           Tracking
         </h1>
         <p class="max-w-2xl text-sm text-zinc-500 sm:text-[15px]">
-          Delivery, opens, and clicks from your sends—stored in this workspace. Click Refresh to pull the latest.
+          Delivery, opens, and clicks from your sends—stored in this workspace.
         </p>
       </div>
       <TenantRefreshIconButton

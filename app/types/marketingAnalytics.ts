@@ -21,21 +21,31 @@ export interface MarketingAnalyticsTimeseriesPoint {
   unsubscribeRate: number | null
 }
 
+export interface MarketingAnalyticsEventItem {
+  email: string
+  date: string
+  subject: string
+  messageId: string
+  event: string
+  from: string
+  reason?: string
+}
+
 export interface MarketingAnalyticsPayload {
   summary: MarketingAnalyticsSummary
   timeseries: MarketingAnalyticsTimeseriesPoint[]
-  /** Raw events for the recipients table (same scope as summary/chart). */
-  events?: Array<{
-    email?: string
-    date?: string
-    messageId?: string
-    event?: string
-    subject?: string
-    tag?: string
-  }>
-  /** Distinct `user:{email}` tags in the ownership-scoped event set (before optional user filter). */
+  /** Ratesheet-style paginated raw events (not aggregated by recipient). */
+  events?: {
+    items: MarketingAnalyticsEventItem[]
+    limit: number
+    offset: number
+    hasMore: boolean
+  }
+  /** Counts for event-type filter pills (from aggregated SMTP report). */
+  eventTypeCounts?: Record<string, number>
+  /** Distinct owner emails for the User filter (session scope). */
   tagUsers?: string[]
-  /** Session may pass `userEmail` to narrow analytics (tenant-wide contacts only). */
+  /** Session may pass `userEmail` to narrow analytics. */
   allowUserTagFilter?: boolean
 }
 

@@ -1,12 +1,34 @@
 <script setup lang="ts">
 import { useBrevoTrackingDateRange } from '~/composables/useBrevoTrackingDateRange'
 import type { MarketingAnalyticsPayload } from '~/types/marketingAnalytics'
-import {
-  buildMarketingAnalyticsMetricCards
-} from '~/utils/marketingAnalyticsChart'
+import { buildMarketingAnalyticsMetricCards } from '~/utils/marketingAnalyticsChart'
+import { formatBrevoSmtpEventLabel } from '~/utils/brevoSmtpEventFormat'
+
+const EVENTS_PAGE_SIZE = 10
+
+type TopView = 'metrics' | 'chart'
+
+const EVENT_FILTER_TYPES = [
+  'requests',
+  'delivered',
+  'opened',
+  'clicks',
+  'hardBounces',
+  'softBounces',
+  'deferred',
+  'blocked',
+  'invalid',
+  'spam',
+  'unsubscribed',
+  'loadedByProxy',
+  'error'
+] as const
 
 const selectedCampaignId = ref('')
 const selectedUserEmail = ref('')
+const selectedEventType = ref('')
+const eventsPage = ref(1)
+const topView = ref<TopView>('metrics')
 
 const { data: me } = useMarketingMe()
 
@@ -20,10 +42,6 @@ const {
   resetDateRange
 } = useBrevoTrackingDateRange()
 
-/**
- * Whether the session may pass `?userEmail=` (before analytics loads).
- * Matches server `resolveTrackingUserScope`.
- */
 const canFilterByUserTag = computed(() => {
   if (me.value?.authType === 'firebase') {
     return me.value.role === 'tenant'
@@ -34,18 +52,26 @@ const canFilterByUserTag = computed(() => {
   return owners === 0 || owners > 1
 })
 
+watch([effectiveDateRange, selectedCampaignId, selectedUserEmail, selectedEventType], () => {
+  eventsPage.value = 1
+})
+
 const analyticsQuery = computed(() => {
-  const query: Record<string, string> = {}
+  const query: Record<string, string> = {
+    eventsLimit: String(EVENTS_PAGE_SIZE),
+    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE)
+  }
   const range = effectiveDateRange.value
   if (range.from) query.from = range.from
   if (range.to) query.to = range.to
-  query.tzOffset = String(new Date().getTimezoneOffset())
   const campaignId = selectedCampaignId.value.trim()
   if (campaignId) query.campaignId = campaignId
   if (canFilterByUserTag.value) {
     const userEmail = selectedUserEmail.value.trim().toLowerCase()
     if (userEmail) query.userEmail = userEmail
   }
+  const eventType = selectedEventType.value.trim()
+  if (eventType) query.event = eventType
   return query
 })
 
@@ -58,6 +84,7 @@ const { data, error, pending, refresh } = useFetch<{ analytics: MarketingAnalyti
   {
     query: analyticsQuery,
     key: fetchKey,
+    watch: [analyticsQuery],
     getCachedData: (key, nuxtApp) =>
       nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]
   }
@@ -68,7 +95,35 @@ const { data: campaignsListData } = useTenantCampaignsList()
 const analytics = computed(() => data.value?.analytics)
 const metricCards = computed(() => buildMarketingAnalyticsMetricCards(analytics.value?.summary))
 const timeseries = computed(() => analytics.value?.timeseries ?? [])
-const recipientEvents = computed(() => analytics.value?.events ?? [])
+const eventItems = computed(() => analytics.value?.events?.items ?? [])
+const eventsHasMore = computed(() => analytics.value?.events?.hasMore === true)
+const eventTypeCounts = computed(() => analytics.value?.eventTypeCounts ?? {})
+
+const eventFilterOptions = computed(() => {
+  const counts = eventTypeCounts.value
+  const selected = selectedEventType.value.trim()
+  const types = EVENT_FILTER_TYPES.filter((t) => (counts[t] ?? 0) > 0 || t === selected)
+  return [
+    { value: '', label: 'All events' },
+    ...types.map((t) => ({
+      value: t,
+      label: `${formatBrevoSmtpEventLabel(t)} (${counts[t] ?? 0})`
+    }))
+  ]
+})
+
+const messagesRangeTitle = computed(() => {
+  const from = effectiveDateRange.value.from
+  const to = effectiveDateRange.value.to
+  if (!from || !to) return 'Latest events (10 per page)'
+  const a = new Date(`${from}T12:00:00`)
+  const b = new Date(`${to}T12:00:00`)
+  const o: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' }
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
+    return 'Latest events (10 per page)'
+  }
+  return `Messages from ${a.toLocaleDateString('en-US', o)} to ${b.toLocaleDateString('en-US', o)}`
+})
 
 const campaignOptions = computed(() => {
   const list = campaignsListData.value?.campaigns ?? []
@@ -108,71 +163,71 @@ const hasActiveFilters = computed(
   () =>
     dateRangeFilterActive.value ||
     !!selectedCampaignId.value.trim() ||
-    !!selectedUserEmail.value.trim()
+    !!selectedUserEmail.value.trim() ||
+    !!selectedEventType.value.trim()
 )
 
 function clearAllFilters() {
   resetDateRange()
   selectedCampaignId.value = ''
   selectedUserEmail.value = ''
+  selectedEventType.value = ''
+  eventsPage.value = 1
 }
 
-defineExpose({ refresh, pending })
+defineExpose({
+  refresh: async () => {
+    eventsPage.value = 1
+    await refresh()
+  },
+  pending
+})
 </script>
 
 <template>
-  <div class="space-y-6 sm:space-y-8">
+  <div class="space-y-5 sm:space-y-6">
     <section
-      class="rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm shadow-zinc-950/[0.04] sm:p-5"
+      class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4"
       aria-label="Analytics filters"
     >
-      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="min-w-0">
-          <h2 class="text-sm font-semibold text-zinc-900">
-            Filters
-          </h2>
-          <p class="mt-0.5 text-xs text-zinc-500">
-            Refine metrics, chart, and recipients
-          </p>
-        </div>
-        <div v-if="hasActiveFilters" class="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            class="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
-            @click="clearAllFilters"
-          >
-            Clear filters
-          </button>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-5">
-        <div class="w-full shrink-0 lg:w-auto">
-          <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
-          <TenantBrevoTrackingDateRangePicker
-            v-model:preset="datePreset"
-            v-model:custom-from="customDateFrom"
-            v-model:custom-to="customDateTo"
-            :label="dateRangeLabel"
-          />
-        </div>
-
-        <TenantMarketingAnalyticsCampaignPicker
-          v-model="selectedCampaignId"
-          :campaigns="campaignOptions"
+      <div class="w-full shrink-0 sm:w-auto">
+        <span class="mb-1.5 block text-xs font-medium text-zinc-500">Date range</span>
+        <TenantBrevoTrackingDateRangePicker
+          v-model:preset="datePreset"
+          v-model:custom-from="customDateFrom"
+          v-model:custom-to="customDateTo"
+          :label="dateRangeLabel"
         />
-
-        <div v-if="showUserFilter" class="w-full shrink-0 lg:w-72">
-          <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
-          <TenantFilterSelect
-            id="marketing-analytics-user-filter"
-            v-model="selectedUserEmail"
-            label="Filter by user"
-            variant="tracking"
-            :options="userFilterOptions"
-          />
-        </div>
       </div>
+
+      <TenantMarketingAnalyticsCampaignPicker
+        v-model="selectedCampaignId"
+        :campaigns="campaignOptions"
+      />
+
+      <div v-if="showUserFilter" class="w-full shrink-0 sm:w-72">
+        <span class="mb-1.5 block text-xs font-medium text-zinc-500">User</span>
+        <TenantFilterSelect
+          id="marketing-analytics-user-filter"
+          v-model="selectedUserEmail"
+          label="Filter by user"
+          variant="tracking"
+          :options="userFilterOptions"
+        />
+      </div>
+
+      <button
+        v-if="hasActiveFilters"
+        type="button"
+        class="inline-flex h-11 w-11 shrink-0 items-center justify-center self-end rounded-2xl border border-zinc-200/90 bg-white text-zinc-500 shadow-sm shadow-zinc-950/5 transition hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+        aria-label="Clear filters"
+        title="Clear filters"
+        @click="clearAllFilters"
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </section>
 
     <div
@@ -186,17 +241,75 @@ defineExpose({ refresh, pending })
       <span class="min-w-0 leading-relaxed">{{ error.message || 'Failed to load analytics' }}</span>
     </div>
 
-    <TenantMarketingAnalyticsMetricCards :cards="metricCards" :loading="pending" />
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div
+        class="inline-flex w-fit rounded-full border border-zinc-200/90 bg-zinc-100/80 p-0.5 shadow-sm shadow-zinc-950/[0.03]"
+        role="tablist"
+        aria-label="Analytics view"
+      >
+        <button
+          type="button"
+          role="tab"
+          class="rounded-full px-3.5 py-1.5 text-sm font-medium transition"
+          :class="
+            topView === 'metrics'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'
+          "
+          :aria-selected="topView === 'metrics'"
+          @click="topView = 'metrics'"
+        >
+          Metrics
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="rounded-full px-3.5 py-1.5 text-sm font-medium transition"
+          :class="
+            topView === 'chart'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'
+          "
+          :aria-selected="topView === 'chart'"
+          @click="topView = 'chart'"
+        >
+          Daily activity
+        </button>
+      </div>
 
-    <TenantMarketingAnalyticsChart
-      :points="timeseries"
-      :date-range="effectiveDateRange"
+      <div class="w-full shrink-0 sm:w-56">
+        <span class="mb-1.5 block text-xs font-medium text-zinc-500">Event type</span>
+        <TenantFilterSelect
+          id="marketing-analytics-event-filter"
+          v-model="selectedEventType"
+          label="Filter by event type"
+          variant="tracking"
+          :options="eventFilterOptions"
+        />
+      </div>
+    </div>
+
+    <TenantMarketingAnalyticsMetricCards
+      v-if="topView === 'metrics'"
+      :cards="metricCards"
       :loading="pending"
     />
 
-    <TenantMarketingAnalyticsRecipientsTable
-      :events="recipientEvents"
+    <TenantMarketingAnalyticsChart
+      v-else
+      :points="timeseries"
+      :date-range="effectiveDateRange"
       :loading="pending"
+      :event-type="selectedEventType"
+    />
+
+    <TenantMarketingAnalyticsMessagesTable
+      :items="eventItems"
+      :loading="pending"
+      :page="eventsPage"
+      :has-more="eventsHasMore"
+      :range-title="messagesRangeTitle"
+      @update:page="eventsPage = $event"
     />
   </div>
 </template>

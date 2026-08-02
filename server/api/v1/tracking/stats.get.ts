@@ -1,3 +1,4 @@
+import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
 import {
   normalizeCampaignIdQuery,
   normalizeYmdQuery
@@ -59,12 +60,15 @@ export default defineEventHandler(async (event) => {
     Math.max(1, normalizeNonNegIntQuery(event, 'eventsLimit', BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX) || BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX)
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
+  const q = getQuery(event) as Record<string, unknown>
+  const eventType = normalizeBrevoEventTypesQuery(q.event ?? q.events)[0] ?? null
 
   const { stats, error } = await fetchBrevoTransactionalStats({
     dbName,
     campaignId,
     startDate: fromYmd,
     endDate: toYmd,
+    eventType,
     eventsLimit,
     eventsOffset
   })

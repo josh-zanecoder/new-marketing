@@ -82,43 +82,94 @@ const SERIES: Array<{
   key: keyof BrevoSmtpDailyRow | 'bounced'
   label: string
   color: string
+  /** Event-type tokens that keep this series visible when filtering. */
+  eventTypes: string[]
 }> = [
-  { key: 'requests', label: 'Sent', color: '#9333ea' },
-  { key: 'delivered', label: 'Delivered', color: '#38bdf8' },
-  { key: 'opens', label: 'Estimated openers', color: '#0f766e' },
-  { key: 'uniqueOpens', label: 'Trackable openers', color: '#22c55e' },
-  { key: 'uniqueClicks', label: 'Unique clickers', color: '#eab308' },
-  { key: 'bounced', label: 'Bounced', color: '#ef4444' }
+  { key: 'requests', label: 'Sent', color: '#9333ea', eventTypes: ['requests', 'sent', 'request'] },
+  { key: 'delivered', label: 'Delivered', color: '#38bdf8', eventTypes: ['delivered'] },
+  {
+    key: 'opens',
+    label: 'Estimated openers',
+    color: '#0f766e',
+    eventTypes: ['opened', 'open', 'opens', 'loadedByProxy', 'loaded_by_proxy']
+  },
+  {
+    key: 'uniqueOpens',
+    label: 'Trackable openers',
+    color: '#22c55e',
+    eventTypes: ['unique_opened', 'uniqueopened', 'firstopening', 'opened', 'open']
+  },
+  {
+    key: 'uniqueClicks',
+    label: 'Unique clickers',
+    color: '#eab308',
+    eventTypes: ['clicks', 'click', 'clicked', 'unique_clicks', 'uniqueclicks']
+  },
+  {
+    key: 'bounced',
+    label: 'Bounced',
+    color: '#ef4444',
+    eventTypes: [
+      'hardBounces',
+      'softBounces',
+      'hard_bounces',
+      'soft_bounces',
+      'hardbounces',
+      'softbounces',
+      'bounces',
+      'bounce'
+    ]
+  }
 ]
+
+function normalizeEventToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s-]+/g, '')
+}
+
+function seriesMatchesEventFilter(
+  series: (typeof SERIES)[number],
+  selectedEventTypes: string[] | null | undefined
+): boolean {
+  if (!selectedEventTypes?.length) return true
+  const wanted = new Set(selectedEventTypes.map(normalizeEventToken).filter(Boolean))
+  return series.eventTypes.some((t) => wanted.has(normalizeEventToken(t)))
+}
 
 export function buildBrevoSmtpDailyChartOption(
   daily: BrevoSmtpDailyRow[],
-  range?: BrevoTrackingDateRange | null
+  range?: BrevoTrackingDateRange | null,
+  selectedEventTypes?: string[] | null
 ): BrevoSmtpDailyChartOption {
   const rows = fillBrevoSmtpDailyRange(daily, range)
   const labels = rows.map((r) => r.date)
   const axisLabels = labels.map(formatAxisLabel)
+  const visible = SERIES.filter((s) => seriesMatchesEventFilter(s, selectedEventTypes))
+  const legendBottom = visible.length > 1
 
   return {
-    color: SERIES.map((s) => s.color),
+    color: visible.map((s) => s.color),
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'line' }
+      axisPointer: { type: 'line' },
+      // Keep the tip inside the plot so it never covers the bottom legend.
+      confine: true,
+      extraCssText: 'max-width: 16rem; white-space: normal; z-index: 10;'
     },
     legend: {
       type: 'scroll',
-      top: 0,
+      bottom: 0,
       left: 0,
       right: 0,
       itemWidth: 10,
       itemHeight: 10,
+      itemGap: 12,
       textStyle: { color: '#52525b', fontSize: 11 }
     },
     grid: {
       left: 8,
       right: 12,
-      top: 36,
-      bottom: 8,
+      top: 16,
+      bottom: legendBottom ? 56 : 32,
       outerBoundsMode: 'same',
       outerBoundsContain: 'axisLabel'
     },
@@ -136,7 +187,7 @@ export function buildBrevoSmtpDailyChartOption(
       axisLabel: { color: '#71717a', fontSize: 11 },
       splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.25)' } }
     },
-    series: SERIES.map((s) => ({
+    series: visible.map((s) => ({
       name: s.label,
       type: 'line' as const,
       smooth: 0.25,

@@ -791,7 +791,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             :aria-current="campaignViewTab === 'tracking' ? 'page' : undefined"
             @click="setCampaignViewTab('tracking')"
           >
-            Tracking
+            Statistics
           </button>
           <button
             type="button"
@@ -804,7 +804,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
             :aria-current="campaignViewTab === 'logs' ? 'page' : undefined"
             @click="setCampaignViewTab('logs')"
           >
-            Logs
+            Tracking
           </button>
         </nav>
 
@@ -964,10 +964,10 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         <section
           v-if="campaignViewTab === 'tracking'"
           class="min-w-0 space-y-3 sm:space-y-4"
-          aria-label="Campaign send tracking"
+          aria-label="Campaign statistics"
         >
           <div class="flex items-center justify-between gap-3">
-            <h2 class="text-sm font-semibold text-zinc-900">Tracking</h2>
+            <h2 class="text-sm font-semibold text-zinc-900">Statistics</h2>
             <TenantRefreshIconButton
               label="Refresh campaign statistics"
               :pending="campaignStatsPending"
@@ -984,24 +984,23 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 
         <section
           v-if="campaignViewTab === 'logs'"
-          class="min-w-0 space-y-3 sm:space-y-4"
-          aria-label="Campaign send logs"
+          class="min-w-0"
+          aria-label="Campaign tracking"
         >
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-sm font-semibold text-zinc-900">Message logs</h2>
-            <TenantRefreshIconButton
-              label="Refresh campaign logs"
-              :pending="campaignLogsPending"
-              @click="onRefreshCampaignLogs"
-            />
-          </div>
-
           <TenantBrevoTrackingEventsPanel
             ref="campaignTrackingPanelRef"
             :key="`campaign-tracking-${id}`"
             :campaign-id="id"
             hide-campaign-column
-          />
+          >
+            <template #toolbar-actions>
+              <TenantRefreshIconButton
+                label="Refresh campaign tracking"
+                :pending="campaignLogsPending"
+                @click="onRefreshCampaignLogs"
+              />
+            </template>
+          </TenantBrevoTrackingEventsPanel>
         </section>
       </div>
     </div>

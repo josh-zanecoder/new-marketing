@@ -101,11 +101,140 @@ export function expandPointsForChart(
 
 export function buildMarketingAnalyticsChartOption(
   points: MarketingAnalyticsTimeseriesPoint[],
-  range?: BrevoTrackingDateRange
+  range?: BrevoTrackingDateRange,
+  eventType?: string | null
 ): MarketingAnalyticsChartOption {
   const chartPoints = expandPointsForChart(points, range)
   const labels = chartPoints.map((point) => formatAxisLabel(point.date))
   const useSmoothLines = chartPoints.length >= 3
+  const focus = (eventType || '').trim().toLowerCase().replace(/[_\s-]+/g, '')
+
+  type SeriesKey =
+    | 'emailsSent'
+    | 'emailsDelivered'
+    | 'openRate'
+    | 'clickRate'
+    | 'bounceRate'
+    | 'unsubscribeRate'
+
+  const allSeries: SeriesKey[] = [
+    'emailsSent',
+    'emailsDelivered',
+    'openRate',
+    'clickRate',
+    'bounceRate',
+    'unsubscribeRate'
+  ]
+
+  function seriesKeysForEvent(): SeriesKey[] {
+    if (!focus) return allSeries
+    if (focus === 'requests' || focus === 'sent' || focus === 'request') return ['emailsSent']
+    if (focus === 'delivered') return ['emailsDelivered']
+    if (focus.includes('open') || focus === 'loadedbyproxy') return ['openRate']
+    if (focus.includes('click')) return ['clickRate']
+    if (focus.includes('bounce')) return ['bounceRate']
+    if (focus.includes('unsub')) return ['unsubscribeRate']
+    return ['emailsSent']
+  }
+
+  const activeKeys = new Set(seriesKeysForEvent())
+  const showVolumeAxis =
+    activeKeys.has('emailsSent') || activeKeys.has('emailsDelivered')
+  const showRateAxis =
+    activeKeys.has('openRate') ||
+    activeKeys.has('clickRate') ||
+    activeKeys.has('bounceRate') ||
+    activeKeys.has('unsubscribeRate')
+
+  const seriesDefs: Array<{
+    key: SeriesKey
+    name: string
+    color: string
+    area?: string
+    rate?: boolean
+    values: number[]
+  }> = [
+    {
+      key: 'emailsSent',
+      name: 'Emails sent',
+      color: '#0284c7',
+      area: 'rgba(2, 132, 199, 0.08)',
+      values: chartPoints.map((point) => point.emailsSent)
+    },
+    {
+      key: 'emailsDelivered',
+      name: 'Emails delivered',
+      color: '#059669',
+      area: 'rgba(5, 150, 105, 0.08)',
+      values: chartPoints.map((point) => point.emailsDelivered)
+    },
+    {
+      key: 'openRate',
+      name: 'Open rate',
+      color: '#7c3aed',
+      rate: true,
+      values: chartPoints.map((point) => point.openRate ?? 0)
+    },
+    {
+      key: 'clickRate',
+      name: 'Click rate',
+      color: '#d97706',
+      rate: true,
+      values: chartPoints.map((point) => point.clickRate ?? 0)
+    },
+    {
+      key: 'bounceRate',
+      name: 'Bounce rate',
+      color: '#dc2626',
+      rate: true,
+      values: chartPoints.map((point) => point.bounceRate ?? 0)
+    },
+    {
+      key: 'unsubscribeRate',
+      name: 'Unsubscribe rate',
+      color: '#52525b',
+      rate: true,
+      values: chartPoints.map((point) => point.unsubscribeRate ?? 0)
+    }
+  ]
+
+  const visible = seriesDefs.filter((s) => activeKeys.has(s.key))
+  const rateAxisIndex = showVolumeAxis ? 1 : 0
+
+  const yAxis: YAXisComponentOption[] = []
+  if (showVolumeAxis) {
+    yAxis.push({
+      type: 'value',
+      name: 'Emails',
+      nameLocation: 'end',
+      nameGap: 12,
+      nameTextStyle: { color: '#71717a', fontSize: 11, align: 'left' },
+      minInterval: 1,
+      splitLine: { lineStyle: { color: '#f4f4f5' } },
+      axisLabel: { color: '#71717a', fontSize: 11 }
+    })
+  }
+  if (showRateAxis) {
+    yAxis.push({
+      type: 'value',
+      name: 'Rate %',
+      nameLocation: 'end',
+      nameGap: 12,
+      nameTextStyle: {
+        color: '#71717a',
+        fontSize: 11,
+        align: showVolumeAxis ? 'right' : 'left'
+      },
+      min: 0,
+      max: 100,
+      splitLine: { show: !showVolumeAxis, lineStyle: { color: '#f4f4f5' } },
+      axisLabel: {
+        color: '#71717a',
+        fontSize: 11,
+        formatter: (value: number) => `${value}%`
+      }
+    })
+  }
 
   return {
     tooltip: {
@@ -116,15 +245,14 @@ export function buildMarketingAnalyticsChartOption(
         const idx = items[0]?.dataIndex ?? 0
         const point = chartPoints[idx]
         if (!point) return ''
-        const lines = [
-          `<strong>${formatAxisLabel(point.date)}</strong>`,
-          `Emails sent: ${point.emailsSent.toLocaleString()}`,
-          `Emails delivered: ${point.emailsDelivered.toLocaleString()}`,
-          `Open rate: ${formatPercent(point.openRate)}`,
-          `Click rate: ${formatPercent(point.clickRate)}`,
-          `Bounce rate: ${formatPercent(point.bounceRate)}`,
-          `Unsubscribe rate: ${formatPercent(point.unsubscribeRate)}`
-        ]
+        const lines = [`<strong>${formatAxisLabel(point.date)}</strong>`]
+        for (const s of visible) {
+          if (s.rate) {
+            lines.push(`${s.name}: ${formatPercent(point[s.key] as number | null)}`)
+          } else {
+            lines.push(`${s.name}: ${(point[s.key] as number).toLocaleString()}`)
+          }
+        }
         return lines.join('<br/>')
       }
     },
@@ -138,7 +266,7 @@ export function buildMarketingAnalyticsChartOption(
       left: 4,
       right: 4,
       top: 44,
-      bottom: 64,
+      bottom: visible.length > 1 ? 64 : 40,
       outerBoundsMode: 'same',
       outerBoundsContain: 'axisLabel'
     },
@@ -149,101 +277,19 @@ export function buildMarketingAnalyticsChartOption(
       axisLine: { lineStyle: { color: '#e4e4e7' } },
       axisLabel: { color: '#71717a', fontSize: 11 }
     },
-    yAxis: [
-      {
-        type: 'value',
-        name: 'Emails',
-        nameLocation: 'end',
-        nameGap: 12,
-        nameTextStyle: { color: '#71717a', fontSize: 11, align: 'left' },
-        minInterval: 1,
-        splitLine: { lineStyle: { color: '#f4f4f5' } },
-        axisLabel: { color: '#71717a', fontSize: 11 }
-      },
-      {
-        type: 'value',
-        name: 'Rate %',
-        nameLocation: 'end',
-        nameGap: 12,
-        nameTextStyle: { color: '#71717a', fontSize: 11, align: 'right' },
-        min: 0,
-        max: 100,
-        splitLine: { show: false },
-        axisLabel: {
-          color: '#71717a',
-          fontSize: 11,
-          formatter: (value: number) => `${value}%`
-        }
-      }
-    ],
-    series: [
-      {
-        name: 'Emails sent',
-        type: 'line',
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#0284c7' },
-        areaStyle: { color: 'rgba(2, 132, 199, 0.08)' },
-        data: chartPoints.map((point) => point.emailsSent)
-      },
-      {
-        name: 'Emails delivered',
-        type: 'line',
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#059669' },
-        areaStyle: { color: 'rgba(5, 150, 105, 0.08)' },
-        data: chartPoints.map((point) => point.emailsDelivered)
-      },
-      {
-        name: 'Open rate',
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#7c3aed' },
-        data: chartPoints.map((point) => point.openRate ?? 0)
-      },
-      {
-        name: 'Click rate',
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#d97706' },
-        data: chartPoints.map((point) => point.clickRate ?? 0)
-      },
-      {
-        name: 'Bounce rate',
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#dc2626' },
-        data: chartPoints.map((point) => point.bounceRate ?? 0)
-      },
-      {
-        name: 'Unsubscribe rate',
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: useSmoothLines,
-        showSymbol: labels.length <= 31,
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#52525b' },
-        data: chartPoints.map((point) => point.unsubscribeRate ?? 0)
-      }
-    ]
+    yAxis,
+    series: visible.map((s) => ({
+      name: s.name,
+      type: 'line' as const,
+      ...(s.rate && showVolumeAxis ? { yAxisIndex: rateAxisIndex } : {}),
+      smooth: useSmoothLines,
+      showSymbol: labels.length <= 31,
+      symbolSize: 6,
+      lineStyle: { width: 2 },
+      itemStyle: { color: s.color },
+      ...(s.area ? { areaStyle: { color: s.area } } : {}),
+      data: s.values
+    }))
   }
 }
 
