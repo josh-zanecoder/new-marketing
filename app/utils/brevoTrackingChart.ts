@@ -11,6 +11,7 @@ import {
   isoMatchesBrevoTrackingRange,
   toYmdLocal
 } from '~/composables/useBrevoTrackingDateRange'
+import { formatBrevoSmtpEventLabel } from '~/utils/brevoSmtpEventFormat'
 
 export type BrevoTrackingChartOption = ComposeOption<
   LineSeriesOption | GridComponentOption | TooltipComponentOption | LegendComponentOption
@@ -151,7 +152,7 @@ export function buildBrevoTrackingChartOption(
   const series: LineSeriesOption[] =
     seriesTypes.length > 0
       ? seriesTypes.map((type) => ({
-          name: type,
+          name: formatBrevoSmtpEventLabel(type),
           type: 'line',
           smooth: useSmoothLines,
           showSymbol: labels.length <= 31,

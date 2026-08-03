@@ -3,6 +3,9 @@ import {
   getSmtpDailyReport,
   getTransactionalEmailEventReport
 } from '@server/services/brevo.service'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import { BREVO_SMTP_STATS_CACHE_TTL_SECONDS } from '@server/models/tenant/BrevoSmtpStatsCache'
+import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import type { BrevoEmailEventType } from '@server/utils/tracking/brevoEventType'
 import {
   buildBrevoEventReportTagToken,
@@ -18,6 +21,10 @@ export const BREVO_SMTP_REPORTS_PAGE_LIMIT = 10
 export const BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX = 10
 /** Daily SMTP report windows stay within Brevo’s practical range. */
 const BREVO_SMTP_DAILY_MAX_RANGE_DAYS = 30
+/** Same window as the email-events report cache / Mongo TTL. */
+export const BREVO_SMTP_STATS_CACHE_TTL_MS = BREVO_SMTP_STATS_CACHE_TTL_SECONDS * 1000
+/** Max inclusive days for stats/analytics API ranges (matches UI). */
+export const BREVO_SMTP_STATS_MAX_RANGE_DAYS = BREVO_SMTP_DAILY_MAX_RANGE_DAYS
 
 export type BrevoSmtpAggregatedRates = {
   deliveredPct: number
@@ -107,6 +114,26 @@ export function clampBrevoSmtpDateRange(
   const end = endDate > todayUtc ? todayUtc : endDate
   const start = startDate > end ? end : startDate
   return { startDate: start, endDate: end }
+}
+
+/** Cap inclusive day span (pull start forward). Default max matches Brevo daily windows. */
+export function clampBrevoSmtpStatsRangeToMaxDays(
+  startDate: string,
+  endDate: string,
+  maxDays: number = BREVO_SMTP_STATS_MAX_RANGE_DAYS
+): { startDate: string; endDate: string } {
+  const start = parseYmdUtc(startDate)
+  const end = parseYmdUtc(endDate)
+  if (!start || !end || maxDays < 1 || start.getTime() > end.getTime()) {
+    return { startDate, endDate }
+  }
+  const spanDays =
+    Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
+  if (spanDays <= maxDays) return { startDate, endDate }
+  return {
+    startDate: addUtcDays(endDate, -(maxDays - 1)),
+    endDate
+  }
 }
 
 function parseYmdUtc(ymd: string): Date | null {
@@ -251,12 +278,7 @@ function mapStatsEventItem(raw: Record<string, unknown>): BrevoSmtpStatsEventIte
   }
 }
 
-/**
- * Ratesheet-style Brevo stats: aggregated SMTP report + daily series + paginated events.
- * Pass `campaignId` and/or `userEmail` to scope Brevo tags (`campaign:…`, `user:…`).
- * Without those, scopes to `db:{dbName}` for tenant-wide analytics.
- */
-export async function fetchBrevoTransactionalStats(params: {
+export type FetchBrevoTransactionalStatsParams = {
   dbName: string
   campaignId?: string | null
   userEmail?: string | null
@@ -266,10 +288,92 @@ export async function fetchBrevoTransactionalStats(params: {
   endDate: string
   eventsLimit?: number
   eventsOffset?: number
-}): Promise<{ stats?: BrevoTransactionalStatsResult; error?: string }> {
-  const range = clampBrevoSmtpDateRange(params.startDate, params.endDate)
-  const campaignId = params.campaignId?.trim() || null
-  const userEmail = params.userEmail?.trim().toLowerCase() || null
+  /** When true, skip Mongo cache (Refresh). */
+  skipCache?: boolean
+}
+
+export function buildBrevoSmtpStatsCacheKey(params: {
+  dbName: string
+  campaignId: string | null
+  userEmail: string | null
+  startDate: string
+  endDate: string
+  eventType: string | null
+  eventsLimit: number
+  eventsOffset: number
+}): string {
+  return [
+    params.dbName.trim(),
+    params.campaignId?.trim() || '-',
+    params.userEmail?.trim().toLowerCase() || '-',
+    params.startDate,
+    params.endDate,
+    params.eventType?.trim() || '-',
+    String(params.eventsLimit),
+    String(params.eventsOffset),
+    'v1'
+  ].join('|')
+}
+
+function isValidCachedStats(value: unknown): value is BrevoTransactionalStatsResult {
+  if (!value || typeof value !== 'object') return false
+  const s = value as BrevoTransactionalStatsResult
+  return Boolean(s.aggregated && Array.isArray(s.daily) && s.events && Array.isArray(s.events.items))
+}
+
+async function loadCachedSmtpStats(
+  dbName: string,
+  cacheKey: string,
+  nowMs: number = Date.now()
+): Promise<BrevoTransactionalStatsResult | null> {
+  try {
+    const conn = await getTenantConnectionByDbName(dbName)
+    const { BrevoSmtpStatsCache } = getTenantClientModels(conn)
+    const doc = (await BrevoSmtpStatsCache.findOne({ cacheKey }).lean().exec()) as {
+      stats?: unknown
+      fetchedAt?: Date | string
+    } | null
+    if (!doc?.fetchedAt || !isValidCachedStats(doc.stats)) return null
+    const fetchedAtMs = new Date(doc.fetchedAt).getTime()
+    if (!Number.isFinite(fetchedAtMs) || fetchedAtMs + BREVO_SMTP_STATS_CACHE_TTL_MS <= nowMs) {
+      return null
+    }
+    return doc.stats
+  } catch (err) {
+    console.warn('[brevo-smtp-stats-cache] read failed:', err)
+    return null
+  }
+}
+
+async function saveCachedSmtpStats(
+  dbName: string,
+  cacheKey: string,
+  stats: BrevoTransactionalStatsResult
+): Promise<void> {
+  try {
+    const conn = await getTenantConnectionByDbName(dbName)
+    const { BrevoSmtpStatsCache } = getTenantClientModels(conn)
+    const fetchedAt = new Date()
+    await BrevoSmtpStatsCache.updateOne(
+      { cacheKey },
+      { $set: { cacheKey, stats, fetchedAt } },
+      { upsert: true }
+    ).exec()
+  } catch (err) {
+    console.warn('[brevo-smtp-stats-cache] write failed:', err)
+  }
+}
+
+async function fetchBrevoTransactionalStatsUncached(
+  params: FetchBrevoTransactionalStatsParams & {
+    range: { startDate: string; endDate: string }
+    campaignId: string | null
+    userEmail: string | null
+    eventsLimit: number
+    eventsOffset: number
+  }
+): Promise<{ stats?: BrevoTransactionalStatsResult; error?: string }> {
+  const { range, campaignId, userEmail, eventsLimit, eventsOffset } = params
   const userTag = userEmail?.includes('@') ? `user:${userEmail}` : null
 
   // Aggregated + daily accept a single tag. Prefer campaign, then user, then db.
@@ -290,12 +394,6 @@ export async function fetchBrevoTransactionalStats(params: {
     if (dbTag) eventTagTokens.push(dbTag)
   }
   const tagsFilter = joinBrevoEventReportTags(eventTagTokens)
-
-  const eventsLimit = Math.min(
-    BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
-    Math.max(1, params.eventsLimit ?? BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX)
-  )
-  const eventsOffset = Math.max(0, params.eventsOffset ?? 0)
 
   const [aggResult, dailyResult, eventsResult] = await Promise.all([
     getAggregatedSmtpReport(
@@ -358,4 +456,78 @@ export async function fetchBrevoTransactionalStats(params: {
       }
     }
   }
+}
+
+const inflightFetches = new Map<
+  string,
+  Promise<{ stats?: BrevoTransactionalStatsResult; error?: string }>
+>()
+
+/**
+ * Ratesheet-style Brevo stats: aggregated SMTP report + daily series + paginated events.
+ * Pass `campaignId` and/or `userEmail` to scope Brevo tags (`campaign:…`, `user:…`).
+ * Without those, scopes to `db:{dbName}` for tenant-wide analytics.
+ *
+ * Successful responses are cached in tenant Mongo for 5 minutes (same as events report TTL).
+ * Pass `skipCache: true` on Refresh.
+ */
+export async function fetchBrevoTransactionalStats(
+  params: FetchBrevoTransactionalStatsParams
+): Promise<{ stats?: BrevoTransactionalStatsResult; error?: string }> {
+  const clampedToToday = clampBrevoSmtpDateRange(params.startDate, params.endDate)
+  const range = clampedToToday
+  const campaignId = params.campaignId?.trim() || null
+  const userEmail = params.userEmail?.trim().toLowerCase() || null
+  const eventType = params.eventType?.trim() || null
+  const eventsLimit = Math.min(
+    BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
+    Math.max(1, params.eventsLimit ?? BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX)
+  )
+  const eventsOffset = Math.max(0, params.eventsOffset ?? 0)
+
+  const cacheKey = buildBrevoSmtpStatsCacheKey({
+    dbName: params.dbName,
+    campaignId,
+    userEmail,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    eventType,
+    eventsLimit,
+    eventsOffset
+  })
+
+  if (!params.skipCache) {
+    const cached = await loadCachedSmtpStats(params.dbName, cacheKey)
+    if (cached) return { stats: cached }
+
+    const existing = inflightFetches.get(cacheKey)
+    if (existing) return existing
+  }
+
+  const promise = (async () => {
+    const result = await fetchBrevoTransactionalStatsUncached({
+      ...params,
+      range,
+      campaignId,
+      userEmail,
+      eventType: eventType as BrevoEmailEventType | null,
+      eventsLimit,
+      eventsOffset
+    })
+    if (result.stats) {
+      await saveCachedSmtpStats(params.dbName, cacheKey, result.stats)
+    }
+    return result
+  })().finally(() => {
+    inflightFetches.delete(cacheKey)
+  })
+
+  if (!params.skipCache) {
+    inflightFetches.set(cacheKey, promise)
+  }
+  return promise
+}
+
+export function clearBrevoSmtpStatsInflightForTests(): void {
+  inflightFetches.clear()
 }

@@ -3,6 +3,7 @@ import { VueDatePicker } from '@vuepic/vue-datepicker'
 import {
   BREVO_TRACKING_DATE_PRESET_OPTIONS,
   BREVO_TRACKING_DEFAULT_PRESET,
+  clampBrevoTrackingRangeToMaxDays,
   presetToBrevoTrackingRange,
   toYmdLocal,
   type BrevoTrackingDatePresetId,
@@ -13,9 +14,23 @@ const datePreset = defineModel<BrevoTrackingDatePresetId>('preset', { required: 
 const customDateFrom = defineModel<string>('customFrom', { required: true })
 const customDateTo = defineModel<string>('customTo', { required: true })
 
-const props = defineProps<{
-  label: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    label: string
+    /** Override sidebar presets (e.g. SMTP stats without Last 90 Days). */
+    presetOptions?: readonly { id: BrevoTrackingDatePresetId; label: string }[]
+    /** Max inclusive days for a custom selection. */
+    maxRangeDays?: number
+  }>(),
+  {
+    presetOptions: undefined,
+    maxRangeDays: undefined
+  }
+)
+
+const presetOptions = computed(
+  () => props.presetOptions ?? BREVO_TRACKING_DATE_PRESET_OPTIONS
+)
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
@@ -30,6 +45,11 @@ const maxSelectableDate = computed(() => {
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 })
+
+/** VueDatePicker max-range is the max gap in days between start and end (exclusive of start). */
+const vueMaxRange = computed(() =>
+  props.maxRangeDays != null && props.maxRangeDays > 1 ? props.maxRangeDays - 1 : undefined
+)
 
 const rangeInputValue = computed(() => props.label)
 const useDualCalendars = computed(() => !isCompact.value)
@@ -105,10 +125,17 @@ function selectPreset(id: BrevoTrackingDatePresetId) {
 function applyCalendarRange(dates: [Date, Date] | null) {
   if (!dates?.[0] || !dates?.[1]) return
   if (dates[0].getTime() > dates[1].getTime()) return
-  customDateFrom.value = toYmdLocal(dates[0])
-  customDateTo.value = toYmdLocal(dates[1])
+  let from = toYmdLocal(dates[0])
+  let to = toYmdLocal(dates[1])
+  if (props.maxRangeDays != null) {
+    const clamped = clampBrevoTrackingRangeToMaxDays({ from, to }, props.maxRangeDays)
+    from = clamped.from || from
+    to = clamped.to || to
+  }
+  customDateFrom.value = from
+  customDateTo.value = to
   datePreset.value = 'custom'
-  calendarRange.value = dates
+  calendarRange.value = ymdRangeToDates(from, to)
 }
 
 function onRangeEnd(dates: [Date, Date] | null) {
@@ -273,7 +300,7 @@ onBeforeUnmount(() => {
           aria-label="Date presets"
         >
           <button
-            v-for="option in BREVO_TRACKING_DATE_PRESET_OPTIONS"
+            v-for="option in presetOptions"
             :key="option.id"
             type="button"
             class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium transition md:w-full"
@@ -313,6 +340,7 @@ onBeforeUnmount(() => {
               :enable-time-picker="false"
               :time-picker="false"
               :max-date="maxSelectableDate"
+              :max-range="vueMaxRange"
               :month-change-on-scroll="false"
               :week-start="1"
               inline

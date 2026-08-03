@@ -35,10 +35,25 @@ function normalizeNonNegIntQuery(
   return n
 }
 
+function normalizeSkipCacheQuery(event: Parameters<typeof getQuery>[0]): boolean {
+  const q = getQuery(event) as Record<string, unknown>
+  const raw = q.skipCache ?? q.refresh
+  const s =
+    typeof raw === 'string'
+      ? raw.trim().toLowerCase()
+      : Array.isArray(raw) && typeof raw[0] === 'string'
+        ? raw[0].trim().toLowerCase()
+        : raw === true
+          ? 'true'
+          : ''
+  return s === '1' || s === 'true' || s === 'yes'
+}
+
 /**
  * Ratesheet / campaign-Tracking style analytics:
  * Brevo aggregated SMTP + daily series + small paginated events page.
  * Does not load the full Tracking event dump.
+ * Uses a 5-minute Mongo cache (pass skipCache/refresh to bypass).
  */
 export default defineEventHandler(async (event) => {
   const { dbName, userEmails, allowUserTagFilter } =
@@ -104,6 +119,7 @@ export default defineEventHandler(async (event) => {
     )
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
+  const skipCache = normalizeSkipCacheQuery(event)
 
   const { stats, error } = await fetchBrevoTransactionalStats({
     dbName,
@@ -113,7 +129,8 @@ export default defineEventHandler(async (event) => {
     startDate: fromYmd,
     endDate: toYmd,
     eventsLimit,
-    eventsOffset
+    eventsOffset,
+    skipCache
   })
 
   if (error || !stats) {

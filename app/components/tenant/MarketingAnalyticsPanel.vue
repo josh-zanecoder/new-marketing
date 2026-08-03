@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { useBrevoTrackingDateRange } from '~/composables/useBrevoTrackingDateRange'
+import {
+  BREVO_SMTP_STATS_DATE_PRESET_OPTIONS,
+  useBrevoTrackingDateRange
+} from '~/composables/useBrevoTrackingDateRange'
 import type { MarketingAnalyticsPayload } from '~/types/marketingAnalytics'
 import { buildMarketingAnalyticsMetricCards } from '~/utils/marketingAnalyticsChart'
 import { formatBrevoSmtpEventLabel } from '~/utils/brevoSmtpEventFormat'
@@ -29,6 +32,8 @@ const selectedUserEmail = ref('')
 const selectedEventType = ref('')
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
+/** Set during Refresh so the next request bypasses the Mongo stats cache. */
+const skipCacheOnce = ref(false)
 
 const { data: me } = useMarketingMe()
 
@@ -72,6 +77,7 @@ const analyticsQuery = computed(() => {
   }
   const eventType = selectedEventType.value.trim()
   if (eventType) query.event = eventType
+  if (skipCacheOnce.value) query.skipCache = '1'
   return query
 })
 
@@ -178,7 +184,12 @@ function clearAllFilters() {
 defineExpose({
   refresh: async () => {
     eventsPage.value = 1
-    await refresh()
+    skipCacheOnce.value = true
+    try {
+      await refresh()
+    } finally {
+      skipCacheOnce.value = false
+    }
   },
   pending
 })
@@ -197,6 +208,7 @@ defineExpose({
           v-model:custom-from="customDateFrom"
           v-model:custom-to="customDateTo"
           :label="dateRangeLabel"
+          :preset-options="BREVO_SMTP_STATS_DATE_PRESET_OPTIONS"
         />
       </div>
 

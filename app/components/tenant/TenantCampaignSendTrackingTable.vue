@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { brevoEventTypeTooltip } from '~/utils/brevoEventTypeTooltip'
+import { formatBrevoSmtpEventLabel } from '~/utils/brevoSmtpEventFormat'
 
 interface BrevoEmailEvent {
   email?: string
@@ -167,7 +168,7 @@ function eventBadgeClass(ev: string | undefined): string {
               "
               @click="toggleEventFilter(t)"
             >
-              {{ t }}
+              {{ formatBrevoSmtpEventLabel(t) }}
               <span class="ml-1 tabular-nums opacity-90">({{ recipientCountForEventType(t) }})</span>
             </button>
           </UiHoverTip>
@@ -210,7 +211,7 @@ function eventBadgeClass(ev: string | undefined): string {
                       class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
                       :class="eventBadgeClass(ev)"
                     >
-                      {{ ev }}
+                      {{ formatBrevoSmtpEventLabel(ev) }}
                     </span>
                   </UiHoverTip>
                 </div>

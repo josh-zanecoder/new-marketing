@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useBrevoSmtpStatsDashboard } from '~/composables/useBrevoSmtpStatsDashboard'
-import { useBrevoTrackingDateRange } from '~/composables/useBrevoTrackingDateRange'
+import {
+  BREVO_SMTP_STATS_DATE_PRESET_OPTIONS,
+  BREVO_SMTP_STATS_MAX_RANGE_DAYS,
+  useBrevoTrackingDateRange
+} from '~/composables/useBrevoTrackingDateRange'
 import type { BrevoTransactionalStats } from '~/types/brevoSmtpStats'
 import {
   brevoSmtpEventBadgeClass,
@@ -33,8 +37,10 @@ const EVENT_FILTER_TYPES = [
 const EVENTS_PAGE_SIZE = 10
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
-/** Empty = all event types. */
-const selectedEventTypes = ref<string[]>([])
+/** Empty = all event types. Brevo events API accepts one type at a time. */
+const selectedEventType = ref('')
+/** Set during Refresh so the next request bypasses the Mongo stats cache. */
+const skipCacheOnce = ref(false)
 
 const {
   datePreset,
@@ -42,16 +48,11 @@ const {
   customDateTo,
   effectiveDateRange,
   dateRangeLabel
-} = useBrevoTrackingDateRange()
+} = useBrevoTrackingDateRange({ maxRangeDays: BREVO_SMTP_STATS_MAX_RANGE_DAYS })
 
-watch([effectiveDateRange, selectedEventTypes], () => {
+watch([effectiveDateRange, selectedEventType], () => {
   eventsPage.value = 1
 })
-
-/** Brevo events API accepts a single type — use it when exactly one is selected. */
-const apiEventType = computed(() =>
-  selectedEventTypes.value.length === 1 ? selectedEventTypes.value[0] : ''
-)
 
 const statsQuery = computed(() => {
   const q: Record<string, string> = {
@@ -63,7 +64,9 @@ const statsQuery = computed(() => {
   const to = effectiveDateRange.value.to?.trim()
   if (from) q.from = from
   if (to) q.to = to
-  if (apiEventType.value) q.event = apiEventType.value
+  const eventType = selectedEventType.value.trim()
+  if (eventType) q.event = eventType
+  if (skipCacheOnce.value) q.skipCache = '1'
   return q
 })
 
@@ -104,24 +107,23 @@ const eventTypeCounts = computed(() => {
 
 const eventFilterOptions = computed(() => {
   const counts = eventTypeCounts.value
-  const selected = new Set(selectedEventTypes.value)
-  return EVENT_FILTER_TYPES.filter((t) => (counts[t] ?? 0) > 0 || selected.has(t)).map((t) => ({
-    value: t,
-    label: `${formatBrevoSmtpEventLabel(t)}${(counts[t] ?? 0) > 0 ? ` (${counts[t]})` : ''}`
-  }))
+  const selected = selectedEventType.value.trim()
+  const types = EVENT_FILTER_TYPES.filter((t) => (counts[t] ?? 0) > 0 || t === selected)
+  return [
+    { value: '', label: 'All events' },
+    ...types.map((t) => ({
+      value: t,
+      label: `${formatBrevoSmtpEventLabel(t)}${(counts[t] ?? 0) > 0 ? ` (${counts[t]})` : ''}`
+    }))
+  ]
 })
 
-function normalizeEventToken(value: string): string {
-  return value.trim().toLowerCase().replace(/[_\s-]+/g, '')
-}
-
-const eventItems = computed(() => {
-  const items = stats.value?.events.items ?? []
-  const sel = selectedEventTypes.value
-  if (!sel.length || sel.length === 1) return items
-  const wanted = new Set(sel.map(normalizeEventToken))
-  return items.filter((ev) => wanted.has(normalizeEventToken(ev.event || '')))
+const chartSelectedEventTypes = computed(() => {
+  const t = selectedEventType.value.trim()
+  return t ? [t] : []
 })
+
+const eventItems = computed(() => stats.value?.events.items ?? [])
 const eventsHasMore = computed(() => stats.value?.events.hasMore === true)
 
 function goEventsPage(page: number) {
@@ -144,7 +146,12 @@ const FILL_CLASS: Record<string, string> = {
 defineExpose({
   refresh: async () => {
     eventsPage.value = 1
-    await refresh()
+    skipCacheOnce.value = true
+    try {
+      await refresh()
+    } finally {
+      skipCacheOnce.value = false
+    }
   },
   pending
 })
@@ -191,9 +198,9 @@ defineExpose({
       <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
         <div class="w-full shrink-0 sm:w-56">
           <span class="mb-1.5 block text-xs font-medium text-zinc-500">Event type</span>
-          <TenantFilterMultiSelect
+          <TenantFilterSelect
             id="campaign-tracking-event-filter"
-            v-model="selectedEventTypes"
+            v-model="selectedEventType"
             label="Filter by event type"
             variant="tracking"
             :options="eventFilterOptions"
@@ -205,6 +212,8 @@ defineExpose({
           v-model:custom-from="customDateFrom"
           v-model:custom-to="customDateTo"
           :label="dateRangeLabel"
+          :preset-options="BREVO_SMTP_STATS_DATE_PRESET_OPTIONS"
+          :max-range-days="BREVO_SMTP_STATS_MAX_RANGE_DAYS"
           class="shrink-0"
         />
       </div>
@@ -302,7 +311,7 @@ defineExpose({
       v-else
       :daily="stats?.daily ?? []"
       :date-range="effectiveDateRange"
-      :selected-event-types="selectedEventTypes"
+      :selected-event-types="chartSelectedEventTypes"
       :loading="pending && !stats"
     />
 

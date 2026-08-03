@@ -5,6 +5,7 @@ import {
 } from '~/composables/useBrevoTrackingDateRange'
 import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
 import { brevoEventTypeTooltip } from '~/utils/brevoEventTypeTooltip'
+import { formatBrevoSmtpEventLabel } from '~/utils/brevoSmtpEventFormat'
 
 interface BrevoEmailEvent {
   email?: string
@@ -434,7 +435,7 @@ function visibleEventTypes(types: string[]): { shown: string[]; overflow: number
 }
 
 function overflowEventTooltip(types: string[]): string {
-  return types.slice(3).join(', ')
+  return types.slice(3).map((t) => formatBrevoSmtpEventLabel(t)).join(', ')
 }
 
 function groupRecipient(g: MessageEventGroup): string {
@@ -816,7 +817,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                 "
                 @click="toggleEventFilter(t)"
               >
-                {{ t }}
+                {{ formatBrevoSmtpEventLabel(t) }}
                 <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
               </button>
             </UiHoverTip>
@@ -923,7 +924,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                 "
                 @click="toggleEventFilter(t)"
               >
-                {{ t }}
+                {{ formatBrevoSmtpEventLabel(t) }}
                 <span class="ml-1 tabular-nums opacity-90">({{ countEventsOfType(t) }})</span>
               </button>
             </UiHoverTip>
@@ -1041,7 +1042,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                           class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset sm:text-xs"
                           :class="eventBadgeClass(ev)"
                         >
-                          {{ ev }}
+                          {{ formatBrevoSmtpEventLabel(ev) }}
                         </span>
                       </UiHoverTip>
                       <UiHoverTip
@@ -1148,7 +1149,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
                             class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 ring-inset"
                             :class="eventBadgeClass(ev)"
                           >
-                            {{ ev }}
+                            {{ formatBrevoSmtpEventLabel(ev) }}
                           </span>
                         </UiHoverTip>
                         <UiHoverTip
