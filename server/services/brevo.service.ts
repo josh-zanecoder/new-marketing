@@ -1,9 +1,5 @@
 import { BrevoClient } from '@getbrevo/brevo'
-import type {
-  GetAggregatedSmtpReportRequest,
-  GetEmailEventReportRequest,
-  GetSmtpReportRequest
-} from '@getbrevo/brevo/transactionalEmails'
+import type { GetEmailEventReportRequest } from '@getbrevo/brevo/transactionalEmails'
 import {
   buildCampaignBrevoBatchRequest,
   type CampaignBatchMessageVersion
@@ -319,46 +315,6 @@ async function withBrevoFetchRetry<T>(
     }
   }
   return { error: 'Brevo rate limit exceeded' }
-}
-
-/**
- * Aggregated SMTP statistics (`GET /smtp/statistics/aggregatedReport`).
- * Optional `tag` scopes to a single Brevo tag (e.g. `campaign:{id}`).
- */
-export async function getAggregatedSmtpReport(
-  params: GetAggregatedSmtpReportRequest = {},
-  options?: { apiKey?: string; dbName?: string | null }
-): Promise<{ report?: unknown; error?: string }> {
-  const client = await resolveClient(options)
-  if (!client) {
-    console.error('[Brevo] API key is not configured')
-    return { error: 'Brevo API key is not configured' }
-  }
-  const result = await withBrevoFetchRetry('getAggregatedSmtpReport', () =>
-    client.transactionalEmails.getAggregatedSmtpReport(params)
-  )
-  if (result.error) return { error: result.error }
-  return { report: result.data }
-}
-
-/**
- * One page of daily SMTP statistics (`GET /smtp/statistics/reports`).
- * Brevo page size is small (~10); callers should paginate.
- */
-export async function getSmtpDailyReport(
-  params: GetSmtpReportRequest = {},
-  options?: { apiKey?: string; dbName?: string | null }
-): Promise<{ report?: unknown; error?: string }> {
-  const client = await resolveClient(options)
-  if (!client) {
-    console.error('[Brevo] API key is not configured')
-    return { error: 'Brevo API key is not configured' }
-  }
-  const result = await withBrevoFetchRetry('getSmtpReport', () =>
-    client.transactionalEmails.getSmtpReport(params)
-  )
-  if (result.error) return { error: result.error }
-  return { report: result.data }
 }
 
 /**

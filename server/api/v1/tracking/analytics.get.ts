@@ -1,18 +1,19 @@
 import {
   normalizeCampaignIdQuery,
+  normalizeTzOffsetQuery,
   normalizeUserEmailQuery,
   normalizeYmdQuery
 } from '@server/utils/tracking/brevoTenantEvents'
 import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
-import {
-  BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
-  fetchBrevoTransactionalStats
-} from '@server/utils/tracking/fetchBrevoTransactionalStats'
+import { aggregateStoredBrevoSmtpStats } from '@server/utils/tracking/aggregateStoredBrevoSmtpStats'
+import { BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX } from '@server/utils/tracking/fetchBrevoTransactionalStats'
+import { loadStoredCampaignSmtpStatsEventsPage } from '@server/utils/tracking/loadStoredCampaignSmtpStatsEventsPage'
 import { marketingAnalyticsFromSmtpStats } from '@server/utils/tracking/marketingAnalyticsFromSmtpStats'
 import {
   mergeTrackingUserEmails,
   resolveTrackingTenantContext
 } from '@server/utils/tracking/resolveTrackingTenantContext'
+import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 function normalizeNonNegIntQuery(
@@ -50,13 +51,12 @@ function normalizeSkipCacheQuery(event: Parameters<typeof getQuery>[0]): boolean
 }
 
 /**
- * Ratesheet / campaign-Tracking style analytics:
- * Brevo aggregated SMTP + daily series + small paginated events page.
- * Does not load the full Tracking event dump.
- * Uses a 5-minute Mongo cache (pass skipCache/refresh to bypass).
+ * Marketing Analytics from Mongo `brevo_tracking_events` (totals + daily + paged messages).
+ * Refresh (`skipCache`) syncs unaggregated Brevo events into Mongo first — never calls
+ * Brevo tagged aggregated (that path is minutes-slow).
  */
 export default defineEventHandler(async (event) => {
-  const { dbName, userEmails, allowUserTagFilter } =
+  const { dbName, marketingTenantId, userEmails, allowUserTagFilter } =
     await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
@@ -69,6 +69,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const tzOffsetMinutes = normalizeTzOffsetQuery(event)
   const requestedUserEmail = normalizeUserEmailQuery(event)
   const { ownershipEmails, filterEmails } = mergeTrackingUserEmails(
     userEmails,
@@ -76,15 +77,14 @@ export default defineEventHandler(async (event) => {
     allowUserTagFilter
   )
 
-  // Single-owner sessions force that user tag; optional picker uses filterEmails.
   const scopedUserEmail =
     filterEmails?.[0] ??
     (ownershipEmails != null && ownershipEmails.length === 1 ? ownershipEmails[0] : null)
 
   const q = getQuery(event) as Record<string, unknown>
   const eventTypes = normalizeBrevoEventTypesQuery(q.event ?? q.events)
-  // Brevo events API accepts a single `event` filter.
   const eventType = eventTypes[0] ?? null
+  const skipCache = normalizeSkipCacheQuery(event)
 
   if (ownershipEmails != null && ownershipEmails.length === 0) {
     return {
@@ -110,6 +110,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  if (skipCache) {
+    const sync = await syncTenantBrevoTrackingEvents({
+      dbName,
+      marketingTenantId,
+      fromYmd,
+      toYmd,
+      campaignId
+    })
+    if (sync.error) {
+      throwBrevoTrackingFetchError(sync.error)
+    }
+  }
+
   const eventsLimit = Math.min(
     BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
     Math.max(
@@ -119,30 +132,34 @@ export default defineEventHandler(async (event) => {
     )
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
-  const skipCache = normalizeSkipCacheQuery(event)
 
-  const { stats, error } = await fetchBrevoTransactionalStats({
-    dbName,
-    campaignId,
-    userEmail: scopedUserEmail,
-    eventType,
-    startDate: fromYmd,
-    endDate: toYmd,
-    eventsLimit,
-    eventsOffset,
-    skipCache
-  })
-
-  if (error || !stats) {
-    throwBrevoTrackingFetchError(error || 'Failed to load analytics')
-  }
+  const [reports, mongoEvents] = await Promise.all([
+    aggregateStoredBrevoSmtpStats({
+      dbName,
+      campaignId,
+      userEmail: scopedUserEmail,
+      startDate: fromYmd,
+      endDate: toYmd,
+      tzOffsetMinutes
+    }),
+    loadStoredCampaignSmtpStatsEventsPage({
+      dbName,
+      campaignId,
+      userEmail: scopedUserEmail,
+      startDate: fromYmd,
+      endDate: toYmd,
+      eventType,
+      limit: eventsLimit,
+      offset: eventsOffset
+    })
+  ])
 
   const { summary, timeseries } = marketingAnalyticsFromSmtpStats(
-    stats.aggregated,
-    stats.daily
+    reports.aggregated,
+    reports.daily
   )
 
-  const a = stats.aggregated
+  const a = reports.aggregated
   const eventTypeCounts: Record<string, number> = {
     requests: a.requests,
     delivered: a.delivered,
@@ -160,7 +177,12 @@ export default defineEventHandler(async (event) => {
     analytics: {
       summary,
       timeseries,
-      events: stats.events,
+      events: {
+        items: mongoEvents.items,
+        limit: eventsLimit,
+        offset: eventsOffset,
+        hasMore: mongoEvents.hasMore
+      },
       eventTypeCounts,
       tagUsers: ownershipEmails ?? [],
       allowUserTagFilter

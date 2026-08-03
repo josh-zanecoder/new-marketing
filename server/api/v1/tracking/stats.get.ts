@@ -1,15 +1,18 @@
 import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
 import {
   normalizeCampaignIdQuery,
+  normalizeTzOffsetQuery,
   normalizeYmdQuery
 } from '@server/utils/tracking/brevoTenantEvents'
+import { aggregateStoredBrevoSmtpStats } from '@server/utils/tracking/aggregateStoredBrevoSmtpStats'
 import {
   BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
   clampBrevoSmtpDateRange,
-  clampBrevoSmtpStatsRangeToMaxDays,
-  fetchBrevoTransactionalStats
+  clampBrevoSmtpStatsRangeToMaxDays
 } from '@server/utils/tracking/fetchBrevoTransactionalStats'
+import { loadStoredCampaignSmtpStatsEventsPage } from '@server/utils/tracking/loadStoredCampaignSmtpStatsEventsPage'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
+import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 function normalizeNonNegIntQuery(
@@ -47,12 +50,11 @@ function normalizeSkipCacheQuery(event: Parameters<typeof getQuery>[0]): boolean
 }
 
 /**
- * Ratesheet-style Brevo SMTP statistics for a campaign (`tag=campaign:{id}`).
- * Live Brevo call with a 5-minute Mongo cache (pass skipCache/refresh to bypass).
- * Includes a small paginated events page (same pattern as ratesheet Statistics).
+ * Campaign SMTP statistics from Mongo `brevo_tracking_events`.
+ * Refresh syncs unaggregated Brevo events, then re-aggregates locally.
  */
 export default defineEventHandler(async (event) => {
-  const { dbName } = await resolveTrackingTenantContext(event)
+  const { dbName, marketingTenantId } = await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
   if (!campaignId) {
@@ -76,30 +78,65 @@ export default defineEventHandler(async (event) => {
     clampedToToday.startDate,
     clampedToToday.endDate
   )
+  const tzOffsetMinutes = normalizeTzOffsetQuery(event)
 
   const eventsLimit = Math.min(
     BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,
-    Math.max(1, normalizeNonNegIntQuery(event, 'eventsLimit', BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX) || BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX)
+    Math.max(
+      1,
+      normalizeNonNegIntQuery(event, 'eventsLimit', BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX) ||
+        BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX
+    )
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
   const q = getQuery(event) as Record<string, unknown>
   const eventType = normalizeBrevoEventTypesQuery(q.event ?? q.events)[0] ?? null
   const skipCache = normalizeSkipCacheQuery(event)
 
-  const { stats, error } = await fetchBrevoTransactionalStats({
-    dbName,
-    campaignId,
-    startDate: range.startDate,
-    endDate: range.endDate,
-    eventType,
-    eventsLimit,
-    eventsOffset,
-    skipCache
-  })
-
-  if (error) {
-    throwBrevoTrackingFetchError(error)
+  if (skipCache) {
+    const sync = await syncTenantBrevoTrackingEvents({
+      dbName,
+      marketingTenantId,
+      fromYmd: range.startDate,
+      toYmd: range.endDate,
+      campaignId
+    })
+    if (sync.error) {
+      throwBrevoTrackingFetchError(sync.error)
+    }
   }
 
-  return { stats }
+  const [reports, mongoEvents] = await Promise.all([
+    aggregateStoredBrevoSmtpStats({
+      dbName,
+      campaignId,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      tzOffsetMinutes
+    }),
+    loadStoredCampaignSmtpStatsEventsPage({
+      dbName,
+      campaignId,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      eventType,
+      limit: eventsLimit,
+      offset: eventsOffset
+    })
+  ])
+
+  return {
+    stats: {
+      range: reports.range,
+      tag: reports.tag,
+      aggregated: reports.aggregated,
+      daily: reports.daily,
+      events: {
+        items: mongoEvents.items,
+        limit: eventsLimit,
+        offset: eventsOffset,
+        hasMore: mongoEvents.hasMore
+      }
+    }
+  }
 })

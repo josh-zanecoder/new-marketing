@@ -32,7 +32,7 @@ const selectedUserEmail = ref('')
 const selectedEventType = ref('')
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
-/** Set during Refresh so the next request bypasses the Mongo stats cache. */
+/** Set during Refresh so the next request syncs Brevo events into Mongo first. */
 const skipCacheOnce = ref(false)
 
 const { data: me } = useMarketingMe()
@@ -64,7 +64,8 @@ watch([effectiveDateRange, selectedCampaignId, selectedUserEmail, selectedEventT
 const analyticsQuery = computed(() => {
   const query: Record<string, string> = {
     eventsLimit: String(EVENTS_PAGE_SIZE),
-    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE)
+    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE),
+    tzOffset: String(new Date().getTimezoneOffset())
   }
   const range = effectiveDateRange.value
   if (range.from) query.from = range.from

@@ -10,9 +10,25 @@ import {
   normalizeYmdQuery,
   type BrevoTrackingEmailEvent
 } from '@server/utils/tracking/brevoTenantEvents'
-import { loadStoredTenantBrevoTrackingEvents } from '@server/utils/tracking/loadStoredTenantBrevoTrackingEvents'
+import { loadStoredTenantBrevoTrackingEventsPage } from '@server/utils/tracking/loadStoredTenantBrevoTrackingEventsPage'
 import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
+
+function normalizePositiveInt(raw: unknown, fallback: number, max: number): number {
+  const n =
+    typeof raw === 'string'
+      ? Number.parseInt(raw, 10)
+      : typeof raw === 'number'
+        ? raw
+        : NaN
+  if (!Number.isFinite(n) || n < 1) return fallback
+  return Math.min(max, Math.floor(n))
+}
+
+function normalizeSearchQuery(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  return raw.trim().slice(0, 200)
+}
 
 export type AdminTrackingTenant = {
   dbName: string
@@ -65,7 +81,21 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
 }> {
   const tenantDbName = normalizeAdminTenantDbQuery(event)
   if (!tenantDbName) {
-    return { report: { events: [], tagUsers: [], allowUserTagFilter: false } }
+    return {
+      report: {
+        events: [],
+        messageGroups: [],
+        chartEvents: [],
+        eventCounts: {},
+        totalEvents: 0,
+        totalMessages: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+        tagUsers: [],
+        allowUserTagFilter: false
+      }
+    }
   }
 
   const tenants = await listAdminTrackingTenants(tenantDbName)
@@ -79,19 +109,25 @@ export async function fetchAdminTrackingReport(event: H3Event): Promise<{
   const tzOffsetMinutes = normalizeTzOffsetQuery(event)
   const q = getQuery(event) as Record<string, unknown>
   const brevoEventTypes = normalizeBrevoEventTypesQuery(q.event ?? q.events)
+  const search = normalizeSearchQuery(q.q ?? q.search)
+  const page = normalizePositiveInt(q.page, 1, 10_000)
+  const pageSize = normalizePositiveInt(q.limit ?? q.pageSize, 20, 100)
 
-  const { events, tagUsers } = await loadStoredTenantBrevoTrackingEvents(tenantDbName, {
+  const result = await loadStoredTenantBrevoTrackingEventsPage(tenantDbName, {
     campaignId,
     fromYmd,
     toYmd,
     tzOffsetMinutes,
     userEmails: null,
     filterUserEmails: null,
-    brevoEventTypes: brevoEventTypes.length ? brevoEventTypes : null
+    brevoEventTypes: brevoEventTypes.length ? brevoEventTypes : null,
+    search: search || null,
+    page,
+    pageSize
   })
 
   return {
-    report: { events, tagUsers, allowUserTagFilter: false }
+    report: { ...result, allowUserTagFilter: false }
   }
 }
 

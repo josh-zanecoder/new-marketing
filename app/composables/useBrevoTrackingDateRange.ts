@@ -112,7 +112,12 @@ export function presetToBrevoTrackingRange(
 }
 
 export function localDayStartMs(iso: string): number {
-  const d = new Date(iso)
+  const trimmed = iso.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-').map(Number)
+    return new Date(y, m - 1, d).getTime()
+  }
+  const d = new Date(trimmed)
   if (Number.isNaN(d.getTime())) return NaN
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }

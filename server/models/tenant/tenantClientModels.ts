@@ -1,5 +1,4 @@
 import type { Connection, Model } from 'mongoose'
-import { brevoSmtpStatsCacheSchema } from './BrevoSmtpStatsCache'
 import { brevoTrackingEventSchema } from './BrevoTrackingEvent'
 import { campaignSchema } from './Campaign'
 import { campaignRecipientSchema } from './CampaignRecipient'
@@ -28,7 +27,6 @@ export type TenantClientModels = {
   RecipientListMember: Model<unknown>
   UnsubscribeTokenResponse: Model<unknown>
   BrevoTrackingEvent: Model<unknown>
-  BrevoSmtpStatsCache: Model<unknown>
 }
 
 export function getTenantClientModels(conn: Connection): TenantClientModels {
@@ -65,9 +63,6 @@ export function getTenantClientModels(conn: Connection): TenantClientModels {
       conn.model('UnsubscribeTokenResponse', unsubscribeTokenResponseSchema),
     BrevoTrackingEvent:
       conn.models.BrevoTrackingEvent ||
-      conn.model('BrevoTrackingEvent', brevoTrackingEventSchema),
-    BrevoSmtpStatsCache:
-      conn.models.BrevoSmtpStatsCache ||
-      conn.model('BrevoSmtpStatsCache', brevoSmtpStatsCacheSchema)
+      conn.model('BrevoTrackingEvent', brevoTrackingEventSchema)
   } as TenantClientModels
 }

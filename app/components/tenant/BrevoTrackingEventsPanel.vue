@@ -1,6 +1,5 @@
 ﻿<script setup lang="ts">
 import {
-  isoMatchesBrevoTrackingRange,
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
 import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
@@ -23,6 +22,14 @@ interface BrevoEmailEvent {
 
 interface BrevoEventReport {
   events?: BrevoEmailEvent[]
+  messageGroups?: MessageEventGroup[]
+  chartEvents?: Array<{ date?: string; event?: string; count?: number }>
+  eventCounts?: Record<string, number>
+  totalEvents?: number
+  totalMessages?: number
+  page?: number
+  pageSize?: number
+  totalPages?: number
   tagUsers?: string[]
   allowUserTagFilter?: boolean
 }
@@ -82,6 +89,24 @@ function preferredEventTypeFilter(availableTypes: string[]): string[] {
   return availableTypes.includes('requests') ? [...DEFAULT_EVENT_TYPE_FILTER] : []
 }
 
+const searchQuery = ref('')
+const debouncedSearch = ref('')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
+watch(searchQuery, (value) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    const next = value.trim()
+    if (debouncedSearch.value === next) return
+    debouncedSearch.value = next
+    currentPage.value = 1
+  }, 300)
+})
+
+const TRACKING_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
+const tablePageSize = ref<number>(20)
+const currentPage = ref(1)
+const pageInput = ref('1')
+
 const {
   datePreset,
   customDateFrom,
@@ -126,6 +151,13 @@ const trackingQuery = computed(() => {
     const userEmail = selectedUserEmail.value.trim().toLowerCase()
     if (userEmail) q.userEmail = userEmail
   }
+  const search = debouncedSearch.value.trim()
+  if (search) q.q = search
+  if (selectedEventTypes.value.length) {
+    q.events = selectedEventTypes.value.join(',')
+  }
+  q.page = String(currentPage.value)
+  q.limit = String(tablePageSize.value)
   return q
 })
 
@@ -225,11 +257,18 @@ watch(
     if (error.value) return
 
     const report = data.value?.report
+    if (!report || typeof report !== 'object') return
+    const totalEvents =
+      'totalEvents' in report && typeof (report as { totalEvents?: unknown }).totalEvents === 'number'
+        ? (report as { totalEvents: number }).totalEvents
+        : null
     const events =
-      report && typeof report === 'object' && report !== null && 'events' in report
-        ? (report as { events?: unknown[] }).events
-        : undefined
-    if (!Array.isArray(events) || events.length > 0) return
+      'events' in report && Array.isArray((report as { events?: unknown[] }).events)
+        ? (report as { events: unknown[] }).events
+        : null
+    const isEmpty =
+      totalEvents != null ? totalEvents === 0 : events != null ? events.length === 0 : true
+    if (!isEmpty) return
 
     const key = campaignAutoSyncKey()
     if (!key || autoSyncedKeys.value.has(key)) return
@@ -299,13 +338,14 @@ function campaignDisplayLabel(campaignId: string | null): string {
 
 const report = computed((): BrevoEventReport | null => {
   const r = data.value?.report
-  if (r && typeof r === 'object' && r !== null && 'events' in r) {
+  if (r && typeof r === 'object' && r !== null) {
     return r as BrevoEventReport
   }
   return null
 })
 
 const events = computed(() => report.value?.events ?? [])
+const chartEvents = computed(() => report.value?.chartEvents ?? [])
 
 const userFilterOptions = computed(() => {
   const users = report.value?.tagUsers ?? []
@@ -386,25 +426,7 @@ async function onCampaignLinkClick(event: MouseEvent, campaignId: string | null)
   await navigateToCampaign(campaignId)
 }
 
-const messageGroups = computed((): MessageEventGroup[] => {
-  const map = new Map<string, BrevoEmailEvent[]>()
-  for (const ev of events.value) {
-    const key = ev.messageId?.trim() || '(no message id)'
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(ev)
-  }
-  const groups = [...map.entries()].map(([messageId, evs]) => {
-    const sorted = [...evs].sort(
-      (a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime()
-    )
-    return { messageId, events: sorted }
-  })
-  groups.sort(
-    (a, b) =>
-      new Date(b.events[0]?.date || 0).getTime() - new Date(a.events[0]?.date || 0).getTime()
-  )
-  return groups
-})
+const messageGroups = computed((): MessageEventGroup[] => report.value?.messageGroups ?? [])
 
 function groupLatestIso(g: MessageEventGroup): string {
   let max = 0
@@ -459,55 +481,20 @@ function eventTypesInOrder(g: MessageEventGroup): string[] {
   return out
 }
 
-const searchQuery = ref('')
-
-function groupMatchesDateRange(g: MessageEventGroup): boolean {
-  const range = effectiveDateRange.value
-  if (!range.from && !range.to) return true
-  return g.events.some((e) => isoMatchesBrevoTrackingRange(e.date, range))
-}
-
-function groupMatchesSearch(g: MessageEventGroup): boolean {
-  if (props.campaignId?.trim()) return true
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return true
-  const campaign = parseCampaignIdFromTag(groupTagSample(g) || g.events[0]?.tag)
-  const campaignName = campaign ? campaignDisplayLabel(campaign) : ''
-  const parts = [
-    groupSubject(g),
-    g.messageId,
-    groupRecipient(g),
-    groupTagSample(g),
-    campaign ?? '',
-    campaignName
-  ]
-    .join(' ')
-    .toLowerCase()
-  return parts.includes(q) || parts.split(/\s+/).some((w) => w.includes(q))
-}
-
 const isCampaignScoped = computed(() => Boolean(props.campaignId?.trim()))
 const searchPlaceholder = computed(() =>
   isCampaignScoped.value ? 'Recipient or subject…' : 'Subject, email, campaign…'
 )
 
-const groupsAfterSearchDate = computed(() =>
-  messageGroups.value.filter((g) => groupMatchesDateRange(g) && groupMatchesSearch(g))
-)
-
 const availableEventTypes = computed(() => {
-  const s = new Set<string>()
-  for (const g of groupsAfterSearchDate.value) {
-    for (const e of g.events) {
-      const ev = (e.event || '').trim()
-      if (ev) s.add(ev)
-    }
-  }
-  return [...s].sort((a, b) => {
-    if (a === 'requests') return -1
-    if (b === 'requests') return 1
-    return a.localeCompare(b)
-  })
+  const counts = report.value?.eventCounts ?? {}
+  return Object.keys(counts)
+    .filter((t) => t.trim())
+    .sort((a, b) => {
+      if (a === 'requests') return -1
+      if (b === 'requests') return 1
+      return a.localeCompare(b)
+    })
 })
 
 function isDefaultEventTypeFilter(sel: string[]): boolean {
@@ -537,52 +524,33 @@ watch(
   }
 )
 
-/** Raw event counts (matches Brevo log totals), not unique messages. */
-const eventCountByType = computed(() => {
-  const m = new Map<string, number>()
-  for (const g of groupsAfterSearchDate.value) {
-    for (const e of g.events) {
-      const t = (e.event || '').trim()
-      if (!t) continue
-      m.set(t, (m.get(t) ?? 0) + 1)
-    }
-  }
-  return m
-})
-
-const totalEventCount = computed(() => {
-  let n = 0
-  for (const count of eventCountByType.value.values()) n += count
-  return n
-})
+const totalEventCount = computed(() => report.value?.totalEvents ?? 0)
 
 function countEventsOfType(t: string): number {
-  return eventCountByType.value.get(t) ?? 0
+  return report.value?.eventCounts?.[t] ?? 0
 }
 
 function toggleEventFilter(name: string) {
   const i = selectedEventTypes.value.indexOf(name)
   if (i === -1) selectedEventTypes.value = [...selectedEventTypes.value, name]
   else selectedEventTypes.value = selectedEventTypes.value.filter((_, j) => j !== i)
+  currentPage.value = 1
 }
 
 /** Event type pill “All” — no type filter. */
 function clearEventFilters() {
   selectedEventTypes.value = []
+  currentPage.value = 1
 }
 
 function resetEventTypeFilter() {
   selectedEventTypes.value = preferredEventTypeFilter(availableEventTypes.value)
+  currentPage.value = 1
 }
 
 const tableRows = computed((): TrackingTableRow[] => {
   const sel = selectedEventTypes.value
-  let groups = groupsAfterSearchDate.value
-  if (sel.length) {
-    groups = groups.filter((g) => g.events.some((e) => sel.includes((e.event || '').trim())))
-  }
-
-  return groups.map((g) => {
+  return messageGroups.value.map((g) => {
     const tag = groupTagSample(g) || g.events[0]?.tag
     const campaignId = parseCampaignIdFromTag(tag)
     let types = eventTypesInOrder(g)
@@ -641,20 +609,48 @@ function closeMessageHistory() {
   historyRow.value = null
 }
 
-const TRACKING_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
-const tablePageSize = ref<number>(20)
+const paginatedTableRows = computed(() => tableRows.value)
 
-const {
-  currentPage,
-  totalPages,
-  paginatedItems: paginatedTableRows,
-  paginationMeta,
-  pageInput,
-  commitPageInput
-} = useClientPagination(tableRows, tablePageSize)
+const totalPages = computed(() => Math.max(1, report.value?.totalPages ?? 1))
+
+const paginationMeta = computed(() => {
+  const total = report.value?.totalMessages ?? 0
+  const size = tablePageSize.value
+  const page = report.value?.page ?? currentPage.value
+  if (!total) return { from: 0, to: 0, total: 0 }
+  const from = (page - 1) * size + 1
+  const to = Math.min(page * size, total)
+  return { from, to, total }
+})
 
 watch(
-  [searchQuery, datePreset, customDateFrom, customDateTo, selectedEventTypes, adminTenantFilter, selectedUserEmail],
+  currentPage,
+  (page) => {
+    pageInput.value = String(page)
+  },
+  { immediate: true }
+)
+
+watch(totalPages, (pages) => {
+  if (currentPage.value > pages) currentPage.value = pages
+})
+
+watch(tablePageSize, () => {
+  currentPage.value = 1
+})
+
+function commitPageInput() {
+  const parsed = Number.parseInt(pageInput.value.trim(), 10)
+  if (!Number.isFinite(parsed)) {
+    pageInput.value = String(currentPage.value)
+    return
+  }
+  currentPage.value = Math.min(totalPages.value, Math.max(1, parsed))
+  pageInput.value = String(currentPage.value)
+}
+
+watch(
+  [datePreset, customDateFrom, customDateTo, adminTenantFilter, selectedUserEmail],
   () => {
     currentPage.value = 1
   }
@@ -662,9 +658,11 @@ watch(
 
 function clearAllFilters() {
   searchQuery.value = ''
+  debouncedSearch.value = ''
   resetDateRange()
   resetEventTypeFilter()
   selectedUserEmail.value = ''
+  currentPage.value = 1
   if (props.adminTracking && !props.adminTenantDb) {
     adminTenantFilter.value = ''
   }
@@ -701,7 +699,11 @@ const emptyStateMessage = computed(() => {
 })
 
 const reportLoadFailed = computed(() => Boolean(error.value) && !isLoading.value)
-const showEmptyReport = computed(() => !isLoading.value && events.value.length === 0)
+const showEmptyReport = computed(
+  () =>
+    !isLoading.value &&
+    (report.value?.totalEvents ?? events.value.length) === 0
+)
 
 const EVENT_FILTER_SKELETON_COUNT = 4
 </script>
@@ -951,7 +953,7 @@ const EVENT_FILTER_SKELETON_COUNT = 4
 
       <div v-else class="space-y-2" :aria-busy="isLoading">
         <TenantBrevoTrackingLineChart
-          :events="events"
+          :events="chartEvents"
           :date-range="effectiveDateRange"
           :selected-event-types="selectedEventTypes"
           :loading="isLoading"

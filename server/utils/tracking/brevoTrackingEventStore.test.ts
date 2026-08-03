@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseYmdToUtcBounds } from './brevoTrackingEventDateBounds'
+import {
+  parseYmdToExactUtcBounds,
+  parseYmdToUtcBounds
+} from './brevoTrackingEventDateBounds'
 import {
   brevoEventToTrackingDoc,
   parseCampaignIdFromBrevoTag,
@@ -36,5 +39,15 @@ describe('parseYmdToUtcBounds', () => {
     expect(bounds).not.toBeNull()
     expect(bounds!.start.toISOString().startsWith('2026-07-31')).toBe(true)
     expect(bounds!.end.getUTCDate()).toBe(2)
+  })
+})
+
+describe('parseYmdToExactUtcBounds', () => {
+  it('uses client timezone offset for inclusive local days', () => {
+    // PDT: offset 420 → local midnight = 07:00 UTC
+    const bounds = parseYmdToExactUtcBounds('2026-08-01', '2026-08-01', 420)
+    expect(bounds).not.toBeNull()
+    expect(bounds!.start.toISOString()).toBe('2026-08-01T07:00:00.000Z')
+    expect(bounds!.end.toISOString()).toBe('2026-08-02T06:59:59.999Z')
   })
 })

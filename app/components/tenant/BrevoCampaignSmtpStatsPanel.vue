@@ -39,7 +39,7 @@ const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
 /** Empty = all event types. Brevo events API accepts one type at a time. */
 const selectedEventType = ref('')
-/** Set during Refresh so the next request bypasses the Mongo stats cache. */
+/** Set during Refresh so the next request syncs Brevo events into Mongo first. */
 const skipCacheOnce = ref(false)
 
 const {
@@ -58,7 +58,8 @@ const statsQuery = computed(() => {
   const q: Record<string, string> = {
     campaignId: props.campaignId.trim(),
     eventsLimit: String(EVENTS_PAGE_SIZE),
-    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE)
+    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE),
+    tzOffset: String(new Date().getTimezoneOffset())
   }
   const from = effectiveDateRange.value.from?.trim()
   const to = effectiveDateRange.value.to?.trim()

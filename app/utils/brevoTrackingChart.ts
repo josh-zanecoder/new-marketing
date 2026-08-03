@@ -20,6 +20,8 @@ export type BrevoTrackingChartOption = ComposeOption<
 export interface BrevoTrackingChartEvent {
   date?: string
   event?: string
+  /** When set (Mongo daily aggregates), add this many instead of 1. */
+  count?: number
 }
 
 const EVENT_COLORS: Record<string, string> = {
@@ -46,7 +48,9 @@ function eventColor(eventType: string): string {
 
 function parseEventYmd(iso: string | undefined): string | null {
   if (!iso?.trim()) return null
-  const d = new Date(iso)
+  const trimmed = iso.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const d = new Date(trimmed)
   if (Number.isNaN(d.getTime())) return null
   return toYmdLocal(d)
 }
@@ -146,7 +150,11 @@ export function buildBrevoTrackingChartOption(
     const idx = dayIndex.get(ymd)
     const bucket = countsByType.get(type)
     if (idx == null || !bucket) continue
-    bucket[idx] += 1
+    const n =
+      typeof ev.count === 'number' && Number.isFinite(ev.count) && ev.count > 0
+        ? Math.floor(ev.count)
+        : 1
+    bucket[idx] += n
   }
 
   const series: LineSeriesOption[] =
