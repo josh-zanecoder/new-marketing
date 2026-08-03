@@ -11,6 +11,10 @@ import {
   formatBrevoSmtpEventLabel,
   formatBrevoSmtpEventTableDate
 } from '~/utils/brevoSmtpEventFormat'
+import {
+  BREVO_SMTP_METRIC_EXPLANATIONS,
+  brevoSmtpMetricTooltip
+} from '~/utils/brevoSmtpMetricTooltip'
 
 const props = defineProps<{
   campaignId: string
@@ -37,6 +41,7 @@ const EVENT_FILTER_TYPES = [
 const EVENTS_PAGE_SIZE = 10
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
+const showMetricsHelp = ref(false)
 /** Empty = all event types. Brevo events API accepts one type at a time. */
 const selectedEventType = ref('')
 /** Set during Refresh so the next request syncs Brevo events into Mongo first. */
@@ -259,14 +264,31 @@ defineExpose({
               emails sent
             </span>
           </p>
-          <a
-            href="https://help.brevo.com/hc/en-us/categories/360000946719-Transactional"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             class="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:underline"
+            :aria-expanded="showMetricsHelp"
+            @click="showMetricsHelp = !showMetricsHelp"
           >
-            Explain these metrics
-          </a>
+            {{ showMetricsHelp ? 'Hide metric explanations' : 'Explain these metrics' }}
+          </button>
+        </div>
+
+        <div
+          v-if="showMetricsHelp"
+          class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 sm:px-5"
+        >
+          <p class="text-sm font-medium text-zinc-800">What these metrics mean</p>
+          <dl class="mt-3 space-y-2.5">
+            <div
+              v-for="row in BREVO_SMTP_METRIC_EXPLANATIONS"
+              :key="row.label"
+              class="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-3"
+            >
+              <dt class="text-sm font-medium text-zinc-700">{{ row.label }}</dt>
+              <dd class="text-sm text-zinc-600">{{ row.description }}</dd>
+            </div>
+          </dl>
         </div>
 
         <div
@@ -279,7 +301,11 @@ defineExpose({
           >
             <div v-if="cell">
               <div class="flex items-baseline justify-between gap-2 text-sm">
-                <span class="text-zinc-600">{{ cell.label }}</span>
+                <UiHoverTip :text="brevoSmtpMetricTooltip(cell.label)" placement="bottom">
+                  <span class="cursor-help text-zinc-600 underline decoration-zinc-300 decoration-dotted underline-offset-2">
+                    {{ cell.label }}
+                  </span>
+                </UiHoverTip>
                 <span
                   v-if="cell.valueDisplay === 'count'"
                   class="font-semibold tabular-nums text-zinc-900"
