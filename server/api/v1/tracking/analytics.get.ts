@@ -13,8 +13,6 @@ import {
   mergeTrackingUserEmails,
   resolveTrackingTenantContext
 } from '@server/utils/tracking/resolveTrackingTenantContext'
-import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
-import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 function normalizeNonNegIntQuery(
   event: Parameters<typeof getQuery>[0],
@@ -36,27 +34,12 @@ function normalizeNonNegIntQuery(
   return n
 }
 
-function normalizeSkipCacheQuery(event: Parameters<typeof getQuery>[0]): boolean {
-  const q = getQuery(event) as Record<string, unknown>
-  const raw = q.skipCache ?? q.refresh
-  const s =
-    typeof raw === 'string'
-      ? raw.trim().toLowerCase()
-      : Array.isArray(raw) && typeof raw[0] === 'string'
-        ? raw[0].trim().toLowerCase()
-        : raw === true
-          ? 'true'
-          : ''
-  return s === '1' || s === 'true' || s === 'yes'
-}
-
 /**
- * Marketing Analytics from Mongo `brevo_tracking_events` (totals + daily + paged messages).
- * Refresh (`skipCache`) syncs unaggregated Brevo events into Mongo first — never calls
- * Brevo tagged aggregated (that path is minutes-slow).
+ * Marketing Analytics from Mongo `brevo_tracking_events` only (no Brevo HTTP).
+ * Sync fresh events via Tracking Refresh / webhooks.
  */
 export default defineEventHandler(async (event) => {
-  const { dbName, marketingTenantId, userEmails, allowUserTagFilter } =
+  const { dbName, userEmails, allowUserTagFilter } =
     await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
@@ -84,7 +67,6 @@ export default defineEventHandler(async (event) => {
   const q = getQuery(event) as Record<string, unknown>
   const eventTypes = normalizeBrevoEventTypesQuery(q.event ?? q.events)
   const eventType = eventTypes[0] ?? null
-  const skipCache = normalizeSkipCacheQuery(event)
 
   if (ownershipEmails != null && ownershipEmails.length === 0) {
     return {
@@ -107,19 +89,6 @@ export default defineEventHandler(async (event) => {
         tagUsers: [],
         allowUserTagFilter
       }
-    }
-  }
-
-  if (skipCache) {
-    const sync = await syncTenantBrevoTrackingEvents({
-      dbName,
-      marketingTenantId,
-      fromYmd,
-      toYmd,
-      campaignId
-    })
-    if (sync.error) {
-      throwBrevoTrackingFetchError(sync.error)
     }
   }
 

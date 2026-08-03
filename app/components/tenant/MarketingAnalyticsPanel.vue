@@ -32,8 +32,7 @@ const selectedUserEmail = ref('')
 const selectedEventType = ref('')
 const eventsPage = ref(1)
 const topView = ref<TopView>('metrics')
-/** Set during Refresh so the next request syncs Brevo events into Mongo first. */
-const skipCacheOnce = ref(false)
+const syncing = ref(false)
 
 const { data: me } = useMarketingMe()
 
@@ -78,7 +77,6 @@ const analyticsQuery = computed(() => {
   }
   const eventType = selectedEventType.value.trim()
   if (eventType) query.event = eventType
-  if (skipCacheOnce.value) query.skipCache = '1'
   return query
 })
 
@@ -96,6 +94,8 @@ const { data, error, pending, refresh } = useFetch<{ analytics: MarketingAnalyti
       nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]
   }
 )
+
+const isLoading = computed(() => pending.value || syncing.value)
 
 const { data: campaignsListData } = useTenantCampaignsList()
 
@@ -182,18 +182,34 @@ function clearAllFilters() {
   eventsPage.value = 1
 }
 
-defineExpose({
-  refresh: async () => {
-    eventsPage.value = 1
-    skipCacheOnce.value = true
-    try {
-      await refresh()
-    } finally {
-      skipCacheOnce.value = false
-    }
-  },
-  pending
-})
+/**
+ * Pull Brevo unaggregated events into Mongo for the active range, then reload Analytics.
+ */
+async function refreshFromBrevo() {
+  if (syncing.value) return
+  syncing.value = true
+  eventsPage.value = 1
+  try {
+    const body: Record<string, string> = {}
+    const from = effectiveDateRange.value.from?.trim()
+    const to = effectiveDateRange.value.to?.trim()
+    if (from) body.from = from
+    if (to) body.to = to
+    const campaignId = selectedCampaignId.value.trim()
+    if (campaignId) body.campaignId = campaignId
+
+    await $fetch('/api/v1/tracking/sync', {
+      method: 'POST',
+      body,
+      credentials: 'include'
+    })
+    await refresh()
+  } finally {
+    syncing.value = false
+  }
+}
+
+defineExpose({ refresh: refreshFromBrevo, pending: isLoading })
 </script>
 
 <template>
@@ -305,20 +321,20 @@ defineExpose({
     <TenantMarketingAnalyticsMetricCards
       v-if="topView === 'metrics'"
       :cards="metricCards"
-      :loading="pending"
+      :loading="isLoading"
     />
 
     <TenantMarketingAnalyticsChart
       v-else
       :points="timeseries"
       :date-range="effectiveDateRange"
-      :loading="pending"
+      :loading="isLoading"
       :event-type="selectedEventType"
     />
 
     <TenantMarketingAnalyticsMessagesTable
       :items="eventItems"
-      :loading="pending"
+      :loading="isLoading"
       :page="eventsPage"
       :has-more="eventsHasMore"
       :range-title="messagesRangeTitle"
