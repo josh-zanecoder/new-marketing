@@ -57,8 +57,15 @@ export default defineEventHandler(async (event) => {
 
     const result = await beginCampaignSend(tenantConn, campaignId, {
       allowedStatuses: ['Scheduled'],
-      statusOnEnqueueFailure: 'Scheduled'
+      statusOnEnqueueFailure: 'Scheduled',
+      awaitUnsubscribeApproval: false
     })
+
+    if ('needsUnsubscribeApproval' in result && result.needsUnsubscribeApproval) {
+      logSched('skipped.unsubscribeApproval', { campaignId, dbName })
+      setResponseStatus(event, 200)
+      return { ok: true, skipped: true, reason: 'unsubscribe_approval' }
+    }
 
     logSched('done', {
       campaignId,

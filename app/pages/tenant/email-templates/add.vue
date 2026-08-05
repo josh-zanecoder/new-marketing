@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 import type { TenantDynamicVariableItem, TenantEmailTemplateCategoryRow } from '~/composables/useTenantMarketingApi'
 import { buildEmailTemplateCategoryAssignOptions } from '~~/shared/utils/emailTemplateCategory'
 
@@ -8,6 +9,19 @@ definePageMeta({ layout: 'default' })
 const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
+const {
+  open: unsubscribeFooterModalOpen,
+  previewOpen: unsubscribeFooterPreviewOpen,
+  previewHtml: unsubscribeFooterPreviewHtml,
+  title: unsubscribeFooterModalTitle,
+  message: unsubscribeFooterModalMessage,
+  confirmText: unsubscribeFooterModalConfirm,
+  previewText: unsubscribeFooterModalPreview,
+  close: closeUnsubscribeFooterModal,
+  openPreview: openUnsubscribeFooterPreview,
+  closePreview: closeUnsubscribeFooterPreview,
+  openIfAppended: openUnsubscribeFooterModalIfAppended
+} = useUnsubscribeFooterAppendedModal()
 
 const editTemplateId = computed(() => {
   const q = route.query.templateId
@@ -186,7 +200,9 @@ async function ingestFile(file: File) {
   uploadError.value = ''
   uploadPending.value = true
   try {
-    htmlContent.value = await readUploadedHtmlFile(file)
+    const check = ensureEmailTemplateUnsubscribe(await readUploadedHtmlFile(file))
+    htmlContent.value = check.html
+    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
   } catch (e) {
     uploadError.value = e instanceof Error ? e.message : 'Could not read file'
   } finally {
@@ -220,10 +236,12 @@ async function onDrop(ev: DragEvent) {
   if (file) await ingestFile(file)
 }
 
-function validatePasteHtml() {
+async function validatePasteHtml() {
   uploadError.value = ''
   try {
-    htmlContent.value = normalizeUploadedEmailHtml(htmlContent.value)
+    const check = ensureEmailTemplateUnsubscribe(normalizeUploadedEmailHtml(htmlContent.value))
+    htmlContent.value = check.html
+    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
   } catch (e) {
     uploadError.value = e instanceof Error ? e.message : 'Invalid HTML'
   }
@@ -246,7 +264,10 @@ async function saveTemplate() {
 
   let html = ''
   try {
-    html = normalizeUploadedEmailHtml(htmlContent.value)
+    const check = ensureEmailTemplateUnsubscribe(normalizeUploadedEmailHtml(htmlContent.value))
+    html = check.html
+    htmlContent.value = html
+    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
   } catch (e) {
     formError.value = e instanceof Error ? e.message : 'HTML is required.'
     return
@@ -533,5 +554,23 @@ async function saveTemplate() {
       </div>
       </div>
     </form>
+
+    <TenantUnsubscribeFooterAppendedModal
+      :open="unsubscribeFooterModalOpen"
+      :title="unsubscribeFooterModalTitle"
+      :message="unsubscribeFooterModalMessage"
+      :confirm-text="unsubscribeFooterModalConfirm"
+      :preview-text="unsubscribeFooterModalPreview"
+      @preview="openUnsubscribeFooterPreview"
+      @close="closeUnsubscribeFooterModal"
+    />
+    <TenantEmailTemplatePreviewModal
+      :open="unsubscribeFooterPreviewOpen"
+      :name="name.trim() || 'Email template'"
+      :subject="subject"
+      :html="unsubscribeFooterPreviewHtml"
+      elevated
+      @close="closeUnsubscribeFooterPreview"
+    />
   </div>
 </template>

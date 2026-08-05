@@ -333,6 +333,7 @@ function navLinkLayoutClass(compact: boolean) {
       </div>
     </main>
     <UiAppToastHost />
+    <TenantCampaignUnsubscribeSecondCheckHost />
   </div>
 </template>
 

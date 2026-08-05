@@ -7,11 +7,15 @@ const props = defineProps<{
   subject?: string
   html: string
   templateId?: string
+  /** Stack above other dialogs (e.g. unsubscribe footer notice at z-200). */
+  elevated?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
 }>()
+
+const overlayZClass = computed(() => (props.elevated ? 'z-[210]' : 'z-[100]'))
 
 const campaignHref = computed(() =>
   props.templateId
@@ -64,7 +68,8 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6"
+      class="fixed inset-0 flex items-end justify-center sm:items-center sm:p-6"
+      :class="overlayZClass"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="name ? 'email-template-preview-title' : undefined"

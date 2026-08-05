@@ -14,9 +14,12 @@ import {
   resolveStoredEmailTemplateHtml
 } from '../../utils/emailTemplate/resolveStoredEmailTemplateHtml'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 async function resolveHtmlForPersist(htmlTemplate: string, meta: Record<string, unknown>) {
-  if (!isEmailTemplateHtmlStorageRef(htmlTemplate)) return htmlTemplate
+  if (!isEmailTemplateHtmlStorageRef(htmlTemplate)) {
+    return ensureEmailTemplateUnsubscribe(htmlTemplate).html
+  }
   try {
     const resolved = await resolveStoredEmailTemplateHtml(htmlTemplate, {
       throwOnFetchError: true
@@ -34,7 +37,7 @@ async function resolveHtmlForPersist(htmlTemplate: string, meta: Record<string, 
         resolvedChars: resolved.length
       })
     }
-    return resolved
+    return ensureEmailTemplateUnsubscribe(resolved).html
   } catch (err) {
     logger.warn('Failed to resolve CRM email template HTML storage ref; storing ref as-is', {
       ...meta,

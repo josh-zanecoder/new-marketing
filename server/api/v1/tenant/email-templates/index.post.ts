@@ -10,6 +10,7 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event).catch(() => null)) as Record<string, unknown> | null
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   const name = String(body.name ?? '').trim()
   const subject = String(body.subject ?? '').trim()
-  const htmlTemplate = String(body.htmlTemplate ?? '').trim()
+  const rawHtml = String(body.htmlTemplate ?? '').trim()
   const description = String(body.description ?? '').trim()
   const htmlSource = body.htmlSource === 'upload' ? 'upload' : 'editor'
   const saveToLibrary = body.saveToLibrary !== false
@@ -27,7 +28,10 @@ export default defineEventHandler(async (event) => {
 
   if (!name) throw createError({ statusCode: 400, message: 'Template name is required' })
   if (!subject) throw createError({ statusCode: 400, message: 'Default subject is required' })
-  if (!htmlTemplate) throw createError({ statusCode: 400, message: 'Template HTML is required' })
+  if (!rawHtml) throw createError({ statusCode: 400, message: 'Template HTML is required' })
+
+  const unsubscribeCheck = ensureEmailTemplateUnsubscribe(rawHtml)
+  const htmlTemplate = unsubscribeCheck.html
 
   const conn = await getTenantConnectionFromEvent(event)
   const { EmailTemplate, EmailTemplateCategory } = getTenantClientModels(conn)
@@ -49,6 +53,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     ok: true,
+    unsubscribeFooterAppended: unsubscribeCheck.footerAppended,
     template: {
       id: String(doc._id),
       name: doc.name,

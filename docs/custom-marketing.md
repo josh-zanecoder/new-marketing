@@ -13,6 +13,17 @@ Custom Marketing is a **sidebar nav item** for sending bulk email that still loo
    - **Upload HTML template** — choose a `.html` / `.htm` file (previewed and sent as-is)
 6. Click **Send** to send now, or **Schedule send** to pick a date/time (same flow as campaign create) — creates a campaign with `templateHtmlSource: custom`, then starts Brevo send or enqueues the scheduled job, and opens the campaign detail page.
 
+## Unsubscribe first check
+
+Custom Marketing uses the same [unsubscribe first check](./email-template-unsubscribe-first-check.md) as library templates:
+
+| Moment | Behavior |
+| --- | --- |
+| Upload HTML | Runs `ensureEmailTemplateUnsubscribe`; shows info modal + Preview when a footer is auto-appended |
+| Send / Schedule | Resolves write or upload HTML, runs the same check + modal before creating the campaign |
+| Campaign create (server) | `resolveCampaignEmailTemplateOnSave` also ensures unsubscribe on persist |
+| Send queue | [Pre-send second check](./campaign-unsubscribe-second-check.md) via `campaignStore.sendCampaign` (approval modal if still missing) |
+
 ## Rich text editor
 
 | Capability | Behavior |

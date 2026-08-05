@@ -49,6 +49,14 @@ export const useCampaignStore = defineStore('campaigns', () => {
   const sendingCampaignId = ref<string | null>(null)
   const sendStatus = ref<SendStatus | null>(null)
   const sendError = ref<string | null>(null)
+  const unsubscribeSecondCheckPending = ref<{
+    campaignId: string
+    campaignName: string
+    subject: string
+    previewHtml: string
+  } | null>(null)
+  const unsubscribeSecondCheckPreviewOpen = ref(false)
+  const unsubscribeSecondCheckApproving = ref(false)
 
   function getCampaignDetailCache(id: string): TenantCampaignDetail | null {
     return campaignDetailCache.value.get(id) ?? null
@@ -144,13 +152,18 @@ export const useCampaignStore = defineStore('campaigns', () => {
     try {
       const res = await $fetch<{
         ok: boolean
-        total: number
-        valid: number
-        invalid: number
-        queued: number
-        sent: number
-        failed: number
-        pending: number
+        needsUnsubscribeApproval?: boolean
+        campaignId?: string
+        campaignName?: string
+        subject?: string
+        previewHtml?: string
+        total?: number
+        valid?: number
+        invalid?: number
+        queued?: number
+        sent?: number
+        failed?: number
+        pending?: number
       }>('/api/v1/tenant/send-campaign/send', {
         method: 'POST',
         body: { campaignId: c.id },
@@ -164,28 +177,48 @@ export const useCampaignStore = defineStore('campaigns', () => {
         return { poll: false }
       }
 
+      if (res.needsUnsubscribeApproval === true) {
+        unsubscribeSecondCheckPending.value = {
+          campaignId: res.campaignId || c.id,
+          campaignName: res.campaignName || c.name,
+          subject: res.subject || c.subject || '',
+          previewHtml: res.previewHtml || ''
+        }
+        unsubscribeSecondCheckPreviewOpen.value = false
+        sendingCampaignId.value = null
+        sendStatus.value = null
+        return { poll: false }
+      }
+
+      const total = res.total ?? 0
+      const sent = res.sent ?? 0
+      const failed = res.failed ?? 0
+      const pending = res.pending ?? 0
+      const queued = res.queued ?? 0
+      const valid = res.valid ?? 0
+
       sendStatus.value = {
         campaignId: c.id,
-        total: res.total,
-        sent: res.sent,
-        failed: res.failed,
-        pending: res.pending,
+        total,
+        sent,
+        failed,
+        pending,
         done: false,
         campaignStatus: 'Sending'
       }
 
-      if (!res.queued) {
-        const campaignStatus = res.valid === 0 ? 'Failed' : 'Sent'
+      if (!queued) {
+        const campaignStatus = valid === 0 ? 'Failed' : 'Sent'
         sendStatus.value = {
           campaignId: c.id,
           campaignStatus,
           pending: 0,
-          sent: res.sent,
-          failed: res.failed,
-          total: res.total,
+          sent,
+          failed,
+          total,
           done: true
         }
-        if (res.valid === 0) {
+        if (valid === 0) {
           sendError.value =
             'No valid email addresses. Invalid addresses were marked as failed—fix them and send again.'
         }
@@ -196,10 +229,10 @@ export const useCampaignStore = defineStore('campaigns', () => {
       sendStatus.value = {
         campaignId: c.id,
         campaignStatus: 'Sending',
-        pending: res.queued,
+        pending: queued,
         sent: 0,
-        failed: res.failed,
-        total: res.total,
+        failed,
+        total,
         done: false
       }
 
@@ -207,6 +240,113 @@ export const useCampaignStore = defineStore('campaigns', () => {
     } catch (e: unknown) {
       sendError.value = fetchErrorMessage(e, 'Failed to start send')
       return { poll: false }
+    }
+  }
+
+  function openUnsubscribeSecondCheckPreview(): void {
+    if (!unsubscribeSecondCheckPending.value?.previewHtml.trim()) return
+    unsubscribeSecondCheckPreviewOpen.value = true
+  }
+
+  function closeUnsubscribeSecondCheckPreview(): void {
+    unsubscribeSecondCheckPreviewOpen.value = false
+  }
+
+  function declineUnsubscribeSecondCheck(): void {
+    unsubscribeSecondCheckPreviewOpen.value = false
+    unsubscribeSecondCheckPending.value = null
+    unsubscribeSecondCheckApproving.value = false
+    sendingCampaignId.value = null
+    sendStatus.value = null
+  }
+
+  async function approveUnsubscribeSecondCheckAndSend(): Promise<{ poll: boolean }> {
+    const pending = unsubscribeSecondCheckPending.value
+    if (!pending) return { poll: false }
+    unsubscribeSecondCheckApproving.value = true
+    sendError.value = null
+    try {
+      const res = await $fetch<{
+        ok: boolean
+        needsUnsubscribeApproval?: boolean
+        total?: number
+        valid?: number
+        queued?: number
+        sent?: number
+        failed?: number
+        pending?: number
+      }>('/api/v1/tenant/send-campaign/unsubscribe-approve', {
+        method: 'POST',
+        body: { campaignId: pending.campaignId },
+        timeout: 30000,
+        ...apiFetchOptions(),
+        ...serverAuthHeaders()
+      })
+
+      unsubscribeSecondCheckPreviewOpen.value = false
+      unsubscribeSecondCheckPending.value = null
+
+      if (res == null) {
+        sendError.value = 'Unexpected response from server.'
+        return { poll: false }
+      }
+      if (res.needsUnsubscribeApproval === true) {
+        sendError.value = 'Unsubscribe approval is still required. Try again.'
+        return { poll: false }
+      }
+
+      const total = res.total ?? 0
+      const sent = res.sent ?? 0
+      const failed = res.failed ?? 0
+      const pendingCount = res.pending ?? 0
+      const queued = res.queued ?? 0
+      const valid = res.valid ?? 0
+
+      sendingCampaignId.value = pending.campaignId
+      sendStatus.value = {
+        campaignId: pending.campaignId,
+        total,
+        sent,
+        failed,
+        pending: pendingCount,
+        done: false,
+        campaignStatus: 'Sending'
+      }
+
+      if (!queued) {
+        const campaignStatus = valid === 0 ? 'Failed' : 'Sent'
+        sendStatus.value = {
+          campaignId: pending.campaignId,
+          campaignStatus,
+          pending: 0,
+          sent,
+          failed,
+          total,
+          done: true
+        }
+        if (valid === 0) {
+          sendError.value =
+            'No valid email addresses. Invalid addresses were marked as failed—fix them and send again.'
+        }
+        await fetchCampaigns({ force: true })
+        return { poll: false }
+      }
+
+      sendStatus.value = {
+        campaignId: pending.campaignId,
+        campaignStatus: 'Sending',
+        pending: queued,
+        sent: 0,
+        failed,
+        total,
+        done: false
+      }
+      return { poll: true }
+    } catch (e: unknown) {
+      sendError.value = fetchErrorMessage(e, 'Failed to approve and send')
+      return { poll: false }
+    } finally {
+      unsubscribeSecondCheckApproving.value = false
     }
   }
 
@@ -573,8 +713,15 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendingCampaignId,
     sendStatus,
     sendError,
+    unsubscribeSecondCheckPending,
+    unsubscribeSecondCheckPreviewOpen,
+    unsubscribeSecondCheckApproving,
     fetchCampaigns,
     sendCampaign,
+    openUnsubscribeSecondCheckPreview,
+    closeUnsubscribeSecondCheckPreview,
+    declineUnsubscribeSecondCheck,
+    approveUnsubscribeSecondCheckAndSend,
     retryFailedCampaign,
     pauseCampaignSend,
     stopCampaignSend,

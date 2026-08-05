@@ -12,6 +12,7 @@ import {
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -37,11 +38,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const set: Record<string, unknown> = {}
+  let unsubscribeFooterAppended = false
   if (typeof body.name === 'string' && body.name.trim()) set.name = body.name.trim()
   if (typeof body.subject === 'string' && body.subject.trim()) set.subject = body.subject.trim()
   if (typeof body.description === 'string') set.description = body.description.trim()
   if (typeof body.htmlTemplate === 'string' && body.htmlTemplate.trim()) {
-    set.htmlTemplate = body.htmlTemplate.trim()
+    const unsubscribeCheck = ensureEmailTemplateUnsubscribe(body.htmlTemplate.trim())
+    set.htmlTemplate = unsubscribeCheck.html
+    unsubscribeFooterAppended = unsubscribeCheck.footerAppended
   }
   if (body.htmlSource === 'upload' || body.htmlSource === 'editor') {
     set.htmlSource = body.htmlSource
@@ -72,6 +76,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     ok: true,
+    unsubscribeFooterAppended,
     template: {
       id: String(doc._id),
       name: doc.name,

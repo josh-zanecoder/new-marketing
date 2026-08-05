@@ -44,7 +44,17 @@ const {
   clearUploadedTemplate,
   openFilePicker,
   onTemplateFileChange,
-  sendCustomMarketing
+  sendCustomMarketing,
+  unsubscribeFooterModalOpen,
+  unsubscribeFooterPreviewOpen,
+  unsubscribeFooterPreviewHtml,
+  unsubscribeFooterModalTitle,
+  unsubscribeFooterModalMessage,
+  unsubscribeFooterModalConfirm,
+  unsubscribeFooterModalPreview,
+  closeUnsubscribeFooterModal,
+  openUnsubscribeFooterPreview,
+  closeUnsubscribeFooterPreview
 } = useCustomMarketingCompose()
 
 const marketingApi = useTenantMarketingApi()
@@ -433,5 +443,23 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
+
+    <TenantUnsubscribeFooterAppendedModal
+      :open="unsubscribeFooterModalOpen"
+      :title="unsubscribeFooterModalTitle"
+      :message="unsubscribeFooterModalMessage"
+      :confirm-text="unsubscribeFooterModalConfirm"
+      :preview-text="unsubscribeFooterModalPreview"
+      @preview="openUnsubscribeFooterPreview"
+      @close="closeUnsubscribeFooterModal"
+    />
+    <TenantEmailTemplatePreviewModal
+      :open="unsubscribeFooterPreviewOpen"
+      name="Custom marketing"
+      :subject="subject"
+      :html="unsubscribeFooterPreviewHtml"
+      elevated
+      @close="closeUnsubscribeFooterPreview"
+    />
   </div>
 </template>

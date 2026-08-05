@@ -14,6 +14,10 @@ import type {
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import {
+  inspectCampaignUnsubscribeSecondCheck,
+  persistCampaignTemplateHtmlAfterUnsubscribeCheck
+} from '../utils/emailTemplate/applyCampaignUnsubscribeSecondCheck'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { enqueueCampaignBatch, hasActiveCampaignSendJob } from '../queue/emailQueue'
 import {
@@ -230,10 +234,17 @@ export interface BeginCampaignSendOptions {
    * `retry_failed` — keep delivery ledger; only resend non-`sent` rows (failed/pending).
    */
   mode?: 'new' | 'retry_failed'
+  /**
+   * When true (default for interactive send), if the second check must append an unsubscribe
+   * footer, pause and return `needsUnsubscribeApproval` instead of enqueueing.
+   * Scheduled workers set `false` to auto-append and continue.
+   */
+  awaitUnsubscribeApproval?: boolean
 }
 
-export interface BeginCampaignSendResult {
+export type BeginCampaignSendQueuedResult = {
   ok: true
+  needsUnsubscribeApproval?: false
   total: number
   valid: number
   invalid: number
@@ -244,6 +255,19 @@ export interface BeginCampaignSendResult {
   sendRunId: string
   resumed?: boolean
 }
+
+export type BeginCampaignSendApprovalResult = {
+  ok: true
+  needsUnsubscribeApproval: true
+  campaignId: string
+  campaignName: string
+  subject: string
+  previewHtml: string
+}
+
+export type BeginCampaignSendResult =
+  | BeginCampaignSendQueuedResult
+  | BeginCampaignSendApprovalResult
 
 /**
  * Builds recipient rows, moves the campaign to Sending, and enqueues batch processing.
@@ -277,6 +301,40 @@ export async function beginCampaignSend(
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (!allowedStatuses.includes(campaign.status)) {
     throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
+  }
+
+  if (mode === 'new') {
+    const awaitApproval = options?.awaitUnsubscribeApproval !== false
+    const secondCheck = await inspectCampaignUnsubscribeSecondCheck(conn, campaign)
+    if (secondCheck.footerAppended) {
+      if (awaitApproval) {
+        logSend('unsubscribeSecondCheck.needsApproval', {
+          campaignId,
+          dbName,
+          templateId: secondCheck.templateId
+        })
+        return {
+          ok: true,
+          needsUnsubscribeApproval: true,
+          campaignId: String(campaign._id),
+          campaignName: campaign.name ?? '',
+          subject: campaign.subject ?? '',
+          previewHtml: secondCheck.html
+        }
+      }
+      if (secondCheck.templateId) {
+        await persistCampaignTemplateHtmlAfterUnsubscribeCheck(
+          conn,
+          secondCheck.templateId,
+          secondCheck.html
+        )
+        logSend('unsubscribeSecondCheck.autoAppended', {
+          campaignId,
+          dbName,
+          templateId: secondCheck.templateId
+        })
+      }
+    }
   }
 
   const sendRunId = randomUUID()

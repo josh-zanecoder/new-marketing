@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UploadedEmailDesignPayload } from '~~/shared/uploadedEmailDesign'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export interface EmailTemplateItem {
   id: string
@@ -86,7 +87,8 @@ function closeUploadEditor() {
 
 function applyUploadedHtml(html: string) {
   uploadError.value = ''
-  emit('upload-html', { html, saveToLibrary: saveHtmlToLibrary.value })
+  const check = ensureEmailTemplateUnsubscribe(html)
+  emit('upload-html', { html: check.html, saveToLibrary: saveHtmlToLibrary.value })
   resetUploadForm()
 }
 

@@ -8,6 +8,7 @@ import {
   htmlContainsCustomMarketingDataImages
 } from '~~/shared/customMarketingHostedImages'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export type CampaignTemplateSaveInput = {
   campaignName: string
@@ -54,6 +55,7 @@ export async function resolveCampaignEmailTemplateOnSave(
   }
 
   if (html) {
+    html = ensureEmailTemplateUnsubscribe(html).html
     const htmlSource = resolveCampaignTemplateHtmlSource(input.templateHtmlSource)
     const saveToLibrary =
       htmlSource === 'custom' ? false : input.saveHtmlToLibrary === true

@@ -157,8 +157,13 @@ export function startEmailWorker() {
         try {
           const result = await beginCampaignSend(tenantConn, campaignId, {
             allowedStatuses: ['Scheduled'],
-            statusOnEnqueueFailure: 'Scheduled'
+            statusOnEnqueueFailure: 'Scheduled',
+            awaitUnsubscribeApproval: false
           })
+          if ('needsUnsubscribeApproval' in result && result.needsUnsubscribeApproval) {
+            jobLog('startScheduled.skipped.unsubscribeApproval', { campaignId, dbName })
+            return
+          }
           jobLog('startScheduled.done', {
             campaignId,
             dbName,

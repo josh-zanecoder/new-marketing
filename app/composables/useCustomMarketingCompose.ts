@@ -15,8 +15,10 @@ import {
 } from '~~/shared/datetimeLocal'
 import { resolveCrmAuthenticatedSender } from '~~/shared/crmAuthenticatedSender'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
+import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 import { useCampaignStore } from '~/store/campaignStore'
 import { useMarketingScrollLock } from '~/composables/useMarketingScrollLock'
+import { useUnsubscribeFooterAppendedModal } from '~/composables/useUnsubscribeFooterAppendedModal'
 
 interface RecipientListOption {
   id: string
@@ -35,6 +37,19 @@ export function useCustomMarketingCompose() {
   const { data: authUser } = useMarketingMe()
   const { defaultSenderName, defaultSenderEmail, loadDefaultCampaignSender } =
     useDefaultCampaignSender()
+  const {
+    open: unsubscribeFooterModalOpen,
+    previewOpen: unsubscribeFooterPreviewOpen,
+    previewHtml: unsubscribeFooterPreviewHtml,
+    title: unsubscribeFooterModalTitle,
+    message: unsubscribeFooterModalMessage,
+    confirmText: unsubscribeFooterModalConfirm,
+    previewText: unsubscribeFooterModalPreview,
+    close: closeUnsubscribeFooterModal,
+    openPreview: openUnsubscribeFooterPreview,
+    closePreview: closeUnsubscribeFooterPreview,
+    openIfAppended: openUnsubscribeFooterModalIfAppended
+  } = useUnsubscribeFooterAppendedModal()
 
   const subject = ref(CUSTOM_MARKETING_DEFAULT_SUBJECT)
   const body = ref(CUSTOM_MARKETING_DEFAULT_BODY_HTML)
@@ -238,10 +253,12 @@ export function useCustomMarketingCompose() {
   }
 
   async function applyUploadedHtml(html: string, fileName: string): Promise<void> {
-    uploadedHtml.value = normalizeUploadedEmailHtml(html)
+    const check = ensureEmailTemplateUnsubscribe(normalizeUploadedEmailHtml(html))
+    uploadedHtml.value = check.html
     uploadedFileName.value = fileName
     contentSource.value = 'upload'
     uploadError.value = ''
+    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
   }
 
   async function onTemplateFileChange(ev: Event): Promise<void> {
@@ -271,7 +288,8 @@ export function useCustomMarketingCompose() {
     return typeof raw === 'string' ? raw : fallback
   }
 
-  function resolveSendHtmlOrSetError(): string | null {
+  /** Resolve send HTML, run unsubscribe first check, and show the footer modal when appended. */
+  async function resolveSendHtmlOrSetError(): Promise<string | null> {
     const html = resolveCustomMarketingSendHtml({
       contentSource: contentSource.value,
       bodyHtml: body.value,
@@ -283,7 +301,12 @@ export function useCustomMarketingCompose() {
         ?? 'Email HTML is too large for Gmail. Remove or shrink photos before sending.'
       return null
     }
-    return html
+    const check = ensureEmailTemplateUnsubscribe(html)
+    if (contentSource.value === 'upload') {
+      uploadedHtml.value = check.html
+    }
+    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
+    return check.html
   }
 
   async function createCustomMarketingCampaign(html: string): Promise<{ id: string; name: string }> {
@@ -330,7 +353,7 @@ export function useCustomMarketingCompose() {
       scheduleError.value = 'Pick a valid date and time.'
       return
     }
-    const html = resolveSendHtmlOrSetError()
+    const html = await resolveSendHtmlOrSetError()
     if (!html) return
     scheduleSubmitting.value = true
     try {
@@ -363,7 +386,7 @@ export function useCustomMarketingCompose() {
       saveError.value = 'Select a recipient list and provide a subject and message or uploaded template.'
       return
     }
-    const html = resolveSendHtmlOrSetError()
+    const html = await resolveSendHtmlOrSetError()
     if (!html) return
     isSending.value = true
     try {
@@ -380,6 +403,9 @@ export function useCustomMarketingCompose() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
+      if (campaignStore.unsubscribeSecondCheckPending) {
+        return
+      }
       if (sendResult.poll) {
         campaignStore.startSendStatusPolling(campaignId, async () => {
           await navigateTo(`/tenant/campaigns/${campaignId}`)
@@ -437,6 +463,16 @@ export function useCustomMarketingCompose() {
     clearUploadedTemplate,
     openFilePicker,
     onTemplateFileChange,
-    sendCustomMarketing
+    sendCustomMarketing,
+    unsubscribeFooterModalOpen,
+    unsubscribeFooterPreviewOpen,
+    unsubscribeFooterPreviewHtml,
+    unsubscribeFooterModalTitle,
+    unsubscribeFooterModalMessage,
+    unsubscribeFooterModalConfirm,
+    unsubscribeFooterModalPreview,
+    closeUnsubscribeFooterModal,
+    openUnsubscribeFooterPreview,
+    closeUnsubscribeFooterPreview
   }
 }

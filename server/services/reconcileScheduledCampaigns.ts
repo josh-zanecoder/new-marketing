@@ -66,7 +66,8 @@ export async function reconcileOverdueScheduledCampaigns(): Promise<void> {
 
         await beginCampaignSend(tenantConn, campaignId, {
           allowedStatuses: ['Scheduled'],
-          statusOnEnqueueFailure: 'Scheduled'
+          statusOnEnqueueFailure: 'Scheduled',
+          awaitUnsubscribeApproval: false
         })
         started++
         console.log('[ScheduleReconcile] started overdue send', { dbName, campaignId })
