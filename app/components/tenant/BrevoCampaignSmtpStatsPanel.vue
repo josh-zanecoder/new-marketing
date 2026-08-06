@@ -44,8 +44,6 @@ const topView = ref<TopView>('metrics')
 const showMetricsHelp = ref(false)
 /** Empty = all event types. Brevo events API accepts one type at a time. */
 const selectedEventType = ref('')
-/** Set during Refresh so the next request syncs Brevo events into Mongo first. */
-const skipCacheOnce = ref(false)
 
 const {
   datePreset,
@@ -72,7 +70,6 @@ const statsQuery = computed(() => {
   if (to) q.to = to
   const eventType = selectedEventType.value.trim()
   if (eventType) q.event = eventType
-  if (skipCacheOnce.value) q.skipCache = '1'
   return q
 })
 
@@ -151,13 +148,9 @@ const FILL_CLASS: Record<string, string> = {
 
 defineExpose({
   refresh: async () => {
+    // Mongo-only reload. Brevo full sync is owned by Tracking Refresh (avoids 2× sync).
     eventsPage.value = 1
-    skipCacheOnce.value = true
-    try {
-      await refresh()
-    } finally {
-      skipCacheOnce.value = false
-    }
+    await refresh()
   },
   pending
 })

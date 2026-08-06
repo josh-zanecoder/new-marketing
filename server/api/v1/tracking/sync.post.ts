@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
     ok: true as const,
     fetched: result.fetched,
     upserted: result.upserted,
-    modified: result.modified
+    modified: result.modified,
+    deduped: result.deduped ?? 0,
+    timingsMs: result.timingsMs
   }
 })

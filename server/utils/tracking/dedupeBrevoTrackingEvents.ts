@@ -227,3 +227,21 @@ export async function findProximityTrackingEvent(
     .exec()) as LeanTrackingRow | null
   return row
 }
+
+/** Drop legacy unique indexes once per process (avoid syncIndexes on every Refresh). */
+const droppedLegacyIndexes = new WeakSet<object>()
+
+export async function ensureBrevoTrackingIndexes(
+  BrevoTrackingEvent: Model<unknown>
+): Promise<void> {
+  const coll = BrevoTrackingEvent.collection
+  if (droppedLegacyIndexes.has(coll)) return
+  for (const name of ['messageId_1_event_1_date_1', 'messageId_event_eventKeyAt_unique']) {
+    try {
+      await coll.dropIndex(name)
+    } catch {
+      // missing
+    }
+  }
+  droppedLegacyIndexes.add(coll)
+}

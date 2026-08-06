@@ -12,8 +12,6 @@ import {
 } from '@server/utils/tracking/fetchBrevoTransactionalStats'
 import { loadStoredCampaignSmtpStatsEventsPage } from '@server/utils/tracking/loadStoredCampaignSmtpStatsEventsPage'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
-import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
-import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
 
 function normalizeNonNegIntQuery(
   event: Parameters<typeof getQuery>[0],
@@ -35,26 +33,12 @@ function normalizeNonNegIntQuery(
   return n
 }
 
-function normalizeSkipCacheQuery(event: Parameters<typeof getQuery>[0]): boolean {
-  const q = getQuery(event) as Record<string, unknown>
-  const raw = q.skipCache ?? q.refresh
-  const s =
-    typeof raw === 'string'
-      ? raw.trim().toLowerCase()
-      : Array.isArray(raw) && typeof raw[0] === 'string'
-        ? raw[0].trim().toLowerCase()
-        : raw === true
-          ? 'true'
-          : ''
-  return s === '1' || s === 'true' || s === 'yes'
-}
-
 /**
- * Campaign SMTP statistics from Mongo `brevo_tracking_events`.
- * Refresh syncs unaggregated Brevo events, then re-aggregates locally.
+ * Campaign SMTP statistics from Mongo `brevo_tracking_events` only.
+ * Brevo full sync is owned by POST /tracking/sync (Tracking Refresh).
  */
 export default defineEventHandler(async (event) => {
-  const { dbName, marketingTenantId } = await resolveTrackingTenantContext(event)
+  const { dbName } = await resolveTrackingTenantContext(event)
 
   const campaignId = normalizeCampaignIdQuery(event)
   if (!campaignId) {
@@ -91,20 +75,8 @@ export default defineEventHandler(async (event) => {
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
   const q = getQuery(event) as Record<string, unknown>
   const eventType = normalizeBrevoEventTypesQuery(q.event ?? q.events)[0] ?? null
-  const skipCache = normalizeSkipCacheQuery(event)
-
-  if (skipCache) {
-    const sync = await syncTenantBrevoTrackingEvents({
-      dbName,
-      marketingTenantId,
-      fromYmd: range.startDate,
-      toYmd: range.endDate,
-      campaignId
-    })
-    if (sync.error) {
-      throwBrevoTrackingFetchError(sync.error)
-    }
-  }
+  // skipCache used to re-pull Brevo here (doubled Refresh cost with /tracking/sync).
+  // Stats always reads Mongo; Tracking Refresh owns the Brevo full sync.
 
   const [reports, mongoEvents] = await Promise.all([
     aggregateStoredBrevoSmtpStats({
