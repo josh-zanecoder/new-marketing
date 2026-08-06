@@ -243,7 +243,13 @@ export async function loadStoredTenantBrevoTrackingEventsPage(
 
   const countsPipeline: PipelineStage[] = [
     { $match: baseFilter },
-    { $group: { _id: '$event', count: { $sum: 1 } } }
+    {
+      $group: {
+        _id: '$event',
+        count: { $sum: 1 },
+        messageIds: { $addToSet: { $ifNull: ['$messageId', ''] } }
+      }
+    }
   ]
 
   const offsetMinutes =
@@ -277,7 +283,7 @@ export async function loadStoredTenantBrevoTrackingEventsPage(
   const [distinctUsers, countsRows, messageFacet, chartRows] = await Promise.all([
     BrevoTrackingEvent.distinct('userEmail', scopeFilter) as Promise<string[]>,
     BrevoTrackingEvent.aggregate(countsPipeline).exec() as Promise<
-      Array<{ _id: string | null; count: number }>
+      Array<{ _id: string | null; count: number; messageIds?: string[] }>
     >,
     BrevoTrackingEvent.aggregate(messageIdPipeline).exec() as Promise<
       Array<{
@@ -295,8 +301,32 @@ export async function loadStoredTenantBrevoTrackingEventsPage(
   for (const row of countsRows) {
     const key = (row._id || '').trim()
     if (!key) continue
-    eventCounts[key] = row.count
-    totalEvents += row.count
+    // Once-per-message funnel events: count distinct messages (survives leftover dups).
+    // Engagement totals (opened/clicks/…): keep raw event volume after proximity dedupe.
+    const k = key.toLowerCase().replace(/[_\s-]+/g, '')
+    const uniqueByMessage =
+      k === 'requests' ||
+      k === 'request' ||
+      k === 'sent' ||
+      k === 'delivered' ||
+      k === 'blocked' ||
+      k === 'invalid' ||
+      k === 'deferred' ||
+      k === 'error' ||
+      k === 'hardbounce' ||
+      k === 'hardbounces' ||
+      k === 'softbounce' ||
+      k === 'softbounces' ||
+      k === 'spam' ||
+      k === 'complaint' ||
+      k === 'unsubscribed' ||
+      k === 'uniqueopened' ||
+      k === 'firstopening'
+    const n = uniqueByMessage
+      ? (row.messageIds ?? []).filter((id) => String(id).trim()).length
+      : row.count
+    eventCounts[key] = n
+    totalEvents += n
   }
 
   const chartEvents = chartRows

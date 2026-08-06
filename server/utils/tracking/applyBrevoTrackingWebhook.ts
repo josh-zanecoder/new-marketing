@@ -9,6 +9,8 @@ import {
   parseCampaignIdFromBrevoTag,
   parseUserEmailFromBrevoTag
 } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
+import { brevoTrackingIdentityFromDate } from '@server/utils/tracking/brevoTrackingEventIdentity'
+import { findProximityTrackingEvent } from '@server/utils/tracking/dedupeBrevoTrackingEvents'
 import {
   parseBrevoTransactionalWebhookPayload,
   resolveDbNameFromBrevoTags,
@@ -43,12 +45,11 @@ export async function resolveTenantDbName(
 }
 
 function webhookToTrackingDoc(parsed: ParsedBrevoTransactionalWebhook) {
-  const date = parsed.date.trim()
-  const eventAtMs = date ? Date.parse(date) : NaN
+  const identity = brevoTrackingIdentityFromDate(parsed.date)
   const tag = parsed.tag
   return {
     email: parsed.email,
-    date,
+    date: identity.date || parsed.date.trim(),
     messageId: parsed.messageId,
     event: parsed.event,
     tag,
@@ -57,7 +58,8 @@ function webhookToTrackingDoc(parsed: ParsedBrevoTransactionalWebhook) {
     ip: parsed.ip,
     link: parsed.link,
     reason: parsed.reason,
-    eventAt: Number.isFinite(eventAtMs) ? new Date(eventAtMs) : null,
+    eventAt: identity.eventAt,
+    eventKeyAt: identity.eventKeyAt,
     campaignId: parseCampaignIdFromBrevoTag(tag),
     userEmail: parseUserEmailFromBrevoTag(tag)
   }
@@ -106,11 +108,41 @@ export async function applyBrevoTrackingWebhook(
   const { BrevoTrackingEvent } = getTenantClientModels(conn)
   const doc = webhookToTrackingDoc(parsed)
 
+  if (doc.eventKeyAt != null) {
+    const existing = await findProximityTrackingEvent(BrevoTrackingEvent, {
+      messageId: doc.messageId,
+      event: doc.event,
+      eventKeyAt: doc.eventKeyAt
+    })
+    if (existing?._id) {
+      const result = await BrevoTrackingEvent.updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            ...doc,
+            // Keep richer non-empty fields already on the row when incoming is blank.
+            from: doc.from || existing.from || '',
+            tag: doc.tag || existing.tag || '',
+            subject: doc.subject || existing.subject || '',
+            email: doc.email || existing.email || ''
+          }
+        }
+      )
+      return {
+        ok: true,
+        dbName,
+        upserted: Boolean(result.upsertedCount),
+        messageId: doc.messageId,
+        event: doc.event
+      }
+    }
+  }
+
   const result = await BrevoTrackingEvent.updateOne(
     {
       messageId: doc.messageId,
       event: doc.event,
-      date: doc.date
+      ...(doc.eventKeyAt != null ? { eventKeyAt: doc.eventKeyAt } : { date: doc.date })
     },
     { $set: doc },
     { upsert: true }

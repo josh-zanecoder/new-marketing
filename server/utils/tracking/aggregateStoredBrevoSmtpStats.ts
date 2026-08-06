@@ -96,6 +96,19 @@ function metricKeyForEvent(raw: string): keyof BrevoSmtpDailyRow | null {
   return null
 }
 
+/** Funnel / once-per-message metrics — count distinct messageId, not raw rows. */
+const UNIQUE_MESSAGE_METRICS = new Set<keyof BrevoSmtpDailyRow>([
+  'requests',
+  'delivered',
+  'hardBounces',
+  'softBounces',
+  'blocked',
+  'invalid',
+  'spamReports',
+  'unsubscribed',
+  'uniqueOpens'
+])
+
 function enumerateYmdRange(startYmd: string, endYmd: string): string[] {
   const out: string[] = []
   const [ys, ms, ds] = startYmd.split('-').map(Number)
@@ -187,6 +200,9 @@ export async function aggregateStoredBrevoSmtpStats(params: {
           event: '$event'
         },
         count: { $sum: 1 },
+        uniqueMessageIds: {
+          $addToSet: { $ifNull: ['$messageId', ''] }
+        },
         uniqueKeys: {
           $addToSet: {
             $concat: [
@@ -203,6 +219,7 @@ export async function aggregateStoredBrevoSmtpStats(params: {
   const rows = (await BrevoTrackingEvent.aggregate(pipeline).exec()) as Array<{
     _id: { day?: string; event?: string }
     count: number
+    uniqueMessageIds?: string[]
     uniqueKeys?: string[]
   }>
 
@@ -216,6 +233,8 @@ export async function aggregateStoredBrevoSmtpStats(params: {
   const clickUniqueTotal = new Set<string>()
   const openUniqueByDay = new Map<string, Set<string>>()
   const clickUniqueByDay = new Map<string, Set<string>>()
+  const funnelUniqueTotal = new Map<keyof BrevoSmtpDailyRow, Set<string>>()
+  const funnelUniqueByDay = new Map<string, Map<keyof BrevoSmtpDailyRow, Set<string>>>()
   let sawUniqueOpenedEvent = false
 
   for (const row of rows) {
@@ -230,9 +249,33 @@ export async function aggregateStoredBrevoSmtpStats(params: {
       dayMap.set(day, daily)
     }
 
-    const count = row.count || 0
-    addCount(daily, key, count)
-    addCount(totals, key, count)
+    const messageIds = (row.uniqueMessageIds ?? []).filter((id) => id.trim())
+    const count = UNIQUE_MESSAGE_METRICS.has(key) ? messageIds.length : row.count || 0
+
+    if (UNIQUE_MESSAGE_METRICS.has(key)) {
+      let totalSet = funnelUniqueTotal.get(key)
+      if (!totalSet) {
+        totalSet = new Set()
+        funnelUniqueTotal.set(key, totalSet)
+      }
+      let dayMapForFunnel = funnelUniqueByDay.get(day)
+      if (!dayMapForFunnel) {
+        dayMapForFunnel = new Map()
+        funnelUniqueByDay.set(day, dayMapForFunnel)
+      }
+      let daySet = dayMapForFunnel.get(key)
+      if (!daySet) {
+        daySet = new Set()
+        dayMapForFunnel.set(key, daySet)
+      }
+      for (const id of messageIds) {
+        totalSet.add(id)
+        daySet.add(id)
+      }
+    } else {
+      addCount(daily, key, count)
+      addCount(totals, key, count)
+    }
 
     if (key === 'uniqueOpens') sawUniqueOpenedEvent = true
 
@@ -260,6 +303,19 @@ export async function aggregateStoredBrevoSmtpStats(params: {
         daySet.add(k)
         clickUniqueTotal.add(k)
       }
+    }
+  }
+
+  for (const [key, set] of funnelUniqueTotal) {
+    if (key === 'date') continue
+    ;(totals as BrevoSmtpAggregated)[key] = set.size as never
+  }
+  for (const [day, keyMap] of funnelUniqueByDay) {
+    const daily = dayMap.get(day)
+    if (!daily) continue
+    for (const [key, set] of keyMap) {
+      if (key === 'date') continue
+      ;(daily as BrevoSmtpDailyRow)[key] = set.size as never
     }
   }
 

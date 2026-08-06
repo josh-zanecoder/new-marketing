@@ -1,4 +1,4 @@
-import type { AnyBulkWriteOperation } from 'mongoose'
+import type { Model } from 'mongoose'
 import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { fetchTenantBrevoEmailEvents } from '@server/utils/tracking/fetchTenantBrevoEmailEvents'
@@ -7,8 +7,16 @@ import {
   parseTagSegments,
   type BrevoTrackingEmailEvent
 } from '@server/utils/tracking/brevoTenantEvents'
+import {
+  brevoTrackingIdentityFromDate,
+  preferRicherBrevoEventAtMs
+} from '@server/utils/tracking/brevoTrackingEventIdentity'
+import {
+  dedupeBrevoTrackingEvents,
+  findProximityTrackingEvent
+} from '@server/utils/tracking/dedupeBrevoTrackingEvents'
 
-const BULK_CHUNK = 500
+const UPSERT_CONCURRENCY = 40
 
 export function parseCampaignIdFromBrevoTag(tag: string | undefined): string {
   for (const part of parseTagSegments(tag)) {
@@ -29,15 +37,15 @@ export function parseUserEmailFromBrevoTag(tag: string | undefined): string {
 }
 
 export function brevoEventToTrackingDoc(ev: BrevoTrackingEmailEvent) {
-  const date = (ev.date || '').trim()
+  const rawDate = (ev.date || '').trim()
   const messageId = (ev.messageId || '').trim()
   const event = (ev.event || '').trim()
   const tag = (ev.tag || '').trim()
   const email = (ev.email || '').trim()
-  const eventAtMs = date ? Date.parse(date) : NaN
+  const identity = brevoTrackingIdentityFromDate(rawDate)
   return {
     email,
-    date,
+    date: identity.date || rawDate,
     messageId,
     event,
     tag,
@@ -46,16 +54,91 @@ export function brevoEventToTrackingDoc(ev: BrevoTrackingEmailEvent) {
     ip: (ev.ip || '').trim(),
     link: (ev.link || '').trim(),
     reason: (ev.reason || '').trim(),
-    eventAt: Number.isFinite(eventAtMs) ? new Date(eventAtMs) : null,
+    eventAt: identity.eventAt,
+    eventKeyAt: identity.eventKeyAt,
     campaignId: parseCampaignIdFromBrevoTag(tag),
     userEmail: parseUserEmailFromBrevoTag(tag)
   }
+}
+
+type TrackingDoc = ReturnType<typeof brevoEventToTrackingDoc>
+
+function mergeWithExisting(
+  incoming: TrackingDoc,
+  existing: { eventKeyAt?: number | null; date?: string; from?: string }
+): TrackingDoc {
+  const richerMs = preferRicherBrevoEventAtMs(incoming.eventKeyAt, existing.eventKeyAt ?? null)
+  const date =
+    richerMs != null ? new Date(richerMs).toISOString() : incoming.date || existing.date || ''
+  return {
+    ...incoming,
+    date,
+    eventAt: richerMs != null ? new Date(richerMs) : incoming.eventAt,
+    eventKeyAt: richerMs,
+    from: incoming.from || (existing.from || '').trim(),
+    tag: incoming.tag || '',
+    subject: incoming.subject || '',
+    email: incoming.email || ''
+  }
+}
+
+async function upsertTrackingDoc(
+  BrevoTrackingEvent: Model<unknown>,
+  doc: TrackingDoc
+): Promise<'upserted' | 'modified'> {
+  if (doc.eventKeyAt != null) {
+    const existing = await findProximityTrackingEvent(BrevoTrackingEvent, {
+      messageId: doc.messageId,
+      event: doc.event,
+      eventKeyAt: doc.eventKeyAt
+    })
+    if (existing?._id) {
+      const merged = mergeWithExisting(doc, existing)
+      await BrevoTrackingEvent.updateOne({ _id: existing._id }, { $set: merged })
+      return 'modified'
+    }
+  }
+
+  await BrevoTrackingEvent.updateOne(
+    {
+      messageId: doc.messageId,
+      event: doc.event,
+      ...(doc.eventKeyAt != null ? { eventKeyAt: doc.eventKeyAt } : { date: doc.date })
+    },
+    { $set: doc },
+    { upsert: true }
+  )
+  return 'upserted'
+}
+
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<'upserted' | 'modified'>
+): Promise<{ upserted: number; modified: number }> {
+  let upserted = 0
+  let modified = 0
+  let i = 0
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++
+      const item = items[idx]
+      if (item === undefined) return
+      const kind = await fn(item)
+      if (kind === 'upserted') upserted += 1
+      else modified += 1
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length || 1))
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return { upserted, modified }
 }
 
 export type SyncTenantBrevoTrackingEventsResult = {
   fetched: number
   upserted: number
   modified: number
+  deduped?: number
   error?: string
 }
 
@@ -79,7 +162,6 @@ export async function syncTenantBrevoTrackingEvents(params: {
     toYmd: params.toYmd ?? null,
     dbName,
     campaignId: params.campaignId ?? null,
-    // intentionally no `events` filter — refresh stores the full window
     skipCache: true
   })
 
@@ -97,33 +179,42 @@ export async function syncTenantBrevoTrackingEvents(params: {
   const conn = await getTenantConnectionByDbName(dbName)
   const { BrevoTrackingEvent } = getTenantClientModels(conn)
 
-  let upserted = 0
-  let modified = 0
+  for (const name of [
+    'messageId_1_event_1_date_1',
+    'messageId_event_eventKeyAt_unique'
+  ]) {
+    try {
+      await BrevoTrackingEvent.collection.dropIndex(name)
+    } catch {
+      // missing
+    }
+  }
+  try {
+    await BrevoTrackingEvent.syncIndexes()
+  } catch {
+    // ignore index race
+  }
+
+  const before = await dedupeBrevoTrackingEvents(BrevoTrackingEvent, {
+    campaignId: params.campaignId ?? null
+  })
 
   const usable = events.filter(
     (ev) => (ev.messageId || '').trim() && (ev.event || '').trim() && (ev.date || '').trim()
   )
 
-  for (let i = 0; i < usable.length; i += BULK_CHUNK) {
-    const slice = usable.slice(i, i + BULK_CHUNK)
-    const ops: AnyBulkWriteOperation[] = slice.map((ev) => {
-      const doc = brevoEventToTrackingDoc(ev)
-      return {
-        updateOne: {
-          filter: {
-            messageId: doc.messageId,
-            event: doc.event,
-            date: doc.date
-          },
-          update: { $set: doc },
-          upsert: true
-        }
-      }
-    })
-    const result = await BrevoTrackingEvent.bulkWrite(ops, { ordered: false })
-    upserted += result.upsertedCount ?? 0
-    modified += result.modifiedCount ?? 0
-  }
+  const { upserted, modified } = await mapPool(usable, UPSERT_CONCURRENCY, async (ev) =>
+    upsertTrackingDoc(BrevoTrackingEvent, brevoEventToTrackingDoc(ev))
+  )
 
-  return { fetched: usable.length, upserted, modified }
+  const after = await dedupeBrevoTrackingEvents(BrevoTrackingEvent, {
+    campaignId: params.campaignId ?? null
+  })
+
+  return {
+    fetched: usable.length,
+    upserted,
+    modified,
+    deduped: before.removed + after.removed
+  }
 }

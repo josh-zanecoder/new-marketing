@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 export const brevoTrackingEventSchema = new mongoose.Schema(
   {
     email: { type: String, default: '', trim: true },
-    /** Brevo event timestamp string (part of upsert key). */
+    /** Canonical ISO timestamp (preserves ms when present). */
     date: { type: String, required: true, trim: true },
     messageId: { type: String, required: true, trim: true },
     event: { type: String, required: true, trim: true },
@@ -13,15 +13,19 @@ export const brevoTrackingEventSchema = new mongoose.Schema(
     ip: { type: String, default: '', trim: true },
     link: { type: String, default: '', trim: true },
     reason: { type: String, default: '', trim: true },
-    /** Parsed from `date` for range queries. */
+    /** Parsed from `date` for range / proximity queries. */
     eventAt: { type: Date, default: null },
+    /** Exact UTC ms of the event (proximity-deduped with webhook↔API copies). */
+    eventKeyAt: { type: Number, default: null },
     campaignId: { type: String, default: '', trim: true },
     userEmail: { type: String, default: '', trim: true, lowercase: true }
   },
   { timestamps: true, collection: 'brevo_tracking_events' }
 )
 
-brevoTrackingEventSchema.index({ messageId: 1, event: 1, date: 1 }, { unique: true })
+// Non-unique: webhook vs API copies differ by ms and are collapsed in app logic.
+brevoTrackingEventSchema.index({ messageId: 1, event: 1, eventAt: 1 })
+brevoTrackingEventSchema.index({ messageId: 1, event: 1, eventKeyAt: 1 })
 brevoTrackingEventSchema.index({ eventAt: -1 })
 brevoTrackingEventSchema.index({ campaignId: 1, eventAt: -1 })
 brevoTrackingEventSchema.index({ userEmail: 1, eventAt: -1 })
