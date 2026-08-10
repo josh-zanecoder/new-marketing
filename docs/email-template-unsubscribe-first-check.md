@@ -32,7 +32,7 @@ The footer is marked with `data-marketing-unsubscribe-footer` so it is not appen
 
 When the footer is auto-appended on the template create/edit page **or Custom Marketing** (upload / send / schedule), an **info modal** (not a toast) explains what happened. Use **Preview** to open the full HTML preview (with the new footer), then **Got it** to continue.
 
-Send-time merge still replaces `{{unsubscribe}}` via `applyDefaultUnsubscribeMergeValue` / `buildUnsubscribeUrl`. The resolved link is always new-marketing `{marketingBaseUrl}/api/v1/unsubscribe?token=…` (public HTML preferences page). Do not point auto-appended footers at CRM/Retail `crmAppUrl` — that redirects unauthenticated recipients to login.
+Send-time merge still replaces `{{unsubscribe}}` via `applyDefaultUnsubscribeMergeValue` / `buildUnsubscribeUrl`. Prefer new-marketing `{marketingBaseUrl}/api/v1/unsubscribe?token=…`. If that base is unset on the send worker, fall back to CRM origin so the footer does not ship an empty `href` (underlined text that is not clickable). Ensure `NUXT_PUBLIC_MARKETING_BASE_URL` or `MARKETING_PUBLIC_BASE_URL` is set in the send environment.
 
 ## Main code locations
 

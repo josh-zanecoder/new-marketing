@@ -20,7 +20,7 @@ describe('buildUnsubscribeUrl', () => {
     vi.clearAllMocks()
   })
 
-  it('fills {{unsubscribe}} with new-marketing public API even when crmAppUrl is set', () => {
+  it('prefers new-marketing public API when marketing base is set', () => {
     const url = buildUnsubscribeUrl('tenant_db', 'contact1', 'secret', {
       crmAppUrl: 'https://retail.example.com/loan-officer'
     })
@@ -29,7 +29,17 @@ describe('buildUnsubscribeUrl', () => {
     )
   })
 
-  it('returns empty when marketing public base is unset', () => {
+  it('falls back to CRM origin so href is never empty when marketing base is unset', () => {
+    vi.mocked(getMarketingPublicBaseUrl).mockReturnValue('')
+    const url = buildUnsubscribeUrl('tenant_db', 'contact1', 'secret', {
+      crmAppUrl: 'https://crm.example.com/deep/path'
+    })
+    expect(url).toBe(
+      'https://crm.example.com/marketing/unsubscribe?token=signed.token'
+    )
+  })
+
+  it('returns empty only when neither marketing base nor crmAppUrl is available', () => {
     vi.mocked(getMarketingPublicBaseUrl).mockReturnValue('')
     expect(buildUnsubscribeUrl('tenant_db', 'contact1', 'secret')).toBe('')
   })

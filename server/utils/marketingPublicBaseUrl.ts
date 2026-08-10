@@ -1,14 +1,18 @@
-/** Public marketing app origin (no trailing slash). Source: `runtimeConfig.public.marketingBaseUrl` in nuxt.config. */
+/** Public marketing app origin (no trailing slash). */
 export function getMarketingPublicBaseUrl(): string {
-  let raw: string
+  let fromConfig = ''
   try {
     const config = useRuntimeConfig()
-    raw = String(config.public.marketingBaseUrl ?? '')
+    fromConfig = String(config.public.marketingBaseUrl ?? '').trim()
   } catch {
-    raw =
-      process.env.NUXT_PUBLIC_MARKETING_BASE_URL ||
-      process.env.MARKETING_PUBLIC_BASE_URL ||
-      ''
+    fromConfig = ''
   }
-  return raw.trim().replace(/\/$/, '')
+  const fromEnv = (
+    process.env.NUXT_PUBLIC_MARKETING_BASE_URL ||
+    process.env.MARKETING_PUBLIC_BASE_URL ||
+    ''
+  ).trim()
+  // Prefer runtime config when set; always fall through to env (Cloud Run / workers
+  // often bake an empty NUXT_PUBLIC_ value at build time).
+  return (fromConfig || fromEnv).replace(/\/$/, '')
 }
