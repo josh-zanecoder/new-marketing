@@ -7,7 +7,7 @@ import type { ContactLean, ContactModel } from '@server/types/tenant/contact.mod
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactRows } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export async function fetchAdminCampaignDetail(conn: Connection, campaignId: string) {
   const id = String(campaignId ?? '').trim()
@@ -48,12 +48,6 @@ export async function fetchAdminCampaignDetail(conn: Connection, campaignId: str
       sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : undefined,
       error: r.error
     }))
-  } else if (
-    campaign.recipientsType === 'list' &&
-    String(campaign.recipientsListId ?? '').trim()
-  ) {
-    const emails = await resolveRecipientListEmails(conn, String(campaign.recipientsListId))
-    recipients = emails.map((email) => ({ email }))
   } else if (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list') {
     const docs = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: campaign._id })
@@ -79,6 +73,18 @@ export async function fetchAdminCampaignDetail(conn: Connection, campaignId: str
         contactId: String(r.contact)
       }))
       .filter((r) => r.email.trim().length > 0)
+
+    if (
+      !recipients.length &&
+      campaign.recipientsType === 'list' &&
+      String(campaign.recipientsListId ?? '').trim()
+    ) {
+      const rows = await resolveRecipientListContactRows(
+        conn,
+        String(campaign.recipientsListId)
+      )
+      recipients = rows.map((r) => ({ email: r.email, contactId: r.contactId }))
+    }
   }
 
   recipients = recipients.filter((r) => (r.email ?? '').trim().length > 0)

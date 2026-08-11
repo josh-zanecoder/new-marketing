@@ -4,7 +4,7 @@ import type { ContactModel } from '@server/types/tenant/contact.model'
 import type { ManualRecipientInsert, ManualRecipientInsertManyCast, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
-import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactIdsWithInclusion } from '@server/utils/recipient/resolveRecipientListEmails'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import {
   isRegisteredTenantAuthContext,
@@ -83,7 +83,12 @@ export default defineEventHandler(async (event) => {
             .map((id) => new mongoose.Types.ObjectId(id))
         })()
       : recipientsType === 'list' && recipientsListId
-        ? resolveRecipientListContactIds(conn, recipientsListId)
+        ? resolveRecipientListContactIdsWithInclusion(
+            conn,
+            recipientsListId,
+            // When provided, only these list members are stored for the campaign (list itself unchanged).
+            body.recipientsManual
+          )
         : Promise.resolve([])
 
   const registryConn = await getRegistryConnection()

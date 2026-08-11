@@ -319,7 +319,6 @@ export function useCustomMarketingCompose() {
       subject: subject.value.trim(),
       recipientsType: 'list',
       recipientsListId: recipientsListId.value.trim(),
-      recipientsManual: [],
       templateHtml: html,
       templateHtmlSource: 'custom',
       saveHtmlToLibrary: false

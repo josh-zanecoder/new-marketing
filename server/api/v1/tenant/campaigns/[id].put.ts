@@ -10,7 +10,7 @@ import type {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
-import { resolveRecipientListContactIds } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactIdsWithInclusion } from '@server/utils/recipient/resolveRecipientListEmails'
 import {
   isRegisteredTenantAuthContext,
   tenantCreatedByFromAuth
@@ -141,7 +141,12 @@ export default defineEventHandler(async (event) => {
     if (recipientsListId) {
       const [_, contactIds] = await Promise.all([
         deleteRecipientsPromise,
-        resolveRecipientListContactIds(conn, recipientsListId)
+        resolveRecipientListContactIdsWithInclusion(
+          conn,
+          recipientsListId,
+          // When provided, only these list members are stored for the campaign (list itself unchanged).
+          body.recipientsManual
+        )
       ])
       if (contactIds.length) {
         const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({

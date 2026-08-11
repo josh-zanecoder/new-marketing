@@ -56,8 +56,17 @@
           </div>
           <div class="flex w-full shrink-0 flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center">
             <NuxtLink
-              :to="`/tenant/recipient-list/edit/${listId}`"
+              :to="makeCampaignHref"
               class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+            >
+              <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+              </svg>
+              Make a campaign
+            </NuxtLink>
+            <NuxtLink
+              :to="`/tenant/recipient-list/edit/${listId}`"
+              class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
             >
               Edit list
             </NuxtLink>
@@ -686,6 +695,10 @@ const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const listId = computed(() => String(route.params.id ?? ''))
+
+const makeCampaignHref = computed(
+  () => `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId.value)}`
+)
 
 const pending = ref(true)
 const pageLoading = ref(false)

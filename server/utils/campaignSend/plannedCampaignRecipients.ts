@@ -15,13 +15,6 @@ export async function resolvePlannedCampaignRecipientEmails(
   const { ManualRecipient, Contact } = getTenantClientModels(conn)
   const campaignId = campaign._id
 
-  if (
-    campaign.recipientsType === 'list' &&
-    String(campaign.recipientsListId ?? '').trim()
-  ) {
-    return resolveRecipientListEmails(conn, String(campaign.recipientsListId))
-  }
-
   if (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list') {
     const docs = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: campaignId })
@@ -41,9 +34,17 @@ export async function resolvePlannedCampaignRecipientEmails(
     const emailByContactId = new Map<string, string>(
       contacts.map((c) => [String(c._id), (c.email ?? '').trim().toLowerCase()])
     )
-    return docs
+    const fromSnapshot = docs
       .map((r) => emailByContactId.get(String(r.contact)) ?? '')
       .filter((email) => email.trim().length > 0)
+    if (fromSnapshot.length) return fromSnapshot
+  }
+
+  if (
+    campaign.recipientsType === 'list' &&
+    String(campaign.recipientsListId ?? '').trim()
+  ) {
+    return resolveRecipientListEmails(conn, String(campaign.recipientsListId))
   }
 
   return []

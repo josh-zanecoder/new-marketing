@@ -70,6 +70,29 @@ export async function recipientEmailsForCampaign(
   campaign: CampaignLean
 ): Promise<string[]> {
   const { ManualRecipient, Contact } = getTenantClientModels(conn)
+  const manualDocs = await (ManualRecipient as ManualRecipientModel)
+    .find({ campaign: campaign._id })
+    .lean<ManualRecipientLean[]>()
+  const idStrings = manualDocs
+    .map((r) => String(r.contact ?? ''))
+    .filter((id) => mongoose.isValidObjectId(id))
+  const uniqueIds = [...new Set(idStrings)].map((s) => new mongoose.Types.ObjectId(s))
+  if (uniqueIds.length) {
+    const contacts = await (Contact as ContactModel)
+      .find(withMarketableContactFilter({ _id: { $in: uniqueIds } }))
+      .select('email')
+      .lean<ContactLean[]>()
+    const emailById = new Map(
+      contacts.map((c) => [String(c._id), normalizeMarketingEmail(c.email)])
+    )
+    return [
+      ...new Set(
+        manualDocs
+          .map((r) => emailById.get(String(r.contact)))
+          .filter((e): e is string => !!e)
+      )
+    ]
+  }
   if (campaign.recipientsType === 'list' && campaign.recipientsListId?.trim()) {
     const fromList = await resolveRecipientListEmails(conn, campaign.recipientsListId)
     return [
@@ -78,28 +101,7 @@ export async function recipientEmailsForCampaign(
       )
     ]
   }
-  const manualDocs = await (ManualRecipient as ManualRecipientModel)
-    .find({ campaign: campaign._id })
-    .lean<ManualRecipientLean[]>()
-  const idStrings = manualDocs
-    .map((r) => String(r.contact ?? ''))
-    .filter((id) => mongoose.isValidObjectId(id))
-  const uniqueIds = [...new Set(idStrings)].map((s) => new mongoose.Types.ObjectId(s))
-  if (!uniqueIds.length) return []
-  const contacts = await (Contact as ContactModel)
-    .find(withMarketableContactFilter({ _id: { $in: uniqueIds } }))
-    .select('email')
-    .lean<ContactLean[]>()
-  const emailById = new Map(
-    contacts.map((c) => [String(c._id), normalizeMarketingEmail(c.email)])
-  )
-  return [
-    ...new Set(
-      manualDocs
-        .map((r) => emailById.get(String(r.contact)))
-        .filter((e): e is string => !!e)
-    )
-  ]
+  return []
 }
 
 /** Recipient emails for an unsaved draft (wizard) using the same list vs manual rules. */
@@ -108,7 +110,16 @@ export async function recipientEmailsForDraft(
   draft: DraftRecipientContext
 ): Promise<string[]> {
   if (draft.recipientsType === 'list' && draft.recipientsListId?.trim()) {
-    const fromList = await resolveRecipientListEmails(conn, draft.recipientsListId)
+    const inclusion =
+      Array.isArray(draft.recipientsManual) &&
+      draft.recipientsManual.some((id) => mongoose.isValidObjectId(String(id ?? '').trim()))
+        ? draft.recipientsManual
+        : null
+    const fromList = await resolveRecipientListEmails(
+      conn,
+      draft.recipientsListId,
+      inclusion
+    )
     return [
       ...new Set(
         fromList.map((e) => normalizeMarketingEmail(e)).filter((e): e is string => !!e)

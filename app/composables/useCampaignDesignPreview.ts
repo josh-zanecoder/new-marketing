@@ -34,7 +34,12 @@ export function useCampaignDesignPreview(
       const res = await marketingApi.fetchEmailMergeContext({
         recipientsType: form.value.recipientsMode,
         recipientsListId: form.value.recipientsListId || undefined,
-        recipientsManual: manualIds.length ? manualIds : undefined
+        recipientsManual:
+          form.value.recipientsMode === 'list'
+            ? manualIds
+            : manualIds.length
+              ? manualIds
+              : undefined
       })
       designPreviewMergeRoot.value = res.mergeRoot ?? {}
     } catch {

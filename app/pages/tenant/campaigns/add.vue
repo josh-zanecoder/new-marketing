@@ -180,56 +180,151 @@
                 </p>
                 <div
                   v-if="form.recipientsListId"
-                  class="mt-5 overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.03]"
+                  class="mt-5 space-y-4"
                 >
-                  <div class="border-b border-slate-100 px-4 py-3 sm:px-5">
-                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Contacts in this list
-                    </h3>
-                  </div>
-                  <div class="px-4 py-3 sm:px-5 sm:py-4">
-                    <p
-                      v-if="listPreviewPending"
-                      class="text-sm text-slate-500"
-                    >
-                      Loading contacts…
-                    </p>
-                    <p
-                      v-else-if="listPreviewError"
-                      class="text-sm text-red-600"
-                    >
-                      {{ listPreviewError }}
-                    </p>
-                    <p
-                      v-else-if="!listPreviewTotal"
-                      class="text-sm text-slate-500"
-                    >
-                      No contacts in this list yet.
-                    </p>
-                    <template v-else>
-                      <ul class="max-h-56 divide-y divide-slate-100 overflow-y-auto overscroll-contain sm:max-h-64">
-                        <li
-                          v-for="c in listPreviewContacts"
-                          :key="c.id"
-                          class="flex flex-col gap-0.5 py-2.5 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                  <div class="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.03]">
+                    <div class="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                      <div>
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Recipients for this campaign
+                        </h3>
+                        <p
+                          v-if="listPreviewTotal"
+                          class="mt-1 text-xs text-slate-500"
                         >
-                          <span class="text-sm font-medium text-slate-900">{{ c.name || '—' }}</span>
-                          <span class="break-all text-sm text-slate-600">{{ c.email || '—' }}</span>
+                          <span class="font-semibold tabular-nums text-slate-700">{{ listSelectedCount }}</span>
+                          of {{ listPreviewTotal }} selected
+                          <span aria-hidden="true"> · </span>
+                          Does not change the saved recipient list
+                        </p>
+                      </div>
+                      <div
+                        v-if="listPreviewContacts.length"
+                        class="flex flex-wrap gap-2"
+                      >
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+                          :disabled="listSelectedCount === listPreviewTotal"
+                          @click="selectAllListContacts"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+                          :disabled="listSelectedCount === 0"
+                          @click="deselectAllListContacts"
+                        >
+                          Deselect all
+                        </button>
+                      </div>
+                    </div>
+                    <div class="px-4 py-3 sm:px-5 sm:py-4">
+                      <p
+                        v-if="listPreviewPending"
+                        class="text-sm text-slate-500"
+                      >
+                        Loading contacts…
+                      </p>
+                      <p
+                        v-else-if="listPreviewError"
+                        class="text-sm text-red-600"
+                      >
+                        {{ listPreviewError }}
+                      </p>
+                      <p
+                        v-else-if="!listPreviewTotal"
+                        class="text-sm text-slate-500"
+                      >
+                        No contacts in this list yet.
+                      </p>
+                      <p
+                        v-else-if="!listIncludedContacts.length"
+                        class="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center text-sm text-slate-500"
+                      >
+                        No recipients selected. Restore contacts below, or use Select all.
+                      </p>
+                      <ul
+                        v-else
+                        class="max-h-56 divide-y divide-slate-100 overflow-y-auto overscroll-contain sm:max-h-64"
+                      >
+                        <li
+                          v-for="c in listIncludedContacts"
+                          :key="`included-${c.id}`"
+                          class="flex items-center gap-3 py-2.5 first:pt-0"
+                        >
+                          <input
+                            :id="`campaign-add-list-contact-${c.id}`"
+                            type="checkbox"
+                            class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                            checked
+                            @change="removeListContactFromCampaign(c.id)"
+                          >
+                          <label
+                            :for="`campaign-add-list-contact-${c.id}`"
+                            class="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                          >
+                            <span class="text-sm font-medium text-slate-900">{{ c.name || '—' }}</span>
+                            <span class="break-all text-sm text-slate-600">{{ c.email || '—' }}</span>
+                          </label>
+                          <button
+                            type="button"
+                            class="shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+                            @click="removeListContactFromCampaign(c.id)"
+                          >
+                            Remove
+                          </button>
                         </li>
                       </ul>
-                      <p
-                        v-if="listPreviewTotal > listPreviewContacts.length"
-                        class="mt-3 text-xs text-slate-500"
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="listExcludedContacts.length"
+                    class="overflow-hidden rounded-xl border border-amber-200/70 bg-white shadow-sm shadow-slate-900/[0.03]"
+                    aria-label="Removed from this campaign"
+                  >
+                    <div class="flex flex-col gap-2 border-b border-amber-100/80 bg-amber-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                      <div>
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-amber-900/80">
+                          Removed from this campaign
+                        </h3>
+                        <p class="mt-1 text-xs text-amber-900/70">
+                          <span class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-inset ring-amber-600/15">
+                            {{ listExcludedContacts.length }}
+                            {{ listExcludedContacts.length === 1 ? 'contact' : 'contacts' }}
+                          </span>
+                          <span class="ml-1.5">Soft-removed — restore anytime. The original recipient list is unchanged.</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="rounded-lg border border-amber-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-amber-950 shadow-sm transition hover:bg-amber-50"
+                        @click="selectAllListContacts"
                       >
-                        Showing {{ listPreviewContacts.length }} of {{ listPreviewTotal }} contacts.
-                        <NuxtLink
-                          :to="`/tenant/recipient-list/${form.recipientsListId}`"
-                          class="font-semibold text-primary-600 underline hover:text-primary-700"
+                        Restore all
+                      </button>
+                    </div>
+                    <ul class="max-h-48 divide-y divide-slate-100 overflow-y-auto overscroll-contain px-4 sm:max-h-56 sm:px-5">
+                      <li
+                        v-for="c in listExcludedContacts"
+                        :key="`excluded-${c.id}`"
+                        class="flex items-center gap-3 py-2.5"
+                      >
+                        <div class="min-w-0 flex-1">
+                          <p class="truncate text-sm font-medium text-slate-900">{{ c.name || '—' }}</p>
+                          <p class="truncate text-sm text-slate-500" :title="c.email">{{ c.email || '—' }}</p>
+                        </div>
+                        <button
+                          type="button"
+                          class="shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                          @click="restoreListContactToCampaign(c.id)"
                         >
-                          View full list
-                        </NuxtLink>
-                      </p>
-                    </template>
+                          Restore
+                        </button>
+                      </li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -728,6 +823,8 @@ const listPreviewPending = ref(false)
 const listPreviewError = ref('')
 const listPreviewContacts = ref<Array<{ id: string; name: string; email: string }>>([])
 const listPreviewTotal = ref(0)
+/** Tracks which list id last synced selection into `recipientsManual` (avoids resetting user toggles). */
+const listSelectionSyncedForId = ref('')
 
 const addContactsModalOpen = ref(false)
 const contactPickerTypeCounts = ref<Record<string, number> | null>(null)
@@ -970,18 +1067,50 @@ async function loadListContactsPreview() {
     listPreviewContacts.value = []
     listPreviewTotal.value = 0
     listPreviewError.value = ''
+    listSelectionSyncedForId.value = ''
     return
   }
   listPreviewPending.value = true
   listPreviewError.value = ''
   try {
-    const res = await marketingApi.fetchRecipientListById(id, { limit: 50, page: 1 })
-    listPreviewContacts.value = (res.members?.items ?? []).map((c) => ({
-      id: c.id,
-      name: c.name || '',
-      email: c.email || ''
-    }))
-    listPreviewTotal.value = res.members?.total ?? 0
+    const pageSize = 100
+    let page = 1
+    let total = 0
+    const all: Array<{ id: string; name: string; email: string }> = []
+    for (;;) {
+      const res = await marketingApi.fetchRecipientListById(id, { limit: pageSize, page })
+      total = res.members?.total ?? 0
+      const batch = (res.members?.items ?? []).map((c) => ({
+        id: c.id,
+        name: c.name || '',
+        email: c.email || ''
+      }))
+      all.push(...batch)
+      if (!batch.length || all.length >= total) break
+      page += 1
+      if (page > 50) break
+    }
+    listPreviewContacts.value = all
+    listPreviewTotal.value = total || all.length
+
+    const memberIds = all.map((c) => c.id).filter(isManualContactIdString)
+    const memberIdSet = new Set(memberIds)
+    if (listSelectionSyncedForId.value !== id) {
+      const existing = form.value.recipientsManual
+        .map((x) => x.trim())
+        .filter((cid) => memberIdSet.has(cid))
+      form.value.recipientsManual = existing.length ? existing : [...memberIds]
+      listSelectionSyncedForId.value = id
+    } else {
+      form.value.recipientsManual = form.value.recipientsManual
+        .map((x) => x.trim())
+        .filter((cid) => memberIdSet.has(cid))
+    }
+    for (const c of all) {
+      if (form.value.recipientsManual.includes(c.id)) {
+        setManualRecipientLabel(c.id, c.email, c.name)
+      }
+    }
   } catch {
     listPreviewError.value = 'Could not load contacts for this list.'
     listPreviewContacts.value = []
@@ -989,6 +1118,50 @@ async function loadListContactsPreview() {
   } finally {
     listPreviewPending.value = false
   }
+}
+
+const listSelectedCount = computed(
+  () => form.value.recipientsManual.filter(isManualContactIdString).length
+)
+
+const listIncludedContacts = computed(() => {
+  const selected = new Set(form.value.recipientsManual.filter(isManualContactIdString))
+  return listPreviewContacts.value.filter((c) => selected.has(c.id))
+})
+
+const listExcludedContacts = computed(() => {
+  const selected = new Set(form.value.recipientsManual.filter(isManualContactIdString))
+  return listPreviewContacts.value.filter((c) => isManualContactIdString(c.id) && !selected.has(c.id))
+})
+
+function removeListContactFromCampaign(contactId: string) {
+  const id = String(contactId ?? '').trim()
+  if (!id || !isManualContactIdString(id)) return
+  form.value.recipientsManual = form.value.recipientsManual.filter((x) => x.trim() !== id)
+}
+
+function restoreListContactToCampaign(contactId: string) {
+  const id = String(contactId ?? '').trim()
+  if (!id || !isManualContactIdString(id)) return
+  const set = new Set(form.value.recipientsManual.filter(isManualContactIdString))
+  set.add(id)
+  form.value.recipientsManual = [...set]
+  const row = listPreviewContacts.value.find((c) => c.id === id)
+  if (row) setManualRecipientLabel(id, row.email, row.name)
+}
+
+function selectAllListContacts() {
+  const ids = listPreviewContacts.value.map((c) => c.id).filter(isManualContactIdString)
+  form.value.recipientsManual = [...ids]
+  for (const c of listPreviewContacts.value) {
+    if (isManualContactIdString(c.id)) {
+      setManualRecipientLabel(c.id, c.email, c.name)
+    }
+  }
+}
+
+function deselectAllListContacts() {
+  form.value.recipientsManual = []
 }
 
 watch(
@@ -1178,6 +1351,7 @@ async function loadFromEditorReturn() {
         }
       }
       manualRecipientLabels.value = labels
+      listSelectionSyncedForId.value = ''
       form.value = {
         name: c.name,
         senderName: senderDisplayName.value,
@@ -1354,11 +1528,21 @@ const recipientsDescription = computed(() => {
     return count > 0 ? `${count} manual recipient${count === 1 ? '' : 's'}` : 'Add recipients manually'
   }
   const selected = recipientLists.value.find((l) => l.id === form.value.recipientsListId)
-  return selected ? `List: ${selected.name}` : 'Select a recipient list'
+  if (!selected) return 'Select a recipient list'
+  const count = form.value.recipientsManual.filter(isManualContactIdString).length
+  if (listPreviewTotal.value > 0 && count < listPreviewTotal.value) {
+    return `List: ${selected.name} · ${count} of ${listPreviewTotal.value} selected`
+  }
+  return count > 0 ? `List: ${selected.name} · ${count} recipient${count === 1 ? '' : 's'}` : `List: ${selected.name}`
 })
 
 const recipientsComplete = computed(() => {
-  if (form.value.recipientsMode === 'list') return !!form.value.recipientsListId
+  if (form.value.recipientsMode === 'list') {
+    return (
+      !!form.value.recipientsListId &&
+      form.value.recipientsManual.some(isManualContactIdString)
+    )
+  }
   return form.value.recipientsManual.some(isManualContactIdString)
 })
 const subjectComplete = computed(() => !!form.value.subject?.trim())
@@ -1404,10 +1588,9 @@ const canSendTestEmail = computed(() => subjectComplete.value && designComplete.
 function buildTestEmailDraftPayload() {
   applyStoredOrSelectedTemplate()
   if (!savedTemplateHtml.value || !form.value.subject?.trim()) return null
-  const recipientsManual =
-    form.value.recipientsMode === 'manual'
-      ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
-      : undefined
+  const recipientsManual = [
+    ...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))
+  ]
   return {
     subject: form.value.subject.trim(),
     senderName: form.value.senderName,
@@ -1553,9 +1736,9 @@ function clearCampaignSessionStorage() {
 }
 
 function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
-  const recipientsManual = form.value.recipientsMode === 'manual'
-    ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
-    : []
+  const recipientsManual = [
+    ...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))
+  ]
   const recipients: TenantCampaignDetail['recipients'] = recipientsManual.map((contactId) => {
     const lab = manualRecipientLabels.value[contactId]
     return {
@@ -1589,9 +1772,9 @@ function primeCampaignCacheAfterSave(savedId: string) {
 }
 
 async function persistSavedCampaign(): Promise<string> {
-  const recipientsManual = form.value.recipientsMode === 'manual'
-    ? [...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))]
-    : []
+  const recipientsManual = [
+    ...new Set(form.value.recipientsManual.map((e) => e?.trim()).filter(isManualContactIdString))
+  ]
 
   const templateFields = buildCampaignTemplatePersistFields({
     templateMode: form.value.templateMode,
@@ -1629,7 +1812,10 @@ function recipientsReadyForSchedule(): boolean {
   if (form.value.recipientsMode === 'manual') {
     return form.value.recipientsManual.some((id) => isManualContactIdString(String(id ?? '').trim()))
   }
-  return !!form.value.recipientsListId?.trim()
+  return (
+    !!form.value.recipientsListId?.trim() &&
+    form.value.recipientsManual.some((id) => isManualContactIdString(String(id ?? '').trim()))
+  )
 }
 
 function handleOpenScheduleWizard() {

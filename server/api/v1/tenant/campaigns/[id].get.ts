@@ -9,7 +9,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { materializeEmailTemplateHtmlIfNeeded } from '@server/utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
-import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
+import { resolveRecipientListContactRows } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -48,14 +48,8 @@ export default defineEventHandler(async (event) => {
       sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : undefined,
       error: r.error
     }))
-  } else if (
-    campaign.recipientsType === 'list' &&
-    String(campaign.recipientsListId ?? '').trim()
-  ) {
-    // Live list membership + active contacts only (avoids stale ManualRecipient count after contact delete)
-    const emails = await resolveRecipientListEmails(conn, String(campaign.recipientsListId))
-    recipients = emails.map((email) => ({ email }))
   } else if (campaign.recipientsType === 'manual' || campaign.recipientsType === 'list') {
+    // Prefer campaign snapshot (supports list subset without mutating the source list).
     const docs = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: campaign._id })
       .select('contact')
@@ -80,6 +74,19 @@ export default defineEventHandler(async (event) => {
         contactId: String(r.contact)
       }))
       .filter((r) => r.email.trim().length > 0)
+
+    // Legacy / unsynced list drafts: fall back to live list membership with contact ids.
+    if (
+      !recipients.length &&
+      campaign.recipientsType === 'list' &&
+      String(campaign.recipientsListId ?? '').trim()
+    ) {
+      const rows = await resolveRecipientListContactRows(
+        conn,
+        String(campaign.recipientsListId)
+      )
+      recipients = rows.map((r) => ({ email: r.email, contactId: r.contactId }))
+    }
   }
 
   recipients = recipients.filter((r) => (r.email ?? '').trim().length > 0)

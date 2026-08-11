@@ -7,10 +7,10 @@ function hasSendableRecipients(c: Campaign): boolean {
     return (c.recipientsCount ?? c.recipients?.length ?? 0) > 0
   }
   if (c.recipientsType === 'list') {
-    return (
-      !!c.recipientsListId?.trim() ||
-      (c.recipientsCount ?? c.recipients?.length ?? 0) > 0
-    )
+    // List campaigns may store a campaign-specific subset; require at least one resolved recipient when known.
+    const count = c.recipientsCount ?? c.recipients?.length
+    if (typeof count === 'number') return count > 0
+    return !!c.recipientsListId?.trim()
   }
   return false
 }

@@ -50,9 +50,39 @@ export async function resolveRecipientListMarketableContactIds(
   return out
 }
 
+/**
+ * Optional inclusion filter for list-based campaigns.
+ * - missing / empty / no valid ObjectIds → keep all list members (full list)
+ * - non-empty valid ids → intersection with list members
+ * The source list is not modified. (Empty selection is blocked in the UI before save.)
+ */
+export function filterListContactIdsByInclusion(
+  listContactIds: Types.ObjectId[],
+  includeContactIds?: string[] | null
+): Types.ObjectId[] {
+  if (includeContactIds == null || !includeContactIds.length) return listContactIds
+  const allowed = new Set(
+    includeContactIds
+      .map((id) => String(id ?? '').trim())
+      .filter((id) => mongoose.isValidObjectId(id))
+  )
+  if (!allowed.size) return listContactIds
+  return listContactIds.filter((id) => allowed.has(String(id)))
+}
+
+export async function resolveRecipientListContactIdsWithInclusion(
+  conn: Connection,
+  listIdRaw: string,
+  includeContactIds?: string[] | null
+): Promise<Types.ObjectId[]> {
+  const listIds = await resolveRecipientListMarketableContactIds(conn, listIdRaw)
+  return filterListContactIdsByInclusion(listIds, includeContactIds)
+}
+
 export async function resolveRecipientListEmails(
   conn: Connection,
-  listIdRaw: string
+  listIdRaw: string,
+  includeContactIds?: string[] | null
 ): Promise<string[]> {
   const trimmed = listIdRaw.trim()
   if (!trimmed || !mongoose.isValidObjectId(trimmed)) {
@@ -68,7 +98,8 @@ export async function resolveRecipientListEmails(
     .lean<MemberLean[]>()
     .exec()
 
-  const contactIds = members.map((m) => m.contactId).filter(Boolean)
+  let contactIds = members.map((m) => m.contactId).filter(Boolean) as Types.ObjectId[]
+  contactIds = filterListContactIdsByInclusion(contactIds, includeContactIds ?? null)
   if (!contactIds.length) return []
 
   const contacts = await Contact.find(
@@ -83,4 +114,41 @@ export async function resolveRecipientListEmails(
     .filter((e) => e.includes('@'))
 
   return [...new Set(raw)]
+}
+
+/** Marketable list members with email + contactId (for campaign draft display / selection hydrate). */
+export async function resolveRecipientListContactRows(
+  conn: Connection,
+  listIdRaw: string,
+  includeContactIds?: string[] | null
+): Promise<Array<{ contactId: string; email: string }>> {
+  const contactIds = await resolveRecipientListContactIdsWithInclusion(
+    conn,
+    listIdRaw,
+    includeContactIds
+  )
+  if (!contactIds.length) return []
+
+  const { Contact } = getTenantClientModels(conn)
+  const contacts = await Contact.find(withMarketableContactFilter({ _id: { $in: contactIds } }))
+    .select('_id email')
+    .lean<Array<{ _id: Types.ObjectId; email?: string }>>()
+    .exec()
+
+  const emailById = new Map(
+    contacts.map((c) => [
+      String(c._id),
+      String(c.email ?? '')
+        .trim()
+        .toLowerCase()
+    ])
+  )
+
+  return contactIds
+    .map((id) => {
+      const contactId = String(id)
+      const email = emailById.get(contactId) ?? ''
+      return { contactId, email }
+    })
+    .filter((r) => r.email.includes('@'))
 }
