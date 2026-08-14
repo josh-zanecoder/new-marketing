@@ -5,8 +5,9 @@ Tenant-scoped categories for organizing the email template library in **new-mark
 ## What it does
 
 - Create, edit, and delete categories on **Template categories** (`/tenant/email-templates/categories`)
+- Click a category name (or **View templates**) to open the email templates library filtered to that category (`/tenant/email-templates?category=<id>`)
 - Assign a category when creating or editing a template (`/tenant/email-templates/add`)
-- Filter the library by category on **Email templates** (alongside the existing subject filter: All templates / With default subject / Without subject)
+- Filter the library by category on **Email templates** (dropdown, URL query, or clicking a category badge on a card), alongside the existing subject filter: All templates / With default subject / Without subject
 
 Deleting a category clears `categoryId` on templates that used it (templates become uncategorized).
 
@@ -21,10 +22,20 @@ Templates can also be **soft-deleted** from the library (see [email-template-sof
 
 API responses include both `categoryId` and resolved `categoryName` for display.
 
+## Deep-link
+
+| Query | Effect |
+| --- | --- |
+| `/tenant/email-templates` | All categories |
+| `/tenant/email-templates?category=<categoryId>` | Only templates in that category |
+| `/tenant/email-templates?category=uncategorized` | Templates with no category |
+
+Changing the category filter dropdown updates the URL (replace) so the filtered view is shareable and browser Back works.
+
 ## HTTP API
 
 | Method | Path | Notes |
-| --- | --- | --- |
+| --- | --- |
 | `GET` | `/api/v1/tenant/email-template-categories` | List categories |
 | `POST` | `/api/v1/tenant/email-template-categories` | Create (`name` required) |
 | `PUT` | `/api/v1/tenant/email-template-categories/:id` | Update |
@@ -38,6 +49,7 @@ API responses include both `categoryId` and resolved `categoryName` for display.
 | Schema | `server/models/tenant/EmailTemplateCategory.ts`, `EmailTemplate.ts` |
 | Types | `server/types/tenant/emailTemplateCategory.model.ts` |
 | API | `server/api/v1/tenant/email-template-categories/*` |
+| Constants | `shared/constants/emailTemplateCategory.ts` |
 | Shared helpers | `shared/utils/emailTemplateCategory.ts` |
 | FE API | `app/composables/useTenantMarketingApi.ts` |
 | Categories page | `app/pages/tenant/email-templates/categories.vue` + `useEmailTemplateCategoriesPage.ts` |
@@ -48,7 +60,7 @@ API responses include both `categoryId` and resolved `categoryName` for display.
 
 | Test | Path |
 | --- | --- |
-| Category normalize / filter / options | `server/utils/emailTemplate/__tests__/emailTemplateCategory.test.ts` |
+| Category normalize / filter / options / deep-link | `server/utils/emailTemplate/__tests__/emailTemplateCategory.test.ts` |
 
 ```bash
 npm run test -- server/utils/emailTemplate/__tests__/emailTemplateCategory.test.ts

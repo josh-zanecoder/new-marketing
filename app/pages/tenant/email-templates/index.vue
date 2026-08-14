@@ -29,6 +29,7 @@ const {
   formatUpdated,
   makeCampaignHref,
   editTemplateHref,
+  applyCategoryFilter,
   openPreview,
   closePreview,
   loadTemplates,
@@ -216,13 +217,15 @@ onMounted(onMountedLoad)
             <p v-else class="mt-1 text-sm italic text-slate-400">
               No default subject
             </p>
-            <p
-              v-if="template.categoryName?.trim()"
-              class="mt-2 inline-flex w-fit max-w-full truncate rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
-              :title="template.categoryName"
+            <button
+              v-if="template.categoryName?.trim() && template.categoryId"
+              type="button"
+              class="mt-2 inline-flex w-fit max-w-full truncate rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-800"
+              :title="`Show only ${template.categoryName} templates`"
+              @click="applyCategoryFilter(template.categoryId)"
             >
               {{ template.categoryName }}
-            </p>
+            </button>
             <p class="mt-2 text-xs text-slate-400">
               Updated {{ formatUpdated(template.updatedAt) }}
             </p>

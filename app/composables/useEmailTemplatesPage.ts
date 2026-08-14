@@ -1,7 +1,12 @@
 import type { TenantEmailTemplateCategoryRow, TenantEmailTemplateRow } from '~/composables/useTenantMarketingApi'
 import {
+  EMAIL_TEMPLATE_CATEGORY_FILTER_ALL,
+  EMAIL_TEMPLATE_CATEGORY_QUERY_KEY
+} from '~~/shared/constants/emailTemplateCategory'
+import {
   buildEmailTemplateCategoryFilterOptions,
   matchesEmailTemplateCategoryFilter,
+  parseEmailTemplateCategoryFilterQuery,
   type EmailTemplateCategoryFilterValue
 } from '~~/shared/utils/emailTemplateCategory'
 
@@ -17,6 +22,7 @@ type SubjectFilter = 'all' | 'with-subject' | 'without-subject'
 const PAGE_SIZE = 12
 
 export function useEmailTemplatesPage() {
+  const route = useRoute()
   const marketingApi = useTenantMarketingApi()
   const toast = useAppToast()
 
@@ -28,7 +34,9 @@ export function useEmailTemplatesPage() {
   const searchQuery = ref('')
   const sortBy = ref<SortOption>('recent')
   const subjectFilter = ref<SubjectFilter>('all')
-  const categoryFilter = ref<EmailTemplateCategoryFilterValue>('all')
+  const categoryFilter = ref<EmailTemplateCategoryFilterValue>(
+    parseEmailTemplateCategoryFilterQuery(route.query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY])
+  )
   const currentPage = ref(1)
 
   const previewOpen = ref(false)
@@ -118,12 +126,39 @@ export function useEmailTemplatesPage() {
     if (currentPage.value > pages) currentPage.value = pages
   })
 
+  watch(
+    () => route.query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY],
+    (raw) => {
+      const next = parseEmailTemplateCategoryFilterQuery(raw)
+      if (next !== categoryFilter.value) categoryFilter.value = next
+    }
+  )
+
+  watch(categoryFilter, (value) => {
+    const fromRoute = parseEmailTemplateCategoryFilterQuery(
+      route.query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY]
+    )
+    if (fromRoute === value) return
+    const query = { ...route.query }
+    if (value === EMAIL_TEMPLATE_CATEGORY_FILTER_ALL) {
+      delete query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY]
+    } else {
+      query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY] = value
+    }
+    void navigateTo({ path: route.path, query }, { replace: true })
+  })
+
   function makeCampaignHref(templateId: string): string {
     return `/tenant/campaigns/add?templateId=${encodeURIComponent(templateId)}`
   }
 
   function editTemplateHref(templateId: string): string {
     return `/tenant/email-templates/add?templateId=${encodeURIComponent(templateId)}`
+  }
+
+  function applyCategoryFilter(categoryId: string | null | undefined) {
+    const id = typeof categoryId === 'string' ? categoryId.trim() : ''
+    categoryFilter.value = id || EMAIL_TEMPLATE_CATEGORY_FILTER_ALL
   }
 
   function openPreview(template: EmailTemplateListRow) {
@@ -257,6 +292,7 @@ export function useEmailTemplatesPage() {
     formatUpdated,
     makeCampaignHref,
     editTemplateHref,
+    applyCategoryFilter,
     openPreview,
     closePreview,
     loadTemplates,

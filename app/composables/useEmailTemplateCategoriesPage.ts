@@ -1,5 +1,8 @@
 import type { TenantEmailTemplateCategoryRow } from '~/composables/useTenantMarketingApi'
-import { normalizeEmailTemplateCategoryName } from '~~/shared/utils/emailTemplateCategory'
+import {
+  buildEmailTemplatesListHref,
+  normalizeEmailTemplateCategoryName
+} from '~~/shared/utils/emailTemplateCategory'
 
 export function useEmailTemplateCategoriesPage() {
   const marketingApi = useTenantMarketingApi()
@@ -141,6 +144,10 @@ export function useEmailTemplateCategoriesPage() {
     }
   }
 
+  function viewTemplatesHref(categoryId: string): string {
+    return buildEmailTemplatesListHref(categoryId)
+  }
+
   return {
     pending,
     saving,
@@ -158,6 +165,7 @@ export function useEmailTemplateCategoriesPage() {
     loadCategories,
     saveCategory,
     removeCategory,
-    formatUpdated
+    formatUpdated,
+    viewTemplatesHref
   }
 }

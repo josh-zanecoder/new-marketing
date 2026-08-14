@@ -16,7 +16,8 @@ const {
   loadCategories,
   saveCategory,
   removeCategory,
-  formatUpdated
+  formatUpdated,
+  viewTemplatesHref
 } = useEmailTemplateCategoriesPage()
 
 onMounted(() => {
@@ -33,7 +34,7 @@ onMounted(() => {
           Template categories
         </h1>
         <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
-          Create categories to organize email templates, filter the library, and assign a category when saving a template.
+          Create categories to organize email templates. Click a category name to open the library filtered to that category, then assign categories when saving templates.
         </p>
       </div>
       <div class="flex items-center gap-2 sm:shrink-0">
@@ -161,7 +162,13 @@ onMounted(() => {
         class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
       >
         <div class="min-w-0">
-          <p class="truncate text-sm font-semibold text-slate-900">{{ row.name }}</p>
+          <NuxtLink
+            :to="viewTemplatesHref(row.id)"
+            class="truncate text-sm font-semibold text-slate-900 hover:text-primary-700 hover:underline"
+            :title="`View templates in ${row.name}`"
+          >
+            {{ row.name }}
+          </NuxtLink>
           <p v-if="row.description?.trim()" class="mt-0.5 truncate text-sm text-slate-500">
             {{ row.description }}
           </p>
@@ -170,6 +177,12 @@ onMounted(() => {
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
+          <NuxtLink
+            :to="viewTemplatesHref(row.id)"
+            class="inline-flex items-center justify-center rounded-xl border border-primary-200 bg-primary-50/80 px-3 py-2 text-sm font-semibold text-primary-800 shadow-sm hover:border-primary-300 hover:bg-primary-100/80"
+          >
+            View templates
+          </NuxtLink>
           <button
             type="button"
             class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800"
