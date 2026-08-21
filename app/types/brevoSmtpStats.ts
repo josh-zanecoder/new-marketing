@@ -73,4 +73,6 @@ export type BrevoSmtpPerformanceRow = {
   variant: 'blue' | 'teal' | 'green' | 'amber' | 'red' | 'orange' | 'brown' | 'slate'
   valueDisplay: 'percent' | 'count'
   countValue?: number
+  /** Event-type query value used to filter the Messages table. */
+  eventFilter: string
 }

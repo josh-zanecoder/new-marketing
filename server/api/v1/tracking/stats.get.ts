@@ -13,6 +13,22 @@ import {
 import { loadStoredCampaignSmtpStatsEventsPage } from '@server/utils/tracking/loadStoredCampaignSmtpStatsEventsPage'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
 
+function firstEventQueryToken(raw: unknown): string {
+  if (typeof raw === 'string') return raw.split(/[,|]/)[0]?.trim() || ''
+  if (Array.isArray(raw) && typeof raw[0] === 'string') {
+    return raw[0].split(/[,|]/)[0]?.trim() || ''
+  }
+  return ''
+}
+
+/** Mongo Messages filter. Keep unique_opened distinct from opened (Brevo API collapses them). */
+function resolveStatsEventsEventType(raw: unknown): string | null {
+  const token = firstEventQueryToken(raw)
+  const compact = token.toLowerCase().replace(/[_\s-]+/g, '')
+  if (compact === 'uniqueopened' || compact === 'firstopening') return 'unique_opened'
+  return normalizeBrevoEventTypesQuery(raw)[0] ?? null
+}
+
 function normalizeNonNegIntQuery(
   event: Parameters<typeof getQuery>[0],
   key: string,
@@ -74,7 +90,7 @@ export default defineEventHandler(async (event) => {
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
   const q = getQuery(event) as Record<string, unknown>
-  const eventType = normalizeBrevoEventTypesQuery(q.event ?? q.events)[0] ?? null
+  const eventType = resolveStatsEventsEventType(q.event ?? q.events)
   // skipCache used to re-pull Brevo here (doubled Refresh cost with /tracking/sync).
   // Stats always reads Mongo; Tracking Refresh owns the Brevo full sync.
 

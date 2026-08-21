@@ -26,7 +26,9 @@ const EVENT_FILTER_TYPES = [
   'requests',
   'delivered',
   'opened',
+  'unique_opened',
   'clicks',
+  'bounces',
   'hardBounces',
   'softBounces',
   'deferred',
@@ -37,6 +39,24 @@ const EVENT_FILTER_TYPES = [
   'loadedByProxy',
   'error'
 ] as const
+
+const EMAILS_SENT_EVENT_FILTER = 'requests'
+
+const SELECTED_CARD_CLASS: Record<string, string> = {
+  blue: 'ring-sky-400/80 bg-sky-50/90',
+  teal: 'ring-teal-500/70 bg-teal-50/80',
+  green: 'ring-emerald-500/70 bg-emerald-50/80',
+  amber: 'ring-amber-400/80 bg-amber-50/80',
+  red: 'ring-red-400/80 bg-red-50/80',
+  orange: 'ring-orange-400/80 bg-orange-50/80',
+  brown: 'ring-amber-700/50 bg-amber-50/80',
+  slate: 'ring-zinc-400/80 bg-zinc-50'
+}
+
+const EVENT_FILTER_OPTION_LABELS: Record<string, string> = {
+  unique_opened: 'Trackable openers',
+  bounces: 'Bounced'
+}
 
 const EVENTS_PAGE_SIZE = 10
 const eventsPage = ref(1)
@@ -142,7 +162,9 @@ const eventTypeCounts = computed(() => {
     requests: a.requests,
     delivered: a.delivered,
     opened: a.opens,
+    unique_opened: a.uniqueOpens,
     clicks: a.clicks,
+    bounces: (a.hardBounces ?? 0) + (a.softBounces ?? 0),
     hardBounces: a.hardBounces,
     softBounces: a.softBounces,
     blocked: a.blocked,
@@ -152,6 +174,10 @@ const eventTypeCounts = computed(() => {
   } as Record<string, number>
 })
 
+function eventFilterOptionLabel(type: string): string {
+  return EVENT_FILTER_OPTION_LABELS[type] || formatBrevoSmtpEventLabel(type)
+}
+
 const eventFilterOptions = computed(() => {
   const counts = eventTypeCounts.value
   const selected = selectedEventType.value.trim()
@@ -160,10 +186,27 @@ const eventFilterOptions = computed(() => {
     { value: '', label: 'All events' },
     ...types.map((t) => ({
       value: t,
-      label: `${formatBrevoSmtpEventLabel(t)}${(counts[t] ?? 0) > 0 ? ` (${counts[t]})` : ''}`
+      label: `${eventFilterOptionLabel(t)}${(counts[t] ?? 0) > 0 ? ` (${counts[t]})` : ''}`
     }))
   ]
 })
+
+function isMetricSelected(eventFilter: string): boolean {
+  return selectedEventType.value.trim() === eventFilter
+}
+
+function toggleMetricFilter(eventFilter: string) {
+  const next = eventFilter.trim()
+  if (!next) return
+  selectedEventType.value = isMetricSelected(next) ? '' : next
+}
+
+function metricCardClass(variant: string, selected: boolean): string {
+  const base =
+    'w-full min-w-0 rounded-xl px-2.5 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400'
+  if (selected) return `${base} ring-2 ${SELECTED_CARD_CLASS[variant] || 'ring-zinc-400/80 bg-zinc-50'}`
+  return `${base} ring-1 ring-transparent hover:bg-zinc-50 hover:ring-zinc-200/90`
+}
 
 const chartSelectedEventTypes = computed(() => {
   const t = selectedEventType.value.trim()
@@ -289,14 +332,29 @@ defineExpose({
 
       <template v-else-if="stats">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <p class="leading-none text-zinc-900">
+          <button
+            type="button"
+            class="-ml-1 rounded-xl px-1.5 py-1 text-left leading-none text-zinc-900 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+            :class="
+              isMetricSelected(EMAILS_SENT_EVENT_FILTER)
+                ? 'ring-2 ring-sky-400/80 bg-sky-50/90'
+                : 'ring-1 ring-transparent hover:bg-zinc-50 hover:ring-zinc-200/90'
+            "
+            :aria-pressed="isMetricSelected(EMAILS_SENT_EVENT_FILTER)"
+            :aria-label="
+              isMetricSelected(EMAILS_SENT_EVENT_FILTER)
+                ? 'Clear emails sent filter'
+                : 'Filter messages to emails sent'
+            "
+            @click="toggleMetricFilter(EMAILS_SENT_EVENT_FILTER)"
+          >
             <span class="text-3xl font-bold tabular-nums tracking-tight sm:text-[2.15rem]">
               {{ totalEmailsSent.toLocaleString() }}
             </span>
             <span class="ml-1.5 text-base font-normal text-zinc-500 sm:text-lg">
               emails sent
             </span>
-          </p>
+          </button>
           <button
             type="button"
             class="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:underline"
@@ -332,10 +390,21 @@ defineExpose({
             :key="'gc-' + idx"
             class="min-w-0"
           >
-            <div v-if="cell">
+            <button
+              v-if="cell"
+              type="button"
+              :class="metricCardClass(cell.variant, isMetricSelected(cell.eventFilter))"
+              :aria-pressed="isMetricSelected(cell.eventFilter)"
+              :aria-label="
+                isMetricSelected(cell.eventFilter)
+                  ? `Clear ${cell.label} filter`
+                  : `Filter messages by ${cell.label}`
+              "
+              @click="toggleMetricFilter(cell.eventFilter)"
+            >
               <div class="flex items-baseline justify-between gap-2 text-sm">
                 <UiHoverTip :text="brevoSmtpMetricTooltip(cell.label)" placement="bottom">
-                  <span class="cursor-help text-zinc-600 underline decoration-zinc-300 decoration-dotted underline-offset-2">
+                  <span class="text-zinc-600 underline decoration-zinc-300 decoration-dotted underline-offset-2">
                     {{ cell.label }}
                   </span>
                 </UiHoverTip>
@@ -356,7 +425,7 @@ defineExpose({
                   :style="{ width: Math.min(100, cell.pct) + '%' }"
                 />
               </div>
-            </div>
+            </button>
             <div v-else class="min-h-[3.25rem]" aria-hidden="true" />
           </div>
         </div>
@@ -380,10 +449,25 @@ defineExpose({
       :aria-busy="isBusy"
     >
       <div class="border-b border-zinc-100 px-4 py-3 sm:px-5">
-        <p class="text-sm font-semibold text-zinc-800">Messages</p>
-        <p class="mt-0.5 text-xs text-zinc-500">
-          Latest events ({{ EVENTS_PAGE_SIZE }} per page)
-        </p>
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-zinc-800">Messages</p>
+            <p class="mt-0.5 text-xs text-zinc-500">
+              Latest events ({{ EVENTS_PAGE_SIZE }} per page)
+              <span v-if="selectedEventType" class="text-zinc-600">
+                · {{ eventFilterOptionLabel(selectedEventType) }}
+              </span>
+            </p>
+          </div>
+          <button
+            v-if="selectedEventType"
+            type="button"
+            class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+            @click="selectedEventType = ''"
+          >
+            Clear filter
+          </button>
+        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -438,7 +522,11 @@ defineExpose({
         v-else-if="!eventItems.length"
         class="px-5 py-12 text-center text-sm text-zinc-500"
       >
-        No events in this range.
+        {{
+          selectedEventType
+            ? `No ${eventFilterOptionLabel(selectedEventType)} events in this range.`
+            : 'No events in this range.'
+        }}
       </div>
       <div
         v-else

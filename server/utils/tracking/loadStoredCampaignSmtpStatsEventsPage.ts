@@ -4,6 +4,7 @@ import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import type { BrevoEmailEventType } from '@server/utils/tracking/brevoEventType'
 import { parseYmdToUtcBounds } from '@server/utils/tracking/brevoTrackingEventDateBounds'
 import type { BrevoSmtpStatsEventItem } from '@server/utils/tracking/fetchBrevoTransactionalStats'
+import { mongoEventValuesForFilter } from '@server/utils/tracking/mongoEventValuesForFilter'
 import { mongoExcludeCampaignTestEmailTag } from '@server/utils/zcmail/campaignZcMailTags'
 
 type StoredEventLean = {
@@ -15,37 +16,6 @@ type StoredEventLean = {
   from?: string
   reason?: string
   eventAt?: Date | null
-}
-
-/** Brevo UI / API type → Mongo `event` values we may have stored. */
-function mongoEventValuesForFilter(eventType: string | null): string[] | null {
-  if (!eventType?.trim()) return null
-  const t = eventType.trim().toLowerCase()
-  if (t === 'requests' || t === 'sent' || t === 'request') {
-    return ['requests', 'sent', 'request']
-  }
-  if (t === 'opened' || t === 'opens' || t === 'open') {
-    return ['opened', 'open', 'opens', 'unique_opened', 'uniqueopened']
-  }
-  if (t === 'clicks' || t === 'click' || t === 'clicked') {
-    return ['clicks', 'click', 'clicked']
-  }
-  if (t === 'hardbounces' || t === 'hard_bounces') {
-    return ['hardBounces', 'hard_bounces', 'hardbounce']
-  }
-  if (t === 'softbounces' || t === 'soft_bounces') {
-    return ['softBounces', 'soft_bounces', 'softbounce']
-  }
-  if (t === 'deferred') return ['deferred']
-  if (t === 'blocked') return ['blocked']
-  if (t === 'invalid') return ['invalid']
-  if (t === 'spam') return ['spam', 'complaint']
-  if (t === 'unsubscribed') return ['unsubscribed', 'unsubscribe']
-  if (t === 'loadedbyproxy' || t === 'loaded_by_proxy') {
-    return ['loadedByProxy', 'loaded_by_proxy']
-  }
-  if (t === 'error') return ['error']
-  return [eventType.trim()]
 }
 
 /**

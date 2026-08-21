@@ -6,6 +6,7 @@ export function formatBrevoSmtpEventLabel(raw: string | undefined): string {
   if (!k) return '—'
   if (normalized === 'sent' || normalized === 'request' || normalized === 'requests') return 'Sent'
   if (normalized === 'delivered') return 'Delivered'
+  if (normalized === 'bounce' || normalized === 'bounces') return 'Bounced'
   if (normalized === 'hardbounce' || normalized === 'hardbounces') return 'Hard Bounced'
   if (normalized === 'softbounce' || normalized === 'softbounces') return 'Soft Bounced'
   if (normalized === 'blocked') return 'Blocked'

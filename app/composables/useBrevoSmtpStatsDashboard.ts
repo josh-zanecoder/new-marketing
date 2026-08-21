@@ -36,26 +36,70 @@ export function useBrevoSmtpStatsDashboard(stats: Ref<BrevoTransactionalStats | 
     const bouncedCnt = (g.hardBounces ?? 0) + (g.softBounces ?? 0)
     const bouncedPct = pctOf(bouncedCnt, req)
     return [
-      { label: 'Delivered', pct: r.deliveredPct, variant: 'blue', valueDisplay: 'percent' },
-      { label: 'Estimated openers', pct: r.opensPct, variant: 'teal', valueDisplay: 'percent' },
+      {
+        label: 'Delivered',
+        pct: r.deliveredPct,
+        variant: 'blue',
+        valueDisplay: 'percent',
+        eventFilter: 'delivered'
+      },
+      {
+        label: 'Estimated openers',
+        pct: r.opensPct,
+        variant: 'teal',
+        valueDisplay: 'percent',
+        eventFilter: 'opened'
+      },
       {
         label: 'Trackable openers',
         pct: r.uniqueOpensPct,
         variant: 'green',
         valueDisplay: 'count',
-        countValue: g.uniqueOpens
+        countValue: g.uniqueOpens,
+        eventFilter: 'unique_opened'
       },
       {
         label: 'Unique clickers',
         pct: r.uniqueClicksPct,
         variant: 'amber',
-        valueDisplay: 'percent'
+        valueDisplay: 'percent',
+        eventFilter: 'clicks'
       },
-      { label: 'Bounced', pct: bouncedPct, variant: 'red', valueDisplay: 'percent' },
-      { label: 'Hard bounce', pct: r.hardBouncesPct, variant: 'red', valueDisplay: 'percent' },
-      { label: 'Soft bounce', pct: r.softBouncesPct, variant: 'slate', valueDisplay: 'percent' },
-      { label: 'Complaint', pct: r.spamReportsPct, variant: 'orange', valueDisplay: 'percent' },
-      { label: 'Blocked', pct: r.blockedPct, variant: 'brown', valueDisplay: 'percent' }
+      {
+        label: 'Bounced',
+        pct: bouncedPct,
+        variant: 'red',
+        valueDisplay: 'percent',
+        eventFilter: 'bounces'
+      },
+      {
+        label: 'Hard bounce',
+        pct: r.hardBouncesPct,
+        variant: 'red',
+        valueDisplay: 'percent',
+        eventFilter: 'hardBounces'
+      },
+      {
+        label: 'Soft bounce',
+        pct: r.softBouncesPct,
+        variant: 'slate',
+        valueDisplay: 'percent',
+        eventFilter: 'softBounces'
+      },
+      {
+        label: 'Complaint',
+        pct: r.spamReportsPct,
+        variant: 'orange',
+        valueDisplay: 'percent',
+        eventFilter: 'spam'
+      },
+      {
+        label: 'Blocked',
+        pct: r.blockedPct,
+        variant: 'brown',
+        valueDisplay: 'percent',
+        eventFilter: 'blocked'
+      }
     ]
   })
 
