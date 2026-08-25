@@ -11,6 +11,7 @@ env:
   SERVICE_NAME: marketing-production
   WORKER_SERVICE_NAME: marketing-kafka-worker-production
   SEND_WORKER_SERVICE_NAME: marketing-send-worker-production
+  BREVO_WEBHOOK_SERVICE_NAME: marketing-brevo-webhook-production
   ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-production
   BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge-production
   BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge-production
@@ -27,8 +28,12 @@ env:
   WORKER_MAX_INSTANCES: 1
   SEND_WORKER_MIN_INSTANCES: 1
   SEND_WORKER_MAX_INSTANCES: 1
+  BREVO_WEBHOOK_MIN_INSTANCES: 1
+  BREVO_WEBHOOK_MAX_INSTANCES: 10
   # Set to 'true' after Secret Manager has CAMPAIGN_SEND_WORKER_SECRET + Cloud Tasks queue vars.
   DEPLOY_SEND_WORKER: 'true'
+  # Dedicated Brevo ingress (fast ack + Cloud Tasks); requires send worker.
+  DEPLOY_BREVO_WEBHOOK: 'true'
   # Set to 'true' to deploy marketing-kafka-worker-production on production pushes.
   DEPLOY_KAFKA_WORKER: 'false'
   # Set to 'true' to deploy marketing-kafka-producer-bridge-production on production pushes.
@@ -47,7 +52,9 @@ jobs:
       deploy_kafka_worker: ${{ steps.deploy_flags.outputs.deploy_kafka_worker }}
       deploy_kafka_bridge: ${{ steps.deploy_flags.outputs.deploy_kafka_bridge }}
       deploy_send_worker: ${{ steps.deploy_flags.outputs.deploy_send_worker }}
+      deploy_brevo_webhook: ${{ steps.deploy_flags.outputs.deploy_brevo_webhook }}
       send_worker_url: ${{ steps.deploy_send_worker.outputs.send_worker_post_url }}
+      brevo_webhook_url: ${{ steps.deploy_brevo_webhook.outputs.brevo_webhook_public_url }}
 
     steps:
       - name: Checkout code
@@ -115,6 +122,7 @@ jobs:
           echo "deploy_kafka_worker=${{ env.DEPLOY_KAFKA_WORKER }}" >> $GITHUB_OUTPUT
           echo "deploy_kafka_bridge=${{ env.DEPLOY_KAFKA_BRIDGE }}" >> $GITHUB_OUTPUT
           echo "deploy_send_worker=${{ env.DEPLOY_SEND_WORKER }}" >> $GITHUB_OUTPUT
+          echo "deploy_brevo_webhook=${{ env.DEPLOY_BREVO_WEBHOOK }}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         run: |
@@ -183,6 +191,39 @@ jobs:
             --update-env-vars "CAMPAIGN_SEND_WORKER_URL=${SEND_WORKER_POST_URL}"
 
           echo "Campaign send worker URL: $SEND_WORKER_POST_URL"
+
+      - name: Deploy Brevo webhook ingress
+        id: deploy_brevo_webhook
+        if: steps.deploy_flags.outputs.deploy_brevo_webhook == 'true' && steps.deploy_flags.outputs.deploy_send_worker == 'true'
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh brevo-webhook .env brevo-webhook-env.yaml
+          SAFE_URL=$(printf '%s' "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+          echo "CAMPAIGN_SEND_WORKER_URL: \"$SAFE_URL\"" >> brevo-webhook-env.yaml
+
+          gcloud run deploy ${{ env.BREVO_WEBHOOK_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.BREVO_WEBHOOK_MIN_INSTANCES }} \
+            --max-instances ${{ env.BREVO_WEBHOOK_MAX_INSTANCES }} \
+            --memory 512Mi \
+            --cpu 1 \
+            --concurrency 80 \
+            --timeout 300 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --env-vars-file=brevo-webhook-env.yaml
+
+          BREVO_BASE_URL=$(gcloud run services describe ${{ env.BREVO_WEBHOOK_SERVICE_NAME }} \
+            --region ${{ env.REGION }} --format="value(status.url)")
+          echo "brevo_webhook_public_url=${BREVO_BASE_URL}/api/v1/webhooks/brevo/transactional" >> $GITHUB_OUTPUT
+          echo "Brevo webhook URL (point Brevo UI here): ${BREVO_BASE_URL}/api/v1/webhooks/brevo/transactional"
 
       - name: Convert .env to env.yaml (web)
         run: |

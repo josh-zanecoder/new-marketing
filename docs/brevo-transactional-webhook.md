@@ -10,7 +10,10 @@ POST /api/v1/webhooks/brevo/transactional
 
 Public (no session). Authenticated with a shared secret (per-tenant or env).
 
-**URL (prod):** `{NUXT_PUBLIC_MARKETING_BASE_URL}/api/v1/webhooks/brevo/transactional`
+**URL (prod):** `{marketing-brevo-webhook-production …}/api/v1/webhooks/brevo/transactional`  
+After deploy, copy the URL from the GitHub Actions log line `Brevo webhook URL (point Brevo UI here)`.
+
+Legacy (until Brevo UI is updated): `{NUXT_PUBLIC_MARKETING_BASE_URL}/api/v1/webhooks/brevo/transactional` on `marketing-production`.
 
 ## Auth
 
@@ -59,6 +62,40 @@ Each event upserts on `(messageId, event, date)` with:
 - subject, from, ip, link, reason when Brevo sends them
 
 Manual **Refresh** on Tracking still pulls the events report; webhooks keep the store fresher between refreshes.
+
+## Async ingest (Cloud Tasks)
+
+When `CLOUD_TASKS_*` + `CAMPAIGN_SEND_WORKER_SECRET` are set (same as campaign sends), the public webhook **validates auth, enqueues, and returns 200 immediately** — Mongo upsert runs on the **send worker** via:
+
+```http
+POST /api/internal/brevo-webhooks/transactional
+```
+
+Worker URL defaults to the **origin** of `CAMPAIGN_SEND_WORKER_URL` + `/api/internal/brevo-webhooks/transactional`. Override with `BREVO_WEBHOOK_WORKER_URL` if needed.
+
+| Env | Purpose |
+| --- | --- |
+| `CLOUD_TASKS_PROJECT_ID`, `CLOUD_TASKS_LOCATION`, `CLOUD_TASKS_QUEUE_NAME` | Shared queue with campaign batches |
+| `CAMPAIGN_SEND_WORKER_SECRET` | Auth header on worker HTTP target |
+| `CAMPAIGN_SEND_WORKER_URL` | Used to derive Brevo worker origin |
+| `BREVO_WEBHOOK_WORKER_URL` | Optional explicit worker POST URL |
+| `BREVO_WEBHOOK_ASYNC_DISABLED=true` | Force synchronous ingest (local/debug) |
+
+Public response when queued:
+
+```json
+{ "success": true, "accepted": true, "queued": true, "taskId": "bw-…", "messageId": "…", "event": "delivered" }
+```
+
+Without Cloud Tasks config, behavior is unchanged (synchronous upsert on the web service).
+
+## Dedicated ingress service (recommended prod)
+
+When `DEPLOY_BREVO_WEBHOOK: 'true'` (default in deploy workflows), Brevo should POST to **`marketing-brevo-webhook-production`** (test: `marketing-brevo-webhook`), not the main UI service. That service only validates auth and enqueues; Mongo upsert still runs on the send worker.
+
+No extra Secret Manager keys — reuses the same `marketing-production` / `marketing-test` secret + injected `CAMPAIGN_SEND_WORKER_URL`.
+
+See also: [cloud-run-service-split.md](./cloud-run-service-split.md), [campaign-send-reliability.md](./campaign-send-reliability.md).
 
 ## Quick local test
 

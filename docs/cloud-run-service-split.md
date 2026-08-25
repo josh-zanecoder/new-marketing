@@ -7,10 +7,11 @@ Marketing runs as **multiple Cloud Run services** from the **same Docker image**
 | Service | Role | Key env overrides |
 |---------|------|-------------------|
 | `marketing-production` | UI, API, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true`, `EMAIL_WORKER_DISABLED=true`, `CAMPAIGN_SEND_WORKER_URL` → send worker | min **2**, max **30**, 1 CPU |
-| `marketing-send-worker-production` | Cloud Tasks batch HTTP target only | `EMAIL_WORKER_DISABLED=true`, `KAFKA_INBOUND_CONSUMER_DISABLED=true`, self `CAMPAIGN_SEND_WORKER_URL` | min **1**, max **1**, **2 CPU / 2Gi**, `--no-cpu-throttling` |
+| `marketing-brevo-webhook-production` | Brevo public ingress (validate + enqueue only) | Same secret as web; `CAMPAIGN_SEND_WORKER_URL` for Cloud Tasks worker target | min **1**, max **10**, 512Mi |
+| `marketing-send-worker-production` | Cloud Tasks HTTP target (campaign batches + Brevo upsert) | `EMAIL_WORKER_DISABLED=true`, `KAFKA_INBOUND_CONSUMER_DISABLED=true`, self `CAMPAIGN_SEND_WORKER_URL` | min **1**, max **1**, **2 CPU / 2Gi**, `--no-cpu-throttling` |
 | `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
-Test environment uses `marketing-test`, `marketing-send-worker`, and `marketing-kafka-worker`.
+Test environment uses `marketing-test`, `marketing-brevo-webhook`, `marketing-send-worker`, and `marketing-kafka-worker`.
 
 ## Why split
 
@@ -18,6 +19,7 @@ Test environment uses `marketing-test`, `marketing-send-worker`, and `marketing-
 - Web can scale (`max-instances` > 1) without duplicate Kafka consumer group members.
 - Kafka worker stays **min=1, max=1** for a single consumer instance.
 - **Campaign send worker** isolates long-running Cloud Tasks batch HTTP from login/navigation on the web service (see GCP logs: batch + UI shared one instance before this split).
+- **Brevo webhook ingress** keeps transactional webhook floods off the UI service; combined with Cloud Tasks async ingest, public webhooks return 200 in milliseconds.
 
 ## Logs
 
@@ -26,6 +28,9 @@ Test environment uses `marketing-test`, `marketing-send-worker`, and `marketing-
 | `Kafka inbound consumer running` | `marketing-kafka-worker-production` |
 | `marketing.sync.requested` / `syncedCount` | `marketing-kafka-worker-production` |
 | `POST /api/v1/auth/tenant-handoff` | `marketing-production` / `marketing-test` |
+| `[BrevoWebhookCloudTasks] enqueue` / `POST /api/v1/webhooks/brevo/transactional` | `marketing-brevo-webhook-production` / `marketing-brevo-webhook` (preferred) |
+| `POST /api/v1/webhooks/brevo/transactional` (legacy on web until Brevo URL updated) | `marketing-production` / `marketing-test` |
+| `[BrevoWebhookWorker] task.applied` / `POST /api/internal/brevo-webhooks/transactional` | `marketing-send-worker-production` / `marketing-send-worker` |
 | `[CampaignBatchWorker]` / `POST /api/internal/campaign-sends/batch` | `marketing-send-worker-production` / `marketing-send-worker` |
 | `[ScheduleReconcile]` / `[SendingReconcile]` | web service only |
 | `[EmailWorker]` | disabled on web when `EMAIL_WORKER_DISABLED=true` |
@@ -90,5 +95,5 @@ Kafka inbound consumer running {
 
 1. Create queue `marketing-test` in `us-west1` (or set `CLOUD_TASKS_QUEUE_NAME`).
 2. In Secret Manager (`marketing-test`): set a strong `CAMPAIGN_SEND_WORKER_SECRET` and Cloud Tasks project/location/queue vars (Cloud Tasks is used automatically when those are present).
-3. Keep `DEPLOY_SEND_WORKER: 'true'` in `deploy-test-marketing.yml` (default). Deploy injects `CAMPAIGN_SEND_WORKER_URL` + `EMAIL_WORKER_DISABLED=true` on web.
-4. Production: leave `DEPLOY_SEND_WORKER: 'false'` until the same secrets exist on `marketing-production`, then flip the flag.
+3. Keep `DEPLOY_SEND_WORKER: 'true'` and `DEPLOY_BREVO_WEBHOOK: 'true'` in deploy workflows (default). Deploy injects `CAMPAIGN_SEND_WORKER_URL` + `EMAIL_WORKER_DISABLED=true` on web.
+4. After deploy, point Brevo transactional webhook at `{marketing-brevo-webhook-…}/api/v1/webhooks/brevo/transactional` (workflow logs the full URL).

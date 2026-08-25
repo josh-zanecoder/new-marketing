@@ -26,7 +26,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/webhooks/brevo',
   /** Cloud Tasks campaign workers (authenticated via X-Campaign-Send-Worker-Secret). */
   '/api/internal/campaign-sends/batch',
-  '/api/internal/campaign-sends/start-scheduled'
+  '/api/internal/campaign-sends/start-scheduled',
+  '/api/internal/brevo-webhooks/transactional'
 ]
 
 const ADMIN_API_PREFIX = '/api/v1/admin'
