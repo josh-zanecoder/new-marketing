@@ -21,7 +21,7 @@ Same Docker image, two Cloud Run services:
 
 | Service | Role | Env overrides | Scaling |
 |---------|------|---------------|---------|
-| `marketing-production` | UI, API, email worker, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true` | min **1**, max **10** |
+| `marketing-production` | UI, API, email worker, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true` | min **2**, max **30** |
 | `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
 Test environment mirrors this with `marketing-test` and `marketing-kafka-worker`.
@@ -48,8 +48,8 @@ Related: [cloud-run-service-split.md](./cloud-run-service-split.md), [marketing-
 Workflow scaling (top-level env):
 
 ```yaml
-WEB_MIN_INSTANCES: 1
-WEB_MAX_INSTANCES: 10
+WEB_MIN_INSTANCES: 2
+WEB_MAX_INSTANCES: 30
 WORKER_MIN_INSTANCES: 1
 WORKER_MAX_INSTANCES: 1
 ```

@@ -6,7 +6,7 @@ Marketing runs as **multiple Cloud Run services** from the **same Docker image**
 
 | Service | Role | Key env overrides |
 |---------|------|-------------------|
-| `marketing-production` | UI, API, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true`, `EMAIL_WORKER_DISABLED=true`, `CAMPAIGN_SEND_WORKER_URL` → send worker | min **1**, max **10**, 1 CPU |
+| `marketing-production` | UI, API, schedule reconcile | `KAFKA_INBOUND_CONSUMER_DISABLED=true`, `EMAIL_WORKER_DISABLED=true`, `CAMPAIGN_SEND_WORKER_URL` → send worker | min **2**, max **30**, 1 CPU |
 | `marketing-send-worker-production` | Cloud Tasks batch HTTP target only | `EMAIL_WORKER_DISABLED=true`, `KAFKA_INBOUND_CONSUMER_DISABLED=true`, self `CAMPAIGN_SEND_WORKER_URL` | min **1**, max **1**, **2 CPU / 2Gi**, `--no-cpu-throttling` |
 | `marketing-kafka-worker-production` | Kafka inbound consumer only | `EMAIL_WORKER_DISABLED=true`, `SCHEDULE_RECONCILE_DISABLED=true`, `SENDING_RECONCILE_DISABLED=true` | min **1**, max **1** |
 
