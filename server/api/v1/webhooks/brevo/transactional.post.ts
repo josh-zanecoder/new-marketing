@@ -1,61 +1,9 @@
-import { timingSafeEqual } from 'node:crypto'
-import { resolveBrevoWebhookSecret } from '@server/utils/brevo/resolveBrevoWebhookSecret'
+import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3'
+import { isBrevoWebhookCloudTasksEnabled } from '@server/config/brevoWebhookCloudTasks'
+import { verifyBrevoWebhookRequestAuth } from '@server/utils/brevo/brevoWebhookRequestAuth'
+import { enqueueBrevoWebhookCloudTask } from '@server/queue/brevoWebhookCloudTasksQueue'
 import { applyBrevoTrackingWebhook, resolveTenantDbName } from '@server/utils/tracking/applyBrevoTrackingWebhook'
 import { parseBrevoTransactionalWebhookPayload } from '@server/utils/tracking/parseBrevoTransactionalWebhookPayload'
-
-const WEBHOOK_SECRET_HEADERS = [
-  'x-brevo-webhook-secret',
-  'x-brevo-signature',
-  'x-brevo-signature-v2',
-  'x-mailin-custom'
-] as const
-
-function normalizeSecret(value: string | undefined): string {
-  return String(value || '')
-    .trim()
-    .replace(/^"|"$/g, '')
-}
-
-function readBearerOrBasicSecret(event: Parameters<typeof getHeader>[0]): string {
-  const auth = getHeader(event, 'authorization')?.trim() || ''
-  if (!auth) return ''
-
-  const bearer = /^Bearer\s+(.+)$/i.exec(auth)
-  if (bearer?.[1]) return normalizeSecret(bearer[1])
-
-  // Brevo "Basic" auth — treat password (or full user:pass) as the shared secret.
-  const basic = /^Basic\s+(.+)$/i.exec(auth)
-  if (basic?.[1]) {
-    try {
-      const decoded = Buffer.from(basic[1], 'base64').toString('utf8')
-      const colon = decoded.indexOf(':')
-      if (colon >= 0) {
-        const password = decoded.slice(colon + 1)
-        if (password) return normalizeSecret(password)
-      }
-      return normalizeSecret(decoded)
-    } catch {
-      return ''
-    }
-  }
-
-  return ''
-}
-
-function readWebhookSecret(event: Parameters<typeof getHeader>[0]): string {
-  for (const name of WEBHOOK_SECRET_HEADERS) {
-    const v = getHeader(event, name)
-    if (v?.trim()) return normalizeSecret(v)
-  }
-  return readBearerOrBasicSecret(event)
-}
-
-function secretsEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a)
-  const right = Buffer.from(b)
-  if (left.length !== right.length) return false
-  return timingSafeEqual(left, right)
-}
 
 /**
  * Brevo transactional webhook → upsert into tenant `brevo_tracking_events`.
@@ -65,7 +13,8 @@ function secretsEqual(a: string, b: string): boolean {
  *   Auth: Brevo UI “Token” (Authorization: Bearer …), or custom header
  *         `x-brevo-webhook-secret`, matching the tenant webhook secret / env.
  *
- * Sends must include `db:{dbName}` and/or `tenant:{tenantId}` tags (Marketing already does).
+ * When Cloud Tasks is configured, validates and enqueues quickly so UI/login
+ * is not blocked by slow Mongo upserts during webhook floods.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -78,27 +27,39 @@ export default defineEventHandler(async (event) => {
   }
 
   const dbName = await resolveTenantDbName(parsed)
-  const expected = normalizeSecret(await resolveBrevoWebhookSecret(dbName))
-  const got = readWebhookSecret(event)
-  const allowUnsigned =
-    String(process.env.BREVO_WEBHOOK_ALLOW_UNSIGNED || '').toLowerCase() === 'true'
+  const auth = await verifyBrevoWebhookRequestAuth(event, dbName)
+  if (!auth.ok) {
+    throw createError({ statusCode: auth.statusCode, statusMessage: auth.message })
+  }
 
-  if (!expected) {
-    if (!allowUnsigned) {
+  if (isBrevoWebhookCloudTasksEnabled()) {
+    try {
+      const queued = await enqueueBrevoWebhookCloudTask(parsed, body)
+      setResponseStatus(event, 200)
+      return {
+        success: true,
+        accepted: true,
+        queued: true,
+        taskId: queued.taskId,
+        duplicate: Boolean(queued.duplicate),
+        messageId: parsed.messageId,
+        event: parsed.event
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[brevo-webhook] enqueue failed', {
+        messageId: parsed.messageId,
+        event: parsed.event,
+        error: message
+      })
       throw createError({
         statusCode: 503,
-        statusMessage: 'Brevo webhook is not configured'
+        statusMessage: 'Brevo webhook queue unavailable'
       })
     }
-    console.warn('[brevo-webhook] auth bypassed (BREVO_WEBHOOK_ALLOW_UNSIGNED, no secret)')
-  } else if (!got && allowUnsigned) {
-    console.warn('[brevo-webhook] auth bypassed (BREVO_WEBHOOK_ALLOW_UNSIGNED)')
-  } else if (!got || !secretsEqual(got, expected)) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
   const result = await applyBrevoTrackingWebhook(body)
-
   if (!result.ok) {
     throw createError({
       statusCode: result.statusCode,
