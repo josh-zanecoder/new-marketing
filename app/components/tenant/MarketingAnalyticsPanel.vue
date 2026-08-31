@@ -183,7 +183,7 @@ function clearAllFilters() {
 }
 
 /**
- * Pull Brevo unaggregated events into Mongo for the active range, then reload Analytics.
+ * Pull provider events into Mongo for the active range, then reload Analytics.
  */
 async function refreshFromBrevo() {
   if (syncing.value) return

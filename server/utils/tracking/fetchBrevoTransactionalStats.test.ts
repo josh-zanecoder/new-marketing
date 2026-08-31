@@ -13,6 +13,14 @@ describe('clampBrevoSmtpDateRange', () => {
     })
   })
 
+  it('clamps endDate to the viewer local day', () => {
+    const now = new Date('2026-08-30T17:32:00.000Z')
+    expect(clampBrevoSmtpDateRange('2026-08-25', '2026-08-31', now, -480)).toEqual({
+      startDate: '2026-08-25',
+      endDate: '2026-08-31'
+    })
+  })
+
   it('pulls start forward when start is after end', () => {
     const now = new Date('2026-08-01T12:00:00.000Z')
     expect(clampBrevoSmtpDateRange('2026-08-05', '2026-08-01', now)).toEqual({

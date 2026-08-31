@@ -8,6 +8,7 @@ import {
 } from '@server/kafka/kafkaProducer'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import {
+  applyZcMailRegistryPatch,
   normalizeBrevoApiKeyInput,
   normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
@@ -48,6 +49,11 @@ export default defineEventHandler(async (event) => {
      * Non-empty string sets/replaces the tenant webhook secret.
      */
     brevoWebhookSecret?: string | null
+    emailProvider?: string | null
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   }>(event)
 
   const displayName = body?.name?.trim()
@@ -157,6 +163,13 @@ export default defineEventHandler(async (event) => {
     if (nextSecret) $set.brevoWebhookSecret = nextSecret
     else $unset.brevoWebhookSecret = ''
   }
+
+  applyZcMailRegistryPatch({
+    existing,
+    body: body ?? {},
+    $set,
+    $unset
+  })
 
   const update: { $set: Record<string, unknown>; $unset?: Record<string, ''> } = { $set }
   if (Object.keys($unset).length) update.$unset = $unset

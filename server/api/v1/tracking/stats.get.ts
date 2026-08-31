@@ -57,12 +57,12 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const clampedToToday = clampBrevoSmtpDateRange(fromYmd, toYmd)
+  const tzOffsetMinutes = normalizeTzOffsetQuery(event)
+  const clampedToToday = clampBrevoSmtpDateRange(fromYmd, toYmd, new Date(), tzOffsetMinutes)
   const range = clampBrevoSmtpStatsRangeToMaxDays(
     clampedToToday.startDate,
     clampedToToday.endDate
   )
-  const tzOffsetMinutes = normalizeTzOffsetQuery(event)
 
   const eventsLimit = Math.min(
     BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX,

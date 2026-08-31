@@ -79,14 +79,19 @@ export type BrevoTransactionalStatsResult = {
   }
 }
 
-/** Brevo rejects endDate after their UTC calendar "today". */
+/** Brevo rejects endDate after their calendar "today". Prefer the viewer's local day. */
 export function clampBrevoSmtpDateRange(
   startDate: string,
   endDate: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  tzOffsetMinutes?: number | null
 ): { startDate: string; endDate: string } {
-  const todayUtc = now.toISOString().slice(0, 10)
-  const end = endDate > todayUtc ? todayUtc : endDate
+  const offset =
+    typeof tzOffsetMinutes === 'number' && Number.isFinite(tzOffsetMinutes)
+      ? tzOffsetMinutes
+      : 0
+  const todayLocal = new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10)
+  const end = endDate > todayLocal ? todayLocal : endDate
   const start = startDate > end ? end : startDate
   return { startDate: start, endDate: end }
 }

@@ -29,7 +29,7 @@ import {
   buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
-import { sendEmail } from './brevo.service'
+import { sendCampaignOutboundEmail } from './campaignOutboundEmail.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 export interface SendCampaignTestEmailInput {
@@ -236,7 +236,7 @@ export async function sendCampaignTestEmail(
     [authSnap?.firstName, authSnap?.lastName].filter(Boolean).join(' ').trim() ||
     undefined
 
-  const result = await sendEmail({
+  const result = await sendCampaignOutboundEmail({
     sender: { name: sender.name || sender.email, email: sender.email },
     to: [{ email: recipient }],
     ...(replyTo ? { replyTo } : {}),

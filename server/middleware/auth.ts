@@ -24,6 +24,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/v1/unsubscribe',
   /** Brevo transactional delivery webhooks (per-tenant or env BREVO_WEBHOOK_SECRET). */
   '/api/v1/webhooks/brevo',
+  /** zcMail email.status webhooks (HMAC ZC_MAIL_WEBHOOK_SECRET). */
+  '/api/v1/webhooks/zc-mail',
   /** Cloud Tasks campaign workers (authenticated via X-Campaign-Send-Worker-Secret). */
   '/api/internal/campaign-sends/batch',
   '/api/internal/campaign-sends/start-scheduled',

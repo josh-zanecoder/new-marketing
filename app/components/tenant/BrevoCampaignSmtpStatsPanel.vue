@@ -44,6 +44,7 @@ const topView = ref<TopView>('metrics')
 const showMetricsHelp = ref(false)
 /** Empty = all event types. Brevo events API accepts one type at a time. */
 const selectedEventType = ref('')
+const syncing = ref(false)
 
 const {
   datePreset,
@@ -84,7 +85,50 @@ const { data, error, pending, refresh } = useFetch<{ stats: BrevoTransactionalSt
   }
 )
 
+const isBusy = computed(() => pending.value || syncing.value)
+
 const stats = computed(() => data.value?.stats ?? null)
+
+async function refreshFromProvider() {
+  if (syncing.value) return
+  syncing.value = true
+  eventsPage.value = 1
+  try {
+    const body: Record<string, string> = {
+      campaignId: props.campaignId.trim()
+    }
+    const from = effectiveDateRange.value.from?.trim()
+    const to = effectiveDateRange.value.to?.trim()
+    if (from) body.from = from
+    if (to) body.to = to
+    await $fetch('/api/v1/tracking/sync', {
+      method: 'POST',
+      body,
+      credentials: 'include'
+    })
+    await refresh()
+  } finally {
+    syncing.value = false
+  }
+}
+
+const autoSyncedKeys = ref(new Set<string>())
+
+watch([pending, data, error, () => props.campaignId, effectiveDateRange], () => {
+  if (!import.meta.client) return
+  if (!props.campaignId?.trim()) return
+  if (pending.value || syncing.value) return
+  if (error.value) return
+  const requests = stats.value?.aggregated?.requests ?? 0
+  const items = stats.value?.events?.items?.length ?? 0
+  if (requests > 0 || items > 0) return
+  const key = `${props.campaignId.trim()}|${effectiveDateRange.value.from || ''}|${effectiveDateRange.value.to || ''}`
+  if (autoSyncedKeys.value.has(key)) return
+  const next = new Set(autoSyncedKeys.value)
+  next.add(key)
+  autoSyncedKeys.value = next
+  void refreshFromProvider()
+})
 const {
   statsRangeTitleLong,
   totalEmailsSent,
@@ -147,12 +191,8 @@ const FILL_CLASS: Record<string, string> = {
 }
 
 defineExpose({
-  refresh: async () => {
-    // Mongo-only reload. Brevo full sync is owned by Tracking Refresh (avoids 2× sync).
-    eventsPage.value = 1
-    await refresh()
-  },
-  pending
+  refresh: refreshFromProvider,
+  pending: isBusy
 })
 </script>
 
@@ -203,7 +243,7 @@ defineExpose({
             label="Filter by event type"
             variant="tracking"
             :options="eventFilterOptions"
-            :disabled="pending && !stats"
+            :disabled="isBusy && !stats"
           />
         </div>
         <TenantBrevoTrackingDateRangePicker
@@ -233,9 +273,9 @@ defineExpose({
     <div
       v-if="topView === 'metrics'"
       class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white px-5 py-5 shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-6"
-      :aria-busy="pending"
+      :aria-busy="isBusy"
     >
-      <template v-if="pending && !stats">
+      <template v-if="isBusy && !stats">
         <div class="animate-pulse space-y-6">
           <div class="h-9 w-48 rounded bg-zinc-100" />
           <div class="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
@@ -332,12 +372,12 @@ defineExpose({
       :daily="stats?.daily ?? []"
       :date-range="effectiveDateRange"
       :selected-event-types="chartSelectedEventTypes"
-      :loading="pending && !stats"
+      :loading="isBusy && !stats"
     />
 
     <div
       class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
-      :aria-busy="pending"
+      :aria-busy="isBusy"
     >
       <div class="border-b border-zinc-100 px-4 py-3 sm:px-5">
         <p class="text-sm font-semibold text-zinc-800">Messages</p>
@@ -389,7 +429,7 @@ defineExpose({
       </div>
 
       <div
-        v-if="pending && !eventItems.length"
+        v-if="isBusy && !eventItems.length"
         class="px-5 py-10 text-center text-sm text-zinc-500"
       >
         Loading events…
@@ -409,7 +449,7 @@ defineExpose({
           <button
             type="button"
             class="h-8 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 disabled:opacity-40"
-            :disabled="eventsPage <= 1 || pending"
+            :disabled="eventsPage <= 1 || isBusy"
             @click="goEventsPage(eventsPage - 1)"
           >
             Prev
@@ -417,7 +457,7 @@ defineExpose({
           <button
             type="button"
             class="h-8 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 disabled:opacity-40"
-            :disabled="!eventsHasMore || pending"
+            :disabled="!eventsHasMore || isBusy"
             @click="goEventsPage(eventsPage + 1)"
           >
             Next

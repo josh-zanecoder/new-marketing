@@ -4,6 +4,7 @@ import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import type { BrevoEmailEventType } from '@server/utils/tracking/brevoEventType'
 import { parseYmdToUtcBounds } from '@server/utils/tracking/brevoTrackingEventDateBounds'
 import type { BrevoSmtpStatsEventItem } from '@server/utils/tracking/fetchBrevoTransactionalStats'
+import { mongoExcludeCampaignTestEmailTag } from '@server/utils/zcmail/campaignZcMailTags'
 
 type StoredEventLean = {
   email?: string
@@ -70,7 +71,10 @@ export async function loadStoredCampaignSmtpStatsEventsPage(params: {
   const { BrevoTrackingEvent } = getTenantClientModels(conn)
 
   const filter: FilterQuery<Record<string, unknown>> = {}
-  if (campaignId) filter.campaignId = campaignId
+  if (campaignId) {
+    filter.campaignId = campaignId
+    Object.assign(filter, mongoExcludeCampaignTestEmailTag())
+  }
   if (userEmail) filter.userEmail = userEmail
 
   const bounds = parseYmdToUtcBounds(params.startDate, params.endDate, null)

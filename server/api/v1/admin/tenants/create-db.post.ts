@@ -2,6 +2,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { ensureTenantDatabaseInitialized } from '@server/tenant/provisioning'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import {
+  applyZcMailRegistryPatch,
   normalizeBrevoApiKeyInput,
   normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
@@ -30,6 +31,11 @@ export default defineEventHandler(async (event) => {
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
+    emailProvider?: string | null
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()
@@ -85,6 +91,13 @@ export default defineEventHandler(async (event) => {
   }
   if (brevoApiKey) $set.brevoApiKey = brevoApiKey
   if (brevoWebhookSecret) $set.brevoWebhookSecret = brevoWebhookSecret
+
+  applyZcMailRegistryPatch({
+    existing: {},
+    body: body ?? {},
+    $set,
+    $unset: {}
+  })
 
   await registryConn.collection('clients').updateOne({ dbName }, { $set })
   invalidateTenantTopicCacheForDbName(dbName)

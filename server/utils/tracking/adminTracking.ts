@@ -3,6 +3,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
+import { TENANT_EMAIL_PROVIDER_ZC_MAIL } from '@server/constants/emailProvider'
 import { normalizeBrevoEventTypesQuery } from '@server/utils/tracking/brevoEventType'
 import {
   normalizeCampaignIdQuery,
@@ -12,7 +13,12 @@ import {
 } from '@server/utils/tracking/brevoTenantEvents'
 import { loadStoredTenantBrevoTrackingEventsPage } from '@server/utils/tracking/loadStoredTenantBrevoTrackingEventsPage'
 import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
+import { syncTenantZcMailTrackingEvents } from '@server/utils/tracking/syncTenantZcMailTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
+import {
+  requireZcMailSendConfig,
+  resolveTenantEmailSendConfig
+} from '@server/utils/zcmail/resolveTenantEmailSendConfig'
 
 function normalizePositiveInt(raw: unknown, fallback: number, max: number): number {
   const n =
@@ -169,13 +175,31 @@ export async function syncAdminTrackingReport(event: H3Event): Promise<{
       ? campaignRaw.trim()
       : normalizeCampaignIdQuery(event)
 
-  const result = await syncTenantBrevoTrackingEvents({
-    dbName: tenantDbName,
-    marketingTenantId: tenants[0]?.marketingTenantId ?? null,
-    fromYmd,
-    toYmd,
-    campaignId
-  })
+  const emailConfig = await resolveTenantEmailSendConfig(tenantDbName)
+  let result
+  if (emailConfig.provider === TENANT_EMAIL_PROVIDER_ZC_MAIL) {
+    let config
+    try {
+      config = requireZcMailSendConfig(emailConfig)
+    } catch (e: unknown) {
+      throwBrevoTrackingFetchError(e instanceof Error ? e.message : String(e))
+    }
+    result = await syncTenantZcMailTrackingEvents({
+      dbName: tenantDbName,
+      config,
+      fromYmd,
+      toYmd,
+      campaignId
+    })
+  } else {
+    result = await syncTenantBrevoTrackingEvents({
+      dbName: tenantDbName,
+      marketingTenantId: tenants[0]?.marketingTenantId ?? null,
+      fromYmd,
+      toYmd,
+      campaignId
+    })
+  }
 
   if (result.error) {
     throwBrevoTrackingFetchError(result.error)

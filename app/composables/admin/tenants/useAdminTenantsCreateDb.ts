@@ -44,6 +44,11 @@ export function useAdminTenantsCreateDb() {
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
+    emailProvider?: string | null
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   }): Promise<CreateTenantDbResult> {
     resetError()
 
@@ -68,6 +73,17 @@ export function useAdminTenantsCreateDb() {
               : {}),
             ...(payload.brevoWebhookSecret?.trim()
               ? { brevoWebhookSecret: payload.brevoWebhookSecret.trim() }
+              : {}),
+            ...(payload.emailProvider ? { emailProvider: payload.emailProvider } : {}),
+            ...(payload.zcMailBaseUrl?.trim()
+              ? { zcMailBaseUrl: payload.zcMailBaseUrl.trim() }
+              : {}),
+            ...(payload.zcMailTenant?.trim()
+              ? { zcMailTenant: payload.zcMailTenant.trim() }
+              : {}),
+            ...(payload.zcMailArchive === false ? { zcMailArchive: false } : {}),
+            ...(payload.zcMailApiKey?.trim()
+              ? { zcMailApiKey: payload.zcMailApiKey.trim() }
               : {})
           }
         }
@@ -117,6 +133,11 @@ export function useAdminTenantsCreateDb() {
       defaultCampaignSenderName: string | null
       brevoApiKey?: string | null
       brevoWebhookSecret?: string | null
+      emailProvider?: string | null
+      zcMailBaseUrl?: string | null
+      zcMailTenant?: string | null
+      zcMailArchive?: boolean
+      zcMailApiKey?: string | null
     }
   ): Promise<{ ok: boolean }> {
     resetError()

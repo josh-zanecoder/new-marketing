@@ -27,6 +27,16 @@ export interface RegistryTenantDoc {
    * `BREVO_WEBHOOK_SECRET`.
    */
   brevoWebhookSecret?: unknown
+  /** Outbound email provider for campaigns / test sends. Default Brevo. */
+  emailProvider?: unknown
+  /** zcMail API base URL (non-secret). */
+  zcMailBaseUrl?: unknown
+  /** zcMail tenant slug sent as body `tenant` (SES TenantName). */
+  zcMailTenant?: unknown
+  /** When true, zcMail archives outbound mail. Default true. */
+  zcMailArchive?: unknown
+  /** Per-tenant zcMail API key. */
+  zcMailApiKey?: unknown
 }
 
 /** Admin list row for a registered tenant (registry). */
@@ -57,4 +67,11 @@ export interface TenantAdminRow {
   brevoWebhookSecretConfigured: boolean
   /** Masked prefix of the custom Brevo webhook secret (never the full secret). */
   brevoWebhookSecretPrefix: string | null
+  /** Outbound email provider. */
+  emailProvider: 'BREVO' | 'ZC_MAIL'
+  zcMailBaseUrl: string | null
+  zcMailTenant: string | null
+  zcMailArchive: boolean
+  zcMailApiKeyConfigured: boolean
+  zcMailApiKeyPrefix: string | null
 }

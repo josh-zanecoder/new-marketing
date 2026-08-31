@@ -1,14 +1,21 @@
+import { TENANT_EMAIL_PROVIDER_ZC_MAIL } from '@server/constants/emailProvider'
 import {
   normalizeCampaignIdQuery,
   normalizeYmdQuery
 } from '@server/utils/tracking/brevoTenantEvents'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
 import { syncTenantBrevoTrackingEvents } from '@server/utils/tracking/syncTenantBrevoTrackingEvents'
+import { syncTenantZcMailTrackingEvents } from '@server/utils/tracking/syncTenantZcMailTrackingEvents'
 import { throwBrevoTrackingFetchError } from '@server/utils/tracking/throwBrevoTrackingFetchError'
+import {
+  requireZcMailSendConfig,
+  resolveTenantEmailSendConfig
+} from '@server/utils/zcmail/resolveTenantEmailSendConfig'
 
 /**
- * Pull Brevo events for the active date range into the tenant DB.
+ * Pull provider events for the active date range into the tenant DB.
  * Tracking GET reads Mongo only; the UI calls this on Refresh.
+ * Brevo → events API. zcMail → archive list/detail.
  */
 export default defineEventHandler(async (event) => {
   const { dbName, marketingTenantId } = await resolveTrackingTenantContext(event)
@@ -33,6 +40,35 @@ export default defineEventHandler(async (event) => {
     typeof campaignRaw === 'string' && /^[a-f\d]{24}$/i.test(campaignRaw.trim())
       ? campaignRaw.trim()
       : normalizeCampaignIdQuery(event)
+
+  const emailConfig = await resolveTenantEmailSendConfig(dbName)
+  if (emailConfig.provider === TENANT_EMAIL_PROVIDER_ZC_MAIL) {
+    let config
+    try {
+      config = requireZcMailSendConfig(emailConfig)
+    } catch (e: unknown) {
+      throwBrevoTrackingFetchError(e instanceof Error ? e.message : String(e))
+    }
+    const result = await syncTenantZcMailTrackingEvents({
+      dbName,
+      config,
+      fromYmd,
+      toYmd,
+      campaignId
+    })
+    if (result.error) {
+      throwBrevoTrackingFetchError(result.error)
+    }
+    return {
+      ok: true as const,
+      fetched: result.fetched,
+      upserted: result.upserted,
+      modified: result.modified,
+      deduped: result.deduped ?? 0,
+      timingsMs: result.timingsMs,
+      provider: TENANT_EMAIL_PROVIDER_ZC_MAIL
+    }
+  }
 
   const result = await syncTenantBrevoTrackingEvents({
     dbName,

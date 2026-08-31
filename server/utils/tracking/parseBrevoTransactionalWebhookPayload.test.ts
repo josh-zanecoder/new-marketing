@@ -39,6 +39,8 @@ describe('parseBrevoTransactionalWebhookPayload', () => {
     expect(normalizeBrevoWebhookEventName('hard_bounce')).toBe('hardBounces')
     expect(normalizeBrevoWebhookEventName('click')).toBe('clicks')
     expect(normalizeBrevoWebhookEventName('unique_opened')).toBe('unique_opened')
+    expect(normalizeBrevoWebhookEventName('Delivery')).toBe('delivered')
+    expect(normalizeBrevoWebhookEventName('complaint')).toBe('spam')
   })
 
   it('returns null without message id', () => {

@@ -37,7 +37,7 @@ import {
   buildReplyToFromContactOwner,
   buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
-import { sendCampaignBatchWithMessageVersions } from './brevo.service'
+import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
@@ -54,8 +54,8 @@ import {
 import { campaignSendJobShouldSkip } from '../utils/campaignSend/campaignSendJobGuard'
 import type { CampaignBatchMessageVersion } from '../utils/campaignSend/buildCampaignBrevoBatchRequest'
 
-const MISSING_BREVO_ID_MESSAGE =
-  'Brevo did not return a message id for this recipient (partial or empty API response).'
+const MISSING_PROVIDER_MESSAGE_ID_MESSAGE =
+  'Email provider did not return a message id for this recipient (partial or empty API response).'
 
 function logSend(event: string, details: Record<string, unknown>) {
   console.log(`[SendCampaign] ${event}`, details)
@@ -882,7 +882,7 @@ export async function processBatch(
         recipientRowIds: group.map((p) => String(p.row._id))
       })
 
-      const batchResult = await sendCampaignBatchWithMessageVersions({
+      const batchResult = await sendCampaignOutboundBatch({
         sender: group[0]!.sender,
         messageVersions: group.map((p) => p.version),
         tags: [`campaign:${campaignId}`],
@@ -949,7 +949,7 @@ export async function processBatch(
               update: {
                 $set: {
                   status: CAMPAIGN_RECIPIENT_STATUS_FAILED,
-                  error: MISSING_BREVO_ID_MESSAGE
+                  error: MISSING_PROVIDER_MESSAGE_ID_MESSAGE
                 }
               }
             }

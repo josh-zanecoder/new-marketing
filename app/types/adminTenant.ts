@@ -23,5 +23,12 @@ export interface AdminTenantRow {
   brevoWebhookSecretConfigured: boolean
   /** Masked prefix of the custom Brevo webhook secret (never the full secret). */
   brevoWebhookSecretPrefix: string | null
+  /** Outbound email provider for campaigns. Default BREVO. */
+  emailProvider?: 'BREVO' | 'ZC_MAIL'
+  zcMailBaseUrl?: string | null
+  zcMailTenant?: string | null
+  zcMailArchive?: boolean
+  zcMailApiKeyConfigured?: boolean
+  zcMailApiKeyPrefix?: string | null
   status: string
 }

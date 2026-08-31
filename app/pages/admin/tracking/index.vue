@@ -37,7 +37,7 @@ await useAsyncData('admin-tracking-tenants', async () => {
           Tracking
         </h1>
         <p class="page-lead max-w-2xl sm:text-[0.9375rem] sm:leading-relaxed">
-          Select a tenant, then Refresh to sync events from Brevo into that workspace database.
+          Select a tenant, then Refresh to sync events from the tenant email provider into that workspace database.
         </p>
       </div>
       <TenantRefreshIconButton

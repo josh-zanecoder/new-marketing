@@ -174,7 +174,7 @@ const trackingScope = computed(() =>
 )
 
 const syncing = ref(false)
-/** Avoid re-hitting Brevo when campaign DB is empty and sync also returned nothing. */
+/** Avoid re-hitting the provider when campaign DB is empty and sync also returned nothing. */
 const autoSyncedKeys = ref(new Set<string>())
 
 const { data, error, pending, refresh } = useFetch<{ report: unknown }>(
@@ -246,7 +246,7 @@ async function refreshFromBrevo() {
 defineExpose({ refresh: refreshFromBrevo, pending: isLoading })
 
 /**
- * Campaign Logs: if Mongo has no events for this campaign/range, pull from Brevo once.
+ * Campaign Logs: if Mongo has no events for this campaign/range, pull from the email provider once.
  */
 watch(
   [pending, data, error, () => props.campaignId, effectiveDateRange, trackingScope],

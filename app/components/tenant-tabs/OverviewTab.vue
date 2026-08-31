@@ -85,6 +85,48 @@
         class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
       >
         <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          Email provider
+        </dt>
+        <dd class="mt-2 break-words text-sm font-medium text-slate-900">
+          {{ tenant.emailProvider === 'ZC_MAIL' ? 'zcMail' : 'Brevo' }}
+        </dd>
+      </div>
+
+      <div
+        v-if="tenant.emailProvider === 'ZC_MAIL'"
+        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
+      >
+        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          zcMail tenant
+        </dt>
+        <dd class="mt-2 break-words font-mono text-xs font-medium text-slate-800">
+          {{ tenant.zcMailTenant || '—' }}
+        </dd>
+      </div>
+
+      <div
+        v-if="tenant.emailProvider === 'ZC_MAIL'"
+        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
+      >
+        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          zcMail API key
+        </dt>
+        <dd class="mt-2 break-words text-sm font-medium text-slate-900">
+          <template v-if="tenant.zcMailApiKeyConfigured">
+            Set
+            <span v-if="tenant.zcMailApiKeyPrefix" class="font-mono text-xs text-slate-600">
+              ({{ tenant.zcMailApiKeyPrefix }})
+            </span>
+          </template>
+          <span v-else class="text-slate-400">Not set</span>
+        </dd>
+      </div>
+
+      <div
+        v-if="tenant.emailProvider !== 'ZC_MAIL'"
+        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
+      >
+        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           Brevo API key
         </dt>
         <dd class="mt-2 break-words text-sm font-medium text-slate-900">
@@ -99,6 +141,7 @@
       </div>
 
       <div
+        v-if="tenant.emailProvider !== 'ZC_MAIL'"
         class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
       >
         <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -154,6 +197,10 @@ defineProps<{
     brevoApiKeyPrefix?: string | null
     brevoWebhookSecretConfigured?: boolean
     brevoWebhookSecretPrefix?: string | null
+    emailProvider?: 'BREVO' | 'ZC_MAIL'
+    zcMailTenant?: string | null
+    zcMailApiKeyConfigured?: boolean
+    zcMailApiKeyPrefix?: string | null
   }
 }>()
 

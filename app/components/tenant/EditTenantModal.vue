@@ -125,6 +125,25 @@
           </div>
 
           <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-email-provider" class="compact-modal-label">
+              Email provider
+            </label>
+            <select
+              id="edit-tenant-email-provider"
+              v-model="emailProvider"
+              class="compact-modal-input"
+            >
+              <option value="BREVO">Brevo</option>
+              <option value="ZC_MAIL">zcMail</option>
+            </select>
+            <p class="mt-1.5 text-xs text-slate-500">
+              Campaigns and test sends use this provider. Ratesheet CRM uses the same zcMail API
+              (<span class="font-mono">/v1/mail/bulk</span>).
+            </p>
+          </div>
+
+          <template v-if="emailProvider === 'BREVO'">
+          <div class="compact-modal-field compact-modal-field--full">
             <label for="edit-tenant-brevo-key" class="compact-modal-label">
               Brevo API key <span class="compact-modal-label-hint">(optional)</span>
             </label>
@@ -193,6 +212,88 @@
               Clear custom secret (use env default)
             </label>
           </div>
+          </template>
+
+          <template v-else>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-zcmail-tenant" class="compact-modal-label">
+              zcMail tenant name
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="edit-tenant-zcmail-tenant"
+              v-model="zcMailTenant"
+              type="text"
+              autocomplete="off"
+              placeholder="SES TenantName / zc-mail tenant slug"
+              class="compact-modal-input compact-modal-input--mono"
+              required
+            >
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-zcmail-base" class="compact-modal-label">
+              zcMail base URL
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="edit-tenant-zcmail-base"
+              v-model="zcMailBaseUrl"
+              type="url"
+              autocomplete="off"
+              placeholder="https://apizcmail.zanecoder.com"
+              class="compact-modal-input compact-modal-input--mono"
+              required
+            >
+            <p class="mt-1.5 text-xs text-slate-500">
+              Host Marketing can reach (posts to <span class="font-mono">/v1/mail/send</span> and
+              <span class="font-mono">/v1/mail/bulk</span>). Do not use <span class="font-mono">0.0.0.0</span>.
+            </p>
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-zcmail-key" class="compact-modal-label">
+              zcMail API key
+              <span
+                v-if="!props.tenant?.zcMailApiKeyConfigured"
+                class="field-required"
+                aria-hidden="true"
+              >*</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              <template v-if="props.tenant?.zcMailApiKeyConfigured">
+                Key set
+                <span v-if="props.tenant.zcMailApiKeyPrefix" class="font-mono">
+                  ({{ props.tenant.zcMailApiKeyPrefix }})
+                </span>
+                — leave blank to keep.
+              </template>
+              <template v-else>
+                Paste a tenant-scoped zcMail API key (<span class="font-mono">zcm_…</span>).
+              </template>
+            </p>
+            <input
+              id="edit-tenant-zcmail-key"
+              v-model="zcMailApiKey"
+              type="password"
+              autocomplete="off"
+              placeholder="zcm_…"
+              class="compact-modal-input compact-modal-input--mono"
+              :disabled="clearZcMailApiKey"
+            >
+            <label
+              v-if="props.tenant?.zcMailApiKeyConfigured"
+              class="mt-2 flex items-center gap-2 text-xs text-slate-600"
+            >
+              <input v-model="clearZcMailApiKey" type="checkbox" class="rounded border-slate-300">
+              Clear zcMail API key
+            </label>
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label class="mt-1 flex items-center gap-2 text-sm text-slate-700">
+              <input v-model="zcMailArchive" type="checkbox" class="rounded border-slate-300">
+              Archive outbound mail in zcMail
+            </label>
+          </div>
+          </template>
 
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
@@ -258,6 +359,11 @@ const emit = defineEmits<{
     brevoApiKey?: string | null
     /** Omit = keep; `null` = clear to env; string = set/replace. */
     brevoWebhookSecret?: string | null
+    emailProvider?: 'BREVO' | 'ZC_MAIL'
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   }]
 }>()
 
@@ -271,6 +377,12 @@ const brevoApiKey = ref('')
 const clearBrevoApiKey = ref(false)
 const brevoWebhookSecret = ref('')
 const clearBrevoWebhookSecret = ref(false)
+const emailProvider = ref<'BREVO' | 'ZC_MAIL'>('BREVO')
+const zcMailTenant = ref('')
+const zcMailBaseUrl = ref('')
+const zcMailApiKey = ref('')
+const clearZcMailApiKey = ref(false)
+const zcMailArchive = ref(true)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -287,6 +399,12 @@ function loadFromTenant(t: AdminTenantRow) {
   clearBrevoApiKey.value = false
   brevoWebhookSecret.value = ''
   clearBrevoWebhookSecret.value = false
+  emailProvider.value = t.emailProvider === 'ZC_MAIL' ? 'ZC_MAIL' : 'BREVO'
+  zcMailTenant.value = t.zcMailTenant ?? ''
+  zcMailBaseUrl.value = t.zcMailBaseUrl ?? ''
+  zcMailApiKey.value = ''
+  clearZcMailApiKey.value = false
+  zcMailArchive.value = t.zcMailArchive !== false
 }
 
 function resetLocal() {
@@ -361,6 +479,25 @@ function handleSubmit() {
     return
   }
 
+  if (emailProvider.value === 'ZC_MAIL') {
+    if (!zcMailTenant.value.trim()) {
+      errorMessage.value = 'zcMail tenant name is required.'
+      return
+    }
+    if (!zcMailBaseUrl.value.trim() || !/^https?:\/\/.+/i.test(zcMailBaseUrl.value.trim())) {
+      errorMessage.value = 'zcMail base URL must start with http:// or https://'
+      return
+    }
+    if (
+      !props.tenant?.zcMailApiKeyConfigured
+      && !zcMailApiKey.value.trim()
+      && !clearZcMailApiKey.value
+    ) {
+      errorMessage.value = 'zcMail API key is required.'
+      return
+    }
+  }
+
   startSubmitting()
   const payload: {
     name: string
@@ -371,6 +508,11 @@ function handleSubmit() {
     defaultCampaignSenderEmail: string | null
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
+    emailProvider?: 'BREVO' | 'ZC_MAIL'
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   } = {
     name: trimmedName,
     email: trimmedEmail.toLowerCase(),
@@ -379,7 +521,8 @@ function handleSubmit() {
     defaultCampaignSenderName: trimmedSenderName || null,
     defaultCampaignSenderEmail: trimmedSenderEmail
       ? trimmedSenderEmail.toLowerCase()
-      : null
+      : null,
+    emailProvider: emailProvider.value
   }
 
   if (clearBrevoApiKey.value) {
@@ -392,6 +535,17 @@ function handleSubmit() {
     payload.brevoWebhookSecret = null
   } else if (brevoWebhookSecret.value.trim()) {
     payload.brevoWebhookSecret = brevoWebhookSecret.value.trim()
+  }
+
+  if (emailProvider.value === 'ZC_MAIL') {
+    payload.zcMailTenant = zcMailTenant.value.trim() || null
+    payload.zcMailBaseUrl = zcMailBaseUrl.value.trim() || null
+    payload.zcMailArchive = zcMailArchive.value !== false
+    if (clearZcMailApiKey.value) {
+      payload.zcMailApiKey = null
+    } else if (zcMailApiKey.value.trim()) {
+      payload.zcMailApiKey = zcMailApiKey.value.trim()
+    }
   }
 
   emit('submit', payload)

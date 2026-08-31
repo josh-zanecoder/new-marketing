@@ -1287,6 +1287,12 @@ interface TenantDetail {
   brevoApiKeyPrefix?: string | null
   brevoWebhookSecretConfigured?: boolean
   brevoWebhookSecretPrefix?: string | null
+  emailProvider?: 'BREVO' | 'ZC_MAIL'
+  zcMailBaseUrl?: string | null
+  zcMailTenant?: string | null
+  zcMailArchive?: boolean
+  zcMailApiKeyConfigured?: boolean
+  zcMailApiKeyPrefix?: string | null
 }
 
 interface FilterRow {

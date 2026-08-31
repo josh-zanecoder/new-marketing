@@ -110,6 +110,21 @@
           </div>
 
           <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-email-provider" class="compact-modal-label">
+              Email provider
+            </label>
+            <select
+              id="add-tenant-email-provider"
+              v-model="emailProvider"
+              class="compact-modal-input"
+            >
+              <option value="BREVO">Brevo</option>
+              <option value="ZC_MAIL">zcMail</option>
+            </select>
+          </div>
+
+          <template v-if="emailProvider === 'BREVO'">
+          <div class="compact-modal-field compact-modal-field--full">
             <label for="add-tenant-brevo-key" class="compact-modal-label">
               Brevo API key <span class="compact-modal-label-hint">(optional)</span>
             </label>
@@ -142,6 +157,60 @@
               class="compact-modal-input compact-modal-input--mono"
             >
           </div>
+          </template>
+
+          <template v-else>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-zcmail-tenant" class="compact-modal-label">
+              zcMail tenant name
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="add-tenant-zcmail-tenant"
+              v-model="zcMailTenant"
+              type="text"
+              autocomplete="off"
+              placeholder="SES TenantName / zc-mail tenant slug"
+              class="compact-modal-input compact-modal-input--mono"
+              required
+            >
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-zcmail-base" class="compact-modal-label">
+              zcMail base URL
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="add-tenant-zcmail-base"
+              v-model="zcMailBaseUrl"
+              type="url"
+              autocomplete="off"
+              placeholder="https://apizcmail.zanecoder.com"
+              class="compact-modal-input compact-modal-input--mono"
+              required
+            >
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-zcmail-key" class="compact-modal-label">
+              zcMail API key
+              <span class="field-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="add-tenant-zcmail-key"
+              v-model="zcMailApiKey"
+              type="password"
+              autocomplete="off"
+              placeholder="zcm_…"
+              class="compact-modal-input compact-modal-input--mono"
+            >
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
+            <label class="mt-1 flex items-center gap-2 text-sm text-slate-700">
+              <input v-model="zcMailArchive" type="checkbox" class="rounded border-slate-300">
+              Archive outbound mail in zcMail
+            </label>
+          </div>
+          </template>
 
           <div v-if="displayError" class="compact-modal-error compact-modal-field--full">
             {{ displayError }}
@@ -202,6 +271,11 @@ const emit = defineEmits<{
     defaultCampaignSenderName?: string | null
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
+    emailProvider?: 'BREVO' | 'ZC_MAIL'
+    zcMailBaseUrl?: string | null
+    zcMailTenant?: string | null
+    zcMailArchive?: boolean
+    zcMailApiKey?: string | null
   }]
 }>()
 
@@ -212,6 +286,11 @@ const defaultCampaignSenderEmail = ref('')
 const crmAppUrl = ref('')
 const brevoApiKey = ref('')
 const brevoWebhookSecret = ref('')
+const emailProvider = ref<'BREVO' | 'ZC_MAIL'>('BREVO')
+const zcMailTenant = ref('')
+const zcMailBaseUrl = ref('https://apizcmail.zanecoder.com')
+const zcMailApiKey = ref('')
+const zcMailArchive = ref(true)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
 
@@ -225,6 +304,11 @@ function resetForm() {
   crmAppUrl.value = ''
   brevoApiKey.value = ''
   brevoWebhookSecret.value = ''
+  emailProvider.value = 'BREVO'
+  zcMailTenant.value = ''
+  zcMailBaseUrl.value = 'https://apizcmail.zanecoder.com'
+  zcMailApiKey.value = ''
+  zcMailArchive.value = true
   errorMessage.value = null
   stopSubmitting()
 }
@@ -281,6 +365,21 @@ function handleSubmit() {
     return
   }
 
+  if (emailProvider.value === 'ZC_MAIL') {
+    if (!zcMailTenant.value.trim()) {
+      errorMessage.value = 'zcMail tenant name is required.'
+      return
+    }
+    if (!zcMailBaseUrl.value.trim() || !/^https?:\/\/.+/i.test(zcMailBaseUrl.value.trim())) {
+      errorMessage.value = 'zcMail base URL must start with http:// or https://'
+      return
+    }
+    if (!zcMailApiKey.value.trim()) {
+      errorMessage.value = 'zcMail API key is required.'
+      return
+    }
+  }
+
   startSubmitting()
   emit('submit', {
     name: trimmedName,
@@ -290,9 +389,20 @@ function handleSubmit() {
       ? trimmedSenderEmail.toLowerCase()
       : null,
     ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {}),
-    ...(brevoApiKey.value.trim() ? { brevoApiKey: brevoApiKey.value.trim() } : {}),
-    ...(brevoWebhookSecret.value.trim()
+    emailProvider: emailProvider.value,
+    ...(emailProvider.value === 'BREVO' && brevoApiKey.value.trim()
+      ? { brevoApiKey: brevoApiKey.value.trim() }
+      : {}),
+    ...(emailProvider.value === 'BREVO' && brevoWebhookSecret.value.trim()
       ? { brevoWebhookSecret: brevoWebhookSecret.value.trim() }
+      : {}),
+    ...(emailProvider.value === 'ZC_MAIL'
+      ? {
+          zcMailTenant: zcMailTenant.value.trim(),
+          zcMailBaseUrl: zcMailBaseUrl.value.trim(),
+          zcMailApiKey: zcMailApiKey.value.trim(),
+          zcMailArchive: zcMailArchive.value !== false
+        }
       : {})
   })
 }

@@ -430,6 +430,12 @@ async function fetchTenants() {
         brevoApiKeyPrefix?: string | null
         brevoWebhookSecretConfigured?: boolean
         brevoWebhookSecretPrefix?: string | null
+        emailProvider?: 'BREVO' | 'ZC_MAIL'
+        zcMailBaseUrl?: string | null
+        zcMailTenant?: string | null
+        zcMailArchive?: boolean
+        zcMailApiKeyConfigured?: boolean
+        zcMailApiKeyPrefix?: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -448,6 +454,12 @@ async function fetchTenants() {
       brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
       brevoWebhookSecretConfigured: Boolean(t.brevoWebhookSecretConfigured),
       brevoWebhookSecretPrefix: t.brevoWebhookSecretPrefix ?? null,
+      emailProvider: t.emailProvider === 'ZC_MAIL' ? 'ZC_MAIL' : 'BREVO',
+      zcMailBaseUrl: t.zcMailBaseUrl ?? null,
+      zcMailTenant: t.zcMailTenant ?? null,
+      zcMailArchive: t.zcMailArchive !== false,
+      zcMailApiKeyConfigured: Boolean(t.zcMailApiKeyConfigured),
+      zcMailApiKeyPrefix: t.zcMailApiKeyPrefix ?? null,
       status: 'Ready'
     }))
   } catch {
@@ -463,6 +475,11 @@ async function handleAddTenantSubmit(payload: {
   defaultCampaignSenderName?: string | null
   brevoApiKey?: string | null
   brevoWebhookSecret?: string | null
+  emailProvider?: 'BREVO' | 'ZC_MAIL'
+  zcMailBaseUrl?: string | null
+  zcMailTenant?: string | null
+  zcMailArchive?: boolean
+  zcMailApiKey?: string | null
 }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
@@ -486,6 +503,11 @@ async function handleEditTenantSubmit(payload: {
   defaultCampaignSenderName: string | null
   brevoApiKey?: string | null
   brevoWebhookSecret?: string | null
+  emailProvider?: 'BREVO' | 'ZC_MAIL'
+  zcMailBaseUrl?: string | null
+  zcMailTenant?: string | null
+  zcMailArchive?: boolean
+  zcMailApiKey?: string | null
 }) {
   const row = editingTenant.value
   if (!row) return
