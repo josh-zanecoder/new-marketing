@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { processBrevoWebhookWorkerTask } from '@server/services/brevoWebhookWorker.service'
+import { applyBrevoTrackingWebhook } from '@server/utils/tracking/applyBrevoTrackingWebhook'
 
 vi.mock('@server/utils/tracking/applyBrevoTrackingWebhook', () => ({
   applyBrevoTrackingWebhook: vi.fn()
 }))
-
-import { applyBrevoTrackingWebhook } from '@server/utils/tracking/applyBrevoTrackingWebhook'
 
 describe('processBrevoWebhookWorkerTask', () => {
   it('returns applied result on success', async () => {

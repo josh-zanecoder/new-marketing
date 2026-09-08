@@ -35,10 +35,10 @@ zcMail `email.status` webhooks upsert into the same tenant `brevo_tracking_event
 
 - List rows in the selected date range → `requests` / `delivered` / `hardBounces`
 - Archive detail SES events → opens, clicks, bounces (same labels as Brevo)
-- Campaign filter uses send tags (`campaign`), archive `q`/`campaign` query, stored recipient message ids, and `email_message_routing`. Same recipient on a test email or another send is not enough.
+- Campaign filter uses send tags (`campaign`), archive `campaign`/`tag` query (plus a couple of parallel `q` searches), stored recipient message ids for local matching, and `email_message_routing`. Refresh does **not** call the archive API once per recipient message id.
 - Campaign **Send test email** (`source: new-marketing-test`) is excluded from campaign Statistics
 
-Opens/clicks also arrive live via webhook. Archive Refresh gap-fills if webhooks were missed.
+Opens/clicks also arrive live via webhook. Archive Refresh gap-fills if webhooks were missed; detail GETs are skipped when Mongo already has open/click rows for that message.
 
 Archive rows tagged `mortdash-crm-ratesheet` are ignored so a shared zcMail tenant does not mix ratesheet mail into Marketing.
 

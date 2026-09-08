@@ -166,6 +166,66 @@ function uniqueArchiveItems(items: ZcMailArchiveListItem[]): ZcMailArchiveListIt
   return out
 }
 
+const ENGAGEMENT_EVENTS = ['opened', 'unique_opened', 'open', 'opens', 'clicks', 'click'] as const
+
+/**
+ * Message ids that already have open/click rows in Mongo — skip archive detail GET on Refresh.
+ * List-row status (sent/delivered/bounce) is still upserted without detail.
+ */
+async function loadAlreadyEnrichedMessageIds(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  BrevoTrackingEvent: any,
+  messageIds: string[]
+): Promise<Set<string>> {
+  const ids = [...new Set(messageIds.map((id) => id.trim()).filter(Boolean))]
+  if (ids.length === 0) return new Set()
+  const enriched = new Set<string>()
+  const CHUNK = 500
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK)
+    const docs = (await BrevoTrackingEvent.find({
+      messageId: { $in: slice },
+      event: { $in: [...ENGAGEMENT_EVENTS] }
+    })
+      .select({ messageId: 1 })
+      .lean()
+      .exec()) as Array<{ messageId?: string }>
+    for (const doc of docs) {
+      const id = String(doc.messageId || '').trim()
+      if (id) enriched.add(id)
+    }
+  }
+  return enriched
+}
+
+async function loadCampaignArchivesFast(params: {
+  client: ZcMailArchiveTrackingClient
+  baseUrl: string
+  apiKey: string
+  tenantName: string
+  fromYmd?: string | null
+  toYmd?: string | null
+  campaignId: string
+}): Promise<ZcMailArchiveListItem[]> {
+  const listBase = {
+    client: params.client,
+    baseUrl: params.baseUrl,
+    apiKey: params.apiKey,
+    tenantName: params.tenantName,
+    fromYmd: params.fromYmd,
+    toYmd: params.toYmd,
+    campaign: params.campaignId
+  }
+  // Campaign + tag query params already scope the list. Also run a couple of `q`
+  // searches in parallel for older archive rows — never one HTTP call per recipient.
+  const searchTerms = zcMailArchiveCampaignSearchTerms(params.campaignId)
+  const batches = await Promise.all([
+    loadArchivesInRange(listBase),
+    ...searchTerms.map((q) => loadArchivesInRange({ ...listBase, q }))
+  ])
+  return uniqueArchiveItems(batches.flat())
+}
+
 /**
  * Pull zcMail archive (+ SES events on detail) into tenant `brevo_tracking_events`.
  * Webhooks stay the live path; Refresh gap-fills delivered/failed/opens/clicks.
@@ -218,53 +278,42 @@ async function runZcMailArchiveSync(params: {
 
   let campaignMessageIds = new Set<string>()
   let routing = new Map<string, { dbName: string; campaignId: string }>()
-  if (campaignId) {
-    try {
-      campaignMessageIds = await loadCampaignRecipientMatchIndex(dbName, campaignId)
-    } catch (err) {
-      console.warn('[zcMail tracking] campaign recipient index failed', {
-        campaignId,
-        error: err instanceof Error ? err.message : String(err)
-      })
-    }
-  }
 
-  const scope = (item: ZcMailArchiveListItem) => {
-    const hit = routingHitForItem(item, routing)
-    return zcMailArchiveBelongsToScope(item, {
-      dbName,
-      campaignId,
-      routedCampaignId: hit?.campaignId || null,
-      routedDbName: hit?.dbName || null,
-      campaignMessageIds
-    })
+  const listBase = {
+    client,
+    baseUrl: params.config.zcMailBaseUrl,
+    apiKey: params.config.apiKey,
+    tenantName: params.config.zcMailTenant,
+    fromYmd: params.fromYmd,
+    toYmd: params.toYmd,
+    campaign: campaignId || undefined
   }
 
   let listed: ZcMailArchiveListItem[]
   try {
-    const listBase = {
-      client,
-      baseUrl: params.config.zcMailBaseUrl,
-      apiKey: params.config.apiKey,
-      tenantName: params.config.zcMailTenant,
-      fromYmd: params.fromYmd,
-      toYmd: params.toYmd,
-      campaign: campaignId || undefined
-    }
     if (campaignId) {
-      const collected: ZcMailArchiveListItem[] = []
-      const searchTerms = [
-        ...zcMailArchiveCampaignSearchTerms(campaignId),
-        ...campaignMessageIds
-      ]
-      for (const q of [...new Set(searchTerms.map((term) => term.trim()).filter(Boolean))]) {
-        const batch = await loadArchivesInRange({ ...listBase, q })
-        collected.push(...batch)
-      }
-      listed = uniqueArchiveItems(collected)
-      if (listed.length === 0) {
-        listed = await loadArchivesInRange(listBase)
-      }
+      // Load recipient message-id index in parallel with archive list (index is for
+      // local scope/filter only — never one archive `q` per recipient).
+      const [recipientIds, archives] = await Promise.all([
+        loadCampaignRecipientMatchIndex(dbName, campaignId).catch((err) => {
+          console.warn('[zcMail tracking] campaign recipient index failed', {
+            campaignId,
+            error: err instanceof Error ? err.message : String(err)
+          })
+          return new Set<string>()
+        }),
+        loadCampaignArchivesFast({
+          client,
+          baseUrl: params.config.zcMailBaseUrl,
+          apiKey: params.config.apiKey,
+          tenantName: params.config.zcMailTenant,
+          fromYmd: params.fromYmd,
+          toYmd: params.toYmd,
+          campaignId
+        })
+      ])
+      campaignMessageIds = recipientIds
+      listed = archives
     } else {
       listed = await loadArchivesInRange(listBase)
     }
@@ -282,6 +331,17 @@ async function runZcMailArchiveSync(params: {
       timingsMs: { brevoFetch: Date.now() - t0, total: Date.now() - started },
       error: message
     }
+  }
+
+  const scope = (item: ZcMailArchiveListItem) => {
+    const hit = routingHitForItem(item, routing)
+    return zcMailArchiveBelongsToScope(item, {
+      dbName,
+      campaignId,
+      routedCampaignId: hit?.campaignId || null,
+      routedDbName: hit?.dbName || null,
+      campaignMessageIds
+    })
   }
 
   const lookupIds = listed.flatMap((item) => zcMailArchiveLookupIds(item))
@@ -302,16 +362,35 @@ async function runZcMailArchiveSync(params: {
         const tags = item.tags || {}
         return !tags.campaign && !routingHitForItem(item, routing)
       })
-  const seenIds = new Set<string>()
-  const forDetails: ZcMailArchiveListItem[] = []
-  for (const item of [...matched, ...needsTags]) {
-    if (seenIds.has(item.id)) continue
-    seenIds.add(item.id)
-    forDetails.push(item)
-    if (forDetails.length >= ZC_MAIL_ARCHIVE_DETAIL_MAX) break
+
+  const candidates = uniqueArchiveItems([...matched, ...needsTags])
+  const candidateLookupIds = candidates.flatMap((item) => zcMailArchiveLookupIds(item))
+  let alreadyEnriched = new Set<string>()
+  try {
+    alreadyEnriched = await loadAlreadyEnrichedMessageIds(BrevoTrackingEvent, candidateLookupIds)
+  } catch (err) {
+    console.warn('[zcMail tracking] enriched-id lookup failed', {
+      error: err instanceof Error ? err.message : String(err)
+    })
   }
 
-  const details = await mapPool(forDetails, ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY, async (item) => {
+  const needsDetail: ZcMailArchiveListItem[] = []
+  const listOnly: ZcMailArchiveListItem[] = []
+  for (const item of candidates) {
+    const ids = zcMailArchiveLookupIds(item)
+    const enriched = ids.some((id) => alreadyEnriched.has(id))
+    if (enriched) {
+      listOnly.push(item)
+      continue
+    }
+    if (needsDetail.length < ZC_MAIL_ARCHIVE_DETAIL_MAX) {
+      needsDetail.push(item)
+    } else {
+      listOnly.push(item)
+    }
+  }
+
+  const details = await mapPool(needsDetail, ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY, async (item) => {
     try {
       return await client.getById({
         baseUrl: params.config.zcMailBaseUrl,
@@ -323,7 +402,22 @@ async function runZcMailArchiveSync(params: {
     }
   })
 
-  const scoped = details.filter((item) => scope(item))
+  const detailById = new Map<string, ZcMailArchiveListItem | ZcMailArchiveDetail>()
+  for (const item of details) {
+    detailById.set(item.id, item)
+  }
+
+  // Prefer detail (SES events) when fetched; otherwise upsert list-row status so
+  // large campaigns still get delivered/bounce without waiting on N detail GETs.
+  const toMap: Array<ZcMailArchiveListItem | ZcMailArchiveDetail> = []
+  const seenMapIds = new Set<string>()
+  for (const item of candidates) {
+    if (seenMapIds.has(item.id)) continue
+    seenMapIds.add(item.id)
+    toMap.push(detailById.get(item.id) || item)
+  }
+
+  const scoped = toMap.filter((item) => scope(item))
 
   const events = scoped.flatMap((item) => {
     const hit = routingHitForItem(item, routing)
@@ -400,9 +494,11 @@ async function runZcMailArchiveSync(params: {
   const upsertMs = Date.now() - t1
 
   const t2 = Date.now()
-  const dedupe = await dedupeBrevoTrackingEvents(BrevoTrackingEvent, {
-    campaignId
-  })
+  // Skip expensive dedupe when this Refresh wrote nothing new.
+  const dedupe =
+    upserted + modified > 0
+      ? await dedupeBrevoTrackingEvents(BrevoTrackingEvent, { campaignId })
+      : { removed: 0 }
   const dedupeMs = Date.now() - t2
   const total = Date.now() - started
 
@@ -410,6 +506,8 @@ async function runZcMailArchiveSync(params: {
     campaignId,
     listed: listed.length,
     scoped: scoped.length,
+    detailFetches: needsDetail.length,
+    listOnly: listOnly.length,
     fetched: usable.length,
     upserted,
     modified,

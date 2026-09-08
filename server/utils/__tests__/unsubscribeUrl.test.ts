@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { getMarketingPublicBaseUrl } from '../marketingPublicBaseUrl'
+import { buildUnsubscribeUrl } from '../unsubscribeUrl'
 
 vi.mock('../marketingPublicBaseUrl', () => ({
   getMarketingPublicBaseUrl: vi.fn(() => 'https://marketing.example.com')
@@ -7,9 +9,6 @@ vi.mock('../marketingPublicBaseUrl', () => ({
 vi.mock('../unsubscribeToken', () => ({
   signUnsubscribeToken: vi.fn(() => 'signed.token')
 }))
-
-import { getMarketingPublicBaseUrl } from '../marketingPublicBaseUrl'
-import { buildUnsubscribeUrl } from '../unsubscribeUrl'
 
 describe('buildUnsubscribeUrl', () => {
   beforeEach(() => {

@@ -139,12 +139,14 @@ export function useEmailTemplatesPage() {
       route.query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY]
     )
     if (fromRoute === value) return
-    const query = { ...route.query }
-    if (value === EMAIL_TEMPLATE_CATEGORY_FILTER_ALL) {
-      delete query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY]
-    } else {
-      query[EMAIL_TEMPLATE_CATEGORY_QUERY_KEY] = value
-    }
+    const query =
+      value === EMAIL_TEMPLATE_CATEGORY_FILTER_ALL
+        ? Object.fromEntries(
+            Object.entries(route.query).filter(
+              ([key]) => key !== EMAIL_TEMPLATE_CATEGORY_QUERY_KEY
+            )
+          )
+        : { ...route.query, [EMAIL_TEMPLATE_CATEGORY_QUERY_KEY]: value }
     void navigateTo({ path: route.path, query }, { replace: true })
   })
 

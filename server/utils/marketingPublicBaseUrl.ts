@@ -1,6 +1,6 @@
 /** Public marketing app origin (no trailing slash). */
 export function getMarketingPublicBaseUrl(): string {
-  let fromConfig = ''
+  let fromConfig: string
   try {
     const config = useRuntimeConfig()
     fromConfig = String(config.public.marketingBaseUrl ?? '').trim()

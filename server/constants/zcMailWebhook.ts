@@ -13,6 +13,7 @@ export const ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT = 200
 export const ZC_MAIL_ARCHIVE_STATS_MAX_PAGES = 25
 
 /** Max archive detail fetches per Tracking Refresh (SES open/click events). */
-export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 250
+export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 500
 
-export const ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY = 5
+/** Parallel detail GETs per Refresh. Archive list scoping is campaign-tagged; keep polite under API limits. */
+export const ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY = 20
