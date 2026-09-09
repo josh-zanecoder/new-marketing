@@ -73,6 +73,33 @@ export type SyncTenantBrevoTrackingEventsResult = {
     total: number
   }
   error?: string
+  /** Present on zcMail sync so Refresh Network tab can diagnose empty Tracking. */
+  debug?: ZcMailTrackingSyncDebug
+}
+
+export type ZcMailTrackingSyncDebug = {
+  campaignId: string | null
+  fromYmd: string | null
+  toYmd: string | null
+  zcMailTenant: string
+  usedTenantListFallback: boolean
+  campaignRecipientMessageIds: number
+  listed: number
+  matched: number
+  scoped: number
+  routingHits: number
+  sampleRecipientMessageIds: string[]
+  sampleListed: Array<{
+    id: string
+    messageId: string
+    sesMessageId: string
+    recipient: string
+    status: string
+    createdAt: string
+    tags: Record<string, string>
+    inRecipientIndex: boolean
+    routingCampaignId: string | null
+  }>
 }
 
 function syncKey(params: {

@@ -66,7 +66,8 @@ export default defineEventHandler(async (event) => {
       modified: result.modified,
       deduped: result.deduped ?? 0,
       timingsMs: result.timingsMs,
-      provider: TENANT_EMAIL_PROVIDER_ZC_MAIL
+      provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
+      ...(result.debug ? { debug: result.debug } : {})
     }
   }
 

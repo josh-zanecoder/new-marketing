@@ -206,7 +206,7 @@ async function loadCampaignArchivesFast(params: {
   fromYmd?: string | null
   toYmd?: string | null
   campaignId: string
-}): Promise<ZcMailArchiveListItem[]> {
+}): Promise<{ items: ZcMailArchiveListItem[]; usedTenantListFallback: boolean }> {
   const listBase = {
     client: params.client,
     baseUrl: params.baseUrl,
@@ -224,7 +224,7 @@ async function loadCampaignArchivesFast(params: {
     ...searchTerms.map((q) => loadArchivesInRange({ ...listBase, q }))
   ])
   const tagged = uniqueArchiveItems(batches.flat())
-  if (tagged.length > 0) return tagged
+  if (tagged.length > 0) return { items: tagged, usedTenantListFallback: false }
 
   // zcMail archive UI can show the sends while campaign/tag filters return empty
   // (tags not indexed on list, or not persisted). Fall back to tenant-wide list in
@@ -234,7 +234,7 @@ async function loadCampaignArchivesFast(params: {
     fromYmd: params.fromYmd,
     toYmd: params.toYmd
   })
-  return loadArchivesInRange({
+  const items = await loadArchivesInRange({
     client: params.client,
     baseUrl: params.baseUrl,
     apiKey: params.apiKey,
@@ -242,6 +242,7 @@ async function loadCampaignArchivesFast(params: {
     fromYmd: params.fromYmd,
     toYmd: params.toYmd
   })
+  return { items, usedTenantListFallback: true }
 }
 
 /**
@@ -296,6 +297,7 @@ async function runZcMailArchiveSync(params: {
 
   let campaignMessageIds = new Set<string>()
   let routing = new Map<string, { dbName: string; campaignId: string }>()
+  let usedTenantListFallback = false
 
   const listBase = {
     client,
@@ -331,7 +333,8 @@ async function runZcMailArchiveSync(params: {
         })
       ])
       campaignMessageIds = recipientIds
-      listed = archives
+      listed = archives.items
+      usedTenantListFallback = archives.usedTenantListFallback
     } else {
       listed = await loadArchivesInRange(listBase)
     }
@@ -347,7 +350,21 @@ async function runZcMailArchiveSync(params: {
       upserted: 0,
       modified: 0,
       timingsMs: { brevoFetch: Date.now() - t0, total: Date.now() - started },
-      error: message
+      error: message,
+      debug: {
+        campaignId,
+        fromYmd: params.fromYmd?.trim() || null,
+        toYmd: params.toYmd?.trim() || null,
+        zcMailTenant: params.config.zcMailTenant,
+        usedTenantListFallback,
+        campaignRecipientMessageIds: campaignMessageIds.size,
+        listed: 0,
+        matched: 0,
+        scoped: 0,
+        routingHits: 0,
+        sampleRecipientMessageIds: [...campaignMessageIds].slice(0, 5),
+        sampleListed: []
+      }
     }
   }
 
@@ -530,14 +547,50 @@ async function runZcMailArchiveSync(params: {
     upserted,
     modified,
     deduped: dedupe.removed,
+    usedTenantListFallback,
+    campaignRecipientMessageIds: campaignMessageIds.size,
     timingsMs: { archiveFetch: archiveFetchMs, upsert: upsertMs, dedupe: dedupeMs, total }
   })
+
+  const debug = {
+    campaignId,
+    fromYmd: params.fromYmd?.trim() || null,
+    toYmd: params.toYmd?.trim() || null,
+    zcMailTenant: params.config.zcMailTenant,
+    usedTenantListFallback,
+    campaignRecipientMessageIds: campaignMessageIds.size,
+    listed: listed.length,
+    matched: matched.length,
+    scoped: scoped.length,
+    routingHits: routing.size,
+    sampleRecipientMessageIds: [...campaignMessageIds].slice(0, 5),
+    sampleListed: listed.slice(0, 5).map((item) => {
+      const ids = zcMailArchiveLookupIds(item)
+      const hit = routingHitForItem(item, routing)
+      return {
+        id: item.id,
+        messageId: item.messageId || '',
+        sesMessageId: item.sesMessageId || '',
+        recipient: item.recipient || item.to?.[0] || '',
+        status: item.status || '',
+        createdAt: item.createdAt || '',
+        tags: item.tags || {},
+        inRecipientIndex: ids.some(
+          (id) =>
+            campaignMessageIds.has(id) ||
+            campaignMessageIds.has(id.replace(/^<|>$/g, ''))
+        ),
+        routingCampaignId: hit?.campaignId || null
+      }
+    })
+  }
 
   return {
     fetched: usable.length,
     upserted,
     modified,
     deduped: dedupe.removed,
-    timingsMs: { brevoFetch: archiveFetchMs, upsert: upsertMs, dedupe: dedupeMs, total }
+    timingsMs: { brevoFetch: archiveFetchMs, upsert: upsertMs, dedupe: dedupeMs, total },
+    debug
   }
 }
