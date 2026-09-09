@@ -9,10 +9,14 @@ import { aggregateStoredBrevoSmtpStats } from '@server/utils/tracking/aggregateS
 import { BREVO_SMTP_EVENTS_PAGE_LIMIT_MAX } from '@server/utils/tracking/fetchBrevoTransactionalStats'
 import { loadStoredCampaignSmtpStatsEventsPage } from '@server/utils/tracking/loadStoredCampaignSmtpStatsEventsPage'
 import { marketingAnalyticsFromSmtpStats } from '@server/utils/tracking/marketingAnalyticsFromSmtpStats'
+import { parseYmdToExactUtcBounds } from '@server/utils/tracking/brevoTrackingEventDateBounds'
 import {
   mergeTrackingUserEmails,
   resolveTrackingTenantContext
 } from '@server/utils/tracking/resolveTrackingTenantContext'
+import { getTenantConnectionByDbName } from '@server/tenant/connection'
+import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
+import type { FilterQuery } from 'mongoose'
 
 function normalizeNonNegIntQuery(
   event: Parameters<typeof getQuery>[0],
@@ -32,6 +36,65 @@ function normalizeNonNegIntQuery(
   const n = Number.parseInt(s, 10)
   if (!Number.isFinite(n) || n < 0) return fallback
   return n
+}
+
+function normalizeTagUsers(emails: string[]): string[] {
+  return [
+    ...new Set(
+      emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes('@'))
+    )
+  ].sort((a, b) => a.localeCompare(b))
+}
+
+/** Distinct operator emails on tracking events (same source as Tracking User filter). */
+async function loadAnalyticsTagUsers(params: {
+  dbName: string
+  campaignId: string | null
+  fromYmd: string
+  toYmd: string
+  tzOffsetMinutes: number | null
+  ownershipEmails: string[] | null
+}): Promise<string[]> {
+  if (params.ownershipEmails != null) {
+    return normalizeTagUsers(params.ownershipEmails)
+  }
+
+  const conn = await getTenantConnectionByDbName(params.dbName)
+  const { BrevoTrackingEvent, Campaign } = getTenantClientModels(conn)
+  const scopeFilter: FilterQuery<Record<string, unknown>> = {}
+  if (params.campaignId) scopeFilter.campaignId = params.campaignId
+  const bounds = parseYmdToExactUtcBounds(
+    params.fromYmd,
+    params.toYmd,
+    params.tzOffsetMinutes
+  )
+  if (bounds) {
+    scopeFilter.eventAt = { $gte: bounds.start, $lte: bounds.end }
+  }
+
+  const distinctUsers = (await BrevoTrackingEvent.distinct(
+    'userEmail',
+    scopeFilter
+  )) as string[]
+  const fromEvents = normalizeTagUsers(distinctUsers)
+  if (fromEvents.length) return fromEvents
+
+  // zcMail archive sync often stored blank userEmail when tags were missing.
+  // Fall back to campaign mergeUserSnapshot emails for campaigns in range.
+  const campaignIds = params.campaignId
+    ? [params.campaignId]
+    : ((await BrevoTrackingEvent.distinct('campaignId', scopeFilter)) as string[]).filter(
+        (id) => String(id || '').trim()
+      )
+  if (!campaignIds.length) return []
+
+  const campaigns = (await Campaign.find({ _id: { $in: campaignIds } })
+    .select({ mergeUserSnapshot: 1 })
+    .lean()
+    .exec()) as Array<{ mergeUserSnapshot?: { email?: string } }>
+  return normalizeTagUsers(
+    campaigns.map((c) => String(c.mergeUserSnapshot?.email || ''))
+  )
 }
 
 /**
@@ -102,7 +165,7 @@ export default defineEventHandler(async (event) => {
   )
   const eventsOffset = normalizeNonNegIntQuery(event, 'eventsOffset', 0)
 
-  const [reports, mongoEvents] = await Promise.all([
+  const [reports, mongoEvents, tagUsers] = await Promise.all([
     aggregateStoredBrevoSmtpStats({
       dbName,
       campaignId,
@@ -120,6 +183,14 @@ export default defineEventHandler(async (event) => {
       eventType,
       limit: eventsLimit,
       offset: eventsOffset
+    }),
+    loadAnalyticsTagUsers({
+      dbName,
+      campaignId,
+      fromYmd,
+      toYmd,
+      tzOffsetMinutes,
+      ownershipEmails
     })
   ])
 
@@ -153,7 +224,7 @@ export default defineEventHandler(async (event) => {
         hasMore: mongoEvents.hasMore
       },
       eventTypeCounts,
-      tagUsers: ownershipEmails ?? [],
+      tagUsers,
       allowUserTagFilter
     }
   }

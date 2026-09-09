@@ -5,7 +5,7 @@ import {
   parseZcMailEmailStatusWebhookPayload,
   zcMailWebhookToBrevoBody
 } from '@server/utils/tracking/parseZcMailEmailStatusWebhookPayload'
-import { findDbNameByMessageId } from '@server/utils/zcmail/emailMessageRouting'
+import { findDbNameByMessageId, findEmailMessageRoutingMap } from '@server/utils/zcmail/emailMessageRouting'
 import {
   resolveDbNameFromBrevoTags,
   resolveTenantIdFromBrevoTags
@@ -96,9 +96,24 @@ export default defineEventHandler(async (event) => {
   }
 
   const brevoBody = zcMailWebhookToBrevoBody(parsed)
+  const tags = [...(brevoBody.tags || [])]
   if (!resolveDbNameFromBrevoTags(parsed.tags)) {
-    brevoBody.tags = [...parsed.tags, `db:${dbName}`]
+    tags.push(`db:${dbName}`)
   }
+  const hasUserTag = tags.some((t) => String(t).toLowerCase().startsWith('user:'))
+  if (!hasUserTag) {
+    try {
+      const routing = await findEmailMessageRoutingMap([parsed.messageId])
+      const hit =
+        routing.get(parsed.messageId) ||
+        routing.get(parsed.messageId.replace(/^<|>$/g, '')) ||
+        null
+      if (hit?.userEmail) tags.push(`user:${hit.userEmail}`)
+    } catch {
+      // optional enrichment
+    }
+  }
+  brevoBody.tags = tags
 
   const result = await applyBrevoTrackingWebhook(brevoBody)
   if (!result.ok) {

@@ -259,15 +259,19 @@ export function mergeZcMailArchiveTags(
   return Object.keys(tags).length ? { ...item, tags } : item
 }
 
-/** Used when routing knows campaign/db but archive row has no tags. */
+/** Used when routing knows campaign/db/user but archive row has no tags. */
 export function withScopedZcMailArchiveTags(
   item: ZcMailArchiveListItem,
-  params: { dbName: string; campaignId?: string | null }
+  params: { dbName: string; campaignId?: string | null; userEmail?: string | null }
 ): ZcMailArchiveListItem {
   const existing = zcMailArchiveTagsRecord(item)
   const extra: Record<string, string> = {}
   if (!existing.db && params.dbName) extra.db = params.dbName
   if (!existing.campaign && params.campaignId?.trim()) extra.campaign = params.campaignId.trim()
+  const user = String(params.userEmail || '')
+    .trim()
+    .toLowerCase()
+  if (!existing.user && user.includes('@')) extra.user = user
   return mergeZcMailArchiveTags(item, extra)
 }
 

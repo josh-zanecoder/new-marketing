@@ -205,13 +205,33 @@ async function loadArchivesByMessageIdQueries(params: {
 
 function routingHitForItem(
   item: ZcMailArchiveListItem,
-  routing: Map<string, { dbName: string; campaignId: string }>
-): { dbName: string; campaignId: string } | null {
+  routing: Map<string, { dbName: string; campaignId: string; userEmail: string }>
+): { dbName: string; campaignId: string; userEmail: string } | null {
   for (const id of zcMailArchiveLookupIds(item)) {
     const hit = routing.get(id)
     if (hit) return hit
   }
   return null
+}
+
+async function loadCampaignOperatorUserEmail(
+  dbName: string,
+  campaignId: string
+): Promise<string> {
+  try {
+    const conn = await getTenantConnectionByDbName(dbName)
+    const { Campaign } = getTenantClientModels(conn)
+    const doc = (await Campaign.findById(campaignId)
+      .select({ mergeUserSnapshot: 1 })
+      .lean()
+      .exec()) as { mergeUserSnapshot?: { email?: string } } | null
+    const email = String(doc?.mergeUserSnapshot?.email || '')
+      .trim()
+      .toLowerCase()
+    return email.includes('@') ? email : ''
+  } catch {
+    return ''
+  }
 }
 
 async function loadCampaignRecipientMatchIndex(
@@ -371,9 +391,10 @@ async function runZcMailArchiveSync(params: {
   const { BrevoTrackingEvent } = getTenantClientModels(conn)
 
   let campaignMessageIds = new Set<string>()
-  let routing = new Map<string, { dbName: string; campaignId: string }>()
+  let routing = new Map<string, { dbName: string; campaignId: string; userEmail: string }>()
   let usedTenantListFallback = false
   let usedMessageIdBackfill = false
+  let campaignOperatorUserEmail = ''
 
   const listBase = {
     client,
@@ -513,6 +534,10 @@ async function runZcMailArchiveSync(params: {
     })
   }
 
+  if (campaignId) {
+    campaignOperatorUserEmail = await loadCampaignOperatorUserEmail(dbName, campaignId)
+  }
+
   const matched = listed.filter((item) => scope(item))
   // Tenant-wide Refresh may enrich untagged rows. Campaign Refresh must not
   // pull the rest of the mailbox just because the recipient address matches.
@@ -583,7 +608,8 @@ async function runZcMailArchiveSync(params: {
     const hit = routingHitForItem(item, routing)
     const scopedItem = withScopedZcMailArchiveTags(item, {
       dbName,
-      campaignId: campaignId || hit?.campaignId || null
+      campaignId: campaignId || hit?.campaignId || null,
+      userEmail: hit?.userEmail || campaignOperatorUserEmail || null
     })
     if ('events' in item && Array.isArray((item as ZcMailArchiveDetail).events)) {
       return mapZcMailArchiveItemToTrackingEvents({

@@ -5,12 +5,21 @@ export type EmailMessageRoutingEntry = {
   messageId: string
   dbName: string
   campaignId?: string | null
+  /** CRM operator email from send tags (`user:`). Restored when archive tags are empty. */
+  userEmail?: string | null
 }
 
 function messageIdVariants(messageId: string): string[] {
   const id = messageId.trim()
   if (!id) return []
   return [...new Set([id, id.replace(/^<|>$/g, ''), `<${id.replace(/^<|>$/g, '')}>`])]
+}
+
+function normalizeRoutingUserEmail(value: string | null | undefined): string {
+  const email = String(value || '')
+    .trim()
+    .toLowerCase()
+  return email.includes('@') ? email : ''
 }
 
 export async function registerEmailMessageRouting(
@@ -20,7 +29,8 @@ export async function registerEmailMessageRouting(
     .map((e) => ({
       messageId: String(e.messageId || '').trim(),
       dbName: String(e.dbName || '').trim(),
-      campaignId: typeof e.campaignId === 'string' ? e.campaignId.trim() : ''
+      campaignId: typeof e.campaignId === 'string' ? e.campaignId.trim() : '',
+      userEmail: normalizeRoutingUserEmail(e.userEmail)
     }))
     .filter((e) => e.messageId && e.dbName)
   if (!rows.length) return
@@ -36,7 +46,8 @@ export async function registerEmailMessageRouting(
             messageId: row.messageId,
             dbName: row.dbName,
             updatedAt: now,
-            ...(row.campaignId ? { campaignId: row.campaignId } : {})
+            ...(row.campaignId ? { campaignId: row.campaignId } : {}),
+            ...(row.userEmail ? { userEmail: row.userEmail } : {})
           },
           $setOnInsert: { createdAt: now }
         },
@@ -61,6 +72,7 @@ export async function findDbNameByMessageId(messageId: string): Promise<string |
 export type EmailMessageRoutingHit = {
   dbName: string
   campaignId: string
+  userEmail: string
 }
 
 /**
@@ -79,7 +91,7 @@ export async function findEmailMessageRoutingMap(
   const docs = await registry
     .collection(ZC_MAIL_MESSAGE_ROUTING_COLLECTION)
     .find({ messageId: { $in: variants } })
-    .project({ messageId: 1, dbName: 1, campaignId: 1 })
+    .project({ messageId: 1, dbName: 1, campaignId: 1, userEmail: 1 })
     .toArray()
 
   const byStoredId = new Map<string, EmailMessageRoutingHit>()
@@ -88,7 +100,10 @@ export async function findEmailMessageRoutingMap(
     const dbName = typeof doc.dbName === 'string' ? doc.dbName.trim() : ''
     if (!storedId || !dbName) continue
     const campaignId = typeof doc.campaignId === 'string' ? doc.campaignId.trim() : ''
-    const hit = { dbName, campaignId }
+    const userEmail = normalizeRoutingUserEmail(
+      typeof doc.userEmail === 'string' ? doc.userEmail : ''
+    )
+    const hit = { dbName, campaignId, userEmail }
     for (const variant of messageIdVariants(storedId)) {
       byStoredId.set(variant, hit)
     }

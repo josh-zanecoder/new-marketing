@@ -96,12 +96,16 @@ async function sendCampaignBatchViaZcMail(
     )
     const dbName = params.dbName?.trim()
     if (dbName) {
+      const userEmail = String(params.user || '')
+        .trim()
+        .toLowerCase()
       const routing = messageIds
         .filter((id): id is string => Boolean(id && String(id).trim()))
         .map((messageId) => ({
           messageId: String(messageId).trim(),
           dbName,
-          campaignId
+          campaignId,
+          ...(userEmail.includes('@') ? { userEmail } : {})
         }))
       if (routing.length) {
         try {
@@ -189,8 +193,18 @@ export async function sendCampaignOutboundEmail(
     const messageId = result.messageId || undefined
     const dbName = params.dbName?.trim()
     if (dbName && messageId) {
+      const userEmail = String(params.user || '')
+        .trim()
+        .toLowerCase()
       try {
-        await registerEmailMessageRouting([{ messageId, dbName, campaignId }])
+        await registerEmailMessageRouting([
+          {
+            messageId,
+            dbName,
+            campaignId,
+            ...(userEmail.includes('@') ? { userEmail } : {})
+          }
+        ])
       } catch (err) {
         console.warn('[zcMail] message routing register failed', {
           dbName,
