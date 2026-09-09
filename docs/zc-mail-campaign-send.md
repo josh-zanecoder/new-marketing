@@ -35,7 +35,8 @@ zcMail `email.status` webhooks upsert into the same tenant `brevo_tracking_event
 
 - List rows in the selected date range → `requests` / `delivered` / `hardBounces`
 - Archive detail SES events → opens, clicks, bounces (same labels as Brevo)
-- Campaign filter uses send tags (`campaign`), archive `campaign`/`tag` query (plus a couple of parallel `q` searches), stored recipient message ids for local matching, and `email_message_routing`. For campaigns with ≤500 stored recipient message ids, Refresh uses parallel `q=<sesMessageId>` directly (fast path). Larger campaigns still try campaign/tag filters first (with early abort when rows don’t match recipient ids), then fall back to the same parallel `q` lookup.
+- For campaigns with ≤400 stored recipient message ids, Refresh uses parallel `q=<sesMessageId>` (capped). Larger campaigns try campaign/tag filters first (early abort on wrong rows), then a parallel tenant list scan that keeps matching ids — never unbounded per-id lookups.
+- Analytics **All campaigns** Refresh is list-only (no archive detail GETs) with a hard page cap; opens/clicks rely on webhooks. Select a campaign for a deeper Refresh.
 - Campaign **Send test email** (`source: new-marketing-test`) is excluded from campaign Statistics
 
 Opens/clicks also arrive live via webhook. Archive Refresh gap-fills if webhooks were missed; detail GETs are skipped when Mongo already has open/click rows for that message.
