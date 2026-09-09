@@ -223,7 +223,25 @@ async function loadCampaignArchivesFast(params: {
     loadArchivesInRange(listBase),
     ...searchTerms.map((q) => loadArchivesInRange({ ...listBase, q }))
   ])
-  return uniqueArchiveItems(batches.flat())
+  const tagged = uniqueArchiveItems(batches.flat())
+  if (tagged.length > 0) return tagged
+
+  // zcMail archive UI can show the sends while campaign/tag filters return empty
+  // (tags not indexed on list, or not persisted). Fall back to tenant-wide list in
+  // range; caller scopes locally via recipient message ids / routing / tags.
+  console.warn('[zcMail tracking] campaign archive filter empty; falling back to tenant list', {
+    campaignId: params.campaignId,
+    fromYmd: params.fromYmd,
+    toYmd: params.toYmd
+  })
+  return loadArchivesInRange({
+    client: params.client,
+    baseUrl: params.baseUrl,
+    apiKey: params.apiKey,
+    tenantName: params.tenantName,
+    fromYmd: params.fromYmd,
+    toYmd: params.toYmd
+  })
 }
 
 /**
