@@ -12,6 +12,13 @@ export const ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT = 200
 
 export const ZC_MAIL_ARCHIVE_STATS_MAX_PAGES = 25
 
+/**
+ * Extra pages when campaign/tag archive filters miss and we scan the tenant
+ * list for CampaignRecipient message ids (newest-first; large later sends can
+ * push the target campaign past the normal 25-page window).
+ */
+export const ZC_MAIL_ARCHIVE_MESSAGE_ID_BACKFILL_MAX_PAGES = 75
+
 /** Max archive detail fetches per Tracking Refresh (SES open/click events). */
 export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 500
 

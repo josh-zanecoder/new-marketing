@@ -35,7 +35,7 @@ zcMail `email.status` webhooks upsert into the same tenant `brevo_tracking_event
 
 - List rows in the selected date range → `requests` / `delivered` / `hardBounces`
 - Archive detail SES events → opens, clicks, bounces (same labels as Brevo)
-- Campaign filter uses send tags (`campaign`), archive `campaign`/`tag` query (plus a couple of parallel `q` searches), stored recipient message ids for local matching, and `email_message_routing`. If campaign/tag filters return empty, Refresh falls back to a tenant-wide archive list in range and scopes locally by recipient message ids / routing / tags (still not one API call per recipient).
+- Campaign filter uses send tags (`campaign`), archive `campaign`/`tag` query (plus a couple of parallel `q` searches), stored recipient message ids for local matching, and `email_message_routing`. If campaign/tag filters return empty, Refresh falls back to a tenant-wide archive list in range and scopes locally by recipient message ids / routing / tags (still not one API call per recipient). If the campaign filter returns rows but **none** match stored recipient SES/message ids (wrong campaign / empty tags), Refresh scans the tenant archive (up to 75 pages) and keeps only rows whose ids are in `CampaignRecipient.brevoMessageId`.
 - Campaign **Send test email** (`source: new-marketing-test`) is excluded from campaign Statistics
 
 Opens/clicks also arrive live via webhook. Archive Refresh gap-fills if webhooks were missed; detail GETs are skipped when Mongo already has open/click rows for that message.

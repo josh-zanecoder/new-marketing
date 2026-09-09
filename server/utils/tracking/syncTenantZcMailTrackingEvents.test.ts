@@ -197,4 +197,91 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
     expect(listCalls.some((c) => !c.campaign)).toBe(true)
     expect(result.fetched).toBeGreaterThan(0)
   })
+
+  it('backfills by recipient message id when campaign filter returns other campaigns', async () => {
+    const listCalls: Array<{ q?: string; campaign?: string; skip?: number }> = []
+    let tenantListCalls = 0
+    const list = vi.fn(
+      async (params: { q?: string; campaign?: string; skip?: number }) => {
+        listCalls.push({
+          q: params.q,
+          campaign: params.campaign,
+          skip: params.skip
+        })
+        if (params.campaign) {
+          // Wrong campaign rows (empty tags) — matches production zcMail bug.
+          return {
+            total: 1,
+            items: [
+              {
+                id: 'arc-wrong',
+                messageId: 'other-uuid',
+                sesMessageId: '010101-other-campaign',
+                to: ['x@example.com'],
+                from: 'from@example.com',
+                subject: 'Other campaign',
+                tenantName: 't',
+                recipient: 'x@example.com',
+                status: 'sent',
+                createdAt: '2026-09-08T15:00:00.000Z',
+                tags: {}
+              }
+            ]
+          }
+        }
+        tenantListCalls += 1
+        return {
+          total: 1,
+          items: [
+            {
+              id: 'arc-target',
+              messageId: 'uuid-1',
+              sesMessageId: 'msg-1',
+              to: ['a@example.com'],
+              from: 'from@example.com',
+              subject: 'Target campaign',
+              tenantName: 't',
+              recipient: 'a@example.com',
+              status: 'sent',
+              createdAt: '2026-09-03T12:00:00.000Z',
+              tags: {}
+            }
+          ]
+        }
+      }
+    )
+    const getById = vi.fn(async (item: { archiveId: string }) => ({
+      id: item.archiveId,
+      messageId: 'uuid-1',
+      sesMessageId: 'msg-1',
+      to: ['a@example.com'],
+      from: 'from@example.com',
+      subject: 'Target campaign',
+      tenantName: 't',
+      recipient: 'a@example.com',
+      status: 'sent',
+      createdAt: '2026-09-03T12:00:00.000Z',
+      events: []
+    }))
+
+    const result = await syncTenantZcMailTrackingEvents({
+      dbName: 'tenant_db',
+      campaignId: 'camp-1',
+      fromYmd: '2026-09-03',
+      toYmd: '2026-09-09',
+      config: {
+        provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
+        apiKey: 'key',
+        zcMailBaseUrl: 'https://example.test',
+        zcMailTenant: 't',
+        zcMailArchive: true
+      },
+      archiveClient: { list, getById }
+    })
+
+    expect(tenantListCalls).toBeGreaterThan(0)
+    expect(result.debug?.usedMessageIdBackfill).toBe(true)
+    expect(result.debug?.matched).toBeGreaterThan(0)
+    expect(result.fetched).toBeGreaterThan(0)
+  })
 })

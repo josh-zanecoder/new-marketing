@@ -83,6 +83,7 @@ export type ZcMailTrackingSyncDebug = {
   toYmd: string | null
   zcMailTenant: string
   usedTenantListFallback: boolean
+  usedMessageIdBackfill: boolean
   campaignRecipientMessageIds: number
   listed: number
   matched: number
