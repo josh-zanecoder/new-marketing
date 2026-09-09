@@ -2,7 +2,7 @@ import type { AnyBulkWriteOperation } from 'mongoose'
 import {
   ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY,
   ZC_MAIL_ARCHIVE_DETAIL_MAX,
-  ZC_MAIL_ARCHIVE_MESSAGE_ID_BACKFILL_MAX_PAGES,
+  ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_CONCURRENCY,
   ZC_MAIL_ARCHIVE_STATS_MAX_PAGES,
   ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT
 } from '@server/constants/zcMailWebhook'
@@ -89,6 +89,8 @@ async function loadArchivesInRange(params: {
   q?: string
   campaign?: string
   maxPages?: number
+  /** When set, stop after the first in-range page if none of those rows match. */
+  matchMessageIds?: Set<string>
 }): Promise<ZcMailArchiveListItem[]> {
   const collected: ZcMailArchiveListItem[] = []
   const maxPages = params.maxPages ?? ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
@@ -106,13 +108,29 @@ async function loadArchivesInRange(params: {
     if (batch.items.length === 0) break
 
     let reachedBeforeRange = false
+    let inRangeOnPage = 0
+    let matchedOnPage = 0
     for (const item of batch.items) {
       if (!zcMailArchiveInDateRange(item.createdAt, params.fromYmd, params.toYmd)) {
         const day = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : ''
         if (params.fromYmd && day && day < params.fromYmd) reachedBeforeRange = true
         continue
       }
+      inRangeOnPage += 1
+      if (params.matchMessageIds?.size && archiveItemMatchesMessageIds(item, params.matchMessageIds)) {
+        matchedOnPage += 1
+      }
       collected.push(item)
+    }
+
+    // Campaign/tag filter returned the wrong mailbox slice — don't paginate 5k junk rows.
+    if (
+      params.matchMessageIds?.size &&
+      inRangeOnPage > 0 &&
+      matchedOnPage === 0 &&
+      !collected.some((item) => archiveItemMatchesMessageIds(item, params.matchMessageIds!))
+    ) {
+      break
     }
 
     if (batch.items.length < ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT) break
@@ -138,21 +156,20 @@ function archiveItemMatchesMessageIds(
   return false
 }
 
-function countUniqueStrippedMessageIds(messageIds: Set<string>): number {
+function uniqueStrippedMessageIds(messageIds: Set<string>): string[] {
   const unique = new Set<string>()
   for (const id of messageIds) {
     const stripped = id.replace(/^<|>$/g, '').trim()
     if (stripped) unique.add(stripped)
   }
-  return unique.size
+  return [...unique]
 }
 
 /**
- * Newest-first tenant archive scan; keep rows whose SES/message ids are in the
- * campaign recipient index. Used when zcMail campaign/tag filters return the
- * wrong (or empty) set.
+ * Parallel archive `q=<sesMessageId>` lookups. Much faster than paging the whole
+ * tenant newest-first when campaign/tag filters return the wrong campaign.
  */
-async function loadArchivesMatchingMessageIds(params: {
+async function loadArchivesByMessageIdQueries(params: {
   client: ZcMailArchiveTrackingClient
   baseUrl: string
   apiKey: string
@@ -161,51 +178,29 @@ async function loadArchivesMatchingMessageIds(params: {
   toYmd?: string | null
   messageIds: Set<string>
 }): Promise<ZcMailArchiveListItem[]> {
-  if (!params.messageIds.size) return []
-  const targetUnique = countUniqueStrippedMessageIds(params.messageIds)
-  const collected: ZcMailArchiveListItem[] = []
-  const foundUnique = new Set<string>()
+  const ids = uniqueStrippedMessageIds(params.messageIds)
+  if (ids.length === 0) return []
 
-  for (let page = 0; page < ZC_MAIL_ARCHIVE_MESSAGE_ID_BACKFILL_MAX_PAGES; page += 1) {
-    const skip = page * ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT
-    const batch = await params.client.list({
-      baseUrl: params.baseUrl,
-      apiKey: params.apiKey,
-      tenantName: params.tenantName,
-      limit: ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT,
-      skip
-    })
-    if (batch.items.length === 0) break
-
-    let reachedBeforeRange = false
-    for (const item of batch.items) {
-      if (!zcMailArchiveInDateRange(item.createdAt, params.fromYmd, params.toYmd)) {
-        const day = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : ''
-        if (params.fromYmd && day && day < params.fromYmd) reachedBeforeRange = true
-        continue
-      }
-      if (!archiveItemMatchesMessageIds(item, params.messageIds)) continue
-      collected.push(item)
-      for (const id of zcMailArchiveLookupIds(item)) {
-        const stripped = id.replace(/^<|>$/g, '').trim()
-        if (
-          stripped &&
-          (params.messageIds.has(id) || params.messageIds.has(stripped))
-        ) {
-          foundUnique.add(stripped)
-        }
-      }
+  const batches = await mapPool(ids, ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_CONCURRENCY, async (messageId) => {
+    try {
+      const batch = await params.client.list({
+        baseUrl: params.baseUrl,
+        apiKey: params.apiKey,
+        tenantName: params.tenantName,
+        limit: 5,
+        skip: 0,
+        q: messageId
+      })
+      return batch.items.filter(
+        (item) =>
+          zcMailArchiveInDateRange(item.createdAt, params.fromYmd, params.toYmd) &&
+          archiveItemMatchesMessageIds(item, params.messageIds)
+      )
+    } catch {
+      return [] as ZcMailArchiveListItem[]
     }
-
-    if (foundUnique.size >= targetUnique && targetUnique > 0) break
-    if (batch.items.length < ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT) break
-    if (reachedBeforeRange) {
-      const oldest = batch.items[batch.items.length - 1]?.createdAt || ''
-      const oldestDay = oldest ? new Date(oldest).toISOString().slice(0, 10) : ''
-      if (params.fromYmd && oldestDay && oldestDay < params.fromYmd) break
-    }
-  }
-  return uniqueArchiveItems(collected)
+  })
+  return uniqueArchiveItems(batches.flat())
 }
 
 function routingHitForItem(
@@ -292,6 +287,7 @@ async function loadCampaignArchivesFast(params: {
   fromYmd?: string | null
   toYmd?: string | null
   campaignId: string
+  matchMessageIds?: Set<string>
 }): Promise<{ items: ZcMailArchiveListItem[]; usedTenantListFallback: boolean }> {
   const listBase = {
     client: params.client,
@@ -300,10 +296,12 @@ async function loadCampaignArchivesFast(params: {
     tenantName: params.tenantName,
     fromYmd: params.fromYmd,
     toYmd: params.toYmd,
-    campaign: params.campaignId
+    campaign: params.campaignId,
+    matchMessageIds: params.matchMessageIds
   }
   // Campaign + tag query params already scope the list. Also run a couple of `q`
-  // searches in parallel for older archive rows — never one HTTP call per recipient.
+  // searches in parallel for older archive rows — never one HTTP call per recipient
+  // on the happy path.
   const searchTerms = zcMailArchiveCampaignSearchTerms(params.campaignId)
   const batches = await Promise.all([
     loadArchivesInRange(listBase),
@@ -312,23 +310,14 @@ async function loadCampaignArchivesFast(params: {
   const tagged = uniqueArchiveItems(batches.flat())
   if (tagged.length > 0) return { items: tagged, usedTenantListFallback: false }
 
-  // zcMail archive UI can show the sends while campaign/tag filters return empty
-  // (tags not indexed on list, or not persisted). Fall back to tenant-wide list in
-  // range; caller scopes locally via recipient message ids / routing / tags.
-  console.warn('[zcMail tracking] campaign archive filter empty; falling back to tenant list', {
+  // Empty campaign/tag filter: do not page the whole tenant here. Caller fills via
+  // parallel message-id `q` when CampaignRecipient ids exist.
+  console.warn('[zcMail tracking] campaign archive filter empty; will use message-id lookup', {
     campaignId: params.campaignId,
     fromYmd: params.fromYmd,
     toYmd: params.toYmd
   })
-  const items = await loadArchivesInRange({
-    client: params.client,
-    baseUrl: params.baseUrl,
-    apiKey: params.apiKey,
-    tenantName: params.tenantName,
-    fromYmd: params.fromYmd,
-    toYmd: params.toYmd
-  })
-  return { items, usedTenantListFallback: true }
+  return { items: [], usedTenantListFallback: false }
 }
 
 /**
@@ -399,7 +388,8 @@ async function runZcMailArchiveSync(params: {
   let listed: ZcMailArchiveListItem[]
   try {
     if (campaignId) {
-      // Recipient message ids first — needed to detect bad campaign/tag filter results.
+      // Mongo first (fast) so campaign archive probe can abort when filters return
+      // the wrong campaign's rows.
       campaignMessageIds = await loadCampaignRecipientMatchIndex(dbName, campaignId).catch(
         (err) => {
           console.warn('[zcMail tracking] campaign recipient index failed', {
@@ -410,34 +400,12 @@ async function runZcMailArchiveSync(params: {
         }
       )
 
-      const archives = await loadCampaignArchivesFast({
-        client,
-        baseUrl: params.config.zcMailBaseUrl,
-        apiKey: params.config.apiKey,
-        tenantName: params.config.zcMailTenant,
-        fromYmd: params.fromYmd,
-        toYmd: params.toYmd,
-        campaignId
-      })
-      listed = archives.items
-      usedTenantListFallback = archives.usedTenantListFallback
+      const uniqueRecipientIds = uniqueStrippedMessageIds(campaignMessageIds)
 
-      const matchedByMessageId = listed.filter((item) =>
-        archiveItemMatchesMessageIds(item, campaignMessageIds)
-      ).length
-
-      // zcMail campaign/tag filters sometimes return other campaigns' rows (empty tags).
-      // Scan tenant archive by recipient SES ids instead.
-      if (campaignMessageIds.size > 0 && matchedByMessageId === 0) {
-        console.warn(
-          '[zcMail tracking] campaign archive list missed recipient message ids; backfilling',
-          {
-            campaignId,
-            listed: listed.length,
-            campaignRecipientMessageIds: campaignMessageIds.size
-          }
-        )
-        listed = await loadArchivesMatchingMessageIds({
+      // Small/medium campaigns: parallel `q` by SES id is faster than probing a
+      // flaky campaign/tag filter (which often pages thousands of unrelated rows).
+      if (uniqueRecipientIds.length > 0 && uniqueRecipientIds.length <= 500) {
+        listed = await loadArchivesByMessageIdQueries({
           client,
           baseUrl: params.config.zcMailBaseUrl,
           apiKey: params.config.apiKey,
@@ -448,6 +416,48 @@ async function runZcMailArchiveSync(params: {
         })
         usedMessageIdBackfill = true
         usedTenantListFallback = true
+      } else {
+        const archives = await loadCampaignArchivesFast({
+          client,
+          baseUrl: params.config.zcMailBaseUrl,
+          apiKey: params.config.apiKey,
+          tenantName: params.config.zcMailTenant,
+          fromYmd: params.fromYmd,
+          toYmd: params.toYmd,
+          campaignId,
+          matchMessageIds: campaignMessageIds.size > 0 ? campaignMessageIds : undefined
+        })
+        usedTenantListFallback = archives.usedTenantListFallback
+
+        const matchedItems = archives.items.filter((item) =>
+          archiveItemMatchesMessageIds(item, campaignMessageIds)
+        )
+
+        if (campaignMessageIds.size > 0 && matchedItems.length === 0) {
+          console.warn(
+            '[zcMail tracking] campaign archive list missed recipient message ids; q-backfill',
+            {
+              campaignId,
+              listed: archives.items.length,
+              campaignRecipientMessageIds: campaignMessageIds.size
+            }
+          )
+          listed = await loadArchivesByMessageIdQueries({
+            client,
+            baseUrl: params.config.zcMailBaseUrl,
+            apiKey: params.config.apiKey,
+            tenantName: params.config.zcMailTenant,
+            fromYmd: params.fromYmd,
+            toYmd: params.toYmd,
+            messageIds: campaignMessageIds
+          })
+          usedMessageIdBackfill = true
+          usedTenantListFallback = true
+        } else if (campaignMessageIds.size > 0 && matchedItems.length < archives.items.length) {
+          listed = matchedItems
+        } else {
+          listed = archives.items
+        }
       }
     } else {
       listed = await loadArchivesInRange(listBase)

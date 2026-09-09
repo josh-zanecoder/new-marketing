@@ -78,31 +78,35 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
     dedupeBrevoTrackingEvents.mockResolvedValue({ removed: 0 })
   })
 
-  it('lists archives by campaign only — not once per recipient message id', async () => {
+  it('lists archives by message-id q for small campaigns — not once per page of tenant mail', async () => {
     const listCalls: Array<{ q?: string; campaign?: string }> = []
     const list = vi.fn(async (params: { q?: string; campaign?: string }) => {
       listCalls.push({ q: params.q, campaign: params.campaign })
-      return {
-        total: 1,
-        items: [
-          {
-            id: 'arc-1',
-            messageId: 'msg-1',
-            sesMessageId: 'msg-1',
-            to: ['a@example.com'],
-            from: 'from@example.com',
-            subject: 'Hi',
-            tenantName: 't',
-            recipient: 'a@example.com',
-            status: 'delivered',
-            createdAt: '2026-09-01T12:00:00.000Z',
-            tags: { campaign: 'camp-1', db: 'tenant_db', source: 'new-marketing-campaign' }
-          }
-        ]
+      const q = params.q || ''
+      if (q === 'msg-1' || q === 'msg-2' || q === 'msg-3') {
+        return {
+          total: 1,
+          items: [
+            {
+              id: `arc-${q}`,
+              messageId: q,
+              sesMessageId: q,
+              to: ['a@example.com'],
+              from: 'from@example.com',
+              subject: 'Hi',
+              tenantName: 't',
+              recipient: 'a@example.com',
+              status: 'delivered',
+              createdAt: '2026-09-01T12:00:00.000Z',
+              tags: { campaign: 'camp-1', db: 'tenant_db', source: 'new-marketing-campaign' }
+            }
+          ]
+        }
       }
+      return { total: 0, items: [] }
     })
-    const getById = vi.fn(async () => ({
-      id: 'arc-1',
+    const getById = vi.fn(async (item: { archiveId: string }) => ({
+      id: item.archiveId,
       messageId: 'msg-1',
       sesMessageId: 'msg-1',
       to: ['a@example.com'],
@@ -116,7 +120,7 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       events: []
     }))
 
-    await syncTenantZcMailTrackingEvents({
+    const result = await syncTenantZcMailTrackingEvents({
       dbName: 'tenant_db',
       campaignId: 'camp-1',
       fromYmd: '2026-09-01',
@@ -131,12 +135,12 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       archiveClient: { list, getById }
     })
 
-    // 1 campaign-scoped list + 2 search-term lists (id, campaign:id) — not 3 recipient ids.
-    expect(listCalls.length).toBeLessThanOrEqual(3)
-    expect(listCalls.every((c) => c.campaign === 'camp-1')).toBe(true)
-    expect(listCalls.some((c) => c.q === 'msg-1' || c.q === 'msg-2' || c.q === 'msg-3')).toBe(
-      false
+    expect(result.debug?.usedMessageIdBackfill).toBe(true)
+    expect(listCalls.every((c) => c.q === 'msg-1' || c.q === 'msg-2' || c.q === 'msg-3')).toBe(
+      true
     )
+    expect(listCalls.some((c) => c.campaign === 'camp-1')).toBe(false)
+    expect(result.fetched).toBeGreaterThan(0)
   })
 
   it('falls back to tenant archive list when campaign filter returns empty', async () => {
@@ -146,24 +150,27 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       if (params.campaign) {
         return { total: 0, items: [] }
       }
-      return {
-        total: 1,
-        items: [
-          {
-            id: 'arc-1',
-            messageId: 'msg-1',
-            sesMessageId: 'msg-1',
-            to: ['a@example.com'],
-            from: 'from@example.com',
-            subject: 'A quick note from Santiago',
-            tenantName: 't',
-            recipient: 'a@example.com',
-            status: 'sent',
-            createdAt: '2026-09-01T12:00:00.000Z'
-            // no tags — scoped via CampaignRecipient brevoMessageId
-          }
-        ]
+      // message-id q lookup (no campaign param)
+      if (params.q === 'msg-1' || params.q === 'msg-2' || params.q === 'msg-3') {
+        return {
+          total: 1,
+          items: [
+            {
+              id: `arc-${params.q}`,
+              messageId: params.q,
+              sesMessageId: params.q,
+              to: ['a@example.com'],
+              from: 'from@example.com',
+              subject: 'A quick note from Santiago',
+              tenantName: 't',
+              recipient: 'a@example.com',
+              status: 'sent',
+              createdAt: '2026-09-01T12:00:00.000Z'
+            }
+          ]
+        }
       }
+      return { total: 0, items: [] }
     })
     const getById = vi.fn(async (item: { archiveId: string }) => ({
       id: item.archiveId,
@@ -194,13 +201,13 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       archiveClient: { list, getById }
     })
 
-    expect(listCalls.some((c) => !c.campaign)).toBe(true)
+    expect(listCalls.some((c) => c.q === 'msg-1')).toBe(true)
+    expect(result.debug?.usedMessageIdBackfill).toBe(true)
     expect(result.fetched).toBeGreaterThan(0)
   })
 
   it('backfills by recipient message id when campaign filter returns other campaigns', async () => {
     const listCalls: Array<{ q?: string; campaign?: string; skip?: number }> = []
-    let tenantListCalls = 0
     const list = vi.fn(
       async (params: { q?: string; campaign?: string; skip?: number }) => {
         listCalls.push({
@@ -229,25 +236,27 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
             ]
           }
         }
-        tenantListCalls += 1
-        return {
-          total: 1,
-          items: [
-            {
-              id: 'arc-target',
-              messageId: 'uuid-1',
-              sesMessageId: 'msg-1',
-              to: ['a@example.com'],
-              from: 'from@example.com',
-              subject: 'Target campaign',
-              tenantName: 't',
-              recipient: 'a@example.com',
-              status: 'sent',
-              createdAt: '2026-09-03T12:00:00.000Z',
-              tags: {}
-            }
-          ]
+        if (params.q === 'msg-1') {
+          return {
+            total: 1,
+            items: [
+              {
+                id: 'arc-target',
+                messageId: 'uuid-1',
+                sesMessageId: 'msg-1',
+                to: ['a@example.com'],
+                from: 'from@example.com',
+                subject: 'Target campaign',
+                tenantName: 't',
+                recipient: 'a@example.com',
+                status: 'sent',
+                createdAt: '2026-09-03T12:00:00.000Z',
+                tags: {}
+              }
+            ]
+          }
         }
+        return { total: 0, items: [] }
       }
     )
     const getById = vi.fn(async (item: { archiveId: string }) => ({
@@ -279,7 +288,7 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       archiveClient: { list, getById }
     })
 
-    expect(tenantListCalls).toBeGreaterThan(0)
+    expect(listCalls.some((c) => c.q === 'msg-1')).toBe(true)
     expect(result.debug?.usedMessageIdBackfill).toBe(true)
     expect(result.debug?.matched).toBeGreaterThan(0)
     expect(result.fetched).toBeGreaterThan(0)
