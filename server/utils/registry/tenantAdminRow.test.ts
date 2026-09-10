@@ -15,7 +15,8 @@ describe('parseRegistryZcMailFields', () => {
       zcMailBaseUrl: 'https://apizcmail.zanecoder.com/',
       zcMailTenant: 'acme',
       zcMailArchive: false,
-      zcMailApiKey: 'zcm_abcd1234efgh'
+      zcMailApiKey: 'zcm_abcd1234efgh',
+      zcMailWebhookSecret: 'whsec_abcd1234efgh'
     })
     expect(parsed.emailProvider).toBe('ZC_MAIL')
     expect(parsed.zcMailBaseUrl).toBe('https://apizcmail.zanecoder.com')
@@ -23,6 +24,8 @@ describe('parseRegistryZcMailFields', () => {
     expect(parsed.zcMailArchive).toBe(false)
     expect(parsed.zcMailApiKeyConfigured).toBe(true)
     expect(parsed.zcMailApiKeyPrefix).toBe('zcm_…efgh')
+    expect(parsed.zcMailWebhookSecretConfigured).toBe(true)
+    expect(parsed.zcMailWebhookSecretPrefix).toBe('whse…efgh')
   })
 })
 
@@ -33,9 +36,12 @@ describe('toTenantAdminRow', () => {
       dbName: 'acme_db',
       createdAt: '2026-01-01T00:00:00.000Z',
       emailProvider: 'ZC_MAIL',
-      zcMailTenant: 'acme'
+      zcMailTenant: 'acme',
+      zcMailWebhookSecret: 'secret1234abcd'
     })
     expect(row?.emailProvider).toBe('ZC_MAIL')
     expect(row?.zcMailTenant).toBe('acme')
+    expect(row?.zcMailWebhookSecretConfigured).toBe(true)
+    expect(row?.zcMailWebhookSecretPrefix).toBe('secr…abcd')
   })
 })

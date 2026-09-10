@@ -100,6 +100,29 @@ export function parseRegistryBrevoWebhookSecret(doc: RegistryTenantDoc): {
   }
 }
 
+export function normalizeZcMailWebhookSecretInput(
+  raw: string | null | undefined
+): string | null {
+  return normalizeBrevoApiKeyInput(raw)
+}
+
+export function parseRegistryZcMailWebhookSecret(doc: RegistryTenantDoc): {
+  zcMailWebhookSecret: string | null
+  zcMailWebhookSecretConfigured: boolean
+  zcMailWebhookSecretPrefix: string | null
+} {
+  const raw = doc.zcMailWebhookSecret
+  const zcMailWebhookSecret =
+    typeof raw === 'string' && raw.trim() ? raw.trim() : null
+  return {
+    zcMailWebhookSecret,
+    zcMailWebhookSecretConfigured: Boolean(zcMailWebhookSecret),
+    zcMailWebhookSecretPrefix: zcMailWebhookSecret
+      ? maskBrevoApiKeyPrefix(zcMailWebhookSecret)
+      : null
+  }
+}
+
 export function parseRegistryZcMailFields(doc: RegistryTenantDoc): {
   emailProvider: TenantEmailProvider
   zcMailBaseUrl: string | null
@@ -108,6 +131,9 @@ export function parseRegistryZcMailFields(doc: RegistryTenantDoc): {
   zcMailApiKey: string | null
   zcMailApiKeyConfigured: boolean
   zcMailApiKeyPrefix: string | null
+  zcMailWebhookSecret: string | null
+  zcMailWebhookSecretConfigured: boolean
+  zcMailWebhookSecretPrefix: string | null
 } {
   const emailProvider = parseTenantEmailProvider(doc.emailProvider)
   const zcMailBaseUrl =
@@ -122,6 +148,7 @@ export function parseRegistryZcMailFields(doc: RegistryTenantDoc): {
     typeof doc.zcMailApiKey === 'string' && doc.zcMailApiKey.trim()
       ? doc.zcMailApiKey.trim()
       : null
+  const webhook = parseRegistryZcMailWebhookSecret(doc)
   return {
     emailProvider,
     zcMailBaseUrl,
@@ -129,7 +156,10 @@ export function parseRegistryZcMailFields(doc: RegistryTenantDoc): {
     zcMailArchive: doc.zcMailArchive !== false,
     zcMailApiKey,
     zcMailApiKeyConfigured: Boolean(zcMailApiKey),
-    zcMailApiKeyPrefix: zcMailApiKey ? maskBrevoApiKeyPrefix(zcMailApiKey) : null
+    zcMailApiKeyPrefix: zcMailApiKey ? maskBrevoApiKeyPrefix(zcMailApiKey) : null,
+    zcMailWebhookSecret: webhook.zcMailWebhookSecret,
+    zcMailWebhookSecretConfigured: webhook.zcMailWebhookSecretConfigured,
+    zcMailWebhookSecretPrefix: webhook.zcMailWebhookSecretPrefix
   }
 }
 
@@ -152,6 +182,7 @@ export function applyZcMailRegistryPatch(params: {
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    zcMailWebhookSecret?: string | null
   }
   $set: Record<string, unknown>
   $unset: Record<string, ''>
@@ -196,6 +227,19 @@ export function applyZcMailRegistryPatch(params: {
       params.$unset.zcMailApiKey = ''
       prev.zcMailApiKey = null
       prev.zcMailApiKeyConfigured = false
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'zcMailWebhookSecret')) {
+    const next = normalizeZcMailWebhookSecretInput(body.zcMailWebhookSecret)
+    if (next) {
+      params.$set.zcMailWebhookSecret = next
+      prev.zcMailWebhookSecret = next
+      prev.zcMailWebhookSecretConfigured = true
+    } else {
+      params.$unset.zcMailWebhookSecret = ''
+      prev.zcMailWebhookSecret = null
+      prev.zcMailWebhookSecretConfigured = false
     }
   }
 
@@ -287,6 +331,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     zcMailTenant: zcMail.zcMailTenant,
     zcMailArchive: zcMail.zcMailArchive,
     zcMailApiKeyConfigured: zcMail.zcMailApiKeyConfigured,
-    zcMailApiKeyPrefix: zcMail.zcMailApiKeyPrefix
+    zcMailApiKeyPrefix: zcMail.zcMailApiKeyPrefix,
+    zcMailWebhookSecretConfigured: zcMail.zcMailWebhookSecretConfigured,
+    zcMailWebhookSecretPrefix: zcMail.zcMailWebhookSecretPrefix
   }
 }

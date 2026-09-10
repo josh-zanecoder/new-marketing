@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    zcMailWebhookSecret?: string | null
   }>(event)
   const displayName = body?.name?.trim()
   const contactEmail = body?.email?.trim().toLowerCase()

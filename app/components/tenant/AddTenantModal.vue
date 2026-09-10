@@ -205,6 +205,23 @@
             >
           </div>
           <div class="compact-modal-field compact-modal-field--full">
+            <label for="add-tenant-zcmail-webhook-secret" class="compact-modal-label">
+              zcMail webhook secret <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              Leave blank to use env <span class="font-mono">ZC_MAIL_WEBHOOK_SECRET</span>.
+              Must match the HMAC secret configured on the zcMail tenant webhook.
+            </p>
+            <input
+              id="add-tenant-zcmail-webhook-secret"
+              v-model="zcMailWebhookSecret"
+              type="password"
+              autocomplete="off"
+              placeholder="Webhook HMAC secret"
+              class="compact-modal-input compact-modal-input--mono"
+            >
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
             <label class="mt-1 flex items-center gap-2 text-sm text-slate-700">
               <input v-model="zcMailArchive" type="checkbox" class="rounded border-slate-300">
               Archive outbound mail in zcMail
@@ -276,6 +293,7 @@ const emit = defineEmits<{
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    zcMailWebhookSecret?: string | null
   }]
 }>()
 
@@ -290,6 +308,7 @@ const emailProvider = ref<'BREVO' | 'ZC_MAIL'>('BREVO')
 const zcMailTenant = ref('')
 const zcMailBaseUrl = ref('https://apizcmail.zanecoder.com')
 const zcMailApiKey = ref('')
+const zcMailWebhookSecret = ref('')
 const zcMailArchive = ref(true)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
@@ -308,6 +327,7 @@ function resetForm() {
   zcMailTenant.value = ''
   zcMailBaseUrl.value = 'https://apizcmail.zanecoder.com'
   zcMailApiKey.value = ''
+  zcMailWebhookSecret.value = ''
   zcMailArchive.value = true
   errorMessage.value = null
   stopSubmitting()
@@ -401,7 +421,10 @@ function handleSubmit() {
           zcMailTenant: zcMailTenant.value.trim(),
           zcMailBaseUrl: zcMailBaseUrl.value.trim(),
           zcMailApiKey: zcMailApiKey.value.trim(),
-          zcMailArchive: zcMailArchive.value !== false
+          zcMailArchive: zcMailArchive.value !== false,
+          ...(zcMailWebhookSecret.value.trim()
+            ? { zcMailWebhookSecret: zcMailWebhookSecret.value.trim() }
+            : {})
         }
       : {})
   })

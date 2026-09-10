@@ -1307,6 +1307,8 @@ interface TenantDetail {
   zcMailArchive?: boolean
   zcMailApiKeyConfigured?: boolean
   zcMailApiKeyPrefix?: string | null
+  zcMailWebhookSecretConfigured?: boolean
+  zcMailWebhookSecretPrefix?: string | null
 }
 
 interface FilterRow {

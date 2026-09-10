@@ -123,6 +123,27 @@
       </div>
 
       <div
+        v-if="tenant.emailProvider === 'ZC_MAIL'"
+        class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
+      >
+        <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          zcMail webhook secret
+        </dt>
+        <dd class="mt-2 break-words text-sm font-medium text-slate-900">
+          <template v-if="tenant.zcMailWebhookSecretConfigured">
+            Custom
+            <span
+              v-if="tenant.zcMailWebhookSecretPrefix"
+              class="font-mono text-xs text-slate-600"
+            >
+              ({{ tenant.zcMailWebhookSecretPrefix }})
+            </span>
+          </template>
+          <span v-else class="text-slate-400">Env default</span>
+        </dd>
+      </div>
+
+      <div
         v-if="tenant.emailProvider !== 'ZC_MAIL'"
         class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
       >
@@ -201,6 +222,8 @@ defineProps<{
     zcMailTenant?: string | null
     zcMailApiKeyConfigured?: boolean
     zcMailApiKeyPrefix?: string | null
+    zcMailWebhookSecretConfigured?: boolean
+    zcMailWebhookSecretPrefix?: string | null
   }
 }>()
 

@@ -30,5 +30,9 @@ export interface AdminTenantRow {
   zcMailArchive?: boolean
   zcMailApiKeyConfigured?: boolean
   zcMailApiKeyPrefix?: string | null
+  /** True when a custom zcMail webhook HMAC secret is stored for this tenant. */
+  zcMailWebhookSecretConfigured?: boolean
+  /** Masked prefix of the custom zcMail webhook secret (never the full secret). */
+  zcMailWebhookSecretPrefix?: string | null
   status: string
 }

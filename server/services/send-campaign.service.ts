@@ -6,6 +6,7 @@ import type {
   CampaignMergeUserSnapshot,
   CampaignModel
 } from '../types/tenant/campaign.model'
+import type { ContactModel } from '../types/tenant/contact.model'
 import type {
   CampaignRecipientInsertRow,
   CampaignRecipientLean,
@@ -24,6 +25,7 @@ import {
   contactsByEmailForAudience,
   recipientEmailsForCampaign
 } from '../utils/emailMerge/campaignAudience'
+import { findUnsubscribedNormalizedEmails } from '../utils/contact/marketableContact'
 import {
   applyDefaultUnsubscribeMergeValue,
   composeEmailMergeRoot,
@@ -599,7 +601,7 @@ export async function processBatch(
   campaignId: string,
   options: ProcessBatchOptions
 ): Promise<ProcessBatchResult> {
-  const { Campaign, CampaignRecipient, EmailTemplate, EmailDynamicVariable } = models
+  const { Campaign, CampaignRecipient, EmailTemplate, EmailDynamicVariable, Contact } = models
   const campaign = await (Campaign as CampaignModel)
     .findById(campaignId)
     .lean<CampaignLean | null>()
@@ -742,13 +744,11 @@ export async function processBatch(
     status: campaign.status
   })
 
-  const [contactByEmail, dynamicVariableBindings] = await Promise.all([
-    contactsByEmailForAudience(
-      models,
-      campaign,
-      pending.map((r) => r.email)
-    ),
-    fetchEnabledEmailDynamicVariableBindings(EmailDynamicVariable as EmailDynamicVariableModel)
+  const pendingEmails = pending.map((r) => r.email)
+  const [contactByEmail, dynamicVariableBindings, unsubscribedEmails] = await Promise.all([
+    contactsByEmailForAudience(models, campaign, pendingEmails),
+    fetchEnabledEmailDynamicVariableBindings(EmailDynamicVariable as EmailDynamicVariableModel),
+    findUnsubscribedNormalizedEmails(Contact as ContactModel, pendingEmails)
   ])
 
   if (!templateHtml || !campaign.sender?.email) {
@@ -801,10 +801,18 @@ export async function processBatch(
     const prepared: Prepared[] = pending.map((r) => {
       const emailKey = normalizeMarketingEmail(r.email)
       const contact = emailKey ? contactByEmail.get(emailKey) : undefined
-      if (contact?.isUnsubscribe === true) {
+      if (
+        contact?.isUnsubscribe === true ||
+        (emailKey != null && emailKey !== '' && unsubscribedEmails.has(emailKey))
+      ) {
         return {
           row: r,
-          sender: buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback),
+          sender: buildSenderFromContactOwner(
+            contact ?? null,
+            campaign.sender,
+            operatorUser,
+            variableFallback
+          ),
           version: { to: [{ email: r.email }], subject: '', htmlContent: '' },
           failed: 'Contact unsubscribed'
         }

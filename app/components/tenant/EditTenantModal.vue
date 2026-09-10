@@ -288,6 +288,42 @@
             </label>
           </div>
           <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-zcmail-webhook-secret" class="compact-modal-label">
+              zcMail webhook secret <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <p class="mb-1.5 text-xs text-slate-500">
+              HMAC secret for
+              <span class="font-mono">X-ZC-Mail-Signature</span>.
+              <template v-if="props.tenant?.zcMailWebhookSecretConfigured">
+                Custom secret set
+                <span v-if="props.tenant.zcMailWebhookSecretPrefix" class="font-mono">
+                  ({{ props.tenant.zcMailWebhookSecretPrefix }})
+                </span>
+                — leave blank to keep, or clear to use env
+                <span class="font-mono">ZC_MAIL_WEBHOOK_SECRET</span>.
+              </template>
+              <template v-else>
+                Using env <span class="font-mono">ZC_MAIL_WEBHOOK_SECRET</span>. Paste a secret to override for this tenant.
+              </template>
+            </p>
+            <input
+              id="edit-tenant-zcmail-webhook-secret"
+              v-model="zcMailWebhookSecret"
+              type="password"
+              autocomplete="off"
+              placeholder="Webhook HMAC secret"
+              class="compact-modal-input compact-modal-input--mono"
+              :disabled="clearZcMailWebhookSecret"
+            >
+            <label
+              v-if="props.tenant?.zcMailWebhookSecretConfigured"
+              class="mt-2 flex items-center gap-2 text-xs text-slate-600"
+            >
+              <input v-model="clearZcMailWebhookSecret" type="checkbox" class="rounded border-slate-300">
+              Clear custom secret (use env default)
+            </label>
+          </div>
+          <div class="compact-modal-field compact-modal-field--full">
             <label class="mt-1 flex items-center gap-2 text-sm text-slate-700">
               <input v-model="zcMailArchive" type="checkbox" class="rounded border-slate-300">
               Archive outbound mail in zcMail
@@ -364,6 +400,8 @@ const emit = defineEmits<{
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    /** Omit = keep; `null` = clear to env; string = set/replace. */
+    zcMailWebhookSecret?: string | null
   }]
 }>()
 
@@ -382,6 +420,8 @@ const zcMailTenant = ref('')
 const zcMailBaseUrl = ref('')
 const zcMailApiKey = ref('')
 const clearZcMailApiKey = ref(false)
+const zcMailWebhookSecret = ref('')
+const clearZcMailWebhookSecret = ref(false)
 const zcMailArchive = ref(true)
 const errorMessage = ref<string | null>(null)
 const { isSubmitting, startSubmitting, stopSubmitting } = useSubmitting()
@@ -404,6 +444,8 @@ function loadFromTenant(t: AdminTenantRow) {
   zcMailBaseUrl.value = t.zcMailBaseUrl ?? ''
   zcMailApiKey.value = ''
   clearZcMailApiKey.value = false
+  zcMailWebhookSecret.value = ''
+  clearZcMailWebhookSecret.value = false
   zcMailArchive.value = t.zcMailArchive !== false
 }
 
@@ -513,6 +555,7 @@ function handleSubmit() {
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    zcMailWebhookSecret?: string | null
   } = {
     name: trimmedName,
     email: trimmedEmail.toLowerCase(),
@@ -545,6 +588,11 @@ function handleSubmit() {
       payload.zcMailApiKey = null
     } else if (zcMailApiKey.value.trim()) {
       payload.zcMailApiKey = zcMailApiKey.value.trim()
+    }
+    if (clearZcMailWebhookSecret.value) {
+      payload.zcMailWebhookSecret = null
+    } else if (zcMailWebhookSecret.value.trim()) {
+      payload.zcMailWebhookSecret = zcMailWebhookSecret.value.trim()
     }
   }
 

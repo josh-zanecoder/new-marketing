@@ -436,6 +436,8 @@ async function fetchTenants() {
         zcMailArchive?: boolean
         zcMailApiKeyConfigured?: boolean
         zcMailApiKeyPrefix?: string | null
+        zcMailWebhookSecretConfigured?: boolean
+        zcMailWebhookSecretPrefix?: string | null
         createdAt: string
       }[]
     }>('/api/v1/admin/tenants', { method: 'GET' })
@@ -460,6 +462,8 @@ async function fetchTenants() {
       zcMailArchive: t.zcMailArchive !== false,
       zcMailApiKeyConfigured: Boolean(t.zcMailApiKeyConfigured),
       zcMailApiKeyPrefix: t.zcMailApiKeyPrefix ?? null,
+      zcMailWebhookSecretConfigured: Boolean(t.zcMailWebhookSecretConfigured),
+      zcMailWebhookSecretPrefix: t.zcMailWebhookSecretPrefix ?? null,
       status: 'Ready'
     }))
   } catch {
@@ -480,6 +484,7 @@ async function handleAddTenantSubmit(payload: {
   zcMailTenant?: string | null
   zcMailArchive?: boolean
   zcMailApiKey?: string | null
+  zcMailWebhookSecret?: string | null
 }) {
   const result = await createTenantDb(payload)
   if (!result.ok) return
@@ -508,6 +513,7 @@ async function handleEditTenantSubmit(payload: {
   zcMailTenant?: string | null
   zcMailArchive?: boolean
   zcMailApiKey?: string | null
+  zcMailWebhookSecret?: string | null
 }) {
   const row = editingTenant.value
   if (!row) return

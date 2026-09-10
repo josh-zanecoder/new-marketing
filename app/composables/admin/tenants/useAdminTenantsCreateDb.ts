@@ -49,6 +49,7 @@ export function useAdminTenantsCreateDb() {
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    zcMailWebhookSecret?: string | null
   }): Promise<CreateTenantDbResult> {
     resetError()
 
@@ -84,6 +85,9 @@ export function useAdminTenantsCreateDb() {
             ...(payload.zcMailArchive === false ? { zcMailArchive: false } : {}),
             ...(payload.zcMailApiKey?.trim()
               ? { zcMailApiKey: payload.zcMailApiKey.trim() }
+              : {}),
+            ...(payload.zcMailWebhookSecret?.trim()
+              ? { zcMailWebhookSecret: payload.zcMailWebhookSecret.trim() }
               : {})
           }
         }
@@ -138,6 +142,7 @@ export function useAdminTenantsCreateDb() {
       zcMailTenant?: string | null
       zcMailArchive?: boolean
       zcMailApiKey?: string | null
+      zcMailWebhookSecret?: string | null
     }
   ): Promise<{ ok: boolean }> {
     resetError()

@@ -12,7 +12,10 @@ Transactional campaign batches already used Brevo (`sendTransacEmail` + `message
 
 `POST {MARKETING_PUBLIC_BASE_URL}/api/v1/webhooks/zc-mail/email-status`
 
-4. Set `ZC_MAIL_WEBHOOK_SECRET` (HMAC `X-ZC-Mail-Signature: sha256=…`) or `ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED=true` for local only
+4. Set the webhook HMAC secret:
+   - **Per-tenant** — Admin → Tenants → Edit → **zcMail webhook secret** (stored on registry `clients.zcMailWebhookSecret`), matching the secret configured on that zcMail tenant webhook
+   - **Env fallback** — `ZC_MAIL_WEBHOOK_SECRET` when the tenant has no custom secret
+   - Local only: `ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED=true`
 
 Existing tenants stay on **Brevo** until you switch them.
 
@@ -45,12 +48,21 @@ Archive rows tagged `mortdash-crm-ratesheet` are ignored so a shared zcMail tena
 
 ## Env
 
-Host, API key, and tenant slug come from **Admin → Tenants** (`clients.zcMailBaseUrl`, `zcMailApiKey`, `zcMailTenant`). Missing base URL falls back to `https://apizcmail.zanecoder.com`.
+Host, API key, tenant slug, and optional webhook secret come from **Admin → Tenants** (`clients.zcMailBaseUrl`, `zcMailApiKey`, `zcMailTenant`, `zcMailWebhookSecret`). Missing base URL falls back to `https://apizcmail.zanecoder.com`.
 
 | Variable | Purpose |
 | -------- | ------- |
-| `ZC_MAIL_WEBHOOK_SECRET` | HMAC secret for inbound webhooks |
+| `ZC_MAIL_WEBHOOK_SECRET` | Env fallback HMAC secret for inbound webhooks (used when tenant has no custom secret) |
 | `ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED` | Local only |
+
+## Auth
+
+Marketing resolves the tenant from tags / message routing first, then checks the HMAC signature:
+
+1. **Per-tenant** — Admin → Tenants → Edit → **zcMail webhook secret** (`clients.zcMailWebhookSecret`).
+2. **Env fallback** — `ZC_MAIL_WEBHOOK_SECRET` when the tenant has no custom secret.
+
+Header: `X-ZC-Mail-Signature: sha256=<hmac-hex>` over the raw request body.
 
 ## Code map
 
@@ -59,6 +71,8 @@ Host, API key, and tenant slug come from **Admin → Tenants** (`clients.zcMailB
 | Bulk HTTP | `server/utils/zcmail/sendZcMailBulk.ts` |
 | Single send | `server/utils/zcmail/sendZcMailEmail.ts` |
 | Provider resolve | `server/utils/zcmail/resolveTenantEmailSendConfig.ts` |
+| Webhook secret resolve | `server/utils/zcmail/resolveZcMailWebhookSecret.ts` |
+| Webhook auth | `server/utils/zcmail/zcMailWebhookRequestAuth.ts` |
 | Campaign router | `server/services/campaignOutboundEmail.service.ts` |
 | Webhook | `server/api/v1/webhooks/zc-mail/email-status.post.ts` |
 | Archive HTTP | `server/utils/zcmail/zcMailArchiveClient.ts` |

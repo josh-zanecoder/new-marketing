@@ -37,6 +37,11 @@ export interface RegistryTenantDoc {
   zcMailArchive?: unknown
   /** Per-tenant zcMail API key. */
   zcMailApiKey?: unknown
+  /**
+   * Optional per-tenant zcMail webhook HMAC secret; empty/missing → env
+   * `ZC_MAIL_WEBHOOK_SECRET`.
+   */
+  zcMailWebhookSecret?: unknown
 }
 
 /** Admin list row for a registered tenant (registry). */
@@ -74,4 +79,8 @@ export interface TenantAdminRow {
   zcMailArchive: boolean
   zcMailApiKeyConfigured: boolean
   zcMailApiKeyPrefix: string | null
+  /** True when a custom zcMail webhook HMAC secret is stored for this tenant. */
+  zcMailWebhookSecretConfigured: boolean
+  /** Masked prefix of the custom zcMail webhook secret (never the full secret). */
+  zcMailWebhookSecretPrefix: string | null
 }

@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
 import { ZC_MAIL_WEBHOOK_SIGNATURE_HEADER } from '@server/constants/zcMailWebhook'
 import { applyBrevoTrackingWebhook } from '@server/utils/tracking/applyBrevoTrackingWebhook'
 import {
@@ -12,21 +11,7 @@ import {
 } from '@server/utils/tracking/parseBrevoTransactionalWebhookPayload'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { findRegistryTenantByTenantId } from '@server/tenant/registry-auth'
-
-function verifyZcMailSignature(rawBody: string, headerValue: string, secret: string): boolean {
-  const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`
-  const got = String(headerValue || '').trim()
-  if (!got || got.length !== expected.length) return false
-  try {
-    return timingSafeEqual(Buffer.from(got), Buffer.from(expected))
-  } catch {
-    return false
-  }
-}
-
-function webhookSecretFromEnv(): string {
-  return String(process.env.ZC_MAIL_WEBHOOK_SECRET || '').trim()
-}
+import { verifyZcMailWebhookRequestAuth } from '@server/utils/zcmail/zcMailWebhookRequestAuth'
 
 /**
  * zcMail `email.status` webhook → tenant `brevo_tracking_events` (same store as Brevo).
@@ -34,34 +19,17 @@ function webhookSecretFromEnv(): string {
  * Configure zcMail tenant webhookUrl:
  *   POST {MARKETING_PUBLIC_BASE_URL}/api/v1/webhooks/zc-mail/email-status
  *
- * Auth: HMAC `X-ZC-Mail-Signature: sha256=…` with `ZC_MAIL_WEBHOOK_SECRET`,
- * or `ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED=true` for local only.
+ * Auth: HMAC `X-ZC-Mail-Signature: sha256=…` with per-tenant `clients.zcMailWebhookSecret`
+ * (Admin → Tenants) or env `ZC_MAIL_WEBHOOK_SECRET`, or `ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED=true`
+ * for local only.
  */
 export default defineEventHandler(async (event) => {
-  const expectedSecret = webhookSecretFromEnv()
-  const allowUnsigned =
-    String(process.env.ZC_MAIL_WEBHOOK_ALLOW_UNSIGNED || '').toLowerCase() === 'true'
-
-  if (!expectedSecret && !allowUnsigned) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'zcMail webhook is not configured'
-    })
-  }
-
-  const rawBody = (await readRawBody(event)) ?? ''
-  if (expectedSecret) {
-    const signature = getHeader(event, ZC_MAIL_WEBHOOK_SIGNATURE_HEADER) || ''
-    const bodyForSig = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')
-    if (!verifyZcMailSignature(bodyForSig, signature, expectedSecret)) {
-      throw createError({ statusCode: 401, statusMessage: 'Invalid webhook signature' })
-    }
-  }
+  const rawBodyBuf = (await readRawBody(event)) ?? ''
+  const rawBody = typeof rawBodyBuf === 'string' ? rawBodyBuf : rawBodyBuf.toString('utf8')
 
   let body: unknown
   try {
-    const text = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')
-    body = text ? JSON.parse(text) : await readBody(event)
+    body = rawBody ? JSON.parse(rawBody) : await readBody(event)
   } catch {
     body = await readBody(event)
   }
@@ -86,6 +54,16 @@ export default defineEventHandler(async (event) => {
   if (!dbName) {
     dbName = await findDbNameByMessageId(parsed.messageId)
   }
+
+  const auth = await verifyZcMailWebhookRequestAuth({
+    rawBody,
+    signatureHeader: getHeader(event, ZC_MAIL_WEBHOOK_SIGNATURE_HEADER) || '',
+    dbName
+  })
+  if (!auth.ok) {
+    throw createError({ statusCode: auth.statusCode, statusMessage: auth.message })
+  }
+
   if (!dbName) {
     console.warn('[zcMail-webhook] no tenant for message id', {
       messageId: parsed.messageId,

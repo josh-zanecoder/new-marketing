@@ -17,6 +17,10 @@ import {
   resolveTenantIdFromBrevoTags,
   type ParsedBrevoTransactionalWebhook
 } from '@server/utils/tracking/parseBrevoTransactionalWebhookPayload'
+import {
+  shouldAutoUnsubscribeOnTrackingEvent,
+  unsubscribeContactsOnBounce
+} from '@server/utils/contact/unsubscribeContactsOnBounce'
 
 export type ApplyBrevoTrackingWebhookResult = {
   ok: true
@@ -65,8 +69,32 @@ function webhookToTrackingDoc(parsed: ParsedBrevoTransactionalWebhook) {
   }
 }
 
+async function maybeAutoUnsubscribeOnBounce(
+  conn: Awaited<ReturnType<typeof getTenantConnectionByDbName>>,
+  doc: ReturnType<typeof webhookToTrackingDoc>,
+  dbName: string
+): Promise<void> {
+  if (!shouldAutoUnsubscribeOnTrackingEvent(doc.event) || !doc.email?.trim()) return
+  try {
+    await unsubscribeContactsOnBounce(conn, {
+      email: doc.email,
+      reason: doc.event,
+      messageId: doc.messageId
+    })
+  } catch (err) {
+    console.warn('[applyBrevoTrackingWebhook] auto-unsubscribe on bounce failed', {
+      dbName,
+      email: doc.email,
+      event: doc.event,
+      messageId: doc.messageId,
+      err
+    })
+  }
+}
+
 /**
  * Ingest one Brevo transactional webhook into the tenant `brevo_tracking_events` store.
+ * Hard bounces and spam complaints also auto-unsubscribe matching contacts.
  */
 export async function applyBrevoTrackingWebhook(
   body: unknown
@@ -128,6 +156,7 @@ export async function applyBrevoTrackingWebhook(
           }
         }
       )
+      await maybeAutoUnsubscribeOnBounce(conn, doc, dbName)
       return {
         ok: true,
         dbName,
@@ -147,6 +176,8 @@ export async function applyBrevoTrackingWebhook(
     { $set: doc },
     { upsert: true }
   )
+
+  await maybeAutoUnsubscribeOnBounce(conn, doc, dbName)
 
   return {
     ok: true,

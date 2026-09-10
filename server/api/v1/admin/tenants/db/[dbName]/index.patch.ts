@@ -54,6 +54,12 @@ export default defineEventHandler(async (event) => {
     zcMailTenant?: string | null
     zcMailArchive?: boolean
     zcMailApiKey?: string | null
+    /**
+     * Optional. Omit to leave unchanged.
+     * `null` or `""` clears the custom secret (use env `ZC_MAIL_WEBHOOK_SECRET`).
+     * Non-empty string sets/replaces the tenant webhook HMAC secret.
+     */
+    zcMailWebhookSecret?: string | null
   }>(event)
 
   const displayName = body?.name?.trim()
