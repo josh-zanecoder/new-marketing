@@ -55,6 +55,7 @@ function mapSesOrArchiveEventName(raw: string): string {
     send: 'requests',
     delivery: 'delivered',
     bounce: 'hardBounces',
+    bounced: 'hardBounces',
     complaint: 'spam',
     open: 'opened',
     click: 'clicks',
