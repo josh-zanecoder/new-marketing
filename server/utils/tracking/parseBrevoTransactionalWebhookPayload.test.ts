@@ -37,6 +37,8 @@ describe('parseBrevoTransactionalWebhookPayload', () => {
     expect(normalizeBrevoWebhookEventName('request')).toBe('requests')
     expect(normalizeBrevoWebhookEventName('soft_bounce')).toBe('softBounces')
     expect(normalizeBrevoWebhookEventName('hard_bounce')).toBe('hardBounces')
+    expect(normalizeBrevoWebhookEventName('bounced')).toBe('hardBounces')
+    expect(normalizeBrevoWebhookEventName('Bounce')).toBe('bounces')
     expect(normalizeBrevoWebhookEventName('click')).toBe('clicks')
     expect(normalizeBrevoWebhookEventName('unique_opened')).toBe('unique_opened')
     expect(normalizeBrevoWebhookEventName('Delivery')).toBe('delivered')

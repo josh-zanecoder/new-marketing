@@ -8,7 +8,12 @@ import { onContactUnsubscribed } from '@server/utils/contact/contactSubscription
  * Includes `bounces` because zcMail/SES webhooks normalize SES `Bounce` → `bounces`
  * (archive Refresh maps the same to `hardBounces`).
  */
-export const AUTO_UNSUBSCRIBE_TRACKING_EVENTS = new Set(['hardBounces', 'bounces', 'spam'])
+export const AUTO_UNSUBSCRIBE_TRACKING_EVENTS = new Set([
+  'hardBounces',
+  'bounces',
+  'bounced',
+  'spam'
+])
 
 export function shouldAutoUnsubscribeOnTrackingEvent(event: string): boolean {
   return AUTO_UNSUBSCRIBE_TRACKING_EVENTS.has(String(event || '').trim())

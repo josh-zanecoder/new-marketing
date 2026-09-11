@@ -74,12 +74,29 @@ async function maybeAutoUnsubscribeOnBounce(
   doc: ReturnType<typeof webhookToTrackingDoc>,
   dbName: string
 ): Promise<void> {
-  if (!shouldAutoUnsubscribeOnTrackingEvent(doc.event) || !doc.email?.trim()) return
+  if (!shouldAutoUnsubscribeOnTrackingEvent(doc.event)) {
+    return
+  }
+  if (!doc.email?.trim()) {
+    console.warn('[applyBrevoTrackingWebhook] auto-unsubscribe skipped: missing email', {
+      dbName,
+      event: doc.event,
+      messageId: doc.messageId
+    })
+    return
+  }
   try {
-    await unsubscribeContactsOnBounce(conn, {
+    const result = await unsubscribeContactsOnBounce(conn, {
       email: doc.email,
       reason: doc.event,
       messageId: doc.messageId
+    })
+    console.info('[applyBrevoTrackingWebhook] auto-unsubscribe on bounce', {
+      dbName,
+      email: doc.email,
+      event: doc.event,
+      messageId: doc.messageId,
+      ...result
     })
   } catch (err) {
     console.warn('[applyBrevoTrackingWebhook] auto-unsubscribe on bounce failed', {

@@ -32,6 +32,7 @@ describe('shouldAutoUnsubscribeOnTrackingEvent', () => {
   it('auto-unsubscribes hard bounces, SES bounces, and spam', () => {
     expect(shouldAutoUnsubscribeOnTrackingEvent('hardBounces')).toBe(true)
     expect(shouldAutoUnsubscribeOnTrackingEvent('bounces')).toBe(true)
+    expect(shouldAutoUnsubscribeOnTrackingEvent('bounced')).toBe(true)
     expect(shouldAutoUnsubscribeOnTrackingEvent('spam')).toBe(true)
     expect(AUTO_UNSUBSCRIBE_TRACKING_EVENTS.has('hardBounces')).toBe(true)
   })

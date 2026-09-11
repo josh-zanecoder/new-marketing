@@ -100,6 +100,8 @@ export function normalizeBrevoWebhookEventName(raw: string): string {
     hard_bounce: 'hardBounces',
     hardbounce: 'hardBounces',
     hardbounces: 'hardBounces',
+    /** zcMail UI / webhooks use `bounced` for SES Bounce. */
+    bounced: 'hardBounces',
     bounce: 'bounces',
     bounces: 'bounces',
     opened: 'opened',
