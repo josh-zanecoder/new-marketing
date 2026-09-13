@@ -6,6 +6,8 @@ export interface CampaignBatchMessageVersion {
   params?: Record<string, string>
   /** Per-recipient Reply-To (contact account owner); overrides batch-level when owners differ. */
   replyTo?: { email: string; name: string }
+  /** Per-recipient email headers (List-Unsubscribe). */
+  headers?: Record<string, string>
 }
 
 export type BrevoBatchMessageVersionPayload = {
@@ -14,6 +16,7 @@ export type BrevoBatchMessageVersionPayload = {
   htmlContent?: string
   params?: Record<string, string>
   replyTo?: { email: string; name: string }
+  headers?: Record<string, string>
 }
 
 export function campaignBatchVersionsAreUniform(versions: CampaignBatchMessageVersion[]): boolean {
@@ -57,6 +60,9 @@ export function buildCampaignBrevoBatchRequest(versions: CampaignBatchMessageVer
         email: v.replyTo.email.trim().toLowerCase(),
         name: v.replyTo.name.trim().slice(0, 70)
       }
+    }
+    if (v.headers && Object.keys(v.headers).length > 0) {
+      inner.headers = v.headers
     }
     return inner
   })

@@ -14,6 +14,7 @@ export interface ZcMailBulkRecipientInput {
   html: string
   replyTo?: string
   tags?: Record<string, string>
+  headers?: Record<string, string>
 }
 
 export interface SendZcMailBulkInput {
@@ -121,7 +122,10 @@ export async function sendZcMailBulk(
       subject: recipient.subject,
       html: recipient.html,
       ...(recipient.replyTo ? { replyTo: recipient.replyTo } : {}),
-      ...(recipient.tags ? { tags: recipient.tags } : {})
+      ...(recipient.tags ? { tags: recipient.tags } : {}),
+      ...(recipient.headers && Object.keys(recipient.headers).length
+        ? { headers: recipient.headers }
+        : {})
     }))
   }
   const from = input.from?.trim()

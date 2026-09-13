@@ -29,6 +29,7 @@ import {
   buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
+import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
 import { sendCampaignOutboundEmail } from './campaignOutboundEmail.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -139,6 +140,7 @@ export async function sendCampaignTestEmail(
   let mergeRoot: Record<string, unknown>
   let replyTo: { email: string; name: string } | undefined
   let campaignTag: string | undefined
+  let unsubscribeContactId: string | undefined
 
   if (campaignId) {
     if (!mongoose.isValidObjectId(campaignId)) {
@@ -159,6 +161,7 @@ export async function sendCampaignTestEmail(
     }
 
     const contact = await previewContactForSavedCampaign(conn, campaignId)
+    unsubscribeContactId = contact?._id ? String(contact._id) : undefined
     const operatorFallback = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
     sender = buildSenderFromContactOwner(contact ?? null, {
       name: String(campaign.sender?.name ?? '').trim(),
@@ -204,6 +207,7 @@ export async function sendCampaignTestEmail(
         : undefined
     }
     const contact = await previewContactForDraft(conn, draft)
+    unsubscribeContactId = contact?._id ? String(contact._id) : undefined
     mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
@@ -236,6 +240,12 @@ export async function sendCampaignTestEmail(
     [authSnap?.firstName, authSnap?.lastName].filter(Boolean).join(' ').trim() ||
     undefined
 
+  const headers = listUnsubscribeHeadersForContact({
+    dbName,
+    contactId: unsubscribeContactId,
+    clientKeyHash: registryMeta.unsubscribeSigningSecret
+  })
+
   const result = await sendCampaignOutboundEmail({
     sender: { name: sender.name || sender.email, email: sender.email },
     to: [{ email: recipient }],
@@ -245,7 +255,8 @@ export async function sendCampaignTestEmail(
     tags: ['test-email', ...(campaignTag ? [`campaign:${campaignTag}`] : [])],
     tenantId: registryMeta.brevoTenantTagValue,
     dbName,
-    ...(userForTag ? { user: userForTag } : {})
+    ...(userForTag ? { user: userForTag } : {}),
+    ...(headers ? { headers } : {})
   })
 
   if (result.error) {

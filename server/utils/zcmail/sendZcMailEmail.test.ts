@@ -52,6 +52,49 @@ describe('sendZcMailEmail', () => {
     })
   })
 
+  it('forwards custom email headers on send', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          sent: 1,
+          failed: 0,
+          results: [
+            {
+              recipient: 'user@example.com',
+              role: 'to',
+              messageId: 'msg-1',
+              status: 'sent'
+            }
+          ]
+        })
+    })
+
+    await sendZcMailEmail(
+      {
+        baseUrl: 'http://localhost:3003',
+        apiKey: 'zcm_test_key',
+        tenant: 'cbc',
+        to: 'user@example.com',
+        subject: 'Hello',
+        html: '<p>Hi</p>',
+        headers: {
+          'List-Unsubscribe':
+            '<https://marketing.example.com/api/v1/unsubscribe/one-click?token=abc>',
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+        }
+      },
+      fetchImpl as unknown as typeof fetch
+    )
+
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).headers).toEqual({
+      'List-Unsubscribe':
+        '<https://marketing.example.com/api/v1/unsubscribe/one-click?token=abc>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    })
+  })
+
   it('throws ZcMailSendError on non-2xx responses', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,

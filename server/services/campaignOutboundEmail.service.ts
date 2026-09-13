@@ -77,7 +77,10 @@ async function sendCampaignBatchViaZcMail(
         campaignId,
         user: params.user,
         source
-      })
+      }),
+      ...(version.headers && Object.keys(version.headers).length
+        ? { headers: version.headers }
+        : {})
     }
   })
 
@@ -188,7 +191,10 @@ export async function sendCampaignOutboundEmail(
         campaignId,
         user: params.user,
         source
-      })
+      }),
+      ...(params.headers && Object.keys(params.headers).length
+        ? { headers: params.headers }
+        : {})
     })
     const messageId = result.messageId || undefined
     const dbName = params.dbName?.trim()

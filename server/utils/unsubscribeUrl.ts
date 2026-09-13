@@ -37,3 +37,18 @@ export function buildUnsubscribeUrl(
   }
   return ''
 }
+
+/**
+ * HTTPS one-click URL for `List-Unsubscribe` (RFC 8058).
+ * Only the Marketing public API can accept Gmail/Yahoo's POST — do not fall back to the CRM SPA.
+ */
+export function buildOneClickUnsubscribeUrl(
+  dbName: string,
+  contactId: string,
+  clientKeyHash: string
+): string {
+  const token = signUnsubscribeToken({ db: dbName, c: String(contactId) }, clientKeyHash)
+  const base = getMarketingPublicBaseUrl()
+  if (!base) return ''
+  return `${base}/api/v1/unsubscribe/one-click?token=${encodeURIComponent(token)}`
+}

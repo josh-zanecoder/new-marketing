@@ -58,10 +58,20 @@ describe('sendCampaignOutboundBatch', () => {
       results: [{ status: 'sent', sesMessageId: 'ses-1' }]
     })
 
+    const listUnsubscribeHeaders = {
+      'List-Unsubscribe':
+        '<https://marketing.example.com/api/v1/unsubscribe/one-click?token=abc>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    }
     const result = await sendCampaignOutboundBatch({
       sender: { name: 'Acme', email: 'from@acme.com' },
       messageVersions: [
-        { to: [{ email: 'a@example.com' }], subject: 'Hi', htmlContent: '<p>Hi</p>' }
+        {
+          to: [{ email: 'a@example.com' }],
+          subject: 'Hi',
+          htmlContent: '<p>Hi</p>',
+          headers: listUnsubscribeHeaders
+        }
       ],
       tags: ['campaign:abc'],
       dbName: 'acme_db',
@@ -70,6 +80,9 @@ describe('sendCampaignOutboundBatch', () => {
 
     expect(result).toEqual({ messageIds: ['ses-1'], provider: 'ZC_MAIL' })
     expect(sendZcMailBulk).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(sendZcMailBulk).mock.calls[0]?.[0]?.recipients[0]?.headers).toEqual(
+      listUnsubscribeHeaders
+    )
     expect(sendCampaignBatchWithMessageVersions).not.toHaveBeenCalled()
   })
 

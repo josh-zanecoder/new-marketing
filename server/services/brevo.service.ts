@@ -24,6 +24,8 @@ export interface SendEmailParams {
   user?: string
   /** Explicit Brevo API key override (skips tenant/env resolution). */
   apiKey?: string
+  /** Custom email headers (List-Unsubscribe). */
+  headers?: Record<string, string>
 }
 
 const clientsByApiKey = new Map<string, BrevoClient>()
@@ -263,7 +265,10 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId?: 
         : {}),
       subject: params.subject,
       htmlContent: params.htmlContent,
-      ...(tags.length ? { tags } : {})
+      ...(tags.length ? { tags } : {}),
+      ...(params.headers && Object.keys(params.headers).length
+        ? { headers: params.headers }
+        : {})
     })
     const messageId = result?.messageId || undefined
 

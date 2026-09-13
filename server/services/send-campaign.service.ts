@@ -43,6 +43,7 @@ import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
+import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
 import {
   CAMPAIGN_RECIPIENT_STATUS_FAILED,
   CAMPAIGN_RECIPIENT_STATUS_PENDING,
@@ -842,6 +843,11 @@ export async function processBatch(
       const params = recipientBrevoParams(contact)
       const replyTo = buildReplyToFromContactOwner(contact, operatorUser, variableFallback)
       const sender = buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback)
+      const headers = listUnsubscribeHeadersForContact({
+        dbName: tenantDbNameForTags,
+        contactId: contact?._id ? String(contact._id) : undefined,
+        clientKeyHash: unsubscribeSigningSecret
+      })
       return {
         row: r,
         sender,
@@ -850,7 +856,8 @@ export async function processBatch(
           subject: subjectRendered,
           htmlContent: htmlRendered,
           ...(params ? { params } : {}),
-          ...(replyTo ? { replyTo } : {})
+          ...(replyTo ? { replyTo } : {}),
+          ...(headers ? { headers } : {})
         }
       }
     })

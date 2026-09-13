@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { getMarketingPublicBaseUrl } from '../marketingPublicBaseUrl'
-import { buildUnsubscribeUrl } from '../unsubscribeUrl'
+import { buildOneClickUnsubscribeUrl, buildUnsubscribeUrl } from '../unsubscribeUrl'
 
 vi.mock('../marketingPublicBaseUrl', () => ({
   getMarketingPublicBaseUrl: vi.fn(() => 'https://marketing.example.com')
@@ -41,5 +41,13 @@ describe('buildUnsubscribeUrl', () => {
   it('returns empty only when neither marketing base nor crmAppUrl is available', () => {
     vi.mocked(getMarketingPublicBaseUrl).mockReturnValue('')
     expect(buildUnsubscribeUrl('tenant_db', 'contact1', 'secret')).toBe('')
+  })
+
+  it('builds a one-click API URL only when marketing public base is set', () => {
+    expect(buildOneClickUnsubscribeUrl('tenant_db', 'contact1', 'secret')).toBe(
+      'https://marketing.example.com/api/v1/unsubscribe/one-click?token=signed.token'
+    )
+    vi.mocked(getMarketingPublicBaseUrl).mockReturnValue('')
+    expect(buildOneClickUnsubscribeUrl('tenant_db', 'contact1', 'secret')).toBe('')
   })
 })

@@ -88,6 +88,60 @@ describe('sendZcMailBulk', () => {
     vi.useRealTimers()
   })
 
+  it('forwards per-recipient List-Unsubscribe headers on bulk enqueue', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        text: async () => JSON.stringify({ jobId: 'job-2' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            job: {
+              id: 'job-2',
+              status: 'completed',
+              sent: 1,
+              failed: 0,
+              results: [{ status: 'sent', sesMessageId: 'ses-2' }]
+            }
+          })
+      })
+
+    await sendZcMailBulk(
+      {
+        baseUrl: 'http://localhost:3003',
+        apiKey: 'zcm_test',
+        tenant: 'acme',
+        recipients: [
+          {
+            to: 'a@example.com',
+            subject: 'Hi',
+            html: '<p>Hi</p>',
+            headers: {
+              'List-Unsubscribe':
+                '<https://marketing.example.com/api/v1/unsubscribe/one-click?token=abc>',
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+            }
+          }
+        ]
+      },
+      fetchImpl as unknown as typeof fetch
+    )
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1].body)) as {
+      recipients: Array<{ headers?: Record<string, string> }>
+    }
+    expect(body.recipients[0]?.headers).toEqual({
+      'List-Unsubscribe':
+        '<https://marketing.example.com/api/v1/unsubscribe/one-click?token=abc>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    })
+  })
+
   it('throws ZcMailSendError when enqueue fails', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
