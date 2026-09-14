@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+import { safeMarketingTenantPath } from '~~/shared/crmMarketingTabUrl'
 
 definePageMeta({
   layout: false
@@ -59,7 +60,8 @@ onMounted(async () => {
     const embed = useCookie<string | null>('marketing_crm_embed', cookieBase)
     embed.value = '1'
 
-    window.location.replace(`${window.location.origin}/tenant/dashboard`)
+    const next = safeMarketingTenantPath(route.query.next)
+    window.location.replace(`${window.location.origin}${next || '/tenant/dashboard'}`)
   } catch (e: unknown) {
     const msg = e instanceof Error && e.message ? e.message : ''
     errorMessage.value = msg
