@@ -4,7 +4,9 @@ import {
   mergeDynamicVariableValue,
   mergeRootWithUserAndRecipient,
   resolveUserSourceDynamicVariable,
-  setMergePath
+  resolveUserSourceFromSnapshot,
+  setMergePath,
+  type UserMergeSnapshot
 } from '../../../shared/utils/emailTemplateMerge'
 import type { ContactLean } from '@server/types/tenant/contact.model'
 import type { EmailDynamicVariableDoc, EmailDynamicVariableModel } from '@server/types/tenant/emailDynamicVariable.model'
@@ -13,7 +15,10 @@ import {
   contactLookupRecordForDynamicVariables,
   recipientFieldsFromContact
 } from './recipientFromContact'
-import { userMergeSnapshotFromContactOwner } from './tenantUserFromAuth'
+import {
+  mergeUserSnapshotsForEmail,
+  userMergeSnapshotFromContactOwner
+} from './tenantUserFromAuth'
 
 /** One enabled admin-defined token binding (DB row → merge path). */
 export type EmailDynamicVariableBinding = {
@@ -27,15 +32,22 @@ export type EmailDynamicVariableBinding = {
 /**
  * Builds the full object passed to `mergeMustacheTemplate`: `user`, `recipient`, plus custom keys
  * from tenant email dynamic variables.
- * `user.*` reflects the contact's CRM account owner only; per-variable `fallbackValue` applies
- * when owner/recipient data is missing (no logged-in user backfill).
+ * Default: contact CRM account owner, then `operatorUser`, then per-variable `fallbackValue`.
+ * Test sends pass `preferOperator` so the logged-in AE is first.
  */
 export function composeEmailMergeRoot(
   crmContact: ContactLean | null | undefined,
-  dynamicVariableBindings: EmailDynamicVariableBinding[]
+  dynamicVariableBindings: EmailDynamicVariableBinding[],
+  operatorUser?: UserMergeSnapshot | null,
+  preferOperator = false
 ): Record<string, unknown> {
   const recipientSnap = recipientFieldsFromContact(crmContact) ?? {}
-  const ownerUserFields = userMergeSnapshotFromContactOwner(crmContact)
+  const ownerUserFields = preferOperator
+    ? mergeUserSnapshotsForEmail(operatorUser, userMergeSnapshotFromContactOwner(crmContact))
+    : mergeUserSnapshotsForEmail(
+        userMergeSnapshotFromContactOwner(crmContact),
+        operatorUser
+      )
   const base = mergeRootWithUserAndRecipient(ownerUserFields, recipientSnap)
   const root = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
   const contactLookup = contactLookupRecordForDynamicVariables(crmContact ?? null)
@@ -51,7 +63,14 @@ export function composeEmailMergeRoot(
     }
     let resolved = ''
     if (v.sourceType === 'user') {
-      resolved = resolveUserSourceDynamicVariable(v.contactPath.trim(), crmContact ?? null)
+      const fromOwner = resolveUserSourceDynamicVariable(v.contactPath.trim(), crmContact ?? null)
+      const fromOperator = operatorUser
+        ? resolveUserSourceFromSnapshot(v.contactPath.trim(), operatorUser) ||
+          resolveUserSourceFromSnapshot(v.key.trim(), operatorUser)
+        : ''
+      resolved = preferOperator
+        ? fromOperator.trim() || fromOwner
+        : fromOwner.trim() || fromOperator
     } else if (contactLookup) {
       resolved = getMergeValue(contactLookup, v.contactPath.trim())
     }

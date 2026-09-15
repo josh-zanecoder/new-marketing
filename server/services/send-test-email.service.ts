@@ -164,7 +164,12 @@ export async function sendCampaignTestEmail(
       name: String(campaign.sender?.name ?? '').trim(),
       email: String(campaign.sender?.email ?? '').trim()
     }, operatorFallback, variableFallback)
-    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(
+      contact ?? null,
+      dynamicVariableBindings,
+      operatorFallback,
+      true
+    )
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -172,7 +177,10 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    replyTo = buildReplyToFromContactOwner(contact, operatorFallback, variableFallback)
+    replyTo =
+      buildReplyToFromContactOwner(null, operatorFallback) ??
+      buildReplyToFromContactOwner(contact) ??
+      buildReplyToFromContactOwner(null, undefined, variableFallback)
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
@@ -204,7 +212,7 @@ export async function sendCampaignTestEmail(
         : undefined
     }
     const contact = await previewContactForDraft(conn, draft)
-    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings, authSnap, true)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -216,7 +224,10 @@ export async function sendCampaignTestEmail(
       name: String(input.senderName ?? '').trim(),
       email: senderEmail
     }, authSnap, variableFallback)
-    replyTo = buildReplyToFromContactOwner(contact, authSnap, variableFallback)
+    replyTo =
+      buildReplyToFromContactOwner(null, authSnap) ??
+      buildReplyToFromContactOwner(contact) ??
+      buildReplyToFromContactOwner(null, undefined, variableFallback)
   }
 
   const cur = mergeRoot.recipient

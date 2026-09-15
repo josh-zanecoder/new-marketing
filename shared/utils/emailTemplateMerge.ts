@@ -117,6 +117,67 @@ function formatOwnerMetadataMergeValue(path: string, raw: unknown): string {
   return s
 }
 
+function fullNameFromParts(firstName?: string, lastName?: string): string {
+  return [firstName, lastName].map((s) => String(s ?? '').trim()).filter(Boolean).join(' ')
+}
+
+function canonicalizeUserSourceField(pathOrKey: string): string {
+  const stripped = stripUserMergePrefix(pathOrKey).toLowerCase().replace(/^metadata\./, '')
+  if (!stripped) return ''
+  if (
+    stripped === 'name' ||
+    stripped === 'fullname' ||
+    stripped === 'aefullname' ||
+    stripped.endsWith('.name') ||
+    stripped.endsWith('.fullname')
+  ) {
+    return 'name'
+  }
+  if (
+    stripped === 'email' ||
+    stripped === 'owneremail' ||
+    stripped === 'aeemail' ||
+    stripped.endsWith('.email') ||
+    stripped.endsWith('owneremail')
+  ) {
+    return 'email'
+  }
+  if (
+    stripped === 'phone' ||
+    stripped === 'ownerphone' ||
+    stripped === 'aephonenumber' ||
+    stripped === 'aephone' ||
+    stripped.endsWith('.phone') ||
+    stripped.endsWith('ownerphone')
+  ) {
+    return 'phone'
+  }
+  if (
+    stripped === 'firstname' ||
+    stripped === 'ownerfirstname' ||
+    stripped.endsWith('.firstname') ||
+    stripped.endsWith('ownerfirstname')
+  ) {
+    return 'firstName'
+  }
+  if (
+    stripped === 'lastname' ||
+    stripped === 'ownerlastname' ||
+    stripped.endsWith('.lastname') ||
+    stripped.endsWith('ownerlastname')
+  ) {
+    return 'lastName'
+  }
+  return stripped
+}
+
+function ownerFullNameFromMetadata(metadata: Record<string, unknown>): string {
+  const first =
+    typeof metadata.ownerFirstName === 'string' ? metadata.ownerFirstName.trim() : ''
+  const last = typeof metadata.ownerLastName === 'string' ? metadata.ownerLastName.trim() : ''
+  return fullNameFromParts(first, last)
+}
+
 /** Builds `user.*` merge fields from CRM account owner metadata on a contact. */
 export function userMergeSnapshotFromContactOwnerMetadata(
   metadata: Record<string, unknown> | null | undefined
@@ -151,6 +212,10 @@ export function resolveUserSourceDynamicVariable(
   const meta = contact?.metadata
   if (!meta || typeof meta !== 'object') return ''
 
+  if (canonicalizeUserSourceField(contactPath) === 'name') {
+    return ownerFullNameFromMetadata(meta)
+  }
+
   if (path.startsWith('metadata.')) {
     return formatOwnerMetadataMergeValue(path, getMergeValue({ metadata: meta }, path))
   }
@@ -159,6 +224,24 @@ export function resolveUserSourceDynamicVariable(
   if (ownerMetaKey) {
     return formatOwnerMetadataMergeValue(path, meta[ownerMetaKey])
   }
+  return ''
+}
+
+/**
+ * Resolves the same user-source tokens from a session / campaign operator snapshot
+ * (test send + preview backfill when the sample contact has no AE).
+ */
+export function resolveUserSourceFromSnapshot(
+  pathOrKey: string,
+  snapshot: UserMergeSnapshot | null | undefined
+): string {
+  if (!snapshot) return ''
+  const field = canonicalizeUserSourceField(pathOrKey)
+  if (field === 'name') return fullNameFromParts(snapshot.firstName, snapshot.lastName)
+  if (field === 'email') return formatOwnerMetadataMergeValue('email', snapshot.email)
+  if (field === 'phone') return formatOwnerMetadataMergeValue('phone', snapshot.phone)
+  if (field === 'firstName') return String(snapshot.firstName ?? '').trim()
+  if (field === 'lastName') return String(snapshot.lastName ?? '').trim()
   return ''
 }
 

@@ -2,30 +2,42 @@ import {
   type UserMergeSnapshot,
   userMergeSnapshotFromContactOwnerMetadata
 } from '../../../shared/utils/emailTemplateMerge'
-import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
+import {
+  isFirebaseTenantAuthContext,
+  isTenantApiKeyAuthContext,
+  tenantUserEmailFromAuth
+} from '@server/tenant/registry-auth'
 
 /**
- * Maps the current tenant API session to `user.*` merge fields (sender / operator).
+ * Maps the current tenant session to `user.*` merge fields (sender / operator).
  * Does not query the database — reads `event.context.auth` shape only.
  */
 export function tenantUserFieldsFromAuth(auth: unknown): UserMergeSnapshot | undefined {
-  if (!isTenantApiKeyAuthContext(auth)) return undefined
-  const a = auth
-  const raw = a as Record<string, unknown>
   const out: UserMergeSnapshot = {}
-  const firstName = a.tenantUserFirstName || (typeof raw.firstName === 'string' ? raw.firstName : '')
-  const lastName = a.tenantUserLastName || (typeof raw.lastName === 'string' ? raw.lastName : '')
-  const email = a.tenantUserEmail || (typeof raw.email === 'string' ? raw.email : '')
-  const phone = a.tenantUserPhone || (typeof raw.phone === 'string' ? raw.phone : '')
-  const role =
-    a.tenantUserRole
-    || (typeof raw.tenantRole === 'string' ? raw.tenantRole : '')
-    || (typeof raw.role === 'string' ? raw.role : '')
-  if (firstName) out.firstName = firstName
-  if (lastName) out.lastName = lastName
-  if (email) out.email = email
-  if (phone) out.phone = phone
-  if (role) out.role = role
+  const emailFromAuth = tenantUserEmailFromAuth(auth)
+  if (emailFromAuth) out.email = emailFromAuth
+
+  if (isTenantApiKeyAuthContext(auth)) {
+    const a = auth
+    const raw = a as Record<string, unknown>
+    const firstName = a.tenantUserFirstName || (typeof raw.firstName === 'string' ? raw.firstName : '')
+    const lastName = a.tenantUserLastName || (typeof raw.lastName === 'string' ? raw.lastName : '')
+    const phone = a.tenantUserPhone || (typeof raw.phone === 'string' ? raw.phone : '')
+    const crmRole =
+      a.tenantUserRole
+      || (typeof raw.tenantRole === 'string' ? raw.tenantRole : '')
+    if (!out.email) {
+      const rawEmail = typeof raw.email === 'string' ? raw.email.trim().toLowerCase() : ''
+      if (rawEmail) out.email = rawEmail
+    }
+    if (firstName) out.firstName = firstName
+    if (lastName) out.lastName = lastName
+    if (phone) out.phone = phone
+    if (crmRole && crmRole !== 'tenant') out.role = crmRole
+  } else if (isFirebaseTenantAuthContext(auth) && auth.email?.trim()) {
+    if (!out.email) out.email = auth.email.trim().toLowerCase()
+  }
+
   return Object.keys(out).length ? out : undefined
 }
 
