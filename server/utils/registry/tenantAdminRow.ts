@@ -4,7 +4,10 @@ import {
   TENANT_EMAIL_PROVIDER_ZC_MAIL,
   type TenantEmailProvider
 } from '@server/constants/emailProvider'
-import { normalizeZcMailBaseUrl } from '@server/utils/zcmail/zcMailFromAddress'
+import {
+  parseCampaignFromAddressMode,
+  type CampaignFromAddressMode
+} from '~~/shared/campaignFromAddressMode'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -23,6 +26,12 @@ export function parseRegistryCampaignSenderFields(doc: RegistryTenantDoc): {
     typeof nameRaw === 'string' && nameRaw.trim() ? nameRaw.trim() : null
 
   return { defaultCampaignSenderEmail, defaultCampaignSenderName }
+}
+
+export function parseRegistryCampaignFromAddressMode(
+  doc: RegistryTenantDoc
+): CampaignFromAddressMode {
+  return parseCampaignFromAddressMode(doc.campaignFromAddressMode)
 }
 
 export function normalizeCampaignSenderEmailInput(
@@ -305,6 +314,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
 
   const { defaultCampaignSenderEmail, defaultCampaignSenderName } =
     parseRegistryCampaignSenderFields(doc)
+  const campaignFromAddressMode = parseRegistryCampaignFromAddressMode(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
   const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
     parseRegistryBrevoWebhookSecret(doc)
@@ -322,6 +332,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     kafkaOutboundTopic,
     defaultCampaignSenderEmail,
     defaultCampaignSenderName,
+    campaignFromAddressMode,
     brevoApiKeyConfigured,
     brevoApiKeyPrefix,
     brevoWebhookSecretConfigured,

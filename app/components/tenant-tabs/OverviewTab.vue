@@ -78,6 +78,14 @@
             </span>
           </template>
           <span v-else class="text-slate-400">Global default</span>
+          <p class="mt-1 text-xs font-normal text-slate-500">
+            From:
+            {{
+              tenant.campaignFromAddressMode === 'contact_owner'
+                ? 'contact owner (same as Reply-To)'
+                : 'default sender'
+            }}
+          </p>
         </dd>
       </div>
 
@@ -214,6 +222,7 @@ defineProps<{
     kafkaOutboundTopic: string | null
     defaultCampaignSenderEmail: string | null
     defaultCampaignSenderName: string | null
+    campaignFromAddressMode?: 'default' | 'contact_owner'
     brevoApiKeyConfigured?: boolean
     brevoApiKeyPrefix?: string | null
     brevoWebhookSecretConfigured?: boolean

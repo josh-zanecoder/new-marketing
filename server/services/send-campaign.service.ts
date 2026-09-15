@@ -36,9 +36,11 @@ import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
+  applyCampaignFromAddressMode,
   buildReplyToFromContactOwner,
   buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
+import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
@@ -767,6 +769,7 @@ export async function processBatch(
     let brevoTenantTagValue: string | undefined
     let unsubscribeSigningSecret: string | undefined
     let unsubscribeCrmAppUrl: string | undefined
+    let campaignFromAddressMode: CampaignFromAddressMode = 'default'
     if (tenantDbNameForTags) {
       brevoTenantTagValue = tenantDbNameForTags
       try {
@@ -776,6 +779,7 @@ export async function processBatch(
         if (tid) brevoTenantTagValue = tid
         if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
         if (row?.crmAppUrl) unsubscribeCrmAppUrl = row.crmAppUrl
+        if (row?.campaignFromAddressMode) campaignFromAddressMode = row.campaignFromAddressMode
       } catch (err) {
         console.warn('[SendCampaign] registry lookup for Brevo tenant tag failed', {
           dbName: tenantDbNameForTags,
@@ -841,7 +845,11 @@ export async function processBatch(
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)
       const replyTo = buildReplyToFromContactOwner(contact, operatorUser, variableFallback)
-      const sender = buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback)
+      const sender = applyCampaignFromAddressMode(
+        buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback),
+        replyTo,
+        campaignFromAddressMode
+      )
       return {
         row: r,
         sender,

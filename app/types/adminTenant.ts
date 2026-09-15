@@ -13,6 +13,8 @@ export interface AdminTenantRow {
   kafkaOutboundTopic: string | null
   /** Default campaign From email; null uses global fallback. */
   defaultCampaignSenderEmail: string | null
+  /** From address: tenant default sender, or per-recipient contact owner (same as Reply-To). */
+  campaignFromAddressMode: 'default' | 'contact_owner'
   /** Default campaign From name; null uses global fallback. */
   defaultCampaignSenderName: string | null
   /** True when a custom Brevo API key is stored for this tenant. */

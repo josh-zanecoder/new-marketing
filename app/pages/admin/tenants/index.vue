@@ -309,10 +309,14 @@ const tenantsLoading = ref(true)
 function campaignSenderLabel(t: AdminTenantRow): string {
   const name = t.defaultCampaignSenderName?.trim()
   const email = t.defaultCampaignSenderEmail?.trim()
-  if (name && email) return `${name} <${email}>`
-  if (email) return email
-  if (name) return name
-  return '—'
+  let sender = '—'
+  if (name && email) sender = `${name} <${email}>`
+  else if (email) sender = email
+  else if (name) sender = name
+  if (t.campaignFromAddressMode === 'contact_owner') {
+    return sender === '—' ? 'Contact owner' : `Contact owner · fallback ${sender}`
+  }
+  return sender
 }
 
 function openAddTenantModal() {
@@ -426,6 +430,7 @@ async function fetchTenants() {
         kafkaOutboundTopic: string | null
         defaultCampaignSenderEmail: string | null
         defaultCampaignSenderName: string | null
+        campaignFromAddressMode?: 'default' | 'contact_owner'
         brevoApiKeyConfigured?: boolean
         brevoApiKeyPrefix?: string | null
         brevoWebhookSecretConfigured?: boolean
@@ -452,6 +457,8 @@ async function fetchTenants() {
       kafkaOutboundTopic: t.kafkaOutboundTopic ?? null,
       defaultCampaignSenderEmail: t.defaultCampaignSenderEmail ?? null,
       defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
+      campaignFromAddressMode:
+        t.campaignFromAddressMode === 'contact_owner' ? 'contact_owner' : 'default',
       brevoApiKeyConfigured: Boolean(t.brevoApiKeyConfigured),
       brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
       brevoWebhookSecretConfigured: Boolean(t.brevoWebhookSecretConfigured),
@@ -477,6 +484,7 @@ async function handleAddTenantSubmit(payload: {
   crmAppUrl?: string
   defaultCampaignSenderEmail?: string | null
   defaultCampaignSenderName?: string | null
+  campaignFromAddressMode?: 'default' | 'contact_owner'
   brevoApiKey?: string | null
   brevoWebhookSecret?: string | null
   emailProvider?: 'BREVO' | 'ZC_MAIL'
@@ -506,6 +514,7 @@ async function handleEditTenantSubmit(payload: {
   tenantId: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
+  campaignFromAddressMode: 'default' | 'contact_owner'
   brevoApiKey?: string | null
   brevoWebhookSecret?: string | null
   emailProvider?: 'BREVO' | 'ZC_MAIL'

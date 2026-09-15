@@ -42,6 +42,7 @@ export function useAdminTenantsCreateDb() {
     crmAppUrl?: string
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    campaignFromAddressMode?: 'default' | 'contact_owner'
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
     emailProvider?: string | null
@@ -69,6 +70,7 @@ export function useAdminTenantsCreateDb() {
             crmAppUrl: payload.crmAppUrl?.trim() ? payload.crmAppUrl.trim() : null,
             defaultCampaignSenderEmail: payload.defaultCampaignSenderEmail ?? null,
             defaultCampaignSenderName: payload.defaultCampaignSenderName ?? null,
+            campaignFromAddressMode: payload.campaignFromAddressMode ?? 'default',
             ...(payload.brevoApiKey?.trim()
               ? { brevoApiKey: payload.brevoApiKey.trim() }
               : {}),
@@ -135,6 +137,7 @@ export function useAdminTenantsCreateDb() {
       tenantId: string | null
       defaultCampaignSenderEmail: string | null
       defaultCampaignSenderName: string | null
+      campaignFromAddressMode?: 'default' | 'contact_owner'
       brevoApiKey?: string | null
       brevoWebhookSecret?: string | null
       emailProvider?: string | null
