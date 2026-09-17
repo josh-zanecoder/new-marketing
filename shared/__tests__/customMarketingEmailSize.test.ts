@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES,
+  CUSTOM_MARKETING_MAX_IMAGE_BYTES,
   CUSTOM_MARKETING_SAFE_HTML_BYTES,
   GMAIL_CLIP_HTML_BYTES,
   customMarketingGmailClipWarning,
@@ -10,6 +12,11 @@ import {
 } from '../customMarketingEmailSize'
 
 describe('customMarketingEmailSize', () => {
+  it('caps source uploads at 2MB and compressed images at 999KB', () => {
+    assert.equal(CUSTOM_MARKETING_MAX_IMAGE_BYTES, 2 * 1024 * 1024)
+    assert.equal(CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES, 999 * 1024)
+  })
+
   it('measures utf8 byte length', () => {
     assert.equal(utf8ByteLength('abc'), 3)
     assert.ok(utf8ByteLength('é') >= 2)

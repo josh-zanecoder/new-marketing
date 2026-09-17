@@ -105,7 +105,7 @@ If you prefer not to open the whole bucket, keep prevent-public-access off and r
 | Variable picker (body) | `app/composables/useCustomMarketingVariablePicker.ts` |
 | Quick tips panel | `app/components/tenant/CustomMarketingEditorTips.vue`, `app/composables/useCustomMarketingEditorTips.ts`, `shared/customMarketingEditorTips.ts` |
 | External drop vs reposition helper | `shared/customMarketingImageDrag.ts` |
-| Image compression | `app/utils/compressCustomMarketingImage.ts` |
+| Image compression | `app/utils/compressCustomMarketingImage.ts` — source max **2MB**; soft cap after JPEG compress **999KB** (see `CUSTOM_MARKETING_*` in `customMarketingEmailSize.ts`) |
 | GCS upload + HTML rewrite | `server/services/customMarketingImageUpload.service.ts` |
 | Image upload API | `server/api/v1/tenant/custom-marketing/images.post.ts` |
 | Paragraph indent | `shared/customMarketingParagraphIndent.ts` |

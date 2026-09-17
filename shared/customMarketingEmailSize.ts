@@ -14,7 +14,7 @@ export const CUSTOM_MARKETING_IMAGE_MAX_EDGE = 960
 export const CUSTOM_MARKETING_IMAGE_JPEG_QUALITY = 0.72
 
 /** Soft cap for a single compressed image payload (decoded bytes ≈ raw JPEG). */
-export const CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES = 48 * 1024
+export const CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES = 999 * 1024
 
 export function utf8ByteLength(value: string): number {
   if (typeof TextEncoder !== 'undefined') {
