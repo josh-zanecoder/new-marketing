@@ -4,8 +4,18 @@ import mongoose from 'mongoose'
 const clientConnections = new Map<string, mongoose.Connection>()
 let registryConnectInFlight: Promise<mongoose.Connection> | null = null
 
+/** Driver closed the client (`client.close()`). It will not reconnect on the next query. */
+export function isClosedMongoTopologyError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  return (
+    err.name === 'MongoTopologyClosedError' ||
+    err.message.toLowerCase().includes('topology is closed')
+  )
+}
+
 export function isTransientMongoError(err: unknown): boolean {
   if (!(err instanceof Error)) return false
+  if (isClosedMongoTopologyError(err)) return true
   const msg = err.message.toLowerCase()
   return (
     err.name === 'MongoNetworkError' ||
@@ -61,23 +71,30 @@ function resolveRegistryMongoConfig(): { uri: string; dbName: string } {
   }
 }
 
-/** Drop the default registry pool so the next getRegistryConnection() opens a fresh one. */
+/**
+ * Drop the default registry pool so the next getRegistryConnection() opens a fresh one.
+ * After MongoTopologyClosedError, readyState can stay connected. mongoose.connect() then
+ * returns that same handle, and the next query fails with "Topology is closed" again.
+ */
 export async function invalidateRegistryConnection(): Promise<void> {
   registryConnectInFlight = null
   const conn = mongoose.connection
-  if (conn.readyState === 0 || conn.readyState === 99) return
-  try {
-    await conn.close()
-  } catch {
-    /* ignore */
-  }
-  // readyState can stay 1 after the socket is dead; disconnect fully resets the default pool.
-  if (mongoose.connection.readyState !== 0 && mongoose.connection.readyState !== 99) {
+  if (conn.readyState !== 0 && conn.readyState !== 99) {
     try {
-      await mongoose.disconnect()
+      await conn.close()
     } catch {
       /* ignore */
     }
+    if (mongoose.connection.readyState !== 0 && mongoose.connection.readyState !== 99) {
+      try {
+        await mongoose.disconnect()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  if (mongoose.connection.readyState !== 0 && mongoose.connection.readyState !== 99) {
+    mongoose.connection.readyState = 0
   }
 }
 

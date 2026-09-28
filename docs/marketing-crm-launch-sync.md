@@ -44,8 +44,8 @@ Previously, handler errors were logged and **swallowed** → Kafka committed the
 | Mechanism | Effect |
 |-----------|--------|
 | **Re-throw** on inbound handler failure | Failed chunk offset is **not** committed |
-| **3× retry** on sync upsert for transient Mongo errors | Covers `EPIPE`, `ECONNRESET`, `MongoNetworkError`, `MongoNotConnectedError`, `MongooseServerSelectionError`, `ReplicaSetNoPrimary` |
-| **Registry connect** (`server/lib/mongoose.ts`) | Single-flight connect, 3× retry, `invalidateRegistryConnection` on failure, `maxPoolSize` default **15** |
+| **3× retry** on sync upsert for transient Mongo errors | Covers `EPIPE`, `ECONNRESET`, `MongoNetworkError`, `MongoNotConnectedError`, `MongoTopologyClosedError`, `MongooseServerSelectionError`, `ReplicaSetNoPrimary` |
+| **Registry connect** (`server/lib/mongoose.ts`) | Single-flight connect, 3× retry, `invalidateRegistryConnection` on failure (forces `readyState` back to disconnected after `MongoTopologyClosedError` so the next connect is a new client), `maxPoolSize` default **15**. Test: `server/lib/__tests__/isTransientMongoError.test.ts` |
 | **Sync upsert** (`inboundContacts.ts`) | One **`bulkWrite`** per chunk (`ordered: false`) — upsert by `externalId` + `source: crm-kafka` |
 | **Consumer restart** after run loop exit | Restarts after `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` (default 30s) |
 
