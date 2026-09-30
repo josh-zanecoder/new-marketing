@@ -9,6 +9,7 @@ import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 import { listTenantCampaignsForIndex } from '@server/utils/admin/listTenantCampaignsForIndex'
+import { campaignCreatorLabel } from '../../../shared/campaignCreatorLabel'
 
 export const ADMIN_CAMPAIGN_ACTIVE_STATUSES = [
   'Sending',
@@ -79,6 +80,13 @@ export type AdminCampaignIndexItem = {
   recipientsCount: number
   createdAt: string
   updatedAt: string
+  ownerEmail?: string
+  createdBy?: string
+  creator?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+  }
 }
 
 function statusesForView(view: AdminCampaignView): readonly string[] {
@@ -121,10 +129,12 @@ export async function listAdminCampaignsForIndex(options?: {
       for (const c of rows) {
         if (statusFilter && statusFilter !== 'all' && c.status !== statusFilter) continue
         const name = typeof c.name === 'string' ? c.name : 'Untitled'
+        const ownerLabel = campaignCreatorLabel(c).toLowerCase()
         if (
           search &&
           !name.toLowerCase().includes(search) &&
-          !tenant.name.toLowerCase().includes(search)
+          !tenant.name.toLowerCase().includes(search) &&
+          !ownerLabel.includes(search)
         ) {
           continue
         }

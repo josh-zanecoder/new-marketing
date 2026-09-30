@@ -31,12 +31,14 @@ import {
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
 import { sendCampaignOutboundEmail } from './campaignOutboundEmail.service'
+import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
   campaignId?: string
   subject?: string
+  previewText?: string
   senderName?: string
   senderEmail?: string
   templateHtml?: string
@@ -134,6 +136,7 @@ export async function sendCampaignTestEmail(
   const variableFallback = userMergeSnapshotFromDynamicVariableFallbacks(dynamicVariableBindings)
 
   const campaignId = String(input.campaignId ?? '').trim()
+  let previewTextSource = String(input.previewText ?? '')
   let subject: string
   let templateHtml: string
   let sender: { name: string; email: string }
@@ -153,6 +156,7 @@ export async function sendCampaignTestEmail(
 
     templateHtml = await resolveCampaignTemplateHtml(EmailTemplate as EmailTemplateModel, campaign)
     subject = String(campaign.subject ?? '').trim()
+    previewTextSource = String(campaign.previewText ?? previewTextSource)
     if (!templateHtml) {
       throw createError({ statusCode: 400, message: 'Campaign has no email design' })
     }
@@ -233,7 +237,11 @@ export async function sendCampaignTestEmail(
   }
 
   const subjectRendered = mergeMustacheTemplate(testSubjectLine(subject), mergeRoot)
-  const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+  const previewRendered = mergeMustacheTemplate(previewTextSource, mergeRoot)
+  const htmlRendered = applyEmailPreviewText(
+    mergeMustacheTemplate(templateHtml, mergeRoot),
+    previewRendered
+  )
 
   const userForTag =
     authSnap?.email?.trim() ||

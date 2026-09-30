@@ -307,6 +307,11 @@ const previewSubject = computed(() => {
   if (!sub) return ''
   return mergeMustacheTemplate(sub, mergeRoot.value)
 })
+const previewPreviewText = computed(() => {
+  const text = campaign.value?.previewText
+  if (!text?.trim()) return ''
+  return mergeMustacheTemplate(text, mergeRoot.value)
+})
 const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
 
 const showSkeleton = computed(
@@ -840,6 +845,12 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                       {{ previewSubject || '–' }}
                     </dd>
                   </div>
+                  <div v-if="previewPreviewText" class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Preview text</dt>
+                    <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
+                      {{ previewPreviewText }}
+                    </dd>
+                  </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Recipients</dt>
                     <dd class="text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
@@ -935,6 +946,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               :thumbnail-html="campaign.templateHtml"
               :title="previewTitle"
               :subject="previewSubject"
+              :preview-text="previewPreviewText"
               summary="Preview with merge tags applied from your recipients."
             >
               <template #actions>

@@ -15,6 +15,7 @@ import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/camp
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
+import { normalizeEmailPreviewText } from '~~/shared/emailPreviewText'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     senderName: string
     senderEmail: string
     subject: string
+    previewText?: string
     recipientsType?: 'manual' | 'list'
     recipientsListId?: string
     /** Contact `_id` strings (manual audience). */
@@ -104,6 +106,7 @@ export default defineEventHandler(async (event) => {
     recipientsType,
     recipientsListId,
     subject: body.subject?.trim() || '',
+    previewText: normalizeEmailPreviewText(body.previewText),
     status: 'Draft',
     clientId: ''
   }

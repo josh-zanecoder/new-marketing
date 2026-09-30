@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
       mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
     )
     .select(
-      '_id name sender recipientsType recipientsListId emailTemplate subject mergeUserSnapshot'
+      '_id name sender recipientsType recipientsListId emailTemplate subject previewText mergeUserSnapshot'
     )
     .lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -77,6 +77,7 @@ export default defineEventHandler(async (event) => {
     recipientsListId: source.recipientsListId || '',
     emailTemplate: emailTemplateId,
     subject: source.subject || '',
+    previewText: source.previewText?.trim() || '',
     status: 'Draft',
     clientId: '',
     ...(mergeSnap ? { mergeUserSnapshot: mergeSnap } : {}),

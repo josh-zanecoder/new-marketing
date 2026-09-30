@@ -19,7 +19,7 @@ export async function fetchAdminCampaignDetail(conn: Connection, campaignId: str
   const campaign = await (Campaign as CampaignModel)
     .findOne({ _id: id })
     .select(
-      '_id name sender recipientsType recipientsListId subject status scheduledAt emailTemplate mergeUserSnapshot replyTo createdAt updatedAt'
+      '_id name sender recipientsType recipientsListId subject previewText status scheduledAt emailTemplate mergeUserSnapshot replyTo metadata createdBy createdAt updatedAt'
     )
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -118,6 +118,7 @@ export async function fetchAdminCampaignDetail(conn: Connection, campaignId: str
       recipientsType: campaign.recipientsType,
       recipientsListId: campaign.recipientsListId,
       subject: campaign.subject,
+      previewText: campaign.previewText?.trim() || '',
       status: campaign.status,
       scheduledAt: campaign.scheduledAt
         ? new Date(campaign.scheduledAt).toISOString()
@@ -130,6 +131,8 @@ export async function fetchAdminCampaignDetail(conn: Connection, campaignId: str
       saveHtmlToLibrary,
       mergeUserSnapshot: campaign.mergeUserSnapshot,
       replyTo: campaign.replyTo,
+      ownerEmail: campaign.metadata?.ownerEmail?.trim() || undefined,
+      createdBy: campaign.createdBy?.trim() || undefined,
       createdAt: campaign.createdAt
         ? new Date(campaign.createdAt).toISOString()
         : '',

@@ -8,6 +8,8 @@ const props = withDefaults(
     thumbnailHtml?: string
     title?: string
     subject?: string
+    /** Inbox line shown under the subject. */
+    previewText?: string
     summary?: string
     emptyMessage?: string
     /** Flat layout when nested inside the campaign wizard card. */
@@ -19,6 +21,7 @@ const props = withDefaults(
     thumbnailHtml: '',
     title: 'Email preview',
     subject: '',
+    previewText: '',
     summary: '',
     emptyMessage: 'No email design selected yet.',
     embedded: false,
@@ -34,6 +37,7 @@ useMarketingScrollLock(previewModalOpen)
 const hasHtml = computed(() => Boolean(props.html?.trim()))
 const thumbnailSource = computed(() => props.thumbnailHtml?.trim() || props.html?.trim() || '')
 const subjectDisplay = computed(() => props.subject?.trim() || 'No subject')
+const previewTextDisplay = computed(() => props.previewText?.trim() || '')
 const srcdoc = computed(() => campaignEmailPreviewSrcdoc(props.html || ''))
 
 const rootClass = computed(() =>
@@ -116,6 +120,9 @@ onBeforeUnmount(() => {
         <p v-if="subject?.trim()" class="mt-1 line-clamp-2 text-sm text-slate-600 sm:truncate" :title="subjectDisplay">
           Subject: {{ subjectDisplay }}
         </p>
+        <p v-if="previewTextDisplay" class="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate" :title="previewTextDisplay">
+          {{ previewTextDisplay }}
+        </p>
       </div>
       <div class="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-[11rem] sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end">
         <slot name="actions" />
@@ -188,6 +195,9 @@ onBeforeUnmount(() => {
             </p>
             <p class="mt-1 line-clamp-2 text-sm text-slate-600 sm:truncate sm:text-base" :title="subjectDisplay">
               Subject: {{ subjectDisplay }}
+            </p>
+            <p v-if="previewTextDisplay" class="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate" :title="previewTextDisplay">
+              {{ previewTextDisplay }}
             </p>
           </div>
           <button

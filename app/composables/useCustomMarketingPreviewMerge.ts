@@ -5,6 +5,7 @@ import { useTenantMarketingApi } from '~/composables/useTenantMarketingApi'
 
 export type CustomMarketingPreviewMergeBinders = {
   previewSubject: ComputedRef<string>
+  previewPreviewText: ComputedRef<string>
   previewBodyHtml: ComputedRef<string>
   mergePending: Ref<boolean>
   refreshPreviewMerge: () => Promise<void>
@@ -20,6 +21,7 @@ export function useCustomMarketingPreviewMerge(options: {
   previewOpen: Ref<boolean>
   recipientListId: Ref<string> | ComputedRef<string> | string
   subject: Ref<string> | ComputedRef<string> | string
+  previewText?: Ref<string> | ComputedRef<string> | string
   bodyHtml: Ref<string> | ComputedRef<string> | string
 }): CustomMarketingPreviewMergeBinders {
   const marketingApi = useTenantMarketingApi()
@@ -64,6 +66,14 @@ export function useCustomMarketingPreviewMerge(options: {
     )
   )
 
+  const previewPreviewText = computed(() =>
+    renderCustomMarketingPreviewTemplate(
+      readString(options.previewText ?? ''),
+      mergeRoot.value,
+      readString(options.recipientListId)
+    )
+  )
+
   const previewBodyHtml = computed(() => {
     const raw = readString(options.bodyHtml).trim() || '<p></p>'
     return renderCustomMarketingPreviewTemplate(
@@ -73,5 +83,5 @@ export function useCustomMarketingPreviewMerge(options: {
     )
   })
 
-  return { previewSubject, previewBodyHtml, mergePending, refreshPreviewMerge }
+  return { previewSubject, previewPreviewText, previewBodyHtml, mergePending, refreshPreviewMerge }
 }

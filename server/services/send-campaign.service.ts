@@ -40,6 +40,7 @@ import {
   buildSenderFromContactOwner
 } from '@server/utils/email/replyToFromContactMetadata'
 import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
+import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignBatchBrevoIdempotencyKey } from '../utils/campaignSend/campaignBatchBrevoIdempotencyKey'
 import { claimCampaignRecipientBatch } from '../utils/campaignSend/claimCampaignRecipientBatch'
@@ -837,7 +838,11 @@ export async function processBatch(
         }
       }
       const subjectRendered = mergeMustacheTemplate(campaign.subject || '(No subject)', mergeRoot)
-      const htmlRendered = mergeMustacheTemplate(templateHtml, mergeRoot)
+      const previewRendered = mergeMustacheTemplate(campaign.previewText || '', mergeRoot)
+      const htmlRendered = applyEmailPreviewText(
+        mergeMustacheTemplate(templateHtml, mergeRoot),
+        previewRendered
+      )
       const name =
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)

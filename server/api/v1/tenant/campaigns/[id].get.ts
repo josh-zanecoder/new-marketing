@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const campaign = await (Campaign as CampaignModel)
     .findOne(mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth))
     .select(
-      '_id name sender recipientsType recipientsListId subject status scheduledAt emailTemplate mergeUserSnapshot replyTo createdAt updatedAt'
+      '_id name sender recipientsType recipientsListId subject previewText status scheduledAt emailTemplate mergeUserSnapshot replyTo metadata createdBy createdAt updatedAt'
     )
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -129,6 +129,7 @@ export default defineEventHandler(async (event) => {
       recipientsType: campaign.recipientsType,
       recipientsListId: campaign.recipientsListId,
       subject: campaign.subject,
+      previewText: campaign.previewText?.trim() || '',
       status: campaign.status,
       scheduledAt: campaign.scheduledAt
         ? new Date(campaign.scheduledAt).toISOString()
@@ -141,6 +142,8 @@ export default defineEventHandler(async (event) => {
       saveHtmlToLibrary,
       mergeUserSnapshot: campaign.mergeUserSnapshot,
       replyTo: campaign.replyTo,
+      ownerEmail: campaign.metadata?.ownerEmail?.trim() || undefined,
+      createdBy: campaign.createdBy?.trim() || undefined,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt
     }

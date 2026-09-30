@@ -52,6 +52,7 @@ export function useCustomMarketingCompose() {
   } = useUnsubscribeFooterAppendedModal()
 
   const subject = ref(CUSTOM_MARKETING_DEFAULT_SUBJECT)
+  const previewText = ref('')
   const body = ref(CUSTOM_MARKETING_DEFAULT_BODY_HTML)
   const contentSource = ref<CustomMarketingContentSource>('write')
   const uploadedHtml = ref('')
@@ -73,6 +74,11 @@ export function useCustomMarketingCompose() {
   const scheduleLocal = ref('')
   const scheduleError = ref('')
   const scheduleSubmitting = ref(false)
+  const saveTemplateOpen = ref(false)
+  const saveTemplateName = ref('')
+  const saveTemplateError = ref('')
+  const saveTemplatePending = ref(false)
+  const toast = useAppToast()
 
   useMarketingScrollLock(scheduleModalOpen)
 
@@ -103,6 +109,20 @@ export function useCustomMarketingCompose() {
     if (firstRecipientError.value) return 'Could not load recipient email'
     return 'This list has no contacts yet'
   })
+
+  const canSaveTemplate = computed(
+    () =>
+      subject.value.trim().length > 0
+      && isCustomMarketingContentReady({
+        contentSource: contentSource.value,
+        bodyHtml: body.value,
+        uploadedHtml: uploadedHtml.value
+      })
+      && !isSending.value
+      && !scheduleSubmitting.value
+      && !saveTemplatePending.value
+      && !uploadPending.value
+  )
 
   const canSend = computed(
     () =>
@@ -317,6 +337,7 @@ export function useCustomMarketingCompose() {
       senderName: senderName.value,
       senderEmail: senderEmail.value,
       subject: subject.value.trim(),
+      previewText: previewText.value.trim(),
       recipientsType: 'list',
       recipientsListId: recipientsListId.value.trim(),
       templateHtml: html,
@@ -379,6 +400,55 @@ export function useCustomMarketingCompose() {
     }
   }
 
+  function openSaveTemplateModal() {
+    saveTemplateError.value = ''
+    saveTemplateName.value = subject.value.trim().slice(0, 200)
+    saveTemplateOpen.value = true
+  }
+
+  function closeSaveTemplateModal() {
+    if (saveTemplatePending.value) return
+    saveTemplateOpen.value = false
+  }
+
+  async function confirmSaveTemplate() {
+    const name = saveTemplateName.value.trim()
+    if (!name) {
+      saveTemplateError.value = 'Template name is required'
+      return
+    }
+    const htmlTemplate = resolveCustomMarketingSendHtml({
+      contentSource: contentSource.value,
+      bodyHtml: body.value,
+      uploadedHtml: uploadedHtml.value
+    })
+    if (!subject.value.trim() || !htmlTemplate.trim()) {
+      saveTemplateError.value = 'Subject and message are required'
+      return
+    }
+    saveTemplatePending.value = true
+    saveTemplateError.value = ''
+    try {
+      await $fetch('/api/v1/tenant/email-templates', {
+        method: 'POST',
+        body: {
+          name,
+          subject: subject.value.trim(),
+          htmlTemplate,
+          htmlSource: contentSource.value === 'upload' ? 'upload' : 'editor',
+          description: 'Saved from Custom Marketing',
+          saveToLibrary: true
+        }
+      })
+      saveTemplateOpen.value = false
+      toast.success(`Saved “${name}” to Email templates.`)
+    } catch (e) {
+      saveTemplateError.value = catchApiMessage(e, 'Failed to save template')
+    } finally {
+      saveTemplatePending.value = false
+    }
+  }
+
   async function sendCustomMarketing(): Promise<void> {
     saveError.value = null
     if (!canSend.value) {
@@ -420,6 +490,7 @@ export function useCustomMarketingCompose() {
 
   return {
     subject,
+    previewText,
     body,
     contentSource,
     uploadedHtml,
@@ -449,7 +520,15 @@ export function useCustomMarketingCompose() {
     gmailClipWarning,
     isSending,
     sendBusy,
+    canSaveTemplate,
     canSend,
+    saveTemplateOpen,
+    saveTemplateName,
+    saveTemplateError,
+    saveTemplatePending,
+    openSaveTemplateModal,
+    closeSaveTemplateModal,
+    confirmSaveTemplate,
     scheduleModalOpen,
     scheduleLocal,
     scheduleError,

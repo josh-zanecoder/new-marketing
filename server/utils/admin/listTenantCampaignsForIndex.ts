@@ -18,6 +18,16 @@ export type TenantCampaignIndexRow = {
   recipientsCount: number
   createdAt: string
   updatedAt: string
+  /** Lowercased email of the user who owns the campaign. */
+  ownerEmail?: string
+  /** Creator id, or email when the session had no user id. */
+  createdBy?: string
+  /** Name and email captured when the campaign was created. */
+  creator?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+  }
 }
 
 /**
@@ -32,7 +42,7 @@ export async function listTenantCampaignsForIndex(
   const campaigns = await (Campaign as CampaignModel)
     .find({})
     .select(
-      '_id name sender recipientsType recipientsListId subject status scheduledAt createdAt updatedAt'
+      '_id name sender recipientsType recipientsListId subject status scheduledAt createdAt updatedAt metadata createdBy mergeUserSnapshot'
     )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
@@ -53,6 +63,15 @@ export async function listTenantCampaignsForIndex(
     const id = String(c._id)
     const recipientsCount =
       c.recipientsType === 'manual' ? (manualCountByCampaign.get(id) ?? 0) : 0
+    const snap = c.mergeUserSnapshot
+    const creator = snap
+      ? {
+          firstName: snap.firstName?.trim() || undefined,
+          lastName: snap.lastName?.trim() || undefined,
+          email: snap.email?.trim() || undefined
+        }
+      : undefined
+    const hasCreator = !!(creator?.firstName || creator?.lastName || creator?.email)
     return {
       id,
       name: c.name,
@@ -65,7 +84,10 @@ export async function listTenantCampaignsForIndex(
       recipients: [],
       recipientsCount,
       createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : '',
-      updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString() : ''
+      updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString() : '',
+      ownerEmail: c.metadata?.ownerEmail?.trim() || undefined,
+      createdBy: c.createdBy?.trim() || undefined,
+      creator: hasCreator ? creator : undefined
     }
   })
 }

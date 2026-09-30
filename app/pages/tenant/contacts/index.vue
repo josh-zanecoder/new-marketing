@@ -560,6 +560,48 @@
 
                 <section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
                   <h3 class="text-sm font-semibold text-slate-900">
+                    Emails
+                  </h3>
+                  <p class="mt-0.5 text-xs text-slate-500">
+                    Sends to this contact, and whether they opened or clicked
+                  </p>
+                  <p v-if="contactEmailActivityPending" class="mt-3 text-sm text-slate-500">
+                    Loading emails…
+                  </p>
+                  <p v-else-if="contactEmailActivityError" class="mt-3 text-sm text-red-700">
+                    {{ contactEmailActivityError }}
+                  </p>
+                  <p v-else-if="!contactEmailActivity.length" class="mt-3 text-sm text-slate-400">
+                    No emails sent yet
+                  </p>
+                  <ul v-else class="mt-4 divide-y divide-slate-100">
+                    <li
+                      v-for="message in contactEmailActivity"
+                      :key="message.messageId"
+                      class="py-3 first:pt-0 last:pb-0"
+                    >
+                      <p class="text-sm font-medium text-slate-900">{{ message.subject }}</p>
+                      <p class="mt-1 text-xs text-slate-500">{{ formatEmailActivityDate(message.sentAt) }}</p>
+                      <div class="mt-2 flex flex-wrap gap-1.5">
+                        <span
+                          class="rounded-full px-2 py-0.5 text-[11px] font-medium ring-1"
+                          :class="message.opened ? 'bg-violet-50 text-violet-800 ring-violet-200' : 'bg-slate-50 text-slate-500 ring-slate-200'"
+                        >
+                          {{ message.opened ? 'Opened' : 'Not opened' }}
+                        </span>
+                        <span
+                          class="rounded-full px-2 py-0.5 text-[11px] font-medium ring-1"
+                          :class="message.clicked ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-slate-50 text-slate-500 ring-slate-200'"
+                        >
+                          {{ message.clicked ? 'Clicked' : 'Not clicked' }}
+                        </span>
+                      </div>
+                    </li>
+                  </ul>
+                </section>
+
+                <section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
+                  <h3 class="text-sm font-semibold text-slate-900">
                     Address
                   </h3>
                   <p v-if="contactDetailAddressFormatted" class="mt-3 text-sm leading-relaxed text-slate-700">
@@ -963,6 +1005,44 @@ const PAGE_SIZE = 25
 const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
+
+type ContactEmailActivity = {
+  messageId: string
+  subject: string
+  sentAt: string | null
+  opened: boolean
+  clicked: boolean
+}
+
+const contactEmailActivity = ref<ContactEmailActivity[]>([])
+const contactEmailActivityPending = ref(false)
+const contactEmailActivityError = ref('')
+
+function formatEmailActivityDate(iso: string | null): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+async function loadContactEmailActivity(contactId: string) {
+  contactEmailActivityPending.value = true
+  contactEmailActivityError.value = ''
+  contactEmailActivity.value = []
+  try {
+    const res = await $fetch<{ messages: ContactEmailActivity[] }>(
+      `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}/email-activity`
+    )
+    contactEmailActivity.value = res.messages ?? []
+  } catch (e: unknown) {
+    contactEmailActivityError.value =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || 'Failed to load emails')
+        : 'Failed to load emails'
+  } finally {
+    contactEmailActivityPending.value = false
+  }
+}
 
 const addContactOpen = ref(false)
 const contactFormMode = ref<'add' | 'edit'>('add')
@@ -1529,6 +1609,7 @@ function editFromContactDetail() {
 }
 
 async function openContactDetail(contactId: string) {
+  void loadContactEmailActivity(contactId)
   viewContactOpen.value = true
   viewContactLoading.value = true
   viewContactError.value = ''

@@ -6,6 +6,7 @@ import { resolveCustomMarketingMergeVariables } from '~~/shared/customMarketingM
 
 const {
   subject,
+  previewText,
   body,
   contentSource,
   uploadedFileName,
@@ -31,7 +32,15 @@ const {
   gmailClipWarning,
   isSending,
   sendBusy,
+  canSaveTemplate,
   canSend,
+  saveTemplateOpen,
+  saveTemplateName,
+  saveTemplateError,
+  saveTemplatePending,
+  openSaveTemplateModal,
+  closeSaveTemplateModal,
+  confirmSaveTemplate,
   scheduleModalOpen,
   scheduleLocal,
   scheduleError,
@@ -65,6 +74,17 @@ const subjectField = computed({
   }
 })
 const { subjectVariable, subjectInputRef, syncSubjectCaret } = useSubjectVariableInsert(subjectField)
+const previewTextField = computed({
+  get: () => previewText.value,
+  set: (value: string) => {
+    previewText.value = value
+  }
+})
+const {
+  subjectVariable: previewTextVariable,
+  subjectInputRef: previewTextInputRef,
+  syncSubjectCaret: syncPreviewTextCaret
+} = useSubjectVariableInsert(previewTextField)
 const subjectApiVariables = ref<Array<{ key: string; label: string; scopes?: Array<'subject' | 'body'>; enabled?: boolean }>>([])
 
 const subjectVariableSelectOptions = computed(() => [
@@ -188,6 +208,36 @@ onMounted(() => {
           />
         </div>
       </div>
+      <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <label for="custom-marketing-preview-text" class="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Preview text
+        </label>
+        <p class="mb-2 text-xs text-slate-500">Shown under the subject in the inbox. Optional.</p>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            id="custom-marketing-preview-text"
+            ref="previewTextInputRef"
+            v-model="previewText"
+            type="text"
+            maxlength="150"
+            autocomplete="off"
+            placeholder="Short line recipients see before they open the email"
+            class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20 sm:text-[15px]"
+            @click="syncPreviewTextCaret"
+            @keyup="syncPreviewTextCaret"
+            @select="syncPreviewTextCaret"
+          >
+          <TenantFilterSelect
+            id="custom-marketing-preview-text-variable"
+            v-model="previewTextVariable"
+            label="Insert variable"
+            variant="field"
+            :options="subjectVariableSelectOptions"
+            class="w-full shrink-0 sm:w-44"
+            @before-select="syncPreviewTextCaret"
+          />
+        </div>
+      </div>
 
       <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Content</p>
@@ -227,6 +277,7 @@ onMounted(() => {
           <TenantCustomMarketingRichTextEditor
             v-model="body"
             :subject="subject"
+            :preview-text="previewText"
             :from-name="senderName"
             :from-email="senderEmail"
             :to-email="toEmail"
@@ -371,6 +422,14 @@ onMounted(() => {
     <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
       <button
         type="button"
+        class="inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 sm:mr-auto sm:w-auto"
+        :disabled="!canSaveTemplate"
+        @click="openSaveTemplateModal"
+      >
+        Save as template
+      </button>
+      <button
+        type="button"
         class="inline-flex w-full items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         :disabled="!canSend || sendBusy"
         @click="openScheduleModal"
@@ -438,6 +497,55 @@ onMounted(() => {
               @click="closeScheduleModal"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="saveTemplateOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-marketing-save-template-title"
+      >
+        <div class="absolute inset-0 bg-slate-900/40" @click="closeSaveTemplateModal" />
+        <div class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6">
+          <h2 id="custom-marketing-save-template-title" class="text-lg font-semibold text-slate-900">
+            Save as template
+          </h2>
+          <p class="mt-1 text-sm text-slate-500">
+            This message is stored in Email templates so you can send it again.
+          </p>
+          <label class="mt-4 block text-sm font-medium text-slate-700" for="custom-marketing-template-name">
+            Template name
+          </label>
+          <input
+            id="custom-marketing-template-name"
+            v-model="saveTemplateName"
+            type="text"
+            maxlength="200"
+            class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/20"
+          >
+          <p v-if="saveTemplateError" class="mt-3 text-sm text-red-600">{{ saveTemplateError }}</p>
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              :disabled="saveTemplatePending"
+              @click="closeSaveTemplateModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              :disabled="saveTemplatePending"
+              @click="confirmSaveTemplate"
+            >
+              {{ saveTemplatePending ? 'Saving…' : 'Save template' }}
             </button>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
+import { campaignCreatorLabel } from '~~/shared/campaignCreatorLabel'
 
 import { forceReleaseMarketingScrollLock } from '~/composables/useMarketingScrollLock'
 
@@ -268,7 +269,29 @@ const previewSubject = computed(() => {
   if (!sub) return ''
   return mergeMustacheTemplate(sub, mergeRoot.value)
 })
+const previewPreviewText = computed(() => {
+  const text = campaign.value?.previewText
+  if (!text?.trim()) return ''
+  return mergeMustacheTemplate(text, mergeRoot.value)
+})
 const previewTitle = computed(() => campaign.value?.name?.trim() || 'Campaign')
+const creatorLabel = computed(() => {
+  const c = campaign.value
+  if (!c) return ''
+  const snap = c.mergeUserSnapshot
+  return campaignCreatorLabel({
+    ownerEmail: c.ownerEmail,
+    createdBy: c.createdBy,
+    creator:
+      snap && typeof snap === 'object'
+        ? {
+            firstName: typeof snap.firstName === 'string' ? snap.firstName : '',
+            lastName: typeof snap.lastName === 'string' ? snap.lastName : '',
+            email: typeof snap.email === 'string' ? snap.email : ''
+          }
+        : undefined
+  })
+})
 const previewSubjectDisplay = computed(() => previewSubject.value || campaign.value?.subject || 'No subject')
 
 const showSkeleton = computed(
@@ -545,6 +568,7 @@ const recipientListTruncated = computed(() => {
             </h1>
             <p class="mt-2 text-sm text-slate-500 sm:text-[0.9375rem]">
               Created {{ formatDate(campaign.createdAt) }}
+              <template v-if="creatorLabel"> by {{ creatorLabel }}</template>
             </p>
             <div
               v-if="isScheduledCampaign && campaign.scheduledAt"
@@ -689,6 +713,12 @@ const recipientListTruncated = computed(() => {
                 </div>
                 <dl class="divide-y divide-slate-100">
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Created by</dt>
+                    <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
+                      {{ creatorLabel || '–' }}
+                    </dd>
+                  </div>
+                  <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Sender</dt>
                     <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       {{ CONTACT_OWNER_SENDER_LABEL }} &lt;{{ campaign.sender?.email }}&gt;
@@ -698,6 +728,12 @@ const recipientListTruncated = computed(() => {
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Subject</dt>
                     <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
                       {{ previewSubject || '–' }}
+                    </dd>
+                  </div>
+                  <div v-if="previewPreviewText" class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
+                    <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Preview text</dt>
+                    <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
+                      {{ previewPreviewText }}
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
@@ -803,6 +839,7 @@ const recipientListTruncated = computed(() => {
               :thumbnail-html="campaign.templateHtml"
               :title="previewTitle"
               :subject="previewSubjectDisplay"
+              :preview-text="previewPreviewText"
               summary="Preview with merge tags applied from your recipients."
             />
 

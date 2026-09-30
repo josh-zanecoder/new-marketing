@@ -1,45 +1,117 @@
-/** Brevo UI / API type → Mongo `event` values we may have stored. */
+/**
+ * Brevo UI / API type → Mongo `event` values we may have stored.
+ * Must cover every label `metricKeyForEvent` rolls into that metric, or the
+ * Messages table can show empty while the statistic card is non-zero
+ * (SES/zcMail aliases, Brevo variants, pre-normalize leftovers).
+ */
 export function mongoEventValuesForFilter(eventType: string | null): string[] | null {
   if (!eventType?.trim()) return null
   const t = eventType.trim().toLowerCase()
-  if (t === 'requests' || t === 'sent' || t === 'request') {
-    return ['requests', 'sent', 'request']
+  const compact = t.replace(/[_\s-]+/g, '')
+
+  if (compact === 'requests' || compact === 'sent' || compact === 'request' || compact === 'send') {
+    return ['requests', 'sent', 'request', 'send']
   }
-  if (t === 'unique_opened' || t === 'uniqueopened' || t === 'firstopening') {
-    return ['unique_opened', 'uniqueopened', 'firstopening']
+
+  if (compact === 'delivered' || compact === 'delivery') {
+    return ['delivered', 'delivery']
   }
-  if (t === 'opened' || t === 'opens' || t === 'open') {
-    return ['opened', 'open', 'opens', 'unique_opened', 'uniqueopened']
+
+  // Include plain opens: SES/zcMail only store `opened`, while aggregate derives
+  // Trackable openers (uniqueOpens) from those rows when no unique_opened exists.
+  if (
+    compact === 'uniqueopened' ||
+    compact === 'firstopening' ||
+    t === 'unique_opened'
+  ) {
+    return [
+      'unique_opened',
+      'uniqueopened',
+      'firstopening',
+      'first_opening',
+      'opened',
+      'open',
+      'opens'
+    ]
   }
-  if (t === 'clicks' || t === 'click' || t === 'clicked') {
+
+  if (compact === 'opened' || compact === 'opens' || compact === 'open') {
+    return [
+      'opened',
+      'open',
+      'opens',
+      'unique_opened',
+      'uniqueopened',
+      'firstopening',
+      'first_opening'
+    ]
+  }
+
+  if (compact === 'clicks' || compact === 'click' || compact === 'clicked') {
     return ['clicks', 'click', 'clicked']
   }
-  if (t === 'bounces' || t === 'bounce') {
+
+  if (compact === 'bounces' || compact === 'bounce') {
     return [
       'hardBounces',
       'hard_bounces',
       'hardbounce',
+      'hard_bounce',
       'softBounces',
       'soft_bounces',
       'softbounce',
+      'soft_bounce',
       'bounces',
-      'bounce'
+      'bounce',
+      'bounced',
+      'failed'
     ]
   }
-  if (t === 'hardbounces' || t === 'hard_bounces') {
-    return ['hardBounces', 'hard_bounces', 'hardbounce']
+
+  // Aggregate maps bounce/bounces/failed → hardBounces (metricKeyForEvent).
+  if (compact === 'hardbounces' || compact === 'hardbounce') {
+    return [
+      'hardBounces',
+      'hard_bounces',
+      'hardbounce',
+      'hard_bounce',
+      'bounces',
+      'bounce',
+      'bounced',
+      'failed'
+    ]
   }
-  if (t === 'softbounces' || t === 'soft_bounces') {
-    return ['softBounces', 'soft_bounces', 'softbounce']
+
+  if (compact === 'softbounces' || compact === 'softbounce') {
+    return ['softBounces', 'soft_bounces', 'softbounce', 'soft_bounce']
   }
-  if (t === 'deferred') return ['deferred']
-  if (t === 'invalid') return ['invalid']
-  if (t === 'blocked') return ['blocked']
-  if (t === 'spam') return ['spam', 'complaint']
-  if (t === 'unsubscribed') return ['unsubscribed', 'unsubscribe']
-  if (t === 'loadedbyproxy' || t === 'loaded_by_proxy') {
-    return ['loadedByProxy', 'loaded_by_proxy']
+
+  if (compact === 'deferred' || compact === 'deliverydelay') {
+    return ['deferred', 'deliverydelay', 'delivery_delay']
   }
-  if (t === 'error') return ['error']
+
+  if (compact === 'invalid') return ['invalid']
+
+  // Aggregate maps reject → blocked.
+  if (compact === 'blocked' || compact === 'reject') {
+    return ['blocked', 'reject']
+  }
+
+  if (compact === 'spam' || compact === 'complaint') {
+    return ['spam', 'complaint']
+  }
+
+  if (compact === 'unsubscribed' || compact === 'unsubscribe') {
+    return ['unsubscribed', 'unsubscribe']
+  }
+
+  if (compact === 'loadedbyproxy' || compact === 'proxyopen') {
+    return ['loadedByProxy', 'loaded_by_proxy', 'proxy_open']
+  }
+
+  if (compact === 'error' || compact === 'renderingfailure') {
+    return ['error', 'renderingfailure', 'rendering_failure']
+  }
+
   return [eventType.trim()]
 }

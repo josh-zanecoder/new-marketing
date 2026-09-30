@@ -18,6 +18,8 @@ export interface TenantCampaignDetail {
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
   subject: string
+  /** Inbox line under the subject. */
+  previewText?: string
   status: string
   /** ISO 8601 when status is `Scheduled` (or after reschedule). */
   scheduledAt?: string
@@ -38,6 +40,10 @@ export interface TenantCampaignDetail {
   saveHtmlToLibrary?: boolean
   mergeUserSnapshot?: Record<string, unknown>
   replyTo?: { email: string; name: string }
+  /** Email of the user who owns the campaign. */
+  ownerEmail?: string
+  /** Creator id, or email when the session had no user id. */
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }
@@ -524,6 +530,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     recipient: string
     campaignId?: string
     subject?: string
+    previewText?: string
     senderName?: string
     senderEmail?: string
     templateHtml?: string

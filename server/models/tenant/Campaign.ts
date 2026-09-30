@@ -50,6 +50,8 @@ export const campaignSchema = new mongoose.Schema({
   recipientsListId: { type: String, default: '' },
   emailTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },
   subject: { type: String, default: '' },
+  /** Inbox line shown under the subject. Hidden in the message body. */
+  previewText: { type: String, default: '', trim: true },
   status: { type: String, enum: campaignStatusEnum, default: 'Draft' },
   /** When set, campaign is intended to start sending at this instant (UTC). Typically used with status `Scheduled`. */
   scheduledAt: { type: Date, required: false },

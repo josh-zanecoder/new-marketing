@@ -1,5 +1,6 @@
 export interface CampaignTestEmailDraftPayload {
   subject: string
+  previewText?: string
   senderName: string
   senderEmail: string
   templateHtml: string
@@ -85,6 +86,7 @@ export function useCampaignTestEmail() {
       await marketingApi.sendTestEmail({
         recipient: to,
         subject: draft.subject,
+        previewText: draft.previewText,
         senderName: draft.senderName,
         senderEmail: draft.senderEmail,
         templateHtml: draft.templateHtml,

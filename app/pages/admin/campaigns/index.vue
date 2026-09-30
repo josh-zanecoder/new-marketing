@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AdminCampaign } from '~/types/adminCampaign'
 import { adminCampaignKey } from '~/types/adminCampaign'
+import { campaignCreatorLabel } from '~~/shared/campaignCreatorLabel'
 import type { AdminTenantRow } from '~/types/adminTenant'
 import { storeToRefs } from 'pinia'
 import { useAdminCampaignStore } from '~/store/adminCampaignStore'
@@ -76,7 +77,8 @@ const filteredCampaigns = computed(() => {
     list = list.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.tenantName.toLowerCase().includes(q)
+        c.tenantName.toLowerCase().includes(q) ||
+        campaignCreatorLabel(c).toLowerCase().includes(q)
     )
   }
   if (statusFilter.value !== 'all') {
@@ -447,7 +449,7 @@ onUnmounted(() => {
           v-model="searchQuery"
           type="search"
           autocomplete="off"
-          placeholder="Search campaigns…"
+          placeholder="Search campaigns or owners…"
           class="input !rounded-input-lg bg-slate-50 py-3 pl-11 pr-4 focus:bg-white sm:py-3.5 sm:text-[0.9375rem]"
         >
       </div>
@@ -534,6 +536,12 @@ onUnmounted(() => {
           </div>
           <p class="mt-1.5 line-clamp-2 text-sm text-slate-500 sm:line-clamp-none">
             {{ campaignSubtitle(c, countdownNow) }}
+          </p>
+          <p
+            v-if="campaignCreatorLabel(c)"
+            class="mt-1 truncate text-sm text-slate-600"
+          >
+            Created by {{ campaignCreatorLabel(c) }}
           </p>
         </NuxtLink>
         <div class="mt-3 flex flex-wrap items-center gap-0.5 border-t border-slate-100 pt-3 sm:mt-4">

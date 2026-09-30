@@ -28,6 +28,8 @@ export interface CampaignLean {
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
   subject: string
+  /** Inbox line under the subject. */
+  previewText?: string
   status: string
   /** Fire time for scheduled send (stored in Mongo as UTC). */
   scheduledAt?: Date

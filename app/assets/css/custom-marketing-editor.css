@@ -505,6 +505,14 @@
   word-break: break-word;
 }
 
+.custom-marketing-editor__inbox-preview {
+  margin: -8px 0 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #5f6368;
+  word-break: break-word;
+}
+
 .custom-marketing-editor__inbox-meta {
   display: flex;
   align-items: flex-start;

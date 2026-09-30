@@ -36,6 +36,7 @@ import '~/assets/css/custom-marketing-editor.css'
 const props = withDefaults(
   defineProps<{
     subject?: string
+    previewText?: string
     fromName?: string
     fromEmail?: string
     toEmail?: string
@@ -43,6 +44,7 @@ const props = withDefaults(
   }>(),
   {
     subject: '',
+    previewText: '',
     fromName: '',
     fromEmail: '',
     toEmail: '',
@@ -53,6 +55,7 @@ const props = withDefaults(
 const model = defineModel<string>({ required: true })
 
 const subjectRef = computed(() => props.subject)
+const previewTextRef = computed(() => props.previewText)
 const fromNameRef = computed(() => props.fromName)
 const fromEmailRef = computed(() => props.fromEmail)
 const toEmailRef = computed(() => props.toEmail)
@@ -61,10 +64,11 @@ const bodyHtmlRef = computed(() => model.value ?? '')
 
 const { previewOpen, openPreview, closePreview } = useCustomMarketingMessagePreview()
 
-const { previewSubject, previewBodyHtml } = useCustomMarketingPreviewMerge({
+const { previewSubject, previewPreviewText, previewBodyHtml } = useCustomMarketingPreviewMerge({
   previewOpen,
   recipientListId: recipientListIdRef,
   subject: subjectRef,
+  previewText: previewTextRef,
   bodyHtml: bodyHtmlRef
 })
 
@@ -528,6 +532,9 @@ const {
               <div class="custom-marketing-editor__inbox">
                 <div class="custom-marketing-editor__inbox-header">
                   <h2 class="custom-marketing-editor__inbox-subject">{{ subjectDisplay }}</h2>
+                  <p v-if="previewPreviewText.trim()" class="custom-marketing-editor__inbox-preview">
+                    {{ previewPreviewText }}
+                  </p>
                   <div class="custom-marketing-editor__inbox-meta">
                     <div class="custom-marketing-editor__inbox-avatar" aria-hidden="true">{{ senderInitials }}</div>
                     <div class="custom-marketing-editor__inbox-meta-main">

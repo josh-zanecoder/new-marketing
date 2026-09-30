@@ -93,6 +93,7 @@ export function metricKeyForEvent(raw: string): keyof BrevoSmtpDailyRow | null {
     t === 'hardbounce' ||
     t === 'bounce' ||
     t === 'bounces' ||
+    t === 'bounced' ||
     t === 'failed'
   ) {
     return 'hardBounces'

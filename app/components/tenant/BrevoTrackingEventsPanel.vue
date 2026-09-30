@@ -79,7 +79,12 @@ const props = withDefaults(
 const adminTenantFilter = defineModel<string>('adminTenantFilter', { default: '' })
 
 const route = useRoute()
+const toast = useAppToast()
 const { data: me } = useMarketingMe()
+const saveListOpen = ref(false)
+const saveListName = ref('')
+const saveListPending = ref(false)
+const saveListError = ref('')
 const selectedUserEmail = ref('')
 /** Prefer send requests when present; otherwise All (`[]`). */
 const DEFAULT_EVENT_TYPE_FILTER = ['requests'] as const
@@ -601,6 +606,63 @@ const historyOpen = computed({
   }
 })
 
+function suggestedListName(): string {
+  const labels = selectedEventTypes.value.map((type) => formatBrevoSmtpEventLabel(type))
+  if (labels.length === 1) return `${labels[0]} contacts`
+  if (labels.length > 1) return `${labels.join(', ')} contacts`
+  return 'Tracking contacts'
+}
+
+function openSaveListModal() {
+  saveListError.value = ''
+  saveListName.value = suggestedListName()
+  saveListOpen.value = true
+}
+
+function closeSaveListModal() {
+  if (saveListPending.value) return
+  saveListOpen.value = false
+}
+
+async function confirmSaveList() {
+  const name = saveListName.value.trim()
+  if (!name) {
+    saveListError.value = 'Name is required'
+    return
+  }
+  saveListPending.value = true
+  saveListError.value = ''
+  try {
+    const q = { ...trackingQuery.value }
+    delete q.page
+    delete q.limit
+    const params = new URLSearchParams(q)
+    const res = await $fetch<{
+      list: { id: string; name: string; memberCount: number; unmatchedEmailCount: number }
+    }>(`/api/v1/tracking/recipient-list?${params.toString()}`, {
+      method: 'POST',
+      body: { name },
+      headers: adminTenantHeaders.value
+    })
+    const count = res.list.memberCount
+    const skipped = res.list.unmatchedEmailCount
+    toast.success(
+      skipped
+        ? `Saved “${res.list.name}” with ${count} contacts. ${skipped} tracking emails are not contacts.`
+        : `Saved “${res.list.name}” with ${count} contacts.`
+    )
+    saveListOpen.value = false
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || '')
+        : ''
+    saveListError.value = message || 'Failed to save recipient list'
+  } finally {
+    saveListPending.value = false
+  }
+}
+
 function openMessageHistory(row: TrackingTableRow) {
   historyRow.value = row
 }
@@ -932,6 +994,17 @@ const EVENT_FILTER_SKELETON_COUNT = 4
             </UiHoverTip>
           </div>
         </template>
+
+        <div v-if="!adminTracking" class="flex justify-end">
+          <button
+            type="button"
+            class="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoading || showEmptyReport || saveListPending"
+            @click="openSaveListModal"
+          >
+            Save as recipient list
+          </button>
+        </div>
       </div>
 
       <div
@@ -1253,6 +1326,55 @@ const EVENT_FILTER_SKELETON_COUNT = 4
         </div>
       </div>
     </template>
+
+    <Teleport to="body">
+      <div
+        v-if="saveListOpen"
+        class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="save-tracking-list-title"
+      >
+        <div class="absolute inset-0 bg-slate-900/40" @click="closeSaveListModal" />
+        <div class="relative w-full max-w-md rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
+          <h2 id="save-tracking-list-title" class="text-base font-semibold text-zinc-900">
+            Save as recipient list
+          </h2>
+          <p class="mt-1 text-sm text-zinc-500">
+            Contacts who match the current tracking filters, including opens and clicks.
+          </p>
+          <label class="mt-4 block text-sm font-medium text-zinc-700" for="save-tracking-list-name">
+            List name
+          </label>
+          <input
+            id="save-tracking-list-name"
+            v-model="saveListName"
+            type="text"
+            maxlength="200"
+            class="mt-1.5 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+          >
+          <p v-if="saveListError" class="mt-2 text-sm text-red-700">{{ saveListError }}</p>
+          <div class="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              class="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100"
+              :disabled="saveListPending"
+              @click="closeSaveListModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              :disabled="saveListPending"
+              @click="confirmSaveList"
+            >
+              {{ saveListPending ? 'Saving…' : 'Save list' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <TenantBrevoTrackingMessageHistoryModal
       :open="historyOpen"

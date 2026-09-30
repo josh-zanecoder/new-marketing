@@ -20,6 +20,7 @@ import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/camp
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
+import { normalizeEmailPreviewText } from '~~/shared/emailPreviewText'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
     senderName: string
     senderEmail: string
     subject: string
+    previewText?: string
     recipientsType?: 'manual' | 'list'
     recipientsListId?: string
     recipientsManual?: string[]
@@ -94,6 +96,7 @@ export default defineEventHandler(async (event) => {
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
   campaign.subject = body.subject?.trim() || ''
+  campaign.previewText = normalizeEmailPreviewText(body.previewText)
   const editorId = tenantCreatedByFromAuth(event.context.auth)
   if (editorId) campaign.set('updatedBy', editorId)
   await campaign.save()

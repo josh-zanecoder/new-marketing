@@ -125,4 +125,49 @@ describe('rollupStoredSmtpStatsFromGroups', () => {
     expect(aggregated.requests).toBe(3)
     expect(aggregated.rates.deliveredPct).toBe(0)
   })
+
+  it('derives uniqueOpens from opened rows when no unique_opened events exist', () => {
+    const { aggregated } = rollupStoredSmtpStatsFromGroups({
+      startDate: '2026-09-07',
+      endDate: '2026-09-13',
+      rows: [
+        {
+          _id: { day: '2026-09-10', event: 'requests' },
+          count: 4,
+          uniqueMessageIds: ['a', 'b', 'c', 'd']
+        },
+        {
+          _id: { day: '2026-09-10', event: 'opened' },
+          count: 5,
+          uniqueMessageIds: ['a', 'b', 'c', 'd'],
+          uniqueKeys: ['a|a@x.com', 'b|b@x.com', 'c|c@x.com', 'd|d@x.com', 'a|a@x.com']
+        }
+      ]
+    })
+    expect(aggregated.opens).toBe(5)
+    expect(aggregated.uniqueOpens).toBe(4)
+  })
+
+  it('does not overwrite uniqueOpens from opened when unique_opened rows exist', () => {
+    const { aggregated } = rollupStoredSmtpStatsFromGroups({
+      startDate: '2026-09-07',
+      endDate: '2026-09-13',
+      rows: [
+        {
+          _id: { day: '2026-09-10', event: 'unique_opened' },
+          count: 2,
+          uniqueMessageIds: ['a', 'b'],
+          uniqueKeys: ['a|a@x.com', 'b|b@x.com']
+        },
+        {
+          _id: { day: '2026-09-10', event: 'opened' },
+          count: 10,
+          uniqueMessageIds: ['a', 'b', 'c', 'd'],
+          uniqueKeys: ['a|a@x.com', 'b|b@x.com', 'c|c@x.com', 'd|d@x.com']
+        }
+      ]
+    })
+    expect(aggregated.uniqueOpens).toBe(2)
+    expect(aggregated.opens).toBe(10)
+  })
 })

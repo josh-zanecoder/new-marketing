@@ -3,6 +3,13 @@ import type { Campaign } from '~/types/campaign'
 export type AdminCampaign = Campaign & {
   tenantDbName: string
   tenantName: string
+  ownerEmail?: string
+  createdBy?: string
+  creator?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+  }
 }
 
 export function adminCampaignKey(c: { tenantDbName: string; id: string }): string {

@@ -6,6 +6,7 @@ export default defineEventHandler(async (event) => {
     recipient?: string
     campaignId?: string
     subject?: string
+    previewText?: string
     senderName?: string
     senderEmail?: string
     templateHtml?: string
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
     recipient,
     ...(campaignId ? { campaignId } : {}),
     subject: body?.subject,
+    previewText: body?.previewText,
     senderName: body?.senderName,
     senderEmail: body?.senderEmail,
     templateHtml: body?.templateHtml,

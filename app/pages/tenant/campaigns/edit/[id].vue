@@ -433,6 +433,7 @@
               :thumbnail-html="savedTemplateHtml"
               title="Current email design"
               :subject="form.subject"
+              :preview-text="form.previewText"
               :summary="designSourceSummary"
             >
               <template #actions>
@@ -512,6 +513,7 @@
               <div class="min-w-0 flex-1">
                 <div class="text-base font-semibold text-slate-900">Subject</div>
                 <div class="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate sm:text-[15px]">{{ form.subject || 'Add a subject line for this campaign' }}</div>
+                <div v-if="form.previewText.trim()" class="mt-0.5 truncate text-sm text-slate-400">{{ form.previewText }}</div>
               </div>
             </div>
             <span class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto sm:px-4 sm:text-[15px]">{{ subjectOpen ? 'Close' : 'Manage' }}</span>
@@ -539,6 +541,33 @@
                 :options="subjectVariableSelectOptions"
                 class="w-full shrink-0 sm:w-44"
                 @before-select="syncSubjectCaret"
+              />
+            </div>
+            <label class="mb-2 mt-4 block text-sm font-medium text-slate-700" for="campaign-edit-preview-text">Preview text</label>
+            <p class="mb-2 text-sm text-slate-500">Shown under the subject in the inbox. Optional.</p>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <input
+                id="campaign-edit-preview-text"
+                ref="previewTextInputRef"
+                v-model="form.previewText"
+                type="text"
+                maxlength="150"
+                placeholder="Short line recipients see before they open the email"
+                class="min-w-0 flex-1 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:text-[15px]"
+                @click="syncPreviewTextCaret"
+                @keyup="syncPreviewTextCaret"
+                @select="syncPreviewTextCaret"
+                @input="syncPreviewTextCaret"
+                @blur="syncPreviewTextCaret"
+              >
+              <TenantFilterSelect
+                id="campaign-edit-preview-text-variable"
+                v-model="previewTextVariable"
+                label="Insert variable"
+                variant="field"
+                :options="subjectVariableSelectOptions"
+                class="w-full shrink-0 sm:w-44"
+                @before-select="syncPreviewTextCaret"
               />
             </div>
           </div>
@@ -766,6 +795,7 @@ const form = ref({
   senderName: '',
   senderEmail: defaultSenderEmail.value,
   subject: '',
+  previewText: '',
   recipientsMode: 'list' as 'list' | 'manual',
   recipientsListId: '',
   recipientsManual: [] as string[],
@@ -781,6 +811,17 @@ const subjectField = computed({
   }
 })
 const { subjectVariable, subjectInputRef, syncSubjectCaret } = useSubjectVariableInsert(subjectField)
+const previewTextField = computed({
+  get: () => form.value.previewText,
+  set: (value: string) => {
+    form.value.previewText = value
+  }
+})
+const {
+  subjectVariable: previewTextVariable,
+  subjectInputRef: previewTextInputRef,
+  syncSubjectCaret: syncPreviewTextCaret
+} = useSubjectVariableInsert(previewTextField)
 
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
@@ -1316,6 +1357,7 @@ function applyCampaignToEditForm(c: TenantCampaignDetail) {
     senderName: senderDisplayName.value,
     senderEmail: c.sender?.email || defaultSenderEmail.value,
     subject: c.subject || '',
+    previewText: c.previewText || '',
     recipientsMode: c.recipientsType || 'manual',
     recipientsListId: c.recipientsListId || '',
     recipientsManual: ids,
@@ -1410,6 +1452,7 @@ async function loadFromEditorReturn() {
         senderName: senderDisplayName.value,
         senderEmail: c.sender?.email || defaultSenderEmail.value,
         subject: c.subject || '',
+    previewText: c.previewText || '',
         recipientsMode: c.recipientsType || 'manual',
         recipientsListId: c.recipientsListId || '',
         recipientsManual: ids,
@@ -1617,6 +1660,7 @@ function buildTestEmailDraftPayload() {
   ]
   return {
     subject: form.value.subject.trim(),
+    previewText: form.value.previewText.trim(),
     senderName: form.value.senderName,
     senderEmail: form.value.senderEmail,
     templateHtml: savedTemplateHtml.value,
@@ -1787,6 +1831,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     subject: form.value.subject,
+    previewText: form.value.previewText,
     status: editCampaignStatus.value,
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
@@ -1822,6 +1867,7 @@ async function persistSavedCampaign(): Promise<string> {
     senderName: form.value.senderName,
     senderEmail: form.value.senderEmail,
     subject: form.value.subject,
+    previewText: form.value.previewText,
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     recipientsManual,

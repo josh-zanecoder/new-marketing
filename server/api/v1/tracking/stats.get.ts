@@ -21,7 +21,10 @@ function firstEventQueryToken(raw: unknown): string {
   return ''
 }
 
-/** Mongo Messages filter. Keep unique_opened distinct from opened (Brevo API collapses them). */
+/**
+ * Mongo Messages filter token. Preserve `unique_opened` (Brevo API maps it to `opened`).
+ * `mongoEventValuesForFilter` expands it to include plain opens for SES/zcMail.
+ */
 function resolveStatsEventsEventType(raw: unknown): string | null {
   const token = firstEventQueryToken(raw)
   const compact = token.toLowerCase().replace(/[_\s-]+/g, '')
