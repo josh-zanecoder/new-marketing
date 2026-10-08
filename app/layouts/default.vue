@@ -1,182 +1,205 @@
 <script setup lang="ts">
-import { marketingSidebarNavItems } from '~/constants/marketingSidebarNav'
-import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+import {
+  filterMarketingSidebarNavItems,
+  marketingSidebarNavItems,
+} from "~/constants/marketingSidebarNav";
+import { marketingTenantHandoffCookieBase } from "~~/shared/marketingTenantHandoffCookies";
 
-const { data: me, pending, refresh } = useMarketingMe()
+const { data: me, pending, refresh } = useMarketingMe();
 
-const route = useRoute()
+const route = useRoute();
 
-const SIDEBAR_STORAGE_KEY = 'marketing-sidebar-compact'
-const MOBILE_SIDEBAR_MQ = '(max-width: 1023px)'
+const SIDEBAR_STORAGE_KEY = "marketing-sidebar-compact";
+const MOBILE_SIDEBAR_MQ = "(max-width: 1023px)";
 
 /** When true, sidebar shows icons only (narrow rail). */
-const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
-const isMobileViewport = ref(false)
+const sidebarCompact = useState(
+  "layout-marketing-sidebar-compact",
+  () => false,
+);
+const isMobileViewport = ref(false);
 
 /** `null` until client mount — hide handoff “Back” until we know we are not in an iframe (Retail/CRM outer chrome). */
-const inIframe = ref<boolean | null>(null)
+const inIframe = ref<boolean | null>(null);
 
-let sidebarMediaQuery: MediaQueryList | null = null
-let sidebarEscListener: ((e: KeyboardEvent) => void) | null = null
+let sidebarMediaQuery: MediaQueryList | null = null;
+let sidebarEscListener: ((e: KeyboardEvent) => void) | null = null;
 
-const mobileDrawerOpen = computed(() => isMobileViewport.value && !sidebarCompact.value)
-const mainScrollRef = ref<HTMLElement | null>(null)
+const mobileDrawerOpen = computed(
+  () => isMobileViewport.value && !sidebarCompact.value,
+);
+const mainScrollRef = ref<HTMLElement | null>(null);
 
 useHead({
-  htmlAttrs: { class: 'h-full overflow-hidden' },
-  bodyAttrs: { class: 'h-full overflow-hidden' }
-})
+  htmlAttrs: { class: "h-full overflow-hidden" },
+  bodyAttrs: { class: "h-full overflow-hidden" },
+});
 
 const sidebarTitle = computed(() =>
-  me.value?.authType === 'apiKey' ? me.value.tenantName : 'Mortdash'
-)
+  me.value?.authType === "apiKey" ? me.value.tenantName : "Mortdash",
+);
 
 /** Cancel any in-flight `/me` request so each tab sees fresh `crmAppUrl` (Retail return URL). */
 function refreshMe() {
-  return refresh({ dedupe: 'cancel' })
+  return refresh({ dedupe: "cancel" });
 }
 
 function syncMobileViewport() {
-  if (!import.meta.client) return
-  isMobileViewport.value = window.matchMedia(MOBILE_SIDEBAR_MQ).matches
+  if (!import.meta.client) return;
+  isMobileViewport.value = window.matchMedia(MOBILE_SIDEBAR_MQ).matches;
 }
 
 function clearSidebarEscListener() {
-  if (!sidebarEscListener) return
-  window.removeEventListener('keydown', sidebarEscListener)
-  sidebarEscListener = null
+  if (!sidebarEscListener) return;
+  window.removeEventListener("keydown", sidebarEscListener);
+  sidebarEscListener = null;
 }
 
 function syncMobileDrawerSideEffects() {
-  if (!import.meta.client) return
+  if (!import.meta.client) return;
 
-  const drawerOpen = mobileDrawerOpen.value
-  const main = mainScrollRef.value
-  if (main) main.style.overflow = drawerOpen ? 'hidden' : ''
+  const drawerOpen = mobileDrawerOpen.value;
+  const main = mainScrollRef.value;
+  if (main) main.style.overflow = drawerOpen ? "hidden" : "";
 
-  clearSidebarEscListener()
+  clearSidebarEscListener();
   if (drawerOpen) {
     sidebarEscListener = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') sidebarCompact.value = true
-    }
-    window.addEventListener('keydown', sidebarEscListener)
+      if (e.key === "Escape") sidebarCompact.value = true;
+    };
+    window.addEventListener("keydown", sidebarEscListener);
   }
 }
 
 onMounted(() => {
   if (import.meta.client) {
-    const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-    syncMobileViewport()
+    const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    syncMobileViewport();
     if (saved !== null) {
-      sidebarCompact.value = saved === 'true'
+      sidebarCompact.value = saved === "true";
     } else if (isMobileViewport.value) {
-      sidebarCompact.value = true
+      sidebarCompact.value = true;
     }
     try {
-      inIframe.value = window.self !== window.top
+      inIframe.value = window.self !== window.top;
     } catch {
-      inIframe.value = true
+      inIframe.value = true;
     }
-    sidebarMediaQuery = window.matchMedia(MOBILE_SIDEBAR_MQ)
-    sidebarMediaQuery.addEventListener('change', syncMobileViewport)
-    syncMobileDrawerSideEffects()
+    sidebarMediaQuery = window.matchMedia(MOBILE_SIDEBAR_MQ);
+    sidebarMediaQuery.addEventListener("change", syncMobileViewport);
+    syncMobileDrawerSideEffects();
   }
-  void refreshMe()
-})
+  void refreshMe();
+});
 
 onBeforeUnmount(() => {
-  if (!import.meta.client) return
-  sidebarMediaQuery?.removeEventListener('change', syncMobileViewport)
-  clearSidebarEscListener()
-})
+  if (!import.meta.client) return;
+  sidebarMediaQuery?.removeEventListener("change", syncMobileViewport);
+  clearSidebarEscListener();
+});
 
 watch(sidebarCompact, (v) => {
-  if (import.meta.client) localStorage.setItem(SIDEBAR_STORAGE_KEY, String(v))
-  syncMobileDrawerSideEffects()
-})
+  if (import.meta.client) localStorage.setItem(SIDEBAR_STORAGE_KEY, String(v));
+  syncMobileDrawerSideEffects();
+});
 
 watch(isMobileViewport, () => {
-  syncMobileDrawerSideEffects()
-})
+  syncMobileDrawerSideEffects();
+});
 
 function toggleSidebarCompact() {
-  sidebarCompact.value = !sidebarCompact.value
+  sidebarCompact.value = !sidebarCompact.value;
 }
 
 function collapseSidebarIfMobileExpanded() {
-  if (!import.meta.client) return
-  if (sidebarCompact.value) return
-  if (window.matchMedia(MOBILE_SIDEBAR_MQ).matches) sidebarCompact.value = true
+  if (!import.meta.client) return;
+  if (sidebarCompact.value) return;
+  if (window.matchMedia(MOBILE_SIDEBAR_MQ).matches) sidebarCompact.value = true;
 }
 
 watch(
   () => route.fullPath,
   () => {
-    if (import.meta.client) void refreshMe()
-  }
-)
+    if (import.meta.client) void refreshMe();
+  },
+);
 
 const sidebarAccount = computed(() => {
-  if (!me.value) return { primary: pending.value ? 'Loading…' : '', secondary: '' as string }
+  if (!me.value)
+    return {
+      primary: pending.value ? "Loading…" : "",
+      secondary: "" as string,
+    };
   const roleLabel =
-    me.value.role === 'admin'
-      ? 'Admin'
-      : me.value.role === 'client'
-        ? 'Client'
-        : 'Tenant'
-  return { primary: me.value.email, secondary: roleLabel }
-})
+    me.value.role === "admin"
+      ? "Admin"
+      : me.value.role === "client"
+        ? "Client"
+        : "Tenant";
+  return { primary: me.value.email, secondary: roleLabel };
+});
 
 /** CRM / Retail handoff session — “Back” instead of Logout (hidden when iframed; host has outer Back). */
-const isApiKeyBrowserSession = computed(() => me.value?.authType === 'apiKey')
+const isApiKeyBrowserSession = computed(() => me.value?.authType === "apiKey");
+
+const visibleSidebarNavItems = computed(() =>
+  filterMarketingSidebarNavItems(
+    marketingSidebarNavItems,
+    me.value?.authType === "apiKey" ? me.value.permissions : undefined,
+  ),
+);
 
 const showHandoffBack = computed(
-  () => isApiKeyBrowserSession.value && inIframe.value === false
-)
+  () => isApiKeyBrowserSession.value && inIframe.value === false,
+);
 
 const tenantBridgeCookie = useCookie<string | null>(
-  'marketing_tenant_bridge',
-  marketingTenantHandoffCookieBase()
-)
+  "marketing_tenant_bridge",
+  marketingTenantHandoffCookieBase(),
+);
 const crmEmbedCookie = useCookie<string | null>(
-  'marketing_crm_embed',
-  marketingTenantHandoffCookieBase()
-)
+  "marketing_crm_embed",
+  marketingTenantHandoffCookieBase(),
+);
 
 async function handleBackToCrm() {
-  const u = me.value?.authType === 'apiKey' ? me.value.crmAppUrl : undefined
+  const u = me.value?.authType === "apiKey" ? me.value.crmAppUrl : undefined;
   try {
-    await $fetch('/api/v1/auth/logout', { method: 'POST' })
+    await $fetch("/api/v1/auth/logout", { method: "POST" });
   } catch {
     /* ignore */
   }
-  await clearNuxtData('marketing-me')
-  tenantBridgeCookie.value = null
-  crmEmbedCookie.value = null
+  await clearNuxtData("marketing-me");
+  tenantBridgeCookie.value = null;
+  crmEmbedCookie.value = null;
   if (import.meta.client && u) {
-    window.location.assign(u)
-    return
+    window.location.assign(u);
+    return;
   }
-  await navigateTo('/auth/login')
+  await navigateTo("/auth/login");
 }
 
 async function handleLogout() {
-  await logoutMarketingSession()
+  await logoutMarketingSession();
 }
 
-const navLinkClass = 'nav-item'
+const navLinkClass = "nav-item";
 
-const navLinkActiveClass = 'nav-item-active'
+const navLinkActiveClass = "nav-item-active";
 
-const navIconClass = 'nav-item-icon'
+const navIconClass = "nav-item-icon";
 
 function navLinkLayoutClass(compact: boolean) {
-  return compact ? 'justify-center px-2 py-2.5 [&>span]:sr-only' : 'px-3 py-2.5'
+  return compact
+    ? "justify-center px-2 py-2.5 [&>span]:sr-only"
+    : "px-3 py-2.5";
 }
 </script>
 
 <template>
-  <div class="flex h-svh min-h-0 overflow-hidden bg-[var(--color-background)] text-slate-900 antialiased">
+  <div
+    class="flex h-svh min-h-0 overflow-hidden bg-[var(--color-background)] text-slate-900 antialiased"
+  >
     <NuxtLoadingIndicator
       :height="3"
       color="#2563eb"
@@ -203,12 +226,16 @@ function navLinkLayoutClass(compact: boolean) {
       :class="[
         sidebarCompact
           ? 'w-16 lg:w-16'
-          : 'w-[min(18rem,88vw)] shadow-xl shadow-slate-900/10 lg:w-72 lg:shadow-none'
+          : 'w-[min(18rem,88vw)] shadow-xl shadow-slate-900/10 lg:w-72 lg:shadow-none',
       ]"
     >
       <div
         class="flex shrink-0 items-center gap-2 border-b border-slate-100 pt-[max(0px,env(safe-area-inset-top))] transition-[padding] duration-200"
-        :class="sidebarCompact ? 'flex-col px-2 py-3' : 'justify-between px-4 py-4 lg:px-5 lg:py-5'"
+        :class="
+          sidebarCompact
+            ? 'flex-col px-2 py-3'
+            : 'justify-between px-4 py-4 lg:px-5 lg:py-5'
+        "
       >
         <div
           class="min-w-0 transition-[opacity] duration-200"
@@ -217,14 +244,20 @@ function navLinkLayoutClass(compact: boolean) {
           <h1 class="truncate text-lg font-bold tracking-tight text-slate-900">
             {{ sidebarTitle }}
           </h1>
-          <p class="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary-600">Marketing</p>
+          <p
+            class="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary-600"
+          >
+            Marketing
+          </p>
         </div>
         <button
           type="button"
           class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
           :aria-expanded="!sidebarCompact"
           aria-controls="marketing-app-sidebar-nav"
-          :aria-label="sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar to icons'"
+          :aria-label="
+            sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar to icons'
+          "
           @click="toggleSidebarCompact"
         >
           <svg
@@ -266,7 +299,7 @@ function navLinkLayoutClass(compact: boolean) {
         aria-label="Primary"
       >
         <NuxtLink
-          v-for="item in marketingSidebarNavItems"
+          v-for="item in visibleSidebarNavItems"
           :key="item.to"
           :to="item.to"
           :title="sidebarCompact ? item.label : undefined"
@@ -274,30 +307,60 @@ function navLinkLayoutClass(compact: boolean) {
           :active-class="navLinkActiveClass"
           @click="collapseSidebarIfMobileExpanded"
         >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="item.iconPath" />
+          <svg
+            :class="navIconClass"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              :d="item.iconPath"
+            />
           </svg>
           <span>{{ item.label }}</span>
         </NuxtLink>
       </nav>
 
-      <div class="shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div
+        class="shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
         <div
           v-if="!isApiKeyBrowserSession && !sidebarCompact"
           class="mb-3 rounded-card border border-slate-200 bg-slate-50 px-3.5 py-3 shadow-sm"
         >
-          <p class="truncate text-xs font-medium text-slate-900">{{ sidebarAccount.primary }}</p>
-          <p v-if="sidebarAccount.secondary" class="mt-0.5 text-xs text-slate-500">{{ sidebarAccount.secondary }}</p>
+          <p class="truncate text-xs font-medium text-slate-900">
+            {{ sidebarAccount.primary }}
+          </p>
+          <p
+            v-if="sidebarAccount.secondary"
+            class="mt-0.5 text-xs text-slate-500"
+          >
+            {{ sidebarAccount.secondary }}
+          </p>
         </div>
         <button
           v-if="showHandoffBack"
           class="flex w-full items-center gap-3 rounded-xl text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-          :class="sidebarCompact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5 text-left'"
+          :class="
+            sidebarCompact
+              ? 'justify-center px-2 py-2.5'
+              : 'px-3 py-2.5 text-left'
+          "
           type="button"
           title="Back"
           @click="handleBackToCrm"
         >
-          <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -315,8 +378,18 @@ function navLinkLayoutClass(compact: boolean) {
           title="Logout"
           @click="handleLogout"
         >
-          <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H9m4 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1" />
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M17 16l4-4m0 0l-4-4m4 4H9m4 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1"
+            />
           </svg>
           <span :class="sidebarCompact ? 'sr-only' : ''">Logout</span>
         </button>
@@ -328,7 +401,9 @@ function navLinkLayoutClass(compact: boolean) {
       class="marketing-main-scroll main-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain transition-[padding] duration-200 ease-smooth"
       :class="sidebarCompact ? 'pl-16 lg:pl-0' : 'pl-0'"
     >
-      <div class="flex-1 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
+      <div
+        class="flex-1 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8"
+      >
         <slot />
       </div>
     </main>
