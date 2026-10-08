@@ -7,8 +7,8 @@ const root = resolve(__dirname, '..')
 describe('tenant Images library (Images flag path)', () => {
   it('sidebar Images item requires the Images flag', () => {
     const nav = readFileSync(resolve(root, 'app/constants/marketingSidebarNav.ts'), 'utf8')
-    expect(nav).toContain("to: '/tenant/images'")
-    expect(nav).toContain("label: 'Images'")
+    expect(nav).toContain('to: "/tenant/images"')
+    expect(nav).toContain('label: "Images"')
     expect(nav).toContain('requiresTenantImages: true')
 
     const layout = readFileSync(resolve(root, 'app/layouts/default.vue'), 'utf8')
