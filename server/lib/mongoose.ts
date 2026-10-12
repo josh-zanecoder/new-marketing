@@ -32,6 +32,26 @@ export function isTransientMongoError(err: unknown): boolean {
   )
 }
 
+const MONGO_DUPLICATE_KEY_CODE = 11000
+
+function writeErrorCode(writeError: unknown): number | undefined {
+  if (!writeError || typeof writeError !== 'object') return undefined
+  const row = writeError as { code?: unknown; err?: { code?: unknown } }
+  const code = row.code ?? row.err?.code
+  return typeof code === 'number' ? code : undefined
+}
+
+/** Unordered bulk insert that failed only because some rows already exist (E11000). */
+export function isDuplicateKeyOnlyBulkWriteError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const raw = (err as { writeErrors?: unknown }).writeErrors
+  const writeErrors = Array.isArray(raw) ? raw : raw ? [raw] : []
+  if (!writeErrors.length) {
+    return (err as { code?: unknown }).code === MONGO_DUPLICATE_KEY_CODE
+  }
+  return writeErrors.every((e) => writeErrorCode(e) === MONGO_DUPLICATE_KEY_CODE)
+}
+
 function registryConnectRetryDelayMs(attempt: number): number {
   return Math.min(15_000, 1_000 * attempt)
 }

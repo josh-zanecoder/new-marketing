@@ -82,7 +82,7 @@ async function mapPool<T, R>(
   return out
 }
 
-async function loadArchivesInRange(params: {
+export async function loadArchivesInRange(params: {
   client: ZcMailArchiveTrackingClient
   baseUrl: string
   apiKey: string
@@ -106,9 +106,10 @@ async function loadArchivesInRange(params: {
   const collected: ZcMailArchiveListItem[] = []
   const maxPages = params.maxPages ?? ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
   const pageConcurrency = Math.max(1, ZC_MAIL_ARCHIVE_LIST_PAGE_CONCURRENCY)
-  const targetUnique = params.matchMessageIds?.size
-    ? uniqueStrippedMessageIds(params.matchMessageIds).length
-    : 0
+  const targetIds = new Set(
+    params.matchMessageIds?.size ? uniqueStrippedMessageIds(params.matchMessageIds) : []
+  )
+  const targetUnique = targetIds.size
   const foundUnique = new Set<string>()
 
   for (let page = 0; page < maxPages; ) {
@@ -151,9 +152,11 @@ async function loadArchivesInRange(params: {
           archiveItemMatchesMessageIds(item, params.matchMessageIds)
         if (matched) {
           matchedOnPage += 1
+          // Archive rows carry several ids (SES, Message-ID, archive id); count only
+          // campaign ids so foundUnique tracks recipients, not ids.
           for (const id of zcMailArchiveLookupIds(item)) {
             const stripped = id.replace(/^<|>$/g, '').trim()
-            if (stripped) foundUnique.add(stripped)
+            if (stripped && targetIds.has(stripped)) foundUnique.add(stripped)
           }
         }
         if (params.keepMatchedOnly) {

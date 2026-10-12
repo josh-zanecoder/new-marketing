@@ -4,6 +4,7 @@
  */
 import type { Connection, FilterQuery } from 'mongoose'
 import type mongoose from 'mongoose'
+import { isDuplicateKeyOnlyBulkWriteError } from '@server/lib/mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type {
   RecipientListCriterion,
@@ -496,21 +497,34 @@ export async function rebuildRecipientListMembers(
           )
         : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
 
+  type MemberInsert = { recipientListId: typeof listId; contactId: unknown }
+  const insertBatch = async (rows: MemberInsert[]) => {
+    try {
+      await RecipientListMember.insertMany(rows, { ordered: false })
+    } catch (err) {
+      // Concurrent membership writes can add a row between deleteMany and insert; it is still a member.
+      if (!isDuplicateKeyOnlyBulkWriteError(err)) throw err
+    }
+  }
+
   let memberCount = 0
+  const seen = new Set<string>()
   const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()
-  let batch: { recipientListId: typeof listId; contactId: unknown }[] = []
+  let batch: MemberInsert[] = []
 
   for await (const doc of cursor) {
-    if (excludedSet.has(String(doc._id))) continue
+    const id = String(doc._id)
+    if (excludedSet.has(id) || seen.has(id)) continue
+    seen.add(id)
     batch.push({ recipientListId: listId, contactId: doc._id })
     if (batch.length >= MEMBER_INSERT_BATCH) {
-      await RecipientListMember.insertMany(batch, { ordered: false })
+      await insertBatch(batch)
       memberCount += batch.length
       batch = []
     }
   }
   if (batch.length) {
-    await RecipientListMember.insertMany(batch, { ordered: false })
+    await insertBatch(batch)
     memberCount += batch.length
   }
 
