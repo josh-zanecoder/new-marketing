@@ -68,6 +68,8 @@ export interface TenantEmailTemplateRow {
   description?: string
   categoryId?: string | null
   categoryName?: string | null
+  /** False for shared company templates when the user is owner-scoped. */
+  canEdit?: boolean
   createdAt?: string | null
   updatedAt?: string | null
 }

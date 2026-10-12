@@ -230,7 +230,10 @@ onMounted(onMountedLoad)
               Updated {{ formatUpdated(template.updatedAt) }}
             </p>
             <div class="mt-4 flex flex-col gap-2">
-              <div class="grid grid-cols-3 gap-2">
+              <div
+                class="grid gap-2"
+                :class="template.canEdit === false ? 'grid-cols-1' : 'grid-cols-3'"
+              >
                 <button
                   type="button"
                   class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800"
@@ -240,6 +243,7 @@ onMounted(onMountedLoad)
                   Preview
                 </button>
                 <NuxtLink
+                  v-if="template.canEdit !== false"
                   :to="editTemplateHref(template.id)"
                   class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800"
                 >
@@ -247,6 +251,7 @@ onMounted(onMountedLoad)
                   Edit
                 </NuxtLink>
                 <button
+                  v-if="template.canEdit !== false"
                   type="button"
                   class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-2 py-2 text-sm font-semibold text-red-700 shadow-sm transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
                   :disabled="deletingId === template.id"

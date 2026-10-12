@@ -18,6 +18,7 @@ import {
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { emailTemplateOwnershipFromAuth } from '@server/utils/emailTemplate/emailTemplateOwnership'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -47,7 +48,10 @@ export default defineEventHandler(async (event) => {
       const newTemplate = await new EmailTemplate({
         name: `${source.name} (copy) - Template`,
         subject: template.subject?.trim() || source.subject || `${source.name} (copy)`,
-        htmlTemplate: htmlBody
+        htmlTemplate: htmlBody,
+        htmlSource: template.htmlSource ?? 'editor',
+        saveToLibrary: false,
+        ...emailTemplateOwnershipFromAuth(event.context.auth)
       }).save()
       emailTemplateId = newTemplate._id.toString()
     }

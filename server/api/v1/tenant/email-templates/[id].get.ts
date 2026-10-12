@@ -8,6 +8,10 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import {
+  canWriteEmailTemplate,
+  mergeEmailTemplateVisibilityFilter
+} from '@server/utils/emailTemplate/emailTemplateOwnership'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 export default defineEventHandler(async (event) => {
@@ -22,7 +26,12 @@ export default defineEventHandler(async (event) => {
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
   const doc = await model
-    .findOne({ _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER })
+    .findOne(
+      mergeEmailTemplateVisibilityFilter(
+        { _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER },
+        event.context.auth
+      )
+    )
     .lean<EmailTemplateDoc | null>()
 
   if (!doc) {
@@ -50,6 +59,7 @@ export default defineEventHandler(async (event) => {
       externalId: doc.externalId ?? '',
       categoryId,
       categoryName: categoryId ? (nameById.get(categoryId) ?? null) : null,
+      canEdit: canWriteEmailTemplate(doc, event.context.auth),
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     }

@@ -14,6 +14,9 @@ export interface EmailTemplateDoc {
   categoryId?: Types.ObjectId | null
   /** Soft-delete timestamp; null = active. */
   deletedAt?: Date | null
+  /** `ownerEmail` set = private to that owner; empty = shared with the tenant. */
+  metadata?: { ownerEmail?: string }
+  createdBy?: string
   /** Legacy field */
   html?: string
   clientId?: string
