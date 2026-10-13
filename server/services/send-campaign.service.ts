@@ -391,7 +391,7 @@ export async function beginCampaignSend(
     if (inFlightSending > 0) {
       throw createError({
         statusCode: 400,
-        message: 'Campaign send is still in progress'
+        message: 'The last batch is still finishing. Try again in a few minutes.'
       })
     }
 

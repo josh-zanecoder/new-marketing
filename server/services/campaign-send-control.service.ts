@@ -18,6 +18,7 @@ import {
   CAMPAIGN_RECIPIENT_STATUS_SENDING,
   CAMPAIGN_RECIPIENT_STATUS_SENT
 } from '../utils/campaignSend/constants'
+import { releaseAbandonedSendingRecipients } from '../utils/campaignSend/releaseAbandonedSendingRecipients'
 import { beginCampaignSend, finalizeCampaignSendIfComplete } from './send-campaign.service'
 
 const ABORT_RECIPIENTS_MAX = 500
@@ -94,6 +95,7 @@ export async function haltCampaignSend(
   const newSendRunId = randomUUID()
 
   await removeCampaignBatchJobs(dbName, campaignId)
+  await releaseAbandonedSendingRecipients(CampaignRecipient as CampaignRecipientModel, campaignId)
 
   const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
   if (!activeJob) {
@@ -242,6 +244,9 @@ export async function resumeCampaignSend(
     })
   }
 
+  await removeCampaignBatchJobs(dbName, campaignId)
+  await releaseAbandonedSendingRecipients(CampaignRecipient as CampaignRecipientModel, campaignId)
+
   const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
   if (!activeJob) {
     await releaseInFlightSendingRecipients(CampaignRecipient as CampaignRecipientModel, campaignId)
@@ -286,11 +291,14 @@ export async function restartCampaignSend(
     })
   }
 
+  await removeCampaignBatchJobs(dbName, campaignId)
+  await releaseAbandonedSendingRecipients(CampaignRecipient as CampaignRecipientModel, campaignId)
+
   const activeJob = await hasActiveCampaignSendJob(campaignId, dbName)
   if (activeJob) {
     throw createError({
       statusCode: 400,
-      message: 'Campaign send is still in progress'
+      message: 'The last batch is still finishing. Try again in a few minutes.'
     })
   }
 
