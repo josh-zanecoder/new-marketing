@@ -20,6 +20,11 @@ export interface RegistryTenantDoc {
   defaultCampaignSenderName?: unknown
   /** Default From email for new campaigns when the user leaves sender email empty. */
   defaultCampaignSenderEmail?: unknown
+  /**
+   * Who appears in From: `default` = tenant/campaign sender email;
+   * `contact_owner` = same address as Reply-To (contact AE).
+   */
+  campaignFromAddressMode?: unknown
   /** Optional per-tenant Brevo transactional API key; empty/missing → env `BREVO_API_KEY`. */
   brevoApiKey?: unknown
   /**
@@ -64,6 +69,8 @@ export interface TenantAdminRow {
   defaultCampaignSenderName: string | null
   /** Per-tenant default campaign From email; `null` uses shared fallback. */
   defaultCampaignSenderEmail: string | null
+  /** From address: tenant default sender, or per-recipient contact owner (Reply-To). */
+  campaignFromAddressMode: 'default' | 'contact_owner'
   /** True when a custom Brevo API key is stored for this tenant. */
   brevoApiKeyConfigured: boolean
   /** Masked prefix of the custom Brevo key (never the full secret). */

@@ -7,6 +7,10 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import {
+  canWriteEmailTemplate,
+  mergeEmailTemplateVisibilityFilter
+} from '@server/utils/emailTemplate/emailTemplateOwnership'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 type EmailTemplateLean = EmailTemplateDoc & {
@@ -23,7 +27,12 @@ export default defineEventHandler(async (event) => {
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
   const docs = await model
-    .find({ ...ACTIVE_EMAIL_TEMPLATE_FILTER, saveToLibrary: { $ne: false } })
+    .find(
+      mergeEmailTemplateVisibilityFilter(
+        { ...ACTIVE_EMAIL_TEMPLATE_FILTER, saveToLibrary: { $ne: false } },
+        event.context.auth
+      )
+    )
     .sort({ updatedAt: -1 })
     .lean<EmailTemplateLean[]>()
 
@@ -47,6 +56,7 @@ export default defineEventHandler(async (event) => {
         externalId: t.externalId ?? '',
         categoryId,
         categoryName: categoryId ? (nameById.get(categoryId) ?? null) : null,
+        canEdit: canWriteEmailTemplate(t, event.context.auth),
         htmlTemplate,
         createdAt: t.createdAt?.toISOString?.() ?? null,
         updatedAt: t.updatedAt?.toISOString?.() ?? null

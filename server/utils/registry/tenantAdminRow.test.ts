@@ -30,6 +30,25 @@ describe('parseRegistryZcMailFields', () => {
 })
 
 describe('toTenantAdminRow', () => {
+  it('defaults campaign From address mode to default sender', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.campaignFromAddressMode).toBe('default')
+  })
+
+  it('reads contact_owner From address mode from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      campaignFromAddressMode: 'contact_owner'
+    })
+    expect(row?.campaignFromAddressMode).toBe('contact_owner')
+  })
+
   it('includes email provider on admin rows', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

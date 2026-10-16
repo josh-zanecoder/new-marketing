@@ -1,6 +1,7 @@
 import type { Connection } from 'mongoose'
 import type { RecipientListMembershipScope } from '@server/types/tenant/recipientList.model'
 import { hashTenantApiKey } from './api-key'
+import { parseCampaignFromAddressMode, type CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 
 export const ADMIN_ROLE = 'admin' as const
 export const TENANT_ROLE = 'tenant' as const
@@ -259,6 +260,7 @@ export async function findRegistryTenantByDbName(
   crmAppUrl?: string
   /** SHA256 hex of `nmk_` — used to sign browser session cookie. */
   clientKeyHash: string | null
+  campaignFromAddressMode: CampaignFromAddressMode
 } | null> {
   const key = dbName.trim()
   if (!key) return null
@@ -274,6 +276,7 @@ export async function findRegistryTenantByDbName(
           crmAppUrl?: string
           clientKeyHash?: string
           apiKeyHash?: string
+          campaignFromAddressMode?: unknown
         } | null
     )
   if (!doc?.name || !doc?.dbName) return null
@@ -289,10 +292,12 @@ export async function findRegistryTenantByDbName(
     tenantId?: string
     crmAppUrl?: string
     clientKeyHash: string | null
+    campaignFromAddressMode: CampaignFromAddressMode
   } = {
     tenantName: doc.name,
     dbName: doc.dbName,
-    clientKeyHash: hashRaw
+    clientKeyHash: hashRaw,
+    campaignFromAddressMode: parseCampaignFromAddressMode(doc.campaignFromAddressMode)
   }
   if (typeof doc.tenantId === 'string' && doc.tenantId) {
     out.tenantId = doc.tenantId

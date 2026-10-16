@@ -1297,6 +1297,7 @@ interface TenantDetail {
   kafkaOutboundTopic: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
+  campaignFromAddressMode?: 'default' | 'contact_owner'
   brevoApiKeyConfigured?: boolean
   brevoApiKeyPrefix?: string | null
   brevoWebhookSecretConfigured?: boolean

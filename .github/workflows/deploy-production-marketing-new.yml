@@ -1,0 +1,513 @@
+name: New Marketing Production Deployment
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: crm-convere
+  SERVICE_NAME: marketing-v2-prod
+  WORKER_SERVICE_NAME: marketing-v2-prod-kafka-worker
+  SEND_WORKER_SERVICE_NAME: marketing-v2-prod-send-worker
+  BREVO_WEBHOOK_SERVICE_NAME: marketing-v2-prod-brevo-webhook
+  ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/crm-convere/marketing-v2-prod
+  BRIDGE_SERVICE_NAME: marketing-v2-prod-kafka-producer-bridge
+  BRIDGE_IMAGE_NAME: marketing-v2-prod-kafka-producer-bridge
+  BRIDGE_SECRET_NAME: marketing-v2-prod-kafka-producer-bridge
+  SERVICE_ACCOUNT: 401745812644-compute@developer.gserviceaccount.com
+  SECRET_NAME: marketing-v2-prod
+  ARTIFACT_REGISTRY_NAME: marketing-v2-prod
+  REGION: us-west1
+  VPC_CONNECTOR: marketing-run-kafka
+  VPC_EGRESS: private-ranges-only
+  WEB_MIN_INSTANCES: 2
+  WEB_MAX_INSTANCES: 30
+  WORKER_MIN_INSTANCES: 1
+  WORKER_MAX_INSTANCES: 1
+  SEND_WORKER_MIN_INSTANCES: 1
+  SEND_WORKER_MAX_INSTANCES: 1
+  BREVO_WEBHOOK_MIN_INSTANCES: 1
+  BREVO_WEBHOOK_MAX_INSTANCES: 10
+  # Set to 'true' after Secret Manager has CAMPAIGN_SEND_WORKER_SECRET + Cloud Tasks queue vars.
+  DEPLOY_SEND_WORKER: 'true'
+  # Dedicated Brevo ingress (fast ack + Cloud Tasks); requires send worker.
+  DEPLOY_BREVO_WEBHOOK: 'true'
+  # Set to 'true' to deploy marketing-kafka-worker-production on production pushes.
+  DEPLOY_KAFKA_WORKER: 'true'
+  # Set to 'true' to deploy marketing-kafka-producer-bridge-production on production pushes.
+  DEPLOY_KAFKA_BRIDGE: 'true'
+
+jobs:
+  deploy:
+    name: New Marketing Production Deployment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.timestamp.outputs.timestamp }}
+      test_success: ${{ steps.test-deployment.outputs.test_success }}
+      deploy_kafka_worker: ${{ steps.deploy_flags.outputs.deploy_kafka_worker }}
+      deploy_kafka_bridge: ${{ steps.deploy_flags.outputs.deploy_kafka_bridge }}
+      deploy_send_worker: ${{ steps.deploy_flags.outputs.deploy_send_worker }}
+      deploy_brevo_webhook: ${{ steps.deploy_flags.outputs.deploy_brevo_webhook }}
+      send_worker_url: ${{ steps.deploy_send_worker.outputs.send_worker_post_url }}
+      brevo_webhook_url: ${{ steps.deploy_brevo_webhook.outputs.brevo_webhook_public_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
+
+      - name: Fetch environment variables from Secret Manager
+        id: secrets
+        run: |
+          echo "Fetching environment variables from Secret Manager"
+
+          # Fetch the .env content directly from the secret
+          gcloud secrets versions access latest --secret="${{ env.SECRET_NAME }}" --project=${{ env.PROJECT_ID }} > .env
+
+          # Verify the .env file format
+          echo "Verifying .env file format..."
+          if [ -s .env ]; then
+            echo "Environment file created successfully"
+            # Print first few lines without values for verification (safe to log)
+            head -n 5 .env | sed 's/=.*/=****/' || true
+          else
+            echo "Error: .env file is empty"
+            exit 1
+          fi
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      - name: Create Artifact Registry repository if not exists
+        run: |
+          if ! gcloud artifacts repositories describe ${{ env.ARTIFACT_REGISTRY_NAME }} --location=us-west1 --project=${{ env.PROJECT_ID }} 2>/dev/null; then
+            echo "Creating Artifact Registry repository..."
+            gcloud artifacts repositories create ${{ env.ARTIFACT_REGISTRY_NAME }} \
+              --repository-format=docker \
+              --location=us-west1 \
+              --project=${{ env.PROJECT_ID }} \
+              --description="Repository for New Marketing Production"
+          else
+            echo "Repository already exists"
+          fi
+
+      - name: Generate timestamp for unique version
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Resolve optional deploy flags
+        id: deploy_flags
+        run: |
+          echo "deploy_kafka_worker=${{ env.DEPLOY_KAFKA_WORKER }}" >> $GITHUB_OUTPUT
+          echo "deploy_kafka_bridge=${{ env.DEPLOY_KAFKA_BRIDGE }}" >> $GITHUB_OUTPUT
+          echo "deploy_send_worker=${{ env.DEPLOY_SEND_WORKER }}" >> $GITHUB_OUTPUT
+          echo "deploy_brevo_webhook=${{ env.DEPLOY_BREVO_WEBHOOK }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
+
+      - name: Get current traffic allocation
+        id: get-traffic
+        run: |
+          # Check if the service exists and get current revision info
+          if gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} 2>/dev/null; then
+            # Get the current active revision
+            CURRENT_REVISION=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format="value(status.traffic.revisionName)" | head -n 1)
+            echo "Current active revision: $CURRENT_REVISION"
+
+            # Determine the next tag based on current revision
+            if [[ $CURRENT_REVISION == *"-blue-"* ]]; then
+              echo "current=blue" >> $GITHUB_OUTPUT
+              echo "next=green" >> $GITHUB_OUTPUT
+            else
+              echo "current=green" >> $GITHUB_OUTPUT
+              echo "next=blue" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Service doesn't exist yet, start with blue
+            echo "current=none" >> $GITHUB_OUTPUT
+            echo "next=blue" >> $GITHUB_OUTPUT
+          fi
+
+
+      - name: Deploy campaign send worker
+        id: deploy_send_worker
+        if: steps.deploy_flags.outputs.deploy_send_worker == 'true'
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh send-worker .env send-worker-env.yaml
+
+          gcloud run deploy ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.SEND_WORKER_MIN_INSTANCES }} \
+            --max-instances ${{ env.SEND_WORKER_MAX_INSTANCES }} \
+            --memory 2Gi \
+            --cpu 2 \
+            --concurrency 40 \
+            --timeout 3600 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --no-cpu-throttling \
+            --env-vars-file=send-worker-env.yaml
+
+          SEND_WORKER_URL=$(gcloud run services describe ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --region ${{ env.REGION }} --format="value(status.url)")
+          SEND_WORKER_POST_URL="${SEND_WORKER_URL}/api/internal/campaign-sends/batch"
+          echo "send_worker_post_url=$SEND_WORKER_POST_URL" >> $GITHUB_OUTPUT
+
+          gcloud run services update ${{ env.SEND_WORKER_SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --update-env-vars "CAMPAIGN_SEND_WORKER_URL=${SEND_WORKER_POST_URL}"
+
+          echo "Campaign send worker URL: $SEND_WORKER_POST_URL"
+
+      - name: Deploy Brevo webhook ingress
+        id: deploy_brevo_webhook
+        if: steps.deploy_flags.outputs.deploy_brevo_webhook == 'true' && steps.deploy_flags.outputs.deploy_send_worker == 'true'
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh brevo-webhook .env brevo-webhook-env.yaml
+          SAFE_URL=$(printf '%s' "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+          echo "CAMPAIGN_SEND_WORKER_URL: \"$SAFE_URL\"" >> brevo-webhook-env.yaml
+
+          gcloud run deploy ${{ env.BREVO_WEBHOOK_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.BREVO_WEBHOOK_MIN_INSTANCES }} \
+            --max-instances ${{ env.BREVO_WEBHOOK_MAX_INSTANCES }} \
+            --memory 512Mi \
+            --cpu 1 \
+            --concurrency 80 \
+            --timeout 300 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --env-vars-file=brevo-webhook-env.yaml
+
+          BREVO_BASE_URL=$(gcloud run services describe ${{ env.BREVO_WEBHOOK_SERVICE_NAME }} \
+            --region ${{ env.REGION }} --format="value(status.url)")
+          echo "brevo_webhook_public_url=${BREVO_BASE_URL}/api/v1/webhooks/brevo/transactional" >> $GITHUB_OUTPUT
+          echo "Brevo webhook URL (point Brevo UI here): ${BREVO_BASE_URL}/api/v1/webhooks/brevo/transactional"
+
+      - name: Convert .env to env.yaml (web)
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh web .env env.yaml
+          if [ -n "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" ]; then
+            SAFE_URL=$(printf '%s' "${{ steps.deploy_send_worker.outputs.send_worker_post_url }}" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+            echo "CAMPAIGN_SEND_WORKER_URL: \"$SAFE_URL\"" >> env.yaml
+            echo 'EMAIL_WORKER_DISABLED: "true"' >> env.yaml
+          fi
+
+      - name: Deploy new revision
+        id: deploy
+        run: |
+          if gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} 2>/dev/null; then
+            echo "Updating existing service..."
+            gcloud run deploy ${{ env.SERVICE_NAME }} \
+              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+              --region ${{ env.REGION }} \
+              --platform managed \
+              --allow-unauthenticated \
+              --service-account ${{ env.SERVICE_ACCOUNT }} \
+              --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+              --vpc-egress=${{ env.VPC_EGRESS }} \
+              --min-instances ${{ env.WEB_MIN_INSTANCES }} \
+              --max-instances ${{ env.WEB_MAX_INSTANCES }} \
+              --memory 1Gi \
+              --cpu 1 \
+              --timeout 3600 \
+              --port 8080 \
+              --execution-environment gen2 \
+              --cpu-boost \
+              --tag ${{ steps.get-traffic.outputs.next }} \
+              --no-traffic \
+              --env-vars-file=env.yaml
+          else
+            echo "Creating new service..."
+            gcloud run deploy ${{ env.SERVICE_NAME }} \
+              --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.timestamp.outputs.timestamp }} \
+              --region ${{ env.REGION }} \
+              --platform managed \
+              --allow-unauthenticated \
+              --service-account ${{ env.SERVICE_ACCOUNT }} \
+              --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+              --vpc-egress=${{ env.VPC_EGRESS }} \
+              --min-instances ${{ env.WEB_MIN_INSTANCES }} \
+              --max-instances ${{ env.WEB_MAX_INSTANCES }} \
+              --memory 1Gi \
+              --cpu 1 \
+              --timeout 3600 \
+              --port 8080 \
+              --execution-environment gen2 \
+              --cpu-boost \
+              --tag ${{ steps.get-traffic.outputs.next }} \
+              --env-vars-file=env.yaml
+          fi
+
+      - name: Test new deployment
+        id: test-deployment
+        run: |
+          # Get the URL with the tag parameter
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format="value(status.url)")
+          TAG_URL="${SERVICE_URL}/health?tag=${{ steps.get-traffic.outputs.next }}"
+
+          echo "Testing health check URL: $TAG_URL"
+
+          # Add a small delay to allow the service to initialize
+          echo "Waiting 10 seconds for service to initialize..."
+          sleep 10
+
+          # Test the health check endpoint with retries
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+            RESPONSE=$(curl -s -v "$TAG_URL" 2>&1)
+            HTTP_STATUS=$(echo "$RESPONSE" | grep "< HTTP" | awk '{print $3}')
+
+            echo "Full response:"
+            echo "$RESPONSE"
+            echo "HTTP Status: $HTTP_STATUS"
+
+            if [[ "$HTTP_STATUS" =~ ^(200|201|202|204)$ ]]; then
+              echo "Health check successful (Status: $HTTP_STATUS)"
+              SUCCESS=true
+              break
+            else
+              echo "Health check failed with status $HTTP_STATUS"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "Retrying in 10 seconds..."
+                sleep 10
+              fi
+            fi
+          done
+
+          if [ "$SUCCESS" = true ]; then
+            echo "test_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "All health check attempts failed"
+            echo "test_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Migrate traffic to new revision
+        if: steps.test-deployment.outputs.test_success == 'true'
+        run: |
+          echo "Migrating traffic to new revision with tag ${{ steps.get-traffic.outputs.next }}"
+          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --to-tags ${{ steps.get-traffic.outputs.next }}=100
+
+          # Verify traffic migration
+          echo "Verifying traffic migration..."
+          TRAFFIC_INFO=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format="value(status.traffic)")
+          echo "Current traffic distribution:"
+          echo "$TRAFFIC_INFO"
+
+      - name: Rollback if test failed
+        if: steps.test-deployment.outputs.test_success == 'false'
+        run: |
+          echo "Test failed, keeping traffic on current revision"
+          # We don't need to do anything as the new revision has no traffic
+
+  deploy-kafka-worker:
+    name: Deploy Kafka Inbound Worker
+    needs: deploy
+    if: ${{ needs.deploy.outputs.test_success == 'true' && needs.deploy.outputs.deploy_kafka_worker == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
+
+      - name: Fetch environment variables from Secret Manager
+        run: |
+          gcloud secrets versions access latest --secret="${{ env.SECRET_NAME }}" --project=${{ env.PROJECT_ID }} > .env
+          if [ ! -s .env ]; then
+            echo "Error: .env file is empty"
+            exit 1
+          fi
+
+      - name: Convert .env to worker-env.yaml
+        run: |
+          chmod +x .github/scripts/build-cloud-run-env-yaml.sh
+          .github/scripts/build-cloud-run-env-yaml.sh worker .env worker-env.yaml
+
+      - name: Deploy Kafka inbound worker
+        run: |
+          gcloud run deploy ${{ env.WORKER_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ needs.deploy.outputs.image_tag }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances ${{ env.WORKER_MIN_INSTANCES }} \
+            --max-instances ${{ env.WORKER_MAX_INSTANCES }} \
+            --memory 1Gi \
+            --cpu 1 \
+            --timeout 3600 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --cpu-boost \
+            --env-vars-file=worker-env.yaml
+
+      - name: Test worker health check
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.WORKER_SERVICE_NAME }} --region ${{ env.REGION }} --format="value(status.url)")
+          TOKEN=$(gcloud auth print-identity-token)
+          echo "Testing worker health check URL: $SERVICE_URL/health"
+          sleep 10
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$SERVICE_URL/health")
+          echo "HTTP Status: $HTTP_STATUS"
+          if [[ ! "$HTTP_STATUS" =~ ^(200|201|202|204)$ ]]; then
+            echo "Worker health check failed"
+            exit 1
+          fi
+
+  deploy-kafka-bridge:
+    name: Deploy Kafka Producer Bridge
+    needs: deploy
+    if: ${{ needs.deploy.outputs.test_success == 'true' && needs.deploy.outputs.deploy_kafka_bridge == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      - name: Create Artifact Registry repository if not exists
+        run: |
+          if ! gcloud artifacts repositories describe ${{ env.ARTIFACT_REGISTRY_NAME }} --location=us-west1 --project=${{ env.PROJECT_ID }} 2>/dev/null; then
+            gcloud artifacts repositories create ${{ env.ARTIFACT_REGISTRY_NAME }} --repository-format=docker --location=us-west1 --project=${{ env.PROJECT_ID }} --description="Repository for New Marketing Production"
+          fi
+
+      - name: Build and push Kafka bridge image
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ needs.deploy.outputs.image_tag }} ./kafka-producer-bridge
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ needs.deploy.outputs.image_tag }}
+
+      - name: Fetch bridge env from Secret Manager
+        run: |
+          gcloud secrets versions access latest --secret="${{ env.BRIDGE_SECRET_NAME }}" --project=${{ env.PROJECT_ID }} > bridge.env
+          if [ ! -s bridge.env ]; then
+            echo "Error: bridge.env is empty from Secret Manager secret ${{ env.BRIDGE_SECRET_NAME }}"
+            exit 1
+          fi
+
+      - name: Validate bridge env keys
+        run: |
+          missing=0
+          for key in BRIDGE_TOKEN KAFKA_BROKERS KAFKA_CLIENT_ID KAFKA_USERNAME KAFKA_PASSWORD KAFKA_DEFAULT_TOPIC; do
+            if ! grep -q "^${key}=" bridge.env; then
+              echo "Missing required key in bridge secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "Please update Secret Manager secret ${{ env.BRIDGE_SECRET_NAME }} with required keys."
+            exit 1
+          fi
+
+      - name: Convert bridge.env to bridge-env.yaml
+        run: |
+          echo "---" > bridge-env.yaml
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            key="${line%%=*}"
+            value="${line#*=}"
+            value=$(printf '%s' "$value" | sed 's/^"//;s/"$//')
+            safe_value=$(printf '%s' "$value" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+            echo "$key: \"$safe_value\"" >> bridge-env.yaml
+          done < bridge.env
+
+      - name: Deploy Kafka bridge service
+        run: |
+          gcloud run deploy ${{ env.BRIDGE_SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.BRIDGE_IMAGE_NAME }}:${{ needs.deploy.outputs.image_tag }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account ${{ env.SERVICE_ACCOUNT }} \
+            --vpc-connector=projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/${{ env.VPC_CONNECTOR }} \
+            --vpc-egress=${{ env.VPC_EGRESS }} \
+            --min-instances 1 \
+            --max-instances 10 \
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300 \
+            --port 8080 \
+            --execution-environment gen2 \
+            --env-vars-file=bridge-env.yaml

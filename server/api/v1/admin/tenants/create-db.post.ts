@@ -6,7 +6,8 @@ import {
   normalizeBrevoApiKeyInput,
   normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
-  normalizeCampaignSenderNameInput
+  normalizeCampaignSenderNameInput,
+  parseRegistryCampaignFromAddressMode
 } from '@server/utils/registry/tenantAdminRow'
 import {
   computeDefaultMarketingOutboundTopicForTenant,
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
     crmAppUrl?: string | null
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    campaignFromAddressMode?: string | null
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
     emailProvider?: string | null
@@ -67,6 +69,9 @@ export default defineEventHandler(async (event) => {
     body?.defaultCampaignSenderName !== undefined
       ? normalizeCampaignSenderNameInput(body.defaultCampaignSenderName)
       : null
+  const campaignFromAddressMode = parseRegistryCampaignFromAddressMode({
+    campaignFromAddressMode: body?.campaignFromAddressMode
+  })
   const brevoApiKey =
     body?.brevoApiKey !== undefined ? normalizeBrevoApiKeyInput(body.brevoApiKey) : null
   const brevoWebhookSecret =
@@ -88,7 +93,8 @@ export default defineEventHandler(async (event) => {
   const $set: Record<string, unknown> = {
     kafkaOutboundTopic: autoTopic,
     defaultCampaignSenderEmail,
-    defaultCampaignSenderName
+    defaultCampaignSenderName,
+    campaignFromAddressMode
   }
   if (brevoApiKey) $set.brevoApiKey = brevoApiKey
   if (brevoWebhookSecret) $set.brevoWebhookSecret = brevoWebhookSecret

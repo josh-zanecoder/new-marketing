@@ -11,6 +11,10 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import {
+  canWriteEmailTemplate,
+  mergeEmailTemplateVisibilityFilter
+} from '@server/utils/emailTemplate/emailTemplateOwnership'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
@@ -30,11 +34,22 @@ export default defineEventHandler(async (event) => {
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
 
   const existing = await (EmailTemplate as EmailTemplateModel)
-    .findOne({ _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER })
-    .select('_id')
+    .findOne(
+      mergeEmailTemplateVisibilityFilter(
+        { _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER },
+        event.context.auth
+      )
+    )
+    .select('_id metadata')
     .lean()
   if (!existing) {
     throw createError({ statusCode: 404, message: 'Email template not found' })
+  }
+  if (!canWriteEmailTemplate(existing, event.context.auth)) {
+    throw createError({
+      statusCode: 403,
+      message: 'Shared templates can only be edited by an administrator'
+    })
   }
 
   const set: Record<string, unknown> = {}

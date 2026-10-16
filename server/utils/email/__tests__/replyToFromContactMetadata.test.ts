@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyCampaignFromAddressMode,
   buildSenderFromContactOwner,
   buildReplyToFromContactOwner
 } from '../replyToFromContactMetadata'
@@ -118,5 +119,25 @@ describe('buildReplyToFromContactOwner', () => {
   it('returns undefined when owner, dynamic fallback, and operator have no email', () => {
     expect(buildReplyToFromContactOwner(null)).toBeUndefined()
     expect(buildReplyToFromContactOwner({ metadata: { ownerFirstName: 'Jane' } })).toBeUndefined()
+  })
+})
+
+describe('applyCampaignFromAddressMode', () => {
+  const sender = { name: 'Forge Capital Lending', email: 'marketing@example.com' }
+  const replyTo = { name: 'Jane Smith', email: 'jane@example.com' }
+
+  it('keeps the default sender when mode is default', () => {
+    expect(applyCampaignFromAddressMode(sender, replyTo, 'default')).toEqual(sender)
+  })
+
+  it('copies Reply-To onto From when mode is contact_owner', () => {
+    expect(applyCampaignFromAddressMode(sender, replyTo, 'contact_owner')).toEqual({
+      name: 'Jane Smith',
+      email: 'jane@example.com'
+    })
+  })
+
+  it('keeps the default sender when contact_owner has no Reply-To', () => {
+    expect(applyCampaignFromAddressMode(sender, undefined, 'contact_owner')).toEqual(sender)
   })
 })

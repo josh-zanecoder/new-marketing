@@ -10,6 +10,7 @@ import {
   tenantUserEmailFromAuth
 } from '@server/tenant/registry-auth'
 import type { UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
+import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 
 const BREVO_REPLY_TO_NAME_MAX = 70
 const BREVO_SENDER_NAME_MAX = 70
@@ -75,6 +76,22 @@ export function buildSenderFromContactOwner(
   const operatorName = replyToNameFromUserSnapshot(operatorFallback)
   const storedName = String(campaignSender.name ?? '').trim() || email
   const name = (ownerName || dynamicName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
+  return { name, email }
+}
+
+/**
+ * When the tenant is set to From = contact owner, use the same address as Reply-To.
+ * Otherwise keep the campaign/default sender email (name still follows AE when known).
+ */
+export function applyCampaignFromAddressMode(
+  sender: { name: string; email: string },
+  replyTo: CampaignReplyTo | undefined,
+  mode: CampaignFromAddressMode | undefined
+): { name: string; email: string } {
+  if (mode !== 'contact_owner') return sender
+  const email = replyTo?.email?.trim().toLowerCase() ?? ''
+  if (!email.includes('@')) return sender
+  const name = (replyTo?.name?.trim() || sender.name || email).slice(0, BREVO_SENDER_NAME_MAX)
   return { name, email }
 }
 

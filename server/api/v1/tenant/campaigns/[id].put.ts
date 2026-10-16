@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import type { ContactModel } from '@server/types/tenant/contact.model'
+import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import type {
   ManualRecipientInsert,
   ManualRecipientInsertManyCast,
@@ -10,6 +11,7 @@ import type {
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { assertRecipientListVisible } from '@server/utils/recipient/assertRecipientListVisible'
 import { resolveRecipientListContactIdsWithInclusion } from '@server/utils/recipient/resolveRecipientListEmails'
 import {
   isRegisteredTenantAuthContext,
@@ -71,7 +73,15 @@ export default defineEventHandler(async (event) => {
     ? await resolveCustomMarketingTenantFolderName(auth)
     : ''
 
-  const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate, {
+  if (
+    recipientsType === 'list' &&
+    recipientsListId &&
+    recipientsListId !== String(campaign.recipientsListId ?? '')
+  ) {
+    await assertRecipientListVisible(conn, recipientsListId, auth)
+  }
+
+  const templateResult = await resolveCampaignEmailTemplateOnSave(conn, EmailTemplate as EmailTemplateModel, {
     campaignName: body.name.trim(),
     subject: body.subject,
     emailTemplateId: body.emailTemplateId,
@@ -79,6 +89,8 @@ export default defineEventHandler(async (event) => {
     templateHtmlSource: body.templateHtmlSource,
     saveHtmlToLibrary,
     currentEmailTemplateId: campaign.emailTemplate,
+    campaignId: campaign._id,
+    auth,
     tenantName,
     recipientListId: recipientsListId
   })
@@ -116,7 +128,12 @@ export default defineEventHandler(async (event) => {
       ? (async () => {
           const objectIds = idStrings.map((cid) => new mongoose.Types.ObjectId(cid))
           const existing = await (Contact as ContactModel)
-            .find(withMarketableContactFilter({ _id: { $in: objectIds } }))
+            .find(
+              mergeTenantOwnerEmailScopeFilter(
+                withMarketableContactFilter({ _id: { $in: objectIds } }),
+                auth
+              )
+            )
             .select('_id')
             .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
           const allowed = new Set(existing.map((d) => String(d._id)))

@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "seed:admin:production": "tsx scripts/seed-admin.ts --production",
-    "seed:ses-bounce": "tsx scripts/seed-ses-bounce.ts"
+    "seed:ses-bounce": "tsx scripts/seed-ses-bounce.ts",
+    "backfill:email-template-ownership": "tsx scripts/backfill-email-template-ownership.ts"
   },
   "dependencies": {
     "@getbrevo/brevo": "^5.0.1",

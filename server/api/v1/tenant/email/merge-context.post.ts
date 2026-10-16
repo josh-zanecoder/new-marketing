@@ -20,6 +20,7 @@ import {
   composeEmailMergeRoot,
   fetchEnabledEmailDynamicVariableBindings
 } from '@server/utils/emailMerge/composeMergeRoot'
+import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 
 type MergeRootBody =
   | { campaignId: string }
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
     : marketingBase
       ? `${marketingBase}/api/v1/unsubscribe?token=preview`
       : undefined
+  const operatorUser = tenantUserFieldsFromAuth(auth)
 
   if ('campaignId' in body && typeof body.campaignId === 'string' && body.campaignId.trim()) {
     const campaignId = body.campaignId.trim()
@@ -87,7 +89,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Campaign not found' })
     }
     const contact = await previewContactForSavedCampaign(conn, campaignId)
-    const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+    const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings, operatorUser)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -118,7 +120,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const contact = await previewContactForDraft(conn, draft)
-  const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+  const mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings, operatorUser)
   applyDefaultUnsubscribeMergeValue(mergeRoot, {
     dbName,
     contactId: contact?._id ? String(contact._id) : undefined,

@@ -26,13 +26,15 @@ import {
 import { userMergeSnapshotFromDynamicVariableFallbacks } from '../utils/emailMerge/userFieldFallbacksFromDynamicBindings'
 import {
   buildReplyToFromContactOwner,
-  buildSenderFromContactOwner
+  buildSenderFromContactOwner,
+  applyCampaignFromAddressMode
 } from '@server/utils/email/replyToFromContactMetadata'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
 import { sendCampaignOutboundEmail } from './campaignOutboundEmail.service'
 import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
+import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
@@ -80,10 +82,12 @@ async function resolveRegistryMeta(dbName: string): Promise<{
   brevoTenantTagValue: string
   unsubscribeSigningSecret?: string
   crmAppUrl?: string
+  campaignFromAddressMode: CampaignFromAddressMode
 }> {
   let brevoTenantTagValue = dbName
   let unsubscribeSigningSecret: string | undefined
   let crmAppUrl: string | undefined
+  let campaignFromAddressMode: CampaignFromAddressMode = 'default'
   try {
     const registry = await getRegistryConnection()
     const row = await findRegistryTenantByDbName(registry, dbName)
@@ -91,10 +95,11 @@ async function resolveRegistryMeta(dbName: string): Promise<{
     if (tid) brevoTenantTagValue = tid
     if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
     if (row?.crmAppUrl) crmAppUrl = row.crmAppUrl
+    if (row?.campaignFromAddressMode) campaignFromAddressMode = row.campaignFromAddressMode
   } catch (err) {
     console.warn('[TestEmail] registry lookup failed', { dbName, err })
   }
-  return { brevoTenantTagValue, unsubscribeSigningSecret, crmAppUrl }
+  return { brevoTenantTagValue, unsubscribeSigningSecret, crmAppUrl, campaignFromAddressMode }
 }
 
 function crmAppUrlFromAuth(auth: unknown): string | undefined {
@@ -171,7 +176,12 @@ export async function sendCampaignTestEmail(
       name: String(campaign.sender?.name ?? '').trim(),
       email: String(campaign.sender?.email ?? '').trim()
     }, operatorFallback, variableFallback)
-    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(
+      contact ?? null,
+      dynamicVariableBindings,
+      operatorFallback,
+      true
+    )
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -179,7 +189,11 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    replyTo = buildReplyToFromContactOwner(contact, operatorFallback, variableFallback)
+    replyTo =
+      buildReplyToFromContactOwner(null, operatorFallback) ??
+      buildReplyToFromContactOwner(contact) ??
+      buildReplyToFromContactOwner(null, undefined, variableFallback)
+    sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
@@ -212,7 +226,7 @@ export async function sendCampaignTestEmail(
     }
     const contact = await previewContactForDraft(conn, draft)
     unsubscribeContactId = contact?._id ? String(contact._id) : undefined
-    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings)
+    mergeRoot = composeEmailMergeRoot(contact ?? null, dynamicVariableBindings, authSnap, true)
     applyDefaultUnsubscribeMergeValue(mergeRoot, {
       dbName,
       contactId: contact?._id ? String(contact._id) : undefined,
@@ -224,7 +238,11 @@ export async function sendCampaignTestEmail(
       name: String(input.senderName ?? '').trim(),
       email: senderEmail
     }, authSnap, variableFallback)
-    replyTo = buildReplyToFromContactOwner(contact, authSnap, variableFallback)
+    replyTo =
+      buildReplyToFromContactOwner(null, authSnap) ??
+      buildReplyToFromContactOwner(contact) ??
+      buildReplyToFromContactOwner(null, undefined, variableFallback)
+    sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
   }
 
   const cur = mergeRoot.recipient

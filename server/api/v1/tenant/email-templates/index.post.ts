@@ -10,6 +10,10 @@ import {
   categoryIdToString,
   loadCategoryNameMap
 } from '@server/utils/emailTemplate/emailTemplateCategoryLookup'
+import {
+  canWriteEmailTemplate,
+  emailTemplateOwnershipFromAuth
+} from '@server/utils/emailTemplate/emailTemplateOwnership'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export default defineEventHandler(async (event) => {
@@ -45,7 +49,8 @@ export default defineEventHandler(async (event) => {
     htmlTemplate,
     htmlSource,
     saveToLibrary,
-    categoryId: categoryId ?? null
+    categoryId: categoryId ?? null,
+    ...emailTemplateOwnershipFromAuth(event.context.auth)
   })
 
   const idStr = categoryIdToString(doc.categoryId)
@@ -62,6 +67,7 @@ export default defineEventHandler(async (event) => {
       htmlTemplate: doc.htmlTemplate ?? '',
       categoryId: idStr,
       categoryName: idStr ? (nameById.get(idStr) ?? null) : null,
+      canEdit: canWriteEmailTemplate(doc, event.context.auth),
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null
     }

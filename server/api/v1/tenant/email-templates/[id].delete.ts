@@ -2,6 +2,10 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import {
+  canWriteEmailTemplate,
+  mergeEmailTemplateVisibilityFilter
+} from '@server/utils/emailTemplate/emailTemplateOwnership'
 import { softDeleteEmailTemplateById } from '@server/utils/emailTemplate/softDeleteEmailTemplate'
 
 export default defineEventHandler(async (event) => {
@@ -12,7 +16,23 @@ export default defineEventHandler(async (event) => {
 
   const conn = await getTenantConnectionFromEvent(event)
   const { EmailTemplate } = getTenantClientModels(conn)
-  const result = await softDeleteEmailTemplateById(EmailTemplate as EmailTemplateModel, rawId)
+  const model = EmailTemplate as EmailTemplateModel
+
+  const existing = await model
+    .findOne(mergeEmailTemplateVisibilityFilter({ _id: rawId }, event.context.auth))
+    .select('_id metadata')
+    .lean()
+  if (!existing) {
+    throw createError({ statusCode: 404, message: 'Email template not found' })
+  }
+  if (!canWriteEmailTemplate(existing, event.context.auth)) {
+    throw createError({
+      statusCode: 403,
+      message: 'Shared templates can only be deleted by an administrator'
+    })
+  }
+
+  const result = await softDeleteEmailTemplateById(model, rawId)
 
   if (!result.matched) {
     throw createError({ statusCode: 404, message: 'Email template not found' })

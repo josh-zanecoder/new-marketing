@@ -13,6 +13,7 @@ import {
   normalizeBrevoWebhookSecretInput,
   normalizeCampaignSenderEmailInput,
   normalizeCampaignSenderNameInput,
+  parseRegistryCampaignFromAddressMode,
   toTenantAdminRow
 } from '@server/utils/registry/tenantAdminRow'
 
@@ -37,6 +38,7 @@ export default defineEventHandler(async (event) => {
     tenantId?: string | null
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    campaignFromAddressMode?: string | null
     /**
      * Optional. Omit to leave unchanged.
      * `null` or `""` clears the custom key (use env `BREVO_API_KEY`).
@@ -123,6 +125,12 @@ export default defineEventHandler(async (event) => {
   const defaultCampaignSenderName = normalizeCampaignSenderNameInput(
     body.defaultCampaignSenderName
   )
+  const campaignFromAddressMode =
+    body?.campaignFromAddressMode === undefined
+      ? undefined
+      : parseRegistryCampaignFromAddressMode({
+          campaignFromAddressMode: body.campaignFromAddressMode
+        })
 
   const registryConn = await getRegistryConnection()
   const existing = (await registryConn
@@ -157,6 +165,7 @@ export default defineEventHandler(async (event) => {
     defaultCampaignSenderName,
     kafkaOutboundTopic: computeDefaultMarketingOutboundTopicForTenant(displayName, dbName)
   }
+  if (campaignFromAddressMode) $set.campaignFromAddressMode = campaignFromAddressMode
 
   const $unset: Record<string, ''> = {}
   if (Object.prototype.hasOwnProperty.call(body ?? {}, 'brevoApiKey')) {

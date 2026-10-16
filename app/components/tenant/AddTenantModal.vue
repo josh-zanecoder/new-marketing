@@ -95,6 +95,46 @@
           </div>
 
           <div class="compact-modal-field compact-modal-field--full">
+            <span id="add-tenant-from-mode-label" class="compact-modal-label">
+              From address
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="add-tenant-from-mode-label"
+              class="mt-1.5 flex flex-col gap-2"
+            >
+              <label class="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  v-model="campaignFromAddressMode"
+                  type="radio"
+                  value="default"
+                  class="mt-1"
+                >
+                <span>
+                  Default sender
+                  <span class="mt-0.5 block text-xs font-normal text-slate-500">
+                    Use the sender email set above (or the global fallback).
+                  </span>
+                </span>
+              </label>
+              <label class="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  v-model="campaignFromAddressMode"
+                  type="radio"
+                  value="contact_owner"
+                  class="mt-1"
+                >
+                <span>
+                  Contact owner
+                  <span class="mt-0.5 block text-xs font-normal text-slate-500">
+                    Same as Reply-To: each recipient’s AE. Falls back to the default sender if the contact has no owner.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="compact-modal-field compact-modal-field--full">
             <label for="tenant-crm-url" class="compact-modal-label">
               CRM app URL <span class="compact-modal-label-hint">(optional)</span>
             </label>
@@ -272,6 +312,10 @@
 
 <script setup lang="ts">
 import { useSubmitting } from '~/composables/useSubmitting'
+import {
+  CAMPAIGN_FROM_ADDRESS_MODE_DEFAULT,
+  type CampaignFromAddressMode
+} from '~~/shared/campaignFromAddressMode'
 
 const props = defineProps<{
   open: boolean
@@ -286,6 +330,7 @@ const emit = defineEmits<{
     crmAppUrl?: string
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
+    campaignFromAddressMode?: CampaignFromAddressMode
     brevoApiKey?: string | null
     brevoWebhookSecret?: string | null
     emailProvider?: 'BREVO' | 'ZC_MAIL'
@@ -301,6 +346,7 @@ const name = ref('')
 const email = ref('')
 const defaultCampaignSenderName = ref('')
 const defaultCampaignSenderEmail = ref('')
+const campaignFromAddressMode = ref<CampaignFromAddressMode>(CAMPAIGN_FROM_ADDRESS_MODE_DEFAULT)
 const crmAppUrl = ref('')
 const brevoApiKey = ref('')
 const brevoWebhookSecret = ref('')
@@ -320,6 +366,7 @@ function resetForm() {
   email.value = ''
   defaultCampaignSenderName.value = ''
   defaultCampaignSenderEmail.value = ''
+  campaignFromAddressMode.value = CAMPAIGN_FROM_ADDRESS_MODE_DEFAULT
   crmAppUrl.value = ''
   brevoApiKey.value = ''
   brevoWebhookSecret.value = ''
@@ -408,6 +455,7 @@ function handleSubmit() {
     defaultCampaignSenderEmail: trimmedSenderEmail
       ? trimmedSenderEmail.toLowerCase()
       : null,
+    campaignFromAddressMode: campaignFromAddressMode.value,
     ...(trimmedCrm ? { crmAppUrl: trimmedCrm } : {}),
     emailProvider: emailProvider.value,
     ...(emailProvider.value === 'BREVO' && brevoApiKey.value.trim()
