@@ -1,137 +1,170 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
-import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from '@server/constants/contactOwnerScope.constants'
-import { normalizeHandoffCrmAppUrl } from './normalizeHandoffCrmAppUrl'
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { MAX_CONTACT_OWNER_EMAILS_IN_SESSION } from "@server/constants/contactOwnerScope.constants";
+import { normalizeHandoffCrmAppUrl } from "./normalizeHandoffCrmAppUrl";
 
 function base64urlEncode(buf: Buffer): string {
   return buf
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 }
 
 function base64urlToBuffer(s: string): Buffer {
-  const pad = '='.repeat((4 - (s.length % 4)) % 4)
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + pad
-  return Buffer.from(b64, 'base64')
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  return Buffer.from(b64, "base64");
 }
 
 export function signMarketingTenantBrowserSession(params: {
-  dbName: string
-  tenantId: string | null
-  clientKeyHash: string
-  maxAgeSec: number
-  handoffEmail?: string
-  handoffFirstName?: string
-  handoffLastName?: string
-  handoffPhone?: string
-  handoffRole?: string
+  dbName: string;
+  tenantId: string | null;
+  clientKeyHash: string;
+  maxAgeSec: number;
+  handoffEmail?: string;
+  handoffFirstName?: string;
+  handoffLastName?: string;
+  handoffPhone?: string;
+  handoffRole?: string;
+  permissions?: string[];
   /** From tenant handoff JWT — overrides registry `crmAppUrl` for “Back to CRM”. */
-  handoffCrmAppUrl?: string
-  tenantWideContacts?: boolean
-  contactOwnerEmails?: string[]
+  handoffCrmAppUrl?: string;
+  tenantWideContacts?: boolean;
+  contactOwnerEmails?: string[];
 }): string {
-  const now = Math.floor(Date.now() / 1000)
-  const header = { alg: 'HS256', typ: 'JWT' }
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "HS256", typ: "JWT" };
   const payload: Record<string, unknown> = {
     sub: params.dbName,
     iat: now,
-    exp: now + params.maxAgeSec
+    exp: now + params.maxAgeSec,
+  };
+  if (params.tenantId) payload.tid = params.tenantId;
+  const em = params.handoffEmail?.trim();
+  if (em) payload.tenantEmail = em;
+  const fn = params.handoffFirstName?.trim();
+  if (fn) payload.tenantFn = fn;
+  const ln = params.handoffLastName?.trim();
+  if (ln) payload.tenantLn = ln;
+  const ph = params.handoffPhone?.trim();
+  if (ph) payload.tenantPh = ph;
+  const rl = params.handoffRole?.trim();
+  if (rl) payload.tenantRl = rl;
+  if (Array.isArray(params.permissions)) {
+    payload.perms = params.permissions.slice(0, 256);
   }
-  if (params.tenantId) payload.tid = params.tenantId
-  const em = params.handoffEmail?.trim()
-  if (em) payload.tenantEmail = em
-  const fn = params.handoffFirstName?.trim()
-  if (fn) payload.tenantFn = fn
-  const ln = params.handoffLastName?.trim()
-  if (ln) payload.tenantLn = ln
-  const ph = params.handoffPhone?.trim()
-  if (ph) payload.tenantPh = ph
-  const rl = params.handoffRole?.trim()
-  if (rl) payload.tenantRl = rl
-  const crm = params.handoffCrmAppUrl?.trim()
-  if (crm) payload.hcrm = crm
+  const crm = params.handoffCrmAppUrl?.trim();
+  if (crm) payload.hcrm = crm;
   if (params.tenantWideContacts === true) {
-    payload.tw = true
+    payload.tw = true;
   }
   if (params.contactOwnerEmails?.length) {
-    payload.owners = params.contactOwnerEmails.slice(0, MAX_CONTACT_OWNER_EMAILS_IN_SESSION)
+    payload.owners = params.contactOwnerEmails.slice(
+      0,
+      MAX_CONTACT_OWNER_EMAILS_IN_SESSION,
+    );
   }
 
-  const h = base64urlEncode(Buffer.from(JSON.stringify(header), 'utf8'))
-  const p = base64urlEncode(Buffer.from(JSON.stringify(payload), 'utf8'))
-  const sig = createHmac('sha256', params.clientKeyHash).update(`${h}.${p}`).digest()
-  const s = base64urlEncode(sig)
-  return `${h}.${p}.${s}`
+  const h = base64urlEncode(Buffer.from(JSON.stringify(header), "utf8"));
+  const p = base64urlEncode(Buffer.from(JSON.stringify(payload), "utf8"));
+  const sig = createHmac("sha256", params.clientKeyHash)
+    .update(`${h}.${p}`)
+    .digest();
+  const s = base64urlEncode(sig);
+  return `${h}.${p}.${s}`;
 }
 
 export function verifyMarketingTenantBrowserSession(
   token: string,
   clientKeyHash: string,
-  expectedDbName: string
+  expectedDbName: string,
 ): {
-  tenantId: string | null
-  tenantUserEmail?: string
-  tenantUserFirstName?: string
-  tenantUserLastName?: string
-  tenantUserPhone?: string
-  tenantUserRole?: string
-  handoffCrmAppUrl?: string
-  tenantWideContacts?: true
-  contactOwnerEmails?: string[]
+  tenantId: string | null;
+  tenantUserEmail?: string;
+  tenantUserFirstName?: string;
+  tenantUserLastName?: string;
+  tenantUserPhone?: string;
+  tenantUserRole?: string;
+  permissions?: string[];
+  handoffCrmAppUrl?: string;
+  tenantWideContacts?: true;
+  contactOwnerEmails?: string[];
 } {
-  const parts = token.trim().split('.')
-  if (parts.length !== 3) throw new Error('Invalid session')
-  const [h, p, sigB64] = parts
-  if (!h || !p || !sigB64) throw new Error('Invalid session')
+  const parts = token.trim().split(".");
+  if (parts.length !== 3) throw new Error("Invalid session");
+  const [h, p, sigB64] = parts;
+  if (!h || !p || !sigB64) throw new Error("Invalid session");
 
-  const expectedSig = createHmac('sha256', clientKeyHash).update(`${h}.${p}`).digest()
-  const gotSig = base64urlToBuffer(sigB64)
-  if (gotSig.length !== expectedSig.length || !timingSafeEqual(gotSig, expectedSig)) {
-    throw new Error('Invalid signature')
+  const expectedSig = createHmac("sha256", clientKeyHash)
+    .update(`${h}.${p}`)
+    .digest();
+  const gotSig = base64urlToBuffer(sigB64);
+  if (
+    gotSig.length !== expectedSig.length ||
+    !timingSafeEqual(gotSig, expectedSig)
+  ) {
+    throw new Error("Invalid signature");
   }
 
-  const payload = JSON.parse(base64urlToBuffer(p).toString('utf8')) as Record<string, unknown>
-  const sub = typeof payload.sub === 'string' ? payload.sub.trim() : ''
-  const exp = typeof payload.exp === 'number' ? payload.exp : 0
-  if (!sub || sub !== expectedDbName) throw new Error('Invalid subject')
-  if (exp < Math.floor(Date.now() / 1000)) throw new Error('Expired')
+  const payload = JSON.parse(base64urlToBuffer(p).toString("utf8")) as Record<
+    string,
+    unknown
+  >;
+  const sub = typeof payload.sub === "string" ? payload.sub.trim() : "";
+  const exp = typeof payload.exp === "number" ? payload.exp : 0;
+  if (!sub || sub !== expectedDbName) throw new Error("Invalid subject");
+  if (exp < Math.floor(Date.now() / 1000)) throw new Error("Expired");
 
-  const tid = typeof payload.tid === 'string' ? payload.tid.trim() : ''
+  const tid = typeof payload.tid === "string" ? payload.tid.trim() : "";
   const tenantUserEmail =
-    (typeof payload.tenantEmail === 'string' ? payload.tenantEmail.trim() : '') ||
-    (typeof payload.crmEmail === 'string' ? payload.crmEmail.trim() : '')
+    (typeof payload.tenantEmail === "string"
+      ? payload.tenantEmail.trim()
+      : "") ||
+    (typeof payload.crmEmail === "string" ? payload.crmEmail.trim() : "");
   const tenantUserFirstName =
-    (typeof payload.tenantFn === 'string' ? payload.tenantFn.trim() : '') ||
-    (typeof payload.crmFn === 'string' ? payload.crmFn.trim() : '')
+    (typeof payload.tenantFn === "string" ? payload.tenantFn.trim() : "") ||
+    (typeof payload.crmFn === "string" ? payload.crmFn.trim() : "");
   const tenantUserLastName =
-    (typeof payload.tenantLn === 'string' ? payload.tenantLn.trim() : '') ||
-    (typeof payload.crmLn === 'string' ? payload.crmLn.trim() : '')
+    (typeof payload.tenantLn === "string" ? payload.tenantLn.trim() : "") ||
+    (typeof payload.crmLn === "string" ? payload.crmLn.trim() : "");
   const tenantUserPhone =
-    (typeof payload.tenantPh === 'string' ? payload.tenantPh.trim() : '') ||
-    (typeof payload.crmPh === 'string' ? payload.crmPh.trim() : '')
+    (typeof payload.tenantPh === "string" ? payload.tenantPh.trim() : "") ||
+    (typeof payload.crmPh === "string" ? payload.crmPh.trim() : "");
   const tenantUserRole =
-    (typeof payload.tenantRl === 'string' ? payload.tenantRl.trim() : '') ||
-    (typeof payload.crmRl === 'string' ? payload.crmRl.trim() : '')
-  const handoffCrmRaw = typeof payload.hcrm === 'string' ? payload.hcrm.trim() : ''
-  const handoffCrmAppUrl = normalizeHandoffCrmAppUrl(handoffCrmRaw)
-  const tenantWideContacts =
-    payload.tw === true || payload.tw === 'true' ? (true as const) : undefined
-
-  let contactOwnerEmails: string[] | undefined
-  const rawOwners = payload.owners
-  if (Array.isArray(rawOwners)) {
-    const next: string[] = []
-    const seen = new Set<string>()
-    for (const x of rawOwners) {
-      if (typeof x !== 'string') continue
-      const e = x.trim().toLowerCase()
-      if (!e || seen.has(e)) continue
-      seen.add(e)
-      next.push(e)
-      if (next.length >= MAX_CONTACT_OWNER_EMAILS_IN_SESSION) break
+    (typeof payload.tenantRl === "string" ? payload.tenantRl.trim() : "") ||
+    (typeof payload.crmRl === "string" ? payload.crmRl.trim() : "");
+  let permissions: string[] | undefined;
+  if (Array.isArray(payload.perms)) {
+    const set = new Set<string>();
+    for (const value of payload.perms) {
+      if (typeof value !== "string") continue;
+      const permission = value.trim();
+      if (!permission || permission.length > 160) continue;
+      set.add(permission);
+      if (set.size >= 256) break;
     }
-    if (next.length > 0) contactOwnerEmails = next
+    permissions = [...set];
+  }
+  const handoffCrmRaw =
+    typeof payload.hcrm === "string" ? payload.hcrm.trim() : "";
+  const handoffCrmAppUrl = normalizeHandoffCrmAppUrl(handoffCrmRaw);
+  const tenantWideContacts =
+    payload.tw === true || payload.tw === "true" ? (true as const) : undefined;
+
+  let contactOwnerEmails: string[] | undefined;
+  const rawOwners = payload.owners;
+  if (Array.isArray(rawOwners)) {
+    const next: string[] = [];
+    const seen = new Set<string>();
+    for (const x of rawOwners) {
+      if (typeof x !== "string") continue;
+      const e = x.trim().toLowerCase();
+      if (!e || seen.has(e)) continue;
+      seen.add(e);
+      next.push(e);
+      if (next.length >= MAX_CONTACT_OWNER_EMAILS_IN_SESSION) break;
+    }
+    if (next.length > 0) contactOwnerEmails = next;
   }
 
   return {
@@ -141,8 +174,9 @@ export function verifyMarketingTenantBrowserSession(
     ...(tenantUserLastName ? { tenantUserLastName } : {}),
     ...(tenantUserPhone ? { tenantUserPhone } : {}),
     ...(tenantUserRole ? { tenantUserRole } : {}),
+    ...(permissions ? { permissions } : {}),
     ...(handoffCrmAppUrl ? { handoffCrmAppUrl } : {}),
     ...(tenantWideContacts ? { tenantWideContacts } : {}),
-    ...(contactOwnerEmails ? { contactOwnerEmails } : {})
-  }
+    ...(contactOwnerEmails ? { contactOwnerEmails } : {}),
+  };
 }
