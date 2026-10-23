@@ -5,12 +5,17 @@ import { isBrevoRateLimitErrorMessage } from '@server/services/brevo.service'
  * Rate limits become 429 (not 502) so clients can retry without treating it as a hard failure.
  */
 export function throwBrevoTrackingFetchError(error: string): never {
+  console.error('[CampaignTracking] provider sync failed', { providerError: error })
+
   if (isBrevoRateLimitErrorMessage(error)) {
     throw createError({
       statusCode: 429,
-      statusMessage: 'Brevo rate limit — please retry in a moment',
-      message: error
+      statusMessage: 'Tracking is temporarily busy. Please try again in a moment.',
+      message: 'Tracking is temporarily busy. Please try again in a moment.'
     })
   }
-  throw createError({ statusCode: 502, statusMessage: error })
+  throw createError({
+    statusCode: 502,
+    message: 'We could not refresh campaign tracking right now. Please contact your administrator.'
+  })
 }

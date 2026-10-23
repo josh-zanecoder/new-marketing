@@ -7,6 +7,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { requireTenantDatabaseName } from '@server/utils/tenant/requireTenantDatabaseName'
 
 const MIN_LEAD_MS = 60_000
 
@@ -33,10 +34,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'schedule campaign send')
 
   const { Campaign } = getTenantClientModels(conn)
   const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)

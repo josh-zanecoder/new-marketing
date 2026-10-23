@@ -8,6 +8,7 @@ import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/mat
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { getRegistryConnection } from '../lib/mongoose'
 import { findRegistryTenantByDbName } from '../tenant/registry-auth'
+import { requireTenantDatabaseName } from '../utils/tenant/requireTenantDatabaseName'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
   type DraftRecipientContext,
@@ -118,10 +119,7 @@ export async function sendCampaignTestEmail(
     throw createError({ statusCode: 400, message: 'A valid recipient email is required' })
   }
 
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'send campaign test email')
 
   const models = getTenantClientModels(conn)
   const { Campaign, EmailDynamicVariable, EmailTemplate } = models
@@ -286,7 +284,16 @@ export async function sendCampaignTestEmail(
   })
 
   if (result.error) {
-    throw createError({ statusCode: 502, message: result.error })
+    console.error('[TestEmail] delivery failed', {
+      recipient,
+      campaignId: campaignTag,
+      dbName,
+      providerError: result.error
+    })
+    throw createError({
+      statusCode: 502,
+      message: 'We could not send the test email right now. Please contact your administrator.'
+    })
   }
 
   console.log('[TestEmail] sent', { recipient, campaignId: campaignTag, messageId: result.messageId })

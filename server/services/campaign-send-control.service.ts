@@ -19,6 +19,7 @@ import {
   CAMPAIGN_RECIPIENT_STATUS_SENT
 } from '../utils/campaignSend/constants'
 import { releaseAbandonedSendingRecipients } from '../utils/campaignSend/releaseAbandonedSendingRecipients'
+import { requireTenantDatabaseName } from '../utils/tenant/requireTenantDatabaseName'
 import { beginCampaignSend, finalizeCampaignSendIfComplete } from './send-campaign.service'
 
 const ABORT_RECIPIENTS_MAX = 500
@@ -72,10 +73,7 @@ export async function haltCampaignSend(
   sent: number
   failed: number
 }> {
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'halt campaign send')
 
   const models = getTenantClientModels(conn)
   const { Campaign, CampaignRecipient } = models
@@ -180,10 +178,7 @@ export async function unscheduleAllScheduledCampaignSends(conn: Connection): Pro
   ok: true
   unscheduled: Array<{ campaignId: string }>
 }> {
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'unschedule all campaigns')
 
   const models = getTenantClientModels(conn)
   const { Campaign } = models
@@ -223,10 +218,7 @@ export async function resumeCampaignSend(
   campaignId: string,
   options?: { auth?: unknown; mergeUserSnapshot?: CampaignLean['mergeUserSnapshot'] }
 ) {
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'resume campaign send')
 
   const models = getTenantClientModels(conn)
   const { Campaign, CampaignRecipient } = models
@@ -270,10 +262,7 @@ export async function restartCampaignSend(
   campaignId: string,
   options?: { auth?: unknown; mergeUserSnapshot?: CampaignLean['mergeUserSnapshot'] }
 ) {
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'restart campaign send')
 
   const models = getTenantClientModels(conn)
   const { Campaign, CampaignRecipient } = models

@@ -9,6 +9,7 @@ import {
   persistCampaignTemplateHtmlAfterUnsubscribeCheck
 } from '@server/utils/emailTemplate/applyCampaignUnsubscribeSecondCheck'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { requireTenantDatabaseName } from '@server/utils/tenant/requireTenantDatabaseName'
 
 /**
  * After the pre-send unsubscribe second check paused for approval: persist the
@@ -21,10 +22,10 @@ export default defineEventHandler(async (event) => {
 
   const conn = await getTenantConnectionFromEvent(event)
   const snap = tenantUserFieldsFromAuth(event.context.auth)
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(
+    conn.db?.databaseName,
+    'approve campaign unsubscribe notice'
+  )
 
   const { Campaign } = getTenantClientModels(conn)
   const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)

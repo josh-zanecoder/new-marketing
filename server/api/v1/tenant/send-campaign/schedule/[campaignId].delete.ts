@@ -3,16 +3,14 @@ import { removeScheduledCampaignJob } from '@server/queue/emailQueue'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { requireTenantDatabaseName } from '@server/utils/tenant/requireTenantDatabaseName'
 
 export default defineEventHandler(async (event) => {
   const campaignId = String(getRouterParam(event, 'campaignId') ?? '').trim()
   if (!campaignId) throw createError({ statusCode: 400, message: 'Campaign ID is required' })
 
   const conn = await getTenantConnectionFromEvent(event)
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'cancel scheduled campaign')
 
   const { Campaign } = getTenantClientModels(conn)
   const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)

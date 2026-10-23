@@ -22,15 +22,21 @@ type GcsEnv = {
 let storageClient: Storage | null = null
 let cachedBucketName = ''
 
+const CUSTOM_MARKETING_IMAGE_UPLOAD_ERROR =
+  'We could not upload your image right now. Please contact your administrator.'
+
 function decodeGcsPrivateKey(raw: string, base64Raw: string): string {
   const fromB64 = String(base64Raw ?? '').trim()
   if (fromB64) {
     try {
       return Buffer.from(fromB64, 'base64').toString('utf8').replace(/\\n/g, '\n').trim()
     } catch {
+      console.error('Custom Marketing GCS configuration error', {
+        reason: 'GCS_PRIVATE_KEY_BASE64 could not be decoded'
+      })
       throw createError({
         statusCode: 500,
-        message: 'Invalid GCS_PRIVATE_KEY_BASE64 (could not decode).'
+        message: CUSTOM_MARKETING_IMAGE_UPLOAD_ERROR
       })
     }
   }
@@ -72,10 +78,13 @@ function readGcsEnv(): GcsEnv {
   )
 
   if (!bucketName) {
+    console.error('Custom Marketing GCS configuration error', {
+      reason: 'No bucket configured',
+      expectedVariables: ['GCS_BUCKET', 'MARKETING_GCS_BUCKET']
+    })
     throw createError({
       statusCode: 503,
-      message:
-        'GCS is not configured. Set GCS_BUCKET (or MARKETING_GCS_BUCKET) for Custom Marketing image hosting.'
+      message: CUSTOM_MARKETING_IMAGE_UPLOAD_ERROR
     })
   }
 
@@ -156,12 +165,21 @@ export async function uploadCustomMarketingImageToGcs(
     const message = err instanceof Error ? err.message : 'GCS upload failed'
     const isDenied =
       /Permission|denied|storage\.objects\.create|does not have/i.test(message)
-    console.error('Custom Marketing GCS upload failed', message)
+    console.error('Custom Marketing GCS upload failed', {
+      bucket: bucket.name,
+      objectPath,
+      tenantName: input.tenantName,
+      recipientListId: input.recipientListId,
+      contentType,
+      sizeBytes: input.buffer.length,
+      isPermissionError: isDenied,
+      error: err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack, cause: err.cause }
+        : err
+    })
     throw createError({
       statusCode: isDenied ? 403 : 502,
-      message: isDenied
-        ? 'GCS upload denied. Grant the upload service account roles/storage.objectAdmin on bucket custom-marketing-images.'
-        : 'Could not upload image to GCS. Check GCS_BUCKET and credentials.'
+      message: CUSTOM_MARKETING_IMAGE_UPLOAD_ERROR
     })
   }
 

@@ -15,6 +15,7 @@ import type {
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import { requireTenantDatabaseName } from '../utils/tenant/requireTenantDatabaseName'
 import {
   inspectCampaignUnsubscribeSecondCheck,
   persistCampaignTemplateHtmlAfterUnsubscribeCheck
@@ -288,10 +289,7 @@ export async function beginCampaignSend(
   const allowedStatuses = options?.allowedStatuses ?? ['Draft']
   const revertStatus = options?.statusOnEnqueueFailure ?? 'Draft'
 
-  const dbName = conn.db?.databaseName
-  if (!dbName) {
-    throw createError({ statusCode: 500, message: 'Tenant connection has no database name' })
-  }
+  const dbName = requireTenantDatabaseName(conn.db?.databaseName, 'begin campaign send')
 
   const models = getTenantClientModels(conn)
   const { Campaign, CampaignRecipient } = models
