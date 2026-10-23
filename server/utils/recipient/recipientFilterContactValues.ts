@@ -4,7 +4,10 @@
  */
 import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import { recipientFilterContactFieldPath } from '~~/shared/utils/recipientFilterContactField'
+import {
+  distinctBrokerRoleLabels,
+  recipientFilterContactFieldPath
+} from '~~/shared/utils/recipientFilterContactField'
 import { canonicalRecipientFilterFieldsFromDoc } from './recipientFilterValidation'
 
 const MAX_VALUE_OPTIONS = 500
@@ -56,11 +59,12 @@ export async function recipientFilterContactValueOptions(params: {
       if (group.contactType) query.contactType = group.contactType
 
       const raw = await Contact.distinct(group.fieldPath, query)
-      const values = [
-        ...new Set(raw.map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean))
-      ]
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, MAX_VALUE_OPTIONS)
+      const texts = raw.map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean)
+      const values = (
+        group.fieldPath === 'metadata.brokerRole'
+          ? distinctBrokerRoleLabels(texts)
+          : [...new Set(texts)].sort((a, b) => a.localeCompare(b))
+      ).slice(0, MAX_VALUE_OPTIONS)
 
       for (const filterId of group.filterIds) options.set(filterId, values)
     })

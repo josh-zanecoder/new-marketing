@@ -130,20 +130,13 @@
                       Audience filters
                     </h2>
                     <p class="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
-                      Narrow the list with registry rules. Skip this to include everyone in the audience.
+                      Conditions inside a group stay together. And between groups means both groups. Or means either group.
                     </p>
-                  </div>
-                  <div
-                    v-if="form.filterRows.length > 1"
-                    class="inline-flex w-full shrink-0 items-center gap-2 self-start rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1.5 text-[11px] font-semibold leading-snug text-sky-950 shadow-sm shadow-sky-900/[0.04] ring-1 ring-sky-100/60 sm:w-auto sm:text-xs"
-                    role="status"
-                  >
-                    <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
-                    <span>{{ form.filterRows.length }} conditions — <span class="font-semibold">And / Or</span> between them</span>
                   </div>
                 </div>
               </div>
-              <div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+              <div class="space-y-5 p-4 sm:p-6">
+                <TenantRecipientListPreview :preview="filterPreview" />
                 <p
                   v-if="data.tenantIdConfigured && !filtersForAudience.length"
                   class="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm leading-relaxed text-slate-600 sm:px-5"
@@ -151,80 +144,104 @@
                   No filters are set up for this audience yet. Ask an admin to add recipient filters, or create the list using the audience only.
                 </p>
 
+                <template v-for="(group, gIdx) in form.filterGroups" :key="gIdx">
                 <div
-                  v-for="(row, idx) in form.filterRows"
+                  v-if="gIdx > 0"
+                  class="flex items-center gap-3"
+                  role="group"
+                  :aria-label="`How to combine group ${gIdx} with group ${gIdx + 1}`"
+                >
+                  <div class="h-px flex-1 bg-slate-300" aria-hidden="true" />
+                  <div
+                    class="flex items-center gap-2 rounded-full border bg-white py-1 pl-3 pr-1 shadow-sm"
+                    :class="form.groupJoins[gIdx - 1] === 'and' || form.groupJoins[gIdx - 1] === 'or' ? 'border-slate-200' : 'border-amber-300 ring-2 ring-amber-100'"
+                  >
+                    <span class="text-xs font-medium text-slate-500">{{ form.groupJoins[gIdx - 1] === 'or' ? 'Either group' : form.groupJoins[gIdx - 1] === 'and' ? 'Both groups' : 'Choose' }}</span>
+                    <div class="flex rounded-full bg-slate-100 p-0.5" role="radiogroup" aria-label="Combine groups">
+                      <button
+                        type="button"
+                        class="rounded-full px-3 py-1 text-xs font-semibold"
+                        :class="form.groupJoins[gIdx - 1] === 'and' ? 'bg-slate-900 text-white' : 'text-slate-600'"
+                        @click="form.groupJoins[gIdx - 1] = 'and'"
+                      >
+                        And
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full px-3 py-1 text-xs font-semibold"
+                        :class="form.groupJoins[gIdx - 1] === 'or' ? 'bg-amber-500 text-white' : 'text-slate-600'"
+                        @click="form.groupJoins[gIdx - 1] = 'or'"
+                      >
+                        Or
+                      </button>
+                    </div>
+                  </div>
+                  <div class="h-px flex-1 bg-slate-300" aria-hidden="true" />
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+                  <div class="mb-3 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white tabular-nums">{{ gIdx + 1 }}</span>
+                      <p class="text-sm font-semibold text-slate-900">Group {{ gIdx + 1 }}</p>
+                    </div>
+                    <button
+                      type="button"
+                      class="text-xs font-semibold text-red-700 hover:underline"
+                      @click="removeFilterGroup(gIdx)"
+                    >
+                      Remove group
+                    </button>
+                  </div>
+                <div
+                  v-for="(row, idx) in group.rows"
                   :key="idx"
                   class="relative"
                 >
                   <div
-                    v-if="showCombineBeforeFormRow(idx)"
-                    class="relative mb-6 flex flex-col items-center gap-3"
+                    v-if="showCombineBeforeFormRow(group, idx)"
+                    class="flex items-center gap-3 py-3"
                     role="group"
-                    :aria-label="`How to combine condition ${idx} with condition ${idx + 1}`"
+                    :aria-label="`How to combine condition ${conditionNumber(gIdx, idx - 1)} with condition ${conditionNumber(gIdx, idx)}`"
                   >
-                    <div class="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-gradient-to-b from-slate-200 via-primary-200/60 to-slate-200 sm:block sm:-top-4 sm:h-[calc(100%+1rem)]" aria-hidden="true" />
-                    <div class="relative z-[1] w-full rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] sm:p-5">
-                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                        <div class="flex items-start gap-2.5 sm:gap-3">
-                          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-100/80 sm:h-10 sm:w-10" aria-hidden="true">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                            </svg>
-                          </span>
-                          <div>
-                            <p class="text-sm font-semibold text-slate-900">
-                              Connect to the next rule
-                            </p>
-                            <p class="mt-0.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                              <strong class="font-medium text-slate-800">And</strong> = every rule passes.
-                              <strong class="font-medium text-slate-800">Or</strong> = any rule passes.
-                            </p>
-                          </div>
-                        </div>
-                        <div
-                          class="flex w-full shrink-0 rounded-xl border border-slate-200/90 bg-slate-100/70 p-1 sm:w-auto"
-                          role="radiogroup"
-                          aria-label="Combine filters"
-                        >
-                          <button
-                            type="button"
-                            class="min-h-[2.5rem] flex-1 rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors sm:min-w-[7.5rem] sm:px-4 sm:text-sm"
-                            :class="form.criterionJoins[joinSlotBeforeFormRow(idx)] === 'and'
-                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-primary-200/80'
-                              : 'text-slate-600 hover:text-slate-900'"
-                            @click="form.criterionJoins[joinSlotBeforeFormRow(idx)] = 'and'"
-                          >
-                            And
-                            <span class="mt-0.5 block text-[10px] font-normal text-slate-500 sm:text-xs">all match</span>
-                          </button>
-                          <button
-                            type="button"
-                            class="min-h-[2.5rem] flex-1 rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors sm:min-w-[7.5rem] sm:px-4 sm:text-sm"
-                            :class="form.criterionJoins[joinSlotBeforeFormRow(idx)] === 'or'
-                              ? 'bg-white text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-primary-200/80'
-                              : 'text-slate-600 hover:text-slate-900'"
-                            @click="form.criterionJoins[joinSlotBeforeFormRow(idx)] = 'or'"
-                          >
-                            Or
-                            <span class="mt-0.5 block text-[10px] font-normal text-slate-500 sm:text-xs">any match</span>
-                          </button>
-                        </div>
-                      </div>
+                    <div class="h-px flex-1 bg-slate-200" aria-hidden="true" />
+                    <div
+                      class="flex shrink-0 rounded-full border bg-white p-0.5 shadow-sm"
+                      :class="group.joins[joinSlotBeforeFormRow(group, idx)] === 'and' || group.joins[joinSlotBeforeFormRow(group, idx)] === 'or' ? 'border-slate-200' : 'border-amber-300 ring-2 ring-amber-100'"
+                      role="radiogroup"
+                      aria-label="Combine these conditions"
+                    >
+                      <button
+                        type="button"
+                        class="rounded-full px-3 py-1 text-xs font-semibold"
+                        :class="group.joins[joinSlotBeforeFormRow(group, idx)] === 'and' ? 'bg-slate-900 text-white' : 'text-slate-500'"
+                        @click="group.joins[joinSlotBeforeFormRow(group, idx)] = 'and'"
+                      >
+                        And
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full px-3 py-1 text-xs font-semibold"
+                        :class="group.joins[joinSlotBeforeFormRow(group, idx)] === 'or' ? 'bg-amber-500 text-white' : 'text-slate-500'"
+                        @click="group.joins[joinSlotBeforeFormRow(group, idx)] = 'or'"
+                      >
+                        Or
+                      </button>
                     </div>
+                    <div class="h-px flex-1 bg-slate-200" aria-hidden="true" />
                   </div>
 
                   <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
                     <div class="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-3 sm:items-center sm:gap-3 sm:px-5 sm:py-3.5">
                       <div class="flex min-w-0 items-center gap-2.5 sm:gap-3">
                         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-[11px] font-bold text-white shadow-sm shadow-primary-600/25 tabular-nums sm:h-9 sm:w-9 sm:text-xs">
-                          {{ idx + 1 }}
+                          {{ conditionNumber(gIdx, idx) }}
                         </span>
                         <div class="min-w-0">
                           <p class="text-sm font-semibold text-slate-900">
-                            Condition {{ idx + 1 }}
+                            Condition {{ conditionNumber(gIdx, idx) }}
                           </p>
                           <p class="truncate text-xs text-slate-500 sm:whitespace-normal sm:overflow-visible">
-                            {{ row.recipientFilterId ? 'Pick a value to finish this rule' : 'Choose which registry field to filter on' }}
+                            {{ conditionSummary(row) }}
                           </p>
                         </div>
                       </div>
@@ -232,7 +249,7 @@
                         type="button"
                         class="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-transparent p-2 text-xs font-semibold text-red-700 transition-colors hover:border-red-200/90 hover:bg-red-50 sm:px-3 sm:py-2 sm:text-sm"
                         :aria-label="`Remove condition ${idx + 1}`"
-                        @click="removeFilterRow(idx)"
+                        @click="removeFilterRow(gIdx, idx)"
                       >
                         <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -243,47 +260,45 @@
 
                     <div class="p-3 sm:p-5">
                       <template v-if="!row.recipientFilterId">
-                        <label :for="`rl-filter-${idx}`" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Registry field</label>
-                        <TenantFilterSelect
-                          :id="`rl-filter-${idx}`"
-                          v-model="row.recipientFilterId"
-                          label="Registry field"
-                          variant="field"
-                          :options="recipientFilterSelectOptions(idx)"
-                          @change="onRowFilterChange(row)"
-                        />
+                        <div class="rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-3 sm:px-4">
+                          <label :for="`rl-filter-${gIdx}-${idx}`" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-sky-800">Field</label>
+                          <TenantFilterSelect
+                            :id="`rl-filter-${gIdx}-${idx}`"
+                            v-model="row.recipientFilterId"
+                            label="Field"
+                            variant="field"
+                            :options="recipientFilterSelectOptions(idx)"
+                            @change="onRowFilterChange(row)"
+                          />
+                        </div>
                       </template>
 
                       <div
                         v-else
-                        class="rounded-xl border border-slate-200/80 bg-slate-50/40 px-3 py-3 sm:px-5 sm:py-5"
+                        class="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end sm:gap-3"
                       >
-                        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:mb-4">
-                          Match this rule
-                        </p>
-                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end sm:gap-4">
-                          <div class="sm:col-span-5">
-                            <label :for="`rl-filter-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">{{ matchRuleFieldLabel(row) }}</label>
+                          <div class="rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-3 sm:col-span-5">
+                            <label :for="`rl-filter-${gIdx}-${idx}`" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-sky-800">Field</label>
                             <TenantFilterSelect
-                              :id="`rl-filter-${idx}`"
+                              :id="`rl-filter-${gIdx}-${idx}`"
                               v-model="row.recipientFilterId"
-                              :label="matchRuleFieldLabel(row)"
+                              label="Field"
                               variant="field"
                               :options="recipientFilterSelectOptions(idx)"
                               @change="onRowFilterChange(row)"
                             />
                           </div>
                           <div class="flex items-center justify-start sm:col-span-2 sm:justify-center sm:pb-2">
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-primary-600/25" title="must equal">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white" title="must equal">
                               <span aria-hidden="true">=</span>
                               <span>equals</span>
                             </span>
                           </div>
-                          <div class="sm:col-span-5">
-                            <label :for="`rl-list-property-value-${idx}`" class="mb-1.5 block text-xs font-medium text-slate-600">Value</label>
+                          <div class="rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-3 sm:col-span-5">
+                            <label :for="`rl-list-property-value-${gIdx}-${idx}`" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-emerald-800">Value</label>
                             <template v-if="showPropertyRowFor(row) && rowRegistryTokens(row).length > 1">
                               <TenantFilterSelect
-                                :id="`rl-list-property-value-${idx}`"
+                                :id="`rl-list-property-value-${gIdx}-${idx}`"
                                 v-model="row.listPropertyValue"
                                 label="Value"
                                 variant="field"
@@ -298,7 +313,7 @@
                             </p>
                             <input
                               v-else-if="showPropertyRowFor(row)"
-                              :id="`rl-list-property-value-${idx}`"
+                              :id="`rl-list-property-value-${gIdx}-${idx}`"
                               v-model="row.listPropertyValue"
                               type="text"
                               required
@@ -311,13 +326,22 @@
                       </div>
                     </div>
                   </div>
+                <button
+                  v-if="filtersForAudience.length && canAddFilter"
+                  type="button"
+                  class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white/70 px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-primary-300 hover:bg-white hover:text-primary-800"
+                  @click="addFilterRow(gIdx)"
+                >
+                  Add a condition to this group
+                </button>
                 </div>
+                </template>
 
                 <button
                   v-if="filtersForAudience.length && canAddFilter"
                   type="button"
                   class="group flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-3 py-3.5 text-sm font-semibold text-slate-800 transition-colors hover:border-primary-300 hover:bg-primary-50/40 hover:text-primary-950 sm:gap-3 sm:px-4 sm:py-4 sm:text-[15px]"
-                  @click="addFilterRow"
+                  @click="form.filterGroups.length ? addFilterGroup() : addFilterRow()"
                 >
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-primary-600 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors group-hover:border-primary-200 group-hover:bg-primary-50 group-hover:text-primary-700 sm:h-10 sm:w-10">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -325,8 +349,8 @@
                     </svg>
                   </span>
                   <span class="min-w-0 text-left">
-                    <span class="block">{{ form.filterRows.length ? 'Add another condition' : 'Add a filter condition' }}</span>
-                    <span class="mt-0.5 hidden text-xs font-normal text-slate-500 group-hover:text-primary-800/90 min-[400px]:block">Stack rules, then connect them with And or Or above</span>
+                    <span class="block">{{ form.filterGroups.length ? 'Add another group' : 'Add a filter condition' }}</span>
+                    <span class="mt-0.5 hidden text-xs font-normal text-slate-500 group-hover:text-primary-800/90 min-[400px]:block">A group is the part inside the parentheses, like (1 or 2)</span>
                   </span>
                 </button>
               </div>
@@ -375,6 +399,11 @@ const {
   propertyValuePlaceholderFor,
   showCombineBeforeFormRow,
   joinSlotBeforeFormRow,
+  conditionNumber,
+  conditionSummary,
+  filterPreview,
+  addFilterGroup,
+  removeFilterGroup,
   canSubmitForm,
   submitBlockReasons,
   recipientFilterSelectOptions,
@@ -382,7 +411,6 @@ const {
   onRowFilterChange,
   addFilterRow,
   removeFilterRow,
-  matchRuleFieldLabel,
   rowRegistryValueDisplay,
   submitCreate
 } = useRecipientListForm({ mode: 'create' })

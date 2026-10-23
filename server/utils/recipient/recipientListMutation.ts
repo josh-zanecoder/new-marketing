@@ -5,6 +5,7 @@ import type {
   RecipientListCriterion,
   RecipientListCriterionJoin
 } from '@server/types/tenant/recipientList.model'
+import type { NestedFilterGroup } from '@server/utils/recipient/recipientListMembershipQuery'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
@@ -45,6 +46,60 @@ export function parseCriterionJoinsFromBody(
   })
 }
 
+export type PersistedFilterGroup = {
+  rows: { recipientFilterId: string; listPropertyValue: string }[]
+  joins: RecipientListCriterionJoin[]
+}
+
+function asJoin(raw: unknown, label: string): RecipientListCriterionJoin {
+  if (raw === 'or') return 'or'
+  if (raw === 'and' || raw === undefined) return 'and'
+  throw createError({ statusCode: 400, message: `${label} must be "and" or "or"` })
+}
+
+/** `null` when the client did not send groups (keep the flat row chain). */
+export function parseFilterGroupsFromBody(raw: unknown): PersistedFilterGroup[] | null {
+  if (raw === undefined) return null
+  if (!Array.isArray(raw)) {
+    throw createError({ statusCode: 400, message: 'filterGroups must be an array' })
+  }
+  return raw.map((group, gi) => {
+    if (!group || typeof group !== 'object') {
+      throw createError({ statusCode: 400, message: `filterGroups[${gi}] must be an object` })
+    }
+    const g = group as Record<string, unknown>
+    const rows = Array.isArray(g.rows) ? g.rows : null
+    if (!rows) {
+      throw createError({ statusCode: 400, message: `filterGroups[${gi}].rows must be an array` })
+    }
+    const joinsRaw = g.joins
+    return {
+      rows: rows as { recipientFilterId: string; listPropertyValue: string }[],
+      joins: Array.isArray(joinsRaw)
+        ? joinsRaw.map((j, i) => asJoin(j, `filterGroups[${gi}].joins[${i}]`))
+        : []
+    }
+  })
+}
+
+export function parseGroupJoinsFromBody(
+  raw: unknown,
+  groupCount: number
+): RecipientListCriterionJoin[] {
+  const need = Math.max(0, groupCount - 1)
+  if (need === 0) return []
+  if (raw === undefined || raw === null) {
+    return Array.from({ length: need }, () => 'and' as const)
+  }
+  if (!Array.isArray(raw) || raw.length !== need) {
+    throw createError({
+      statusCode: 400,
+      message: `groupJoins must have length ${need} (one of "and" | "or" between each pair of groups)`
+    })
+  }
+  return raw.map((j, i) => asJoin(j, `groupJoins[${i}]`))
+}
+
 export function pickJoinsForQuery(
   groups: RecipientListCriterion[][],
   fromBody: RecipientListCriterionJoin[] | null,
@@ -63,6 +118,67 @@ export function pickJoinsForQuery(
   return null
 }
 
+type ResolvedFilterRow = {
+  criteria: RecipientListCriterion[]
+  persisted: { recipientFilterId: string; listPropertyValue: string }
+}
+
+async function resolveOneFilterRow(
+  row: unknown,
+  tenantConn: Connection,
+  audience: string
+): Promise<ResolvedFilterRow | null> {
+  if (!row || typeof row !== 'object') return null
+  const r = row as Record<string, unknown>
+  const recipientFilterId =
+    typeof r.recipientFilterId === 'string' && r.recipientFilterId.trim()
+      ? r.recipientFilterId.trim()
+      : ''
+  if (!recipientFilterId) return null
+  if (!mongoose.isValidObjectId(recipientFilterId)) {
+    throw createError({ statusCode: 400, message: 'Invalid recipient filter id' })
+  }
+  const listPropertyValue =
+    typeof r.listPropertyValue === 'string' ? r.listPropertyValue.trim().slice(0, 2000) : ''
+
+  const { RecipientFilter: FilterModel } = getTenantClientModels(tenantConn)
+  const doc = await FilterModel.findOne({
+    _id: new mongoose.Types.ObjectId(recipientFilterId),
+    enabled: true,
+    ...recipientFilterContactTypeMatch(audience)
+  })
+    .lean()
+    .exec()
+
+  if (!doc) {
+    throw createError({
+      statusCode: 404,
+      message: 'Recipient filter not found, disabled, or does not match the selected audience'
+    })
+  }
+
+  const filterDoc = doc as Record<string, unknown>
+  const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
+  const registryVal = typeof filterDoc.propertyValue === 'string' ? filterDoc.propertyValue.trim() : ''
+  const effectiveValue = listPropertyValue || registryVal
+
+  if (property !== 'none' && !effectiveValue) {
+    throw createError({
+      statusCode: 400,
+      message: 'This filter has no saved value; enter a value for the property before creating the list'
+    })
+  }
+
+  const rowCriteria = registryDocToCriteria({
+    ...filterDoc,
+    propertyValue: effectiveValue
+  })
+  return {
+    criteria: rowCriteria,
+    persisted: { recipientFilterId, listPropertyValue }
+  }
+}
+
 export async function resolveRecipientListFiltersFromBody(
   body: Record<string, unknown>,
   tenantConn: Connection,
@@ -72,10 +188,57 @@ export async function resolveRecipientListFiltersFromBody(
   criterionGroups: RecipientListCriterion[][]
   persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[]
   criterionJoinsFromBody: RecipientListCriterionJoin[] | null
+  /** Set when the client sent `filterGroups`, including an empty list. */
+  nested: { groups: NestedFilterGroup[]; groupJoins: RecipientListCriterionJoin[] } | null
+  persistedFilterGroups: PersistedFilterGroup[] | null
+  groupJoinsToStore: RecipientListCriterionJoin[] | null
 }> {
   let filters: RecipientListCriterion[] = []
   const criterionGroups: RecipientListCriterion[][] = []
   const persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[] = []
+
+  const requestedGroups = parseFilterGroupsFromBody(body?.filterGroups)
+  if (requestedGroups) {
+    const nestedGroups: NestedFilterGroup[] = []
+    const persistedFilterGroups: PersistedFilterGroup[] = []
+    for (const requested of requestedGroups) {
+      const rowGroups: RecipientListCriterion[][] = []
+      const persistedRows: PersistedFilterGroup['rows'] = []
+      for (const row of requested.rows) {
+        const resolved = await resolveOneFilterRow(row, tenantConn, audience)
+        if (!resolved) continue
+        persistedRows.push(resolved.persisted)
+        if (resolved.criteria.length) {
+          rowGroups.push(resolved.criteria)
+          filters.push(...resolved.criteria)
+        }
+        criterionGroups.push(resolved.criteria.length ? resolved.criteria : [])
+        persistedFilterRows.push(resolved.persisted)
+      }
+      if (!persistedRows.length) continue
+      const need = Math.max(0, persistedRows.length - 1)
+      if (requested.joins.length !== need) {
+        throw createError({
+          statusCode: 400,
+          message: `Each group's joins must have length ${need} (one of "and" | "or" between its conditions)`
+        })
+      }
+      nestedGroups.push({ rowGroups, joins: requested.joins.slice(0, need) })
+      persistedFilterGroups.push({ rows: persistedRows, joins: requested.joins.slice(0, need) })
+    }
+    const groupJoinsToStore = parseGroupJoinsFromBody(body?.groupJoins, nestedGroups.length)
+    const criterionJoinsFromBody =
+      nestedGroups.length === 1 ? nestedGroups[0]!.joins : []
+    return {
+      filters,
+      criterionGroups,
+      persistedFilterRows,
+      criterionJoinsFromBody,
+      nested: { groups: nestedGroups, groupJoins: groupJoinsToStore },
+      persistedFilterGroups,
+      groupJoinsToStore
+    }
+  }
 
   const rawRows = body?.filterRows
   const useFilterRows = Array.isArray(rawRows) && rawRows.length > 0
@@ -190,7 +353,15 @@ export async function resolveRecipientListFiltersFromBody(
     criterionGroups.length
   )
 
-  return { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody }
+  return {
+    filters,
+    criterionGroups,
+    persistedFilterRows,
+    criterionJoinsFromBody,
+    nested: null,
+    persistedFilterGroups: null,
+    groupJoinsToStore: null
+  }
 }
 
 /** Normalized `membershipOwnerEmails` from a list document. */

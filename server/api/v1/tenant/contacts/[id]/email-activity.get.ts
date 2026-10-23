@@ -2,22 +2,8 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { buildContactEngagementTimeline } from '@server/utils/tracking/contactEngagementTimeline'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
-
-const OPEN_EVENTS = new Set(['opened', 'unique_opened', 'open', 'firstopening', 'loadedbyproxy'])
-const CLICK_EVENTS = new Set(['clicks', 'click'])
-
-type ActivityRow = {
-  messageId: string
-  subject: string
-  sentAt: string | null
-  opened: boolean
-  clicked: boolean
-}
-
-function eventFlag(events: string[], set: Set<string>): boolean {
-  return events.some((event) => set.has(event.trim().toLowerCase()))
-}
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, 'id')
@@ -26,7 +12,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const { Contact, BrevoTrackingEvent } = getTenantClientModels(conn)
+  const { Contact, BrevoTrackingEvent, Campaign } = getTenantClientModels(conn)
   const auth = event.context.auth as unknown
   const contact = await Contact.findOne(
     mergeTenantOwnerEmailScopeFilter({ _id: rawId }, auth)
@@ -38,7 +24,12 @@ export default defineEventHandler(async (event) => {
   if (!contact) throw createError({ statusCode: 404, message: 'Contact not found' })
 
   const email = String(contact.email || '').trim().toLowerCase()
-  if (!email) return { messages: [] as ActivityRow[] }
+  if (!email) {
+    return {
+      events: [],
+      summary: { sent: 0, delivered: 0, opened: 0, clicked: 0 }
+    }
+  }
 
   const tracking = await resolveTrackingTenantContext(event)
   const match: Record<string, unknown> = {
@@ -48,38 +39,58 @@ export default defineEventHandler(async (event) => {
     match.userEmail = { $in: tracking.userEmails.map((value) => value.trim().toLowerCase()) }
   }
 
-  const grouped = await BrevoTrackingEvent.aggregate<{
-    _id: string
-    subject: string
-    latest: Date | null
-    events: string[]
-  }>([
-    { $match: match },
-    { $sort: { eventAt: -1 } },
-    {
-      $group: {
-        _id: '$messageId',
-        subject: { $first: '$subject' },
-        latest: { $max: '$eventAt' },
-        events: { $addToSet: '$event' }
-      }
-    },
-    { $sort: { latest: -1 } },
-    { $limit: 50 }
-  ])
+  const docs = await BrevoTrackingEvent.find(match)
+    .select('event eventAt date messageId subject campaignId link reason')
+    .sort({ eventAt: -1 })
+    .limit(400)
+    .lean<
+      {
+        _id: unknown
+        event?: string
+        eventAt?: Date | null
+        date?: string
+        messageId?: string
+        subject?: string
+        campaignId?: string
+        link?: string
+        reason?: string
+      }[]
+    >()
+    .exec()
 
-  const messages: ActivityRow[] = grouped
-    .filter((row) => String(row._id || '').trim())
-    .map((row) => {
-      const events = Array.isArray(row.events) ? row.events.map((value) => String(value || '')) : []
-      return {
-        messageId: String(row._id),
-        subject: String(row.subject || '').trim() || 'No subject',
-        sentAt: row.latest instanceof Date ? row.latest.toISOString() : null,
-        opened: eventFlag(events, OPEN_EVENTS),
-        clicked: eventFlag(events, CLICK_EVENTS)
-      }
+  const campaignIds = [
+    ...new Set(
+      docs
+        .map((row) => String(row.campaignId || '').trim())
+        .filter((id) => mongoose.isValidObjectId(id))
+    )
+  ]
+  const campaignNames = new Map<string, string>()
+  if (campaignIds.length) {
+    const campaigns = await Campaign.find({
+      _id: { $in: campaignIds.map((id) => new mongoose.Types.ObjectId(id)) }
     })
+      .select('name')
+      .lean<{ _id: unknown; name?: string }[]>()
+      .exec()
+    for (const campaign of campaigns) {
+      const name = String(campaign.name || '').trim()
+      if (name) campaignNames.set(String(campaign._id), name)
+    }
+  }
 
-  return { messages }
+  return buildContactEngagementTimeline(
+    docs.map((row) => ({
+      id: String(row._id),
+      event: String(row.event || ''),
+      eventAt: row.eventAt,
+      date: row.date,
+      messageId: row.messageId,
+      subject: row.subject,
+      campaignId: row.campaignId,
+      link: row.link,
+      reason: row.reason
+    })),
+    campaignNames
+  )
 })

@@ -15,6 +15,9 @@ export type RecipientFilterProperty =
   | 'relationship_partner'
   | 'source'
   | 'email'
+  | 'priority'
+  | 'broker_role'
+  | 'account_owner'
 
 /**
  * Sub-field when `property` is `address` (state, city, …) or `contact_profile` (`profile_type` / `profile_subtype`);

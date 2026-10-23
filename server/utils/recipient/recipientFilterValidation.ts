@@ -17,7 +17,10 @@ const PROPERTIES = new Set<RecipientFilterProperty>([
   'contact_profile',
   'relationship_partner',
   'source',
-  'email'
+  'email',
+  'priority',
+  'broker_role',
+  'account_owner'
 ])
 
 const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([

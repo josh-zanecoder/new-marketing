@@ -25,6 +25,9 @@ function labelFromOptions(
 export function recipientFilterPropertyLabel(raw: string): string {
   const key = normalized(raw)
   if (key === 'relationship_partner') return 'Partner'
+  if (key === 'priority') return 'Priority'
+  if (key === 'broker_role') return 'Broker role'
+  if (key === 'account_owner') return 'Account owner'
   return formatRegistryLabelForDisplay(raw)
 }
 
@@ -46,6 +49,9 @@ export function recipientCriterionPropertyLabel(raw: string): string {
   if (key === 'related_partner_type') return 'Partner type'
   if (key === 'related_partner_name') return 'Partner name'
   if (key === 'relationship_partner') return 'Partner'
+  if (key === 'priority') return 'Priority'
+  if (key === 'broker_role') return 'Broker role'
+  if (key === 'account_owner') return 'Account owner'
   return formatRegistryLabelForDisplay(raw)
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Megaphone } from 'lucide-vue-next'
+import { Megaphone, Monitor, Smartphone, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   open: boolean
@@ -17,6 +17,8 @@ const emit = defineEmits<{
 
 const overlayZClass = computed(() => (props.elevated ? 'z-[210]' : 'z-[100]'))
 
+const view = ref<'desktop' | 'mobile'>('desktop')
+
 const campaignHref = computed(() =>
   props.templateId
     ? `/tenant/campaigns/add?templateId=${encodeURIComponent(props.templateId)}`
@@ -26,12 +28,11 @@ const campaignHref = computed(() =>
 function previewSrcdoc(html: string) {
   return `<!DOCTYPE html><html><head><meta charset=utf-8><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *,*::before,*::after{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{padding:16px 10px;overflow:auto;background:linear-gradient(135deg,#f8f4ef 0%,#f0e8df 100%);-webkit-overflow-scrolling:touch}
-#preview-wrap{width:100%;max-width:600px;margin:0 auto}
-#preview-wrap img{max-width:100%!important;height:auto!important}
-#preview-wrap table{max-width:100%!important}
-</style></head><body><div id=preview-wrap>${html}</div></body></html>`
+html,body{margin:0;background:#ffffff}
+body{overflow:auto;-webkit-overflow-scrolling:touch}
+img{max-width:100%!important;height:auto!important}
+table{max-width:100%!important}
+</style></head><body>${html}</body></html>`
 }
 
 let escListener: ((e: KeyboardEvent) => void) | null = null
@@ -46,6 +47,7 @@ watch(
       escListener = null
     }
     if (open) {
+      view.value = 'desktop'
       escListener = (e: KeyboardEvent) => {
         if (e.key === 'Escape') emit('close')
       }
@@ -80,7 +82,7 @@ onBeforeUnmount(() => {
         @click="emit('close')"
       />
       <div
-        class="relative flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
+        class="relative flex h-[min(96dvh,1040px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.04] sm:rounded-2xl"
         @click.stop
       >
         <div
@@ -89,42 +91,67 @@ onBeforeUnmount(() => {
         >
           <span class="h-1 w-10 rounded-full bg-slate-200" />
         </div>
-        <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
-          <div class="min-w-0 flex-1">
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-primary-600 sm:text-xs">
+        <div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-primary-600">
               Preview
             </p>
-            <h2 id="email-template-preview-title" class="mt-0.5 truncate text-base font-semibold text-slate-900 sm:text-lg">
+            <h2 id="email-template-preview-title" class="truncate text-base font-semibold text-slate-900">
               {{ name || 'Email template' }}
             </h2>
-            <p v-if="subject?.trim()" class="mt-1 line-clamp-2 text-xs text-slate-500 sm:line-clamp-1 sm:text-sm">
-              <span class="font-medium text-slate-600">Subject:</span> {{ subject }}
-            </p>
-            <p v-else class="mt-1 text-xs italic text-slate-400 sm:text-sm">
-              No default subject
-            </p>
           </div>
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 sm:h-auto sm:w-auto sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:shadow-none"
-            aria-label="Close preview"
-            @click="emit('close')"
-          >
-            <svg class="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span class="hidden text-sm font-semibold text-slate-600 sm:inline">Close</span>
-          </button>
+          <div class="flex shrink-0 items-center gap-2">
+            <div class="flex rounded-full bg-slate-100 p-0.5" role="radiogroup" aria-label="Preview width">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold"
+                :class="view === 'desktop' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'"
+                @click="view = 'desktop'"
+              >
+                <Monitor class="h-3.5 w-3.5" aria-hidden="true" />
+                <span class="hidden sm:inline">Desktop</span>
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold"
+                :class="view === 'mobile' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'"
+                @click="view = 'mobile'"
+              >
+                <Smartphone class="h-3.5 w-3.5" aria-hidden="true" />
+                <span class="hidden sm:inline">Phone</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Close preview"
+              @click="emit('close')"
+            >
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div class="min-h-0 flex-1 overflow-hidden bg-slate-100/80 p-3 sm:p-5">
+        <div class="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Subject
+          </p>
+          <p v-if="subject?.trim()" class="mt-0.5 text-sm font-medium text-slate-900">
+            {{ subject }}
+          </p>
+          <p v-else class="mt-0.5 text-sm italic text-slate-400">
+            No default subject
+          </p>
+        </div>
+        <div class="flex min-h-0 flex-1 justify-center overflow-hidden bg-slate-200/70 p-3 sm:p-6">
           <iframe
             v-if="html.trim()"
             :srcdoc="previewSrcdoc(html)"
             title="Email template preview"
-            class="mx-auto block h-full min-h-[min(55dvh,640px)] w-full max-w-[600px] rounded-xl border border-slate-200/90 bg-white shadow-sm shadow-slate-900/[0.04]"
+            class="h-full rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-900/10 transition-[width] duration-200"
+            :class="view === 'mobile' ? 'w-[390px] max-w-full' : 'w-full max-w-[680px]'"
             sandbox="allow-same-origin"
           />
-          <p v-else class="flex min-h-[min(40dvh,320px)] items-center justify-center px-4 text-center text-sm text-slate-500">
+          <p v-else class="flex items-center justify-center px-4 text-center text-sm text-slate-500">
             This template has no HTML content.
           </p>
         </div>

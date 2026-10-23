@@ -33,6 +33,9 @@ export function recipientFilterContactFieldPath(
   if (prop === 'status') return 'status'
   if (prop === 'stage') return 'stage'
   if (prop === 'source') return 'source'
+  if (prop === 'priority') return 'metadata.priority'
+  if (prop === 'broker_role') return 'metadata.brokerRole'
+  if (prop === 'account_owner') return 'metadata.ownerEmail'
   return null
 }
 
@@ -41,4 +44,20 @@ export function recipientFilterSupportsContactValues(
   propertyType?: string | null
 ): boolean {
   return recipientFilterContactFieldPath(property, propertyType) !== null
+}
+
+/** Roles stored on a contact as one comma-separated `metadata.brokerRole` string. */
+export function brokerRoleLabels(raw: string | null | undefined): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+export function distinctBrokerRoleLabels(values: readonly string[]): string[] {
+  const labels = new Set<string>()
+  for (const raw of values) {
+    for (const label of brokerRoleLabels(raw)) labels.add(label)
+  }
+  return [...labels].sort((a, b) => a.localeCompare(b))
 }

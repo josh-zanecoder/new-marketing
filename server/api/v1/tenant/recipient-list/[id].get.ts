@@ -146,6 +146,15 @@ export default defineEventHandler(async (event) => {
     rows: { property: string; value: string }[]
     joins: ('and' | 'or')[] | null
   } | null = null
+  const filterGroups: {
+    rows: { recipientFilterId: string; listPropertyValue: string }[]
+    joins: ('and' | 'or')[]
+  }[] = []
+  let groupJoins: ('and' | 'or')[] = []
+  let filterGroupChain: {
+    groups: { rows: { property: string; value: string }[]; joins: ('and' | 'or')[] }[]
+    groupJoins: ('and' | 'or')[]
+  } | null = null
   if (filterRows.length > 0) {
     const rowIds = filterRows
       .map((r) => r.recipientFilterId)
@@ -174,6 +183,47 @@ export default defineEventHandler(async (event) => {
       rows.push(rowCriterionDisplay(fd, fr.listPropertyValue))
     }
     criteriaChain = { rows, joins: chainJoins }
+
+    const rawGroups = (doc as { filterGroups?: unknown }).filterGroups
+    if (Array.isArray(rawGroups)) {
+      const displayGroups: { rows: { property: string; value: string }[]; joins: ('and' | 'or')[] }[] = []
+      for (const item of rawGroups) {
+        if (!item || typeof item !== 'object') continue
+        const g = item as { rows?: unknown; joins?: unknown }
+        if (!Array.isArray(g.rows)) continue
+        const persistedRows: { recipientFilterId: string; listPropertyValue: string }[] = []
+        const displayRows: { property: string; value: string }[] = []
+        for (const rawRow of g.rows) {
+          if (!rawRow || typeof rawRow !== 'object') continue
+          const row = rawRow as Record<string, unknown>
+          const recipientFilterId =
+            typeof row.recipientFilterId === 'string' ? row.recipientFilterId.trim() : ''
+          if (!recipientFilterId) continue
+          const listPropertyValue =
+            typeof row.listPropertyValue === 'string' ? row.listPropertyValue.trim() : ''
+          persistedRows.push({ recipientFilterId, listPropertyValue })
+          const fd = byId.get(recipientFilterId)
+          displayRows.push(
+            fd
+              ? rowCriterionDisplay(fd, listPropertyValue)
+              : { property: 'filter', value: listPropertyValue || recipientFilterId }
+          )
+        }
+        if (!persistedRows.length) continue
+        const joins = Array.isArray(g.joins)
+          ? g.joins.map((j) => (j === 'or' ? 'or' : ('and' as const)))
+          : []
+        filterGroups.push({ rows: persistedRows, joins })
+        displayGroups.push({ rows: displayRows, joins })
+      }
+      const rawGroupJoins = (doc as { groupJoins?: unknown }).groupJoins
+      groupJoins = Array.isArray(rawGroupJoins)
+        ? rawGroupJoins.map((j) => (j === 'or' ? 'or' : ('and' as const)))
+        : []
+      if (displayGroups.length > 1) {
+        filterGroupChain = { groups: displayGroups, groupJoins }
+      }
+    }
   }
 
   const query = getQuery(event)
@@ -340,6 +390,9 @@ export default defineEventHandler(async (event) => {
       criterionJoins: criterionJoins ?? [],
       criteriaChain,
       filterRows,
+      filterGroups,
+      groupJoins,
+      filterGroupChain,
       membershipScope:
         doc.membershipScope === 'tenant' || doc.membershipScope === 'owner_emails'
           ? doc.membershipScope

@@ -43,6 +43,22 @@ export interface RecipientListFilterRow {
   listPropertyValue: string
 }
 
+export type RecipientListJoin = 'and' | 'or'
+/** Empty until the person picks And or Or. */
+export type RecipientListJoinChoice = '' | RecipientListJoin
+
+export type RecipientListPreviewPart =
+  | { kind: 'paren'; side: '(' | ')' }
+  | { kind: 'join'; join: RecipientListJoinChoice; level: 'group' | 'condition' }
+  | { kind: 'clause'; field: string; value: string; incomplete: boolean }
+  | { kind: 'placeholder'; text: string }
+
+export interface RecipientListFilterGroup {
+  rows: RecipientListFilterRow[]
+  /** How conditions inside this group combine. Length = filled rows − 1. Empty until chosen. */
+  joins: RecipientListJoinChoice[]
+}
+
 interface ListDetailForEdit {
   list: {
     name: string
@@ -50,6 +66,11 @@ interface ListDetailForEdit {
     filterMode?: 'and' | 'or'
     criterionJoins?: ('and' | 'or')[]
     filterRows?: { recipientFilterId: string; listPropertyValue: string }[]
+    filterGroups?: {
+      rows: { recipientFilterId: string; listPropertyValue: string }[]
+      joins: ('and' | 'or')[]
+    }[]
+    groupJoins?: ('and' | 'or')[]
   }
 }
 
@@ -67,6 +88,8 @@ export type RecipientListFormSharedReturn = {
     name: string
     audience: string
     filterRows: RecipientListFilterRow[]
+    filterGroups: RecipientListFilterGroup[]
+    groupJoins: RecipientListJoinChoice[]
     filterMode: 'and' | 'or'
     criterionJoins: ('and' | 'or')[]
   }
@@ -77,15 +100,25 @@ export type RecipientListFormSharedReturn = {
   showPropertyRowFor: (row: RecipientListFilterRow) => boolean
   rowRegistryTokens: (row: RecipientListFilterRow) => string[]
   propertyValuePlaceholderFor: (row: RecipientListFilterRow) => string
-  showCombineBeforeFormRow: (formIdx: number) => boolean
-  joinSlotBeforeFormRow: (formIdx: number) => number
+  showCombineBeforeFormRow: (group: RecipientListFilterGroup, formIdx: number) => boolean
+  joinSlotBeforeFormRow: (group: RecipientListFilterGroup, formIdx: number) => number
+  conditionNumber: (groupIndex: number, rowIndex: number) => number
+  conditionCount: ComputedRef<number>
+  conditionSummary: (row: RecipientListFilterRow) => string
+  filterPreview: ComputedRef<{
+    audienceLabel: string
+    empty: boolean
+    parts: RecipientListPreviewPart[]
+  }>
+  addFilterGroup: () => void
+  removeFilterGroup: (groupIndex: number) => void
   canSubmitForm: ComputedRef<boolean>
   submitBlockReasons: ComputedRef<string[]>
   recipientFilterSelectOptions: (rowIdx: number) => FilterSelectOption[]
   registryValueSelectOptions: (row: RecipientListFilterRow) => FilterSelectOption[]
   onRowFilterChange: (row: RecipientListFilterRow) => void
-  addFilterRow: () => void
-  removeFilterRow: (idx: number) => void
+  addFilterRow: (groupIndex?: number) => void
+  removeFilterRow: (groupIndex: number, rowIndex: number) => void
   filterOptionLabel: (f: RegistryFilterRow) => string
   matchRuleFieldLabel: (row: RecipientListFilterRow) => string
   /** Display-only: the single saved value of this row's filter, prettified when it is a registry key. */
@@ -112,6 +145,9 @@ const PROPERTY_FIELD_LABELS: Record<string, string> = {
   stage: 'Stage',
   source: 'Source',
   email: 'Email',
+  priority: 'Priority',
+  broker_role: 'Broker role',
+  account_owner: 'Account owner',
   contact_profile: 'Contact profile',
   search: 'Search'
 }
@@ -126,6 +162,7 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   profile_subtype: 'Sub Type'
 }
 
+const CHOOSE_FIELD_LABEL = 'Choose a field…'
 const CHOOSE_VALUE_LABEL = 'Choose a value…'
 
 export function useRecipientListForm(options: { mode: 'create' }): RecipientListFormCreateReturn
@@ -149,6 +186,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     name: '',
     audience: '',
     filterRows: [] as RecipientListFilterRow[],
+    filterGroups: [] as RecipientListFilterGroup[],
+    groupJoins: [] as RecipientListJoinChoice[],
     filterMode: 'and' as 'and' | 'or',
     criterionJoins: [] as ('and' | 'or')[]
   })
@@ -251,19 +290,32 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     if (!audienceOptions.value.length) {
       reasons.push('Add at least one enabled contact type before saving.')
     }
-    form.filterRows.forEach((row, idx) => {
-      const condition = idx + 1
-      if (!row.recipientFilterId.trim()) {
-        reasons.push(`Choose a field for condition ${condition}.`)
-        return
-      }
-      const missing = rowMissingPropertyValue(row)
-      if (missing === 'choose') {
-        reasons.push(`Choose a value for condition ${condition}.`)
-      } else if (missing === 'enter') {
-        reasons.push(`Enter a value for condition ${condition}.`)
-      }
+    form.filterGroups.forEach((group, gIdx) => {
+      group.rows.forEach((row, idx) => {
+        const condition = conditionNumber(gIdx, idx)
+        if (!row.recipientFilterId.trim()) {
+          reasons.push(`Choose a field for condition ${condition}.`)
+          return
+        }
+        const missing = rowMissingPropertyValue(row)
+        if (missing === 'choose') {
+          reasons.push(`Choose a value for condition ${condition}.`)
+        } else if (missing === 'enter') {
+          reasons.push(`Enter a value for condition ${condition}.`)
+        }
+        if (idx > 0 && rowHasFilterId(group.rows[idx - 1]!)) {
+          const slot = joinSlotBeforeFormRow(group, idx)
+          if (group.joins[slot] !== 'and' && group.joins[slot] !== 'or') {
+            reasons.push(`Choose And or Or between condition ${conditionNumber(gIdx, idx - 1)} and condition ${condition}.`)
+          }
+        }
+      })
     })
+    for (let i = 0; i < form.filterGroups.length - 1; i++) {
+      if (form.groupJoins[i] !== 'and' && form.groupJoins[i] !== 'or') {
+        reasons.push(`Choose And or Or between group ${i + 1} and group ${i + 2}.`)
+      }
+    }
     return reasons
   })
 
@@ -312,31 +364,99 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     return Boolean(String(row.recipientFilterId ?? '').trim())
   }
 
-  /** AND/OR before this row (row index ≥ 1), once the previous row has a filter — including a newly added empty row. */
-  function showCombineBeforeFormRow(formIdx: number): boolean {
+  /** AND/OR before this row, once the previous row in the same group has a filter. */
+  function showCombineBeforeFormRow(group: RecipientListFilterGroup, formIdx: number): boolean {
     if (formIdx <= 0) return false
-    const prev = form.filterRows[formIdx - 1]
+    const prev = group.rows[formIdx - 1]
     return prev != null && rowHasFilterId(prev)
   }
 
-  /** Same slot as join between row formIdx−1 and formIdx (left-associative chain). */
-  function joinSlotBeforeFormRow(formIdx: number): number {
-    return (
-      form.filterRows
-        .slice(0, formIdx)
-        .filter((r) => rowHasFilterId(r)).length - 1
-    )
+  function joinSlotBeforeFormRow(group: RecipientListFilterGroup, formIdx: number): number {
+    return group.rows.slice(0, formIdx).filter((r) => rowHasFilterId(r)).length - 1
   }
 
+  function conditionNumber(groupIndex: number, rowIndex: number): number {
+    let n = rowIndex + 1
+    for (let i = 0; i < groupIndex; i++) n += form.filterGroups[i]?.rows.length ?? 0
+    return n
+  }
+
+  const conditionCount = computed(() =>
+    form.filterGroups.reduce((n, group) => n + group.rows.length, 0)
+  )
+
+  function previewClause(row: RecipientListFilterRow): RecipientListPreviewPart {
+    const f = rowFilter(row)
+    if (!f) return { kind: 'placeholder', text: 'choose a field' }
+    if (f.property === 'none') return { kind: 'clause', field: 'No extra filter', value: '', incomplete: false }
+    const missing = rowMissingPropertyValue(row)
+    const raw = row.listPropertyValue.trim()
+    const value = missing
+      ? ''
+      : rowRegistryTokens(row).length === 1
+        ? rowRegistryValueDisplay(row)
+        : recipientFilterValueDisplay(raw, f.property, f.propertyType) || raw
+    return { kind: 'clause', field: filterOptionLabel(f), value, incomplete: Boolean(missing) }
+  }
+
+  function conditionSummary(row: RecipientListFilterRow): string {
+    const part = previewClause(row)
+    if (part.kind === 'placeholder') return 'Choose which field to filter on'
+    if (part.kind !== 'clause') return ''
+    if (!part.value && part.incomplete) return 'Pick a value to finish this rule'
+    if (!part.value) return part.field
+    return `${part.field} equals ${part.value}`
+  }
+
+  const filterPreview = computed(() => {
+    const key = form.audience.trim().toLowerCase()
+    const named = (data.value?.contactTypes ?? []).find((t) => t.key.trim().toLowerCase() === key)
+    const audienceLabel = named?.label.trim() || (key ? key.charAt(0).toUpperCase() + key.slice(1) : 'contacts')
+    const groups = form.filterGroups
+    if (!groups.length) return { audienceLabel, empty: true, parts: [] as RecipientListPreviewPart[] }
+    const parts: RecipientListPreviewPart[] = []
+    const wrapGroups = groups.length > 1
+    groups.forEach((group, gIdx) => {
+      const wrap = wrapGroups || group.rows.length > 1
+      if (wrap) parts.push({ kind: 'paren', side: '(' })
+      group.rows.forEach((row, idx) => {
+        if (idx > 0 && rowHasFilterId(group.rows[idx - 1]!)) {
+          const slot = joinSlotBeforeFormRow(group, idx)
+          parts.push({
+            kind: 'join',
+            join: group.joins[slot] === 'or' ? 'or' : group.joins[slot] === 'and' ? 'and' : '',
+            level: 'condition'
+          })
+        }
+        parts.push(previewClause(row))
+      })
+      if (wrap) parts.push({ kind: 'paren', side: ')' })
+      if (gIdx < groups.length - 1) {
+        parts.push({
+          kind: 'join',
+          join: form.groupJoins[gIdx] === 'or' ? 'or' : form.groupJoins[gIdx] === 'and' ? 'and' : '',
+          level: 'group'
+        })
+      }
+    })
+    return { audienceLabel, empty: false, parts }
+  })
+
   watch(
-    () => form.filterRows.map((r) => String(r.recipientFilterId ?? '').trim()),
+    () =>
+      form.filterGroups.map((group) =>
+        group.rows.map((r) => String(r.recipientFilterId ?? '').trim())
+      ),
     () => {
-      const n = Math.max(
-        0,
-        form.filterRows.filter((r) => rowHasFilterId(r)).length - 1
-      )
-      while (form.criterionJoins.length < n) form.criterionJoins.push('and')
-      if (form.criterionJoins.length > n) form.criterionJoins.splice(n)
+      for (const group of form.filterGroups) {
+        const n = Math.max(0, group.rows.filter((r) => rowHasFilterId(r)).length - 1)
+        while (group.joins.length < n) group.joins.push('')
+        if (group.joins.length > n) group.joins.splice(n)
+      }
+      const groupNeed = Math.max(0, form.filterGroups.length - 1)
+      while (form.groupJoins.length < groupNeed) form.groupJoins.push('')
+      if (form.groupJoins.length > groupNeed) form.groupJoins.splice(groupNeed)
+      form.filterRows = form.filterGroups.flatMap((group) => group.rows)
     },
     { deep: true, immediate: true }
   )
@@ -347,7 +467,7 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       label: filterOptionLabel(f)
     }))
     if (items.length > 1) {
-      return [{ value: '', label: CHOOSE_VALUE_LABEL }, ...items]
+      return [{ value: '', label: CHOOSE_FIELD_LABEL }, ...items]
     }
     return items
   }
@@ -372,7 +492,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     () => form.audience,
     () => {
       if (skipAudienceClear?.value) return
-      form.filterRows = []
+      form.filterGroups.splice(0, form.filterGroups.length)
+      form.groupJoins.splice(0, form.groupJoins.length)
     }
   )
 
@@ -386,12 +507,35 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     }
   }
 
-  function addFilterRow() {
-    form.filterRows.push({ recipientFilterId: '', listPropertyValue: '' })
+  function addFilterGroup() {
+    form.filterGroups.push({
+      rows: [{ recipientFilterId: '', listPropertyValue: '' }],
+      joins: []
+    })
   }
 
-  function removeFilterRow(idx: number) {
-    form.filterRows.splice(idx, 1)
+  function removeFilterGroup(groupIndex: number) {
+    form.filterGroups.splice(groupIndex, 1)
+    if (groupIndex === 0) form.groupJoins.splice(0, 1)
+    else form.groupJoins.splice(groupIndex - 1, 1)
+  }
+
+  function addFilterRow(groupIndex?: number) {
+    if (!form.filterGroups.length) {
+      addFilterGroup()
+      return
+    }
+    const idx = groupIndex == null ? form.filterGroups.length - 1 : groupIndex
+    const group = form.filterGroups[idx]
+    if (!group) return
+    group.rows.push({ recipientFilterId: '', listPropertyValue: '' })
+  }
+
+  function removeFilterRow(groupIndex: number, rowIndex: number) {
+    const group = form.filterGroups[groupIndex]
+    if (!group) return
+    group.rows.splice(rowIndex, 1)
+    if (!group.rows.length) removeFilterGroup(groupIndex)
   }
 
   function propertyFieldLabel(property: string): string {
@@ -429,22 +573,27 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   }
 
   function buildSaveBody(): Record<string, unknown> {
-    const persistedRows = form.filterRows
-      .filter((r) => r.recipientFilterId.trim())
-      .map((r) => ({
-        recipientFilterId: r.recipientFilterId.trim(),
-        listPropertyValue: r.listPropertyValue.trim()
-      }))
-    const need = Math.max(0, persistedRows.length - 1)
+    const groups = form.filterGroups
+      .map((group) => {
+        const rows = group.rows
+          .filter((r) => r.recipientFilterId.trim())
+          .map((r) => ({
+            recipientFilterId: r.recipientFilterId.trim(),
+            listPropertyValue: r.listPropertyValue.trim()
+          }))
+        const need = Math.max(0, rows.length - 1)
+        return { rows, joins: group.joins.slice(0, need) }
+      })
+      .filter((group) => group.rows.length > 0)
     const body: Record<string, unknown> = {
       name: form.name.trim(),
       audience: form.audience,
-      filterRows: persistedRows,
+      filterRows: groups.flatMap((group) => group.rows),
+      filterGroups: groups,
+      groupJoins: form.groupJoins.slice(0, Math.max(0, groups.length - 1)),
       filterMode: form.filterMode
     }
-    if (need > 0) {
-      body.criterionJoins = form.criterionJoins.slice(0, need)
-    }
+    if (groups.length === 1) body.criterionJoins = groups[0]!.joins
     return body
   }
 
@@ -458,13 +607,55 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     form.name = list.name ?? ''
     form.audience = (list.audience ?? '').trim().toLowerCase()
     form.filterMode = list.filterMode === 'or' ? 'or' : 'and'
-    const rows = list.filterRows?.length
-      ? list.filterRows.map((r) => ({
-          recipientFilterId: String(r.recipientFilterId ?? '').trim(),
-          listPropertyValue: String(r.listPropertyValue ?? '').trim()
-        }))
-      : []
-    form.filterRows = rows
+    const joinsFor = (
+      rows: { recipientFilterId: string }[],
+      api: ('and' | 'or')[] | undefined,
+      useFilterMode: boolean
+    ): RecipientListJoinChoice[] => {
+      const filled = rows.filter((r) => r.recipientFilterId.trim()).length
+      const need = Math.max(0, filled - 1)
+      const joins: RecipientListJoinChoice[] = []
+      for (let i = 0; i < need; i++) {
+        if (Array.isArray(api) && (api[i] === 'or' || api[i] === 'and')) {
+          joins.push(api[i] === 'or' ? 'or' : 'and')
+        } else if (useFilterMode && need === 1 && list.filterMode === 'or') {
+          joins.push('or')
+        } else {
+          joins.push('')
+        }
+      }
+      return joins
+    }
+    const savedGroups: RecipientListFilterGroup[] = list.filterGroups?.length
+      ? list.filterGroups.map((group) => {
+          const rows = group.rows.map((r) => ({
+            recipientFilterId: String(r.recipientFilterId ?? '').trim(),
+            listPropertyValue: String(r.listPropertyValue ?? '').trim()
+          }))
+          return { rows, joins: joinsFor(rows, group.joins, false) }
+        })
+      : [
+          {
+            rows: (list.filterRows ?? []).map((r) => ({
+              recipientFilterId: String(r.recipientFilterId ?? '').trim(),
+              listPropertyValue: String(r.listPropertyValue ?? '').trim()
+            })),
+            joins: joinsFor(
+              (list.filterRows ?? []).map((r) => ({
+                recipientFilterId: String(r.recipientFilterId ?? '').trim()
+              })),
+              list.criterionJoins,
+              true
+            )
+          }
+        ]
+    form.filterGroups.splice(0, form.filterGroups.length, ...savedGroups.filter((g) => g.rows.length))
+    form.groupJoins.splice(0, form.groupJoins.length)
+    const savedGroupJoins = list.groupJoins ?? []
+    for (let i = 0; i < Math.max(0, form.filterGroups.length - 1); i++) {
+      form.groupJoins.push(savedGroupJoins[i] === 'or' ? 'or' : savedGroupJoins[i] === 'and' ? 'and' : '')
+    }
+    form.filterRows = form.filterGroups.flatMap((group) => group.rows)
     for (const row of form.filterRows) {
       const f = rowFilter(row)
       if (!f || f.property === 'none') continue
@@ -476,19 +667,6 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
       }
     }
 
-    const savedCount = form.filterRows.filter((r) => rowHasFilterId(r)).length
-    const need = Math.max(0, savedCount - 1)
-    form.criterionJoins.splice(0, form.criterionJoins.length)
-    const api = list.criterionJoins
-    for (let i = 0; i < need; i++) {
-      if (Array.isArray(api) && api.length === need && (api[i] === 'or' || api[i] === 'and')) {
-        form.criterionJoins.push(api[i] === 'or' ? 'or' : 'and')
-      } else if (need === 1 && list.filterMode === 'or') {
-        form.criterionJoins.push('or')
-      } else {
-        form.criterionJoins.push('and')
-      }
-    }
   }
 
   async function loadFormPayload(): Promise<void> {
@@ -609,6 +787,12 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     propertyValuePlaceholderFor,
     showCombineBeforeFormRow,
     joinSlotBeforeFormRow,
+    conditionNumber,
+    conditionCount,
+    conditionSummary,
+    filterPreview,
+    addFilterGroup,
+    removeFilterGroup,
     canSubmitForm,
     submitBlockReasons,
     recipientFilterSelectOptions,

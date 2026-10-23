@@ -105,6 +105,8 @@ export default defineEventHandler(async (event) => {
     company: c.company ?? '',
     channel: c.channel ?? '',
     ownerEmail: ownerRaw,
+    priority: typeof meta.priority === 'string' ? meta.priority.trim() : '',
+    brokerRole: typeof meta.brokerRole === 'string' ? meta.brokerRole.trim() : '',
     address: {
       street: c.address?.street ?? '',
       unit: c.address?.unit ?? '',

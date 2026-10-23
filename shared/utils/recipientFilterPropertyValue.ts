@@ -24,7 +24,13 @@ export function recipientFilterPropertyAcceptsValueList(
   if (prop.startsWith('address.')) return false
   if (prop === 'address') return type !== 'city' && type !== 'county' && type !== 'street'
 
-  return prop === 'source' || prop === 'contact_profile' || prop === 'relationship_partner'
+  return (
+    prop === 'source' ||
+    prop === 'contact_profile' ||
+    prop === 'relationship_partner' ||
+    prop === 'priority' ||
+    prop === 'broker_role'
+  )
 }
 
 export function splitRecipientFilterValueList(raw: unknown): string[] {

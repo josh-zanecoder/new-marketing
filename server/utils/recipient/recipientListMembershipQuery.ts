@@ -54,6 +54,26 @@ function canonicalCriterionKey(raw: string): string {
   return String(raw ?? '').trim().toLowerCase()
 }
 
+/** One role inside a comma-separated `metadata.brokerRole` list, such as `Loan Officer, Processor`. */
+function brokerRoleTokenQuery(value: string): Record<string, unknown> {
+  return {
+    'metadata.brokerRole': {
+      $regex: new RegExp(`(?:^|,)\\s*${escapeRegex(value.trim())}\\s*(?:,|$)`, 'i')
+    }
+  }
+}
+
+function brokerRoleOrMatch(values: string[]): Record<string, unknown> {
+  const uniq = [...new Set(values.map((v) => v.trim()).filter(Boolean))]
+  if (uniq.length === 0) return {}
+  if (uniq.length === 1) {
+    const only = uniq[0]
+    if (!only) return {}
+    return brokerRoleTokenQuery(only)
+  }
+  return { $or: uniq.map((v) => brokerRoleTokenQuery(v)) }
+}
+
 function exactField(path: string, value: string): Record<string, unknown> {
   return {
     [path]: { $regex: new RegExp(`^${escapeRegex(value)}$`, 'i') }
@@ -136,6 +156,12 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       return exactField('source', val)
     case 'email':
       return exactField('email', val)
+    case 'priority':
+      return exactField('metadata.priority', val)
+    case 'broker_role':
+      return brokerRoleTokenQuery(val)
+    case 'account_owner':
+      return exactField('metadata.ownerEmail', val)
     case 'profile_type': {
       const q = contactProfileTypeKeyMatchQuery(val)
       return Object.keys(q).length ? q : null
@@ -229,6 +255,15 @@ function buildAndMode(
       case 'email':
         andParts.push(orExactField('email', uniq))
         break
+      case 'priority':
+        andParts.push(orExactField('metadata.priority', uniq))
+        break
+      case 'broker_role':
+        andParts.push(brokerRoleOrMatch(uniq))
+        break
+      case 'account_owner':
+        andParts.push(orExactField('metadata.ownerEmail', uniq))
+        break
       case 'profile_type': {
         const ors = uniq
           .map((v) => contactProfileTypeKeyMatchQuery(v))
@@ -306,6 +341,12 @@ function combineCriteriaGroup(
   return { $or: leaves }
 }
 
+/** One parenthesized group of filter rows, then how those groups combine. */
+export type NestedFilterGroup = {
+  rowGroups: RecipientListCriterion[][]
+  joins: ('and' | 'or')[]
+}
+
 /** Left-associative: (...((L0 op0 L1) op1 L2) ...). */
 function foldLeftAssociativeChain(
   leaves: Record<string, unknown>[],
@@ -329,6 +370,53 @@ function mergeAudienceWithExpr(
 ): FilterQuery<Record<string, unknown>> {
   const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
   return { ...base, ...expr } as FilterQuery<Record<string, unknown>>
+}
+
+function expressionFromRowGroups(
+  rowGroups: RecipientListCriterion[][],
+  joins: ('and' | 'or')[]
+): Record<string, unknown> | null {
+  const rowLeaves: Record<string, unknown>[] = []
+  for (const g of rowGroups) {
+    const part = combineCriteriaGroup(g)
+    if (part && Object.keys(part).length) rowLeaves.push(part)
+  }
+  if (rowLeaves.length === 0) return null
+  if (rowLeaves.length === 1) return rowLeaves[0] ?? null
+  const need = rowLeaves.length - 1
+  const norm: ('and' | 'or')[] = []
+  for (let i = 0; i < need; i++) {
+    norm[i] = joins[i] === 'or' ? 'or' : 'and'
+  }
+  return foldLeftAssociativeChain(rowLeaves, norm)
+}
+
+/**
+ * `(group) join (group)`. Each group is its own left-associative chain, so
+ * (1 OR 2) AND (a OR b) is not the same as 1 OR 2 AND a OR b.
+ */
+export function buildNestedFilterQuery(
+  audience: string,
+  groups: NestedFilterGroup[],
+  groupJoins: ('and' | 'or')[]
+): FilterQuery<Record<string, unknown>> {
+  const base: FilterQuery<Record<string, unknown>> = audienceBaseQuery(audience)
+  const exprs: Record<string, unknown>[] = []
+  for (const group of groups) {
+    const expr = expressionFromRowGroups(group.rowGroups, group.joins)
+    if (expr && Object.keys(expr).length) exprs.push(expr)
+  }
+  if (exprs.length === 0) return base
+  if (exprs.length === 1) {
+    const one = exprs[0]
+    return one ? mergeAudienceWithExpr(audience, one) : base
+  }
+  const need = exprs.length - 1
+  const norm: ('and' | 'or')[] = []
+  for (let i = 0; i < need; i++) {
+    norm[i] = groupJoins[i] === 'or' ? 'or' : 'and'
+  }
+  return mergeAudienceWithExpr(audience, foldLeftAssociativeChain(exprs, norm))
 }
 
 /** One leaf per filter row (OR inside row when a row expands to multiple criteria). */
@@ -464,7 +552,8 @@ export async function rebuildRecipientListMembers(
   auth: unknown,
   membershipScope: RecipientListMembershipScope,
   membershipOwnerEmails: string[],
-  storedCriterionJoins?: RecipientListCriterionJoin[] | null
+  storedCriterionJoins?: RecipientListCriterionJoin[] | null,
+  nested?: { groups: NestedFilterGroup[]; groupJoins: ('and' | 'or')[] } | null
 ): Promise<number> {
   const { Contact, RecipientList, RecipientListMember } = getTenantClientModels(tenantConn)
   await RecipientListMember.deleteMany({ recipientListId: listId })
@@ -480,13 +569,16 @@ export async function rebuildRecipientListMembers(
   const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
   const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
 
-  const contactQuery = buildContactFilterQuery(
-    audience,
-    filters,
-    filterMode,
-    groupsForQuery,
-    storedCriterionJoins ?? null
-  )
+  const contactQuery =
+    nested && nested.groups.length > 0
+      ? buildNestedFilterQuery(audience, nested.groups, nested.groupJoins)
+      : buildContactFilterQuery(
+          audience,
+          filters,
+          filterMode,
+          groupsForQuery,
+          storedCriterionJoins ?? null
+        )
   const scopedContactQuery =
     membershipScope === 'tenant'
       ? (contactQuery as Record<string, unknown>)

@@ -10,6 +10,8 @@ import type {
   RecipientListFilterMode,
   RecipientListMembershipScope
 } from '@server/types/tenant/recipientList.model'
+import type { NestedFilterGroup } from '@server/utils/recipient/recipientListMembershipQuery'
+import type { PersistedFilterGroup } from '@server/utils/recipient/recipientListMutation'
 import {
   isRegisteredTenantAuthContext,
   recipientListMembershipOwnerEmailsFromAuth,
@@ -154,6 +156,9 @@ async function loadWritePayload(
   persistedFilterRows: { recipientFilterId: string; listPropertyValue: string }[]
   criterionJoinsFromBody: RecipientListCriterionJoin[] | null
   joinsToStore: RecipientListCriterionJoin[]
+  nested: { groups: NestedFilterGroup[]; groupJoins: RecipientListCriterionJoin[] } | null
+  persistedFilterGroups: PersistedFilterGroup[] | null
+  groupJoinsToStore: RecipientListCriterionJoin[] | null
   membershipScope: RecipientListMembershipScope
   membershipOwnerEmails: string[]
 }> {
@@ -161,8 +166,15 @@ async function loadWritePayload(
   const name = assertName(body)
   const filterMode = assertFilterMode(body?.filterMode)
   const audience = await assertRecipientListAudience(tenantConn, body?.audience)
-  const { filters, criterionGroups, persistedFilterRows, criterionJoinsFromBody } =
-    await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
+  const {
+    filters,
+    criterionGroups,
+    persistedFilterRows,
+    criterionJoinsFromBody,
+    nested,
+    persistedFilterGroups,
+    groupJoinsToStore
+  } = await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
 
   const joinsToStore =
     criterionJoinsFromBody !== null
@@ -184,6 +196,9 @@ async function loadWritePayload(
     persistedFilterRows,
     criterionJoinsFromBody,
     joinsToStore,
+    nested,
+    persistedFilterGroups,
+    groupJoinsToStore,
     membershipScope,
     membershipOwnerEmails
   }
@@ -207,6 +222,9 @@ export async function createRecipientList(params: {
     filterMode: w.filterMode,
     filterRows: w.persistedFilterRows,
     criterionJoins: w.joinsToStore,
+    ...(w.persistedFilterGroups
+      ? { filterGroups: w.persistedFilterGroups, groupJoins: w.groupJoinsToStore ?? [] }
+      : {}),
     clientId: '',
     membershipScope: w.membershipScope,
     membershipOwnerEmails: w.membershipOwnerEmails,
@@ -229,7 +247,8 @@ export async function createRecipientList(params: {
     auth,
     w.membershipScope,
     w.membershipOwnerEmails,
-    joinsForRebuild
+    joinsForRebuild,
+    w.nested
   )
 
   return {
@@ -268,6 +287,10 @@ export async function updateRecipientList(params: {
   if (w.criterionJoinsFromBody !== null) {
     updateDoc.criterionJoins = w.criterionJoinsFromBody
   }
+  if (w.persistedFilterGroups) {
+    updateDoc.filterGroups = w.persistedFilterGroups
+    updateDoc.groupJoins = w.groupJoinsToStore ?? []
+  }
   const editorId = tenantCreatedByFromAuth(auth)
   if (editorId) updateDoc.updatedBy = editorId
 
@@ -288,7 +311,8 @@ export async function updateRecipientList(params: {
     auth,
     w.membershipScope,
     w.membershipOwnerEmails,
-    joinsForRebuild
+    joinsForRebuild,
+    w.nested
   )
 
   const updated = (await RecipientList.findById(listId).lean().exec()) as Record<

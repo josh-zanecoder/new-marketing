@@ -153,6 +153,12 @@ export function registryDocToCriteria(doc: {
       return tokens.map((value) => ({ property: 'source', value }))
     case 'email':
       return [{ property: 'email', value: tokens[0] ?? '' }]
+    case 'priority':
+      return tokens.map((value) => ({ property: 'priority', value }))
+    case 'broker_role':
+      return tokens.map((value) => ({ property: 'broker_role', value }))
+    case 'account_owner':
+      return [{ property: 'account_owner', value: tokens[0] ?? '' }]
     case 'contact_profile':
       if (propertyType === 'profile_type') {
         return tokens.map((value) => ({ property: 'profile_type', value }))

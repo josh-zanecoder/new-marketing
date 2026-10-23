@@ -15,6 +15,8 @@ describe('recipientFilterPropertyAcceptsValueList', () => {
     expect(recipientFilterPropertyAcceptsValueList('source', 'none')).toBe(true)
     expect(recipientFilterPropertyAcceptsValueList('contact_profile', 'profile_type')).toBe(true)
     expect(recipientFilterPropertyAcceptsValueList('relationship_partner', 'partner_email')).toBe(true)
+    expect(recipientFilterPropertyAcceptsValueList('priority', 'none')).toBe(true)
+    expect(recipientFilterPropertyAcceptsValueList('broker_role', 'none')).toBe(true)
   })
 
   it('rejects lists for single-value properties', () => {
@@ -23,6 +25,7 @@ describe('recipientFilterPropertyAcceptsValueList', () => {
     expect(recipientFilterPropertyAcceptsValueList('email', 'none')).toBe(false)
     expect(recipientFilterPropertyAcceptsValueList('address', 'city')).toBe(false)
     expect(recipientFilterPropertyAcceptsValueList('address.street', 'none')).toBe(false)
+    expect(recipientFilterPropertyAcceptsValueList('account_owner', 'none')).toBe(false)
   })
 })
 

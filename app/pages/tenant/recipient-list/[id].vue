@@ -130,6 +130,12 @@
                   <span class="min-w-0 break-words font-semibold text-zinc-900">{{ seg.value }}</span>
                 </span>
                 <span
+                  v-else-if="seg.kind === 'paren'"
+                  class="text-lg font-semibold text-zinc-400"
+                >
+                  {{ seg.side }}
+                </span>
+                <span
                   v-else
                   class="inline-flex shrink-0 items-center justify-center rounded-lg bg-zinc-100 px-2.5 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-600"
                 >
@@ -767,11 +773,30 @@ const viewMemberAddress = computed(() => {
 type CriteriaSegment =
   | { kind: 'criterion'; property: string; value: string }
   | { kind: 'op'; op: 'AND' | 'OR' }
+  | { kind: 'paren'; side: '(' | ')' }
 
 /** Chips + AND/OR indicators for the criteria row. */
 const criteriaSegments = computed((): CriteriaSegment[] => {
   const list = payload.value?.list
   if (!list) return []
+  const grouped = list.filterGroupChain
+  if (grouped && grouped.groups.length > 1) {
+    const out: CriteriaSegment[] = []
+    grouped.groups.forEach((group, gIdx) => {
+      out.push({ kind: 'paren', side: '(' })
+      group.rows.forEach((row, i) => {
+        out.push({ kind: 'criterion', property: row.property, value: row.value })
+        if (i < group.rows.length - 1) {
+          out.push({ kind: 'op', op: group.joins[i] === 'or' ? 'OR' : 'AND' })
+        }
+      })
+      out.push({ kind: 'paren', side: ')' })
+      if (gIdx < grouped.groups.length - 1) {
+        out.push({ kind: 'op', op: grouped.groupJoins[gIdx] === 'or' ? 'OR' : 'AND' })
+      }
+    })
+    return out
+  }
   const chain = list.criteriaChain
   if (chain?.rows?.length) {
     const rows = chain.rows

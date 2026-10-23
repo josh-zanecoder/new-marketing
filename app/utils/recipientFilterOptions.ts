@@ -6,6 +6,9 @@ export const recipientFilterPropertyFieldOptions = [
   { value: 'company', label: 'Company' },
   { value: 'status', label: 'Status' },
   { value: 'stage', label: 'Stage' },
+  { value: 'priority', label: 'Priority' },
+  { value: 'broker_role', label: 'Broker role' },
+  { value: 'account_owner', label: 'Account owner' },
   { value: 'contact_profile', label: 'Contact profile' },
   { value: 'relationship_partner', label: 'Relationship partner' }
 ] as const

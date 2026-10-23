@@ -11,6 +11,8 @@ import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/r
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import {
   buildContactFilterQuery,
+  buildNestedFilterQuery,
+  type NestedFilterGroup,
   rebuildRecipientListMembers
 } from '@server/utils/recipient/recipientListMembershipQuery'
 import { normalizeRecipientListDoc, registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
@@ -111,6 +113,32 @@ function criterionGroupsFromFilterRows(
   return criterionGroups
 }
 
+function nestedGroupsFromListDoc(
+  audience: string,
+  listDoc: RecipientListDoc,
+  filterById: Map<string, FilterDoc>
+): { groups: NestedFilterGroup[]; groupJoins: ('and' | 'or')[] } | null {
+  const raw = (listDoc as { filterGroups?: unknown }).filterGroups
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  const groups: NestedFilterGroup[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const g = item as { rows?: unknown; joins?: unknown }
+    const rowGroups = criterionGroupsFromFilterRows(audience, g.rows, filterById)
+    if (!rowGroups.length) continue
+    const joins = Array.isArray(g.joins)
+      ? g.joins.map((j) => (j === 'or' ? 'or' : ('and' as const)))
+      : []
+    groups.push({ rowGroups, joins })
+  }
+  if (!groups.length) return null
+  const rawJoins = (listDoc as { groupJoins?: unknown }).groupJoins
+  const groupJoins = Array.isArray(rawJoins)
+    ? rawJoins.map((j) => (j === 'or' ? 'or' : ('and' as const)))
+    : []
+  return { groups, groupJoins }
+}
+
 async function syncContactToList(
   models: ReturnType<typeof getTenantClientModels>,
   contactId: mongoose.Types.ObjectId,
@@ -131,6 +159,7 @@ async function syncContactToList(
   const normalized = normalizeRecipientListDoc(listDoc)
   const { audience, filters, filterMode } = normalized
 
+  const nested = nestedGroupsFromListDoc(audience, listDoc, filterById)
   const criterionGroups = criterionGroupsFromFilterRows(audience, listDoc.filterRows, filterById)
   const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
   const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
@@ -140,13 +169,15 @@ async function syncContactToList(
     listDoc as { criterionJoins?: unknown }
   )
 
-  const baseQuery = buildContactFilterQuery(
-    audience,
-    filters,
-    filterMode,
-    groupsForQuery,
-    joinsForQuery
-  )
+  const baseQuery = nested
+    ? buildNestedFilterQuery(audience, nested.groups, nested.groupJoins)
+    : buildContactFilterQuery(
+        audience,
+        filters,
+        filterMode,
+        groupsForQuery,
+        joinsForQuery
+      )
   const scopeRaw = (listDoc as { membershipScope?: unknown }).membershipScope
   const membershipScope =
     scopeRaw === 'tenant' || scopeRaw === 'owner_emails' ? scopeRaw : 'owner_emails'
@@ -251,6 +282,7 @@ async function rebuildOneNonStaticListFromDoc(
 ): Promise<number> {
   const normalized = normalizeRecipientListDoc(listDoc)
   const { audience, filters, filterMode } = normalized
+  const nested = nestedGroupsFromListDoc(audience, listDoc, filterById)
   const criterionGroups = criterionGroupsFromFilterRows(audience, listDoc.filterRows, filterById)
   const joinsForRebuild = pickJoinsForQuery(
     criterionGroups,
@@ -270,7 +302,8 @@ async function rebuildOneNonStaticListFromDoc(
     null,
     membershipScope,
     membershipOwnerEmails,
-    joinsForRebuild
+    joinsForRebuild,
+    nested
   )
 }
 

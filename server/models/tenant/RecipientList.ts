@@ -61,6 +61,27 @@ export const recipientListSchema = new mongoose.Schema(
       type: [{ type: String, enum: criterionJoinEnum }],
       default: undefined
     },
+    /**
+     * Parenthesized groups of conditions. `(group) groupJoins (group)`.
+     * When set, membership uses this instead of the flat `criterionJoins` chain.
+     */
+    filterGroups: {
+      type: [
+        new mongoose.Schema(
+          {
+            rows: { type: [recipientListFilterRowSchema], default: () => [] },
+            joins: { type: [{ type: String, enum: criterionJoinEnum }], default: () => [] }
+          },
+          { _id: false }
+        )
+      ],
+      default: undefined
+    },
+    /** Join between filter groups; length = filterGroups.length − 1. */
+    groupJoins: {
+      type: [{ type: String, enum: criterionJoinEnum }],
+      default: undefined
+    },
     /** Source rows from the tenant UI (registry filter id + value); used to repopulate edit. */
     filterRows: {
       type: [recipientListFilterRowSchema],

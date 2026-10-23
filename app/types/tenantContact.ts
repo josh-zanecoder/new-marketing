@@ -31,6 +31,10 @@ export interface TenantContactListRow {
   company: string
   channel: string
   ownerEmail?: string
+  /** Prospect heat from CRM (`HOT`, `WARM`, `COLD`). Empty when the contact has none. */
+  priority?: string
+  /** Member broker roles from CRM, comma-separated when there is more than one. */
+  brokerRole?: string
   is_unsubscribe: boolean
   address: {
     street: string
@@ -126,6 +130,18 @@ export interface TenantRecipientListDetailList {
     joins: ('and' | 'or')[] | null
   } | null
   filterRows?: TenantRecipientListFilterRow[]
+  filterGroups?: {
+    rows: TenantRecipientListFilterRow[]
+    joins: ('and' | 'or')[]
+  }[]
+  groupJoins?: ('and' | 'or')[]
+  filterGroupChain?: {
+    groups: {
+      rows: TenantRecipientListCriterion[]
+      joins: ('and' | 'or')[]
+    }[]
+    groupJoins: ('and' | 'or')[]
+  } | null
   membershipScope?: 'tenant' | 'owner_emails'
   membershipOwnerEmails?: string[]
   createdAt: string | null

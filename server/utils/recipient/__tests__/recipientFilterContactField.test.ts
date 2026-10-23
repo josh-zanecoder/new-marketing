@@ -12,6 +12,9 @@ describe('recipientFilterContactFieldPath', () => {
     expect(recipientFilterContactFieldPath('status', 'none')).toBe('status')
     expect(recipientFilterContactFieldPath('stage', 'none')).toBe('stage')
     expect(recipientFilterContactFieldPath('source', 'none')).toBe('source')
+    expect(recipientFilterContactFieldPath('priority', 'none')).toBe('metadata.priority')
+    expect(recipientFilterContactFieldPath('broker_role', 'none')).toBe('metadata.brokerRole')
+    expect(recipientFilterContactFieldPath('account_owner', 'none')).toBe('metadata.ownerEmail')
   })
 
   it('maps address sub types, including legacy dotted properties', () => {

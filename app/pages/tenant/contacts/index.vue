@@ -101,6 +101,22 @@
           :options="contactTypeSelectOptions"
           class="w-full shrink-0 lg:w-[14rem]"
         />
+        <TenantFilterSelect
+          v-if="brokerRoleFilterOptions.length > 1"
+          id="contacts-broker-role-filter"
+          v-model="brokerRoleFilter"
+          label="Broker role"
+          :options="brokerRoleFilterOptions"
+          class="w-full shrink-0 lg:w-[13rem]"
+        />
+        <TenantFilterSelect
+          v-if="ownerFilterOptions.length > 2"
+          id="contacts-owner-filter"
+          v-model="ownerFilter"
+          label="Account owner"
+          :options="ownerFilterOptions"
+          class="w-full shrink-0 lg:w-[16rem]"
+        />
       </div>
     </div>
 
@@ -155,6 +171,11 @@
               </p>
               <p v-if="row.company" class="mt-1 truncate text-xs text-slate-500" :title="row.company">
                 {{ row.company }}
+              </p>
+              <p v-if="row.priority || row.brokerRole" class="mt-1 truncate text-xs text-slate-500">
+                <span v-if="row.priority">{{ row.priority }}</span>
+                <span v-if="row.priority && row.brokerRole"> · </span>
+                <span v-if="row.brokerRole">{{ row.brokerRole }}</span>
               </p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
@@ -259,6 +280,18 @@
               </th>
               <th
                 scope="col"
+                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell xl:px-4"
+              >
+                Priority
+              </th>
+              <th
+                scope="col"
+                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell xl:px-4"
+              >
+                Broker role
+              </th>
+              <th
+                scope="col"
                 class="whitespace-nowrap px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pr-6 sm:pl-4"
               >
                 Actions
@@ -330,6 +363,15 @@
                 :title="row.company || undefined"
               >
                 {{ row.company || '—' }}
+              </td>
+              <td class="hidden whitespace-nowrap px-4 py-4 text-slate-600 xl:table-cell xl:px-4">
+                {{ row.priority || '—' }}
+              </td>
+              <td
+                class="hidden max-w-[180px] truncate px-4 py-4 text-slate-600 xl:table-cell xl:px-4"
+                :title="row.brokerRole || undefined"
+              >
+                {{ row.brokerRole || '—' }}
               </td>
               <td class="whitespace-nowrap px-4 py-4 text-right sm:pr-6 sm:pl-4">
                 <div class="inline-flex items-center justify-end gap-2">
@@ -549,6 +591,14 @@
                       <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Channel</dt>
                       <dd class="mt-1 text-sm font-medium text-slate-900">{{ viewContactDetail.channel }}</dd>
                     </div>
+                    <div v-if="hasDetailValue(contactMetadataText('priority'))">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Priority</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ contactMetadataText('priority') }}</dd>
+                    </div>
+                    <div v-if="hasDetailValue(contactMetadataText('brokerRole'))">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Broker role</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ contactMetadataText('brokerRole') }}</dd>
+                    </div>
                     <div v-if="hasDetailValue(viewContactDetail.firstName) || hasDetailValue(viewContactDetail.lastName)">
                       <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Full name</dt>
                       <dd class="mt-1 text-sm font-medium text-slate-900">
@@ -560,44 +610,75 @@
 
                 <section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
                   <h3 class="text-sm font-semibold text-slate-900">
-                    Emails
+                    Activity
                   </h3>
                   <p class="mt-0.5 text-xs text-slate-500">
-                    Sends to this contact, and whether they opened or clicked
+                    Sends, opens, clicks, and failures for this contact
                   </p>
                   <p v-if="contactEmailActivityPending" class="mt-3 text-sm text-slate-500">
-                    Loading emails…
+                    Loading activity…
                   </p>
                   <p v-else-if="contactEmailActivityError" class="mt-3 text-sm text-red-700">
                     {{ contactEmailActivityError }}
                   </p>
-                  <p v-else-if="!contactEmailActivity.length" class="mt-3 text-sm text-slate-400">
-                    No emails sent yet
+                  <p v-else-if="!contactEngagementEvents.length" class="mt-3 text-sm text-slate-400">
+                    No marketing activity yet
                   </p>
-                  <ul v-else class="mt-4 divide-y divide-slate-100">
-                    <li
-                      v-for="message in contactEmailActivity"
-                      :key="message.messageId"
-                      class="py-3 first:pt-0 last:pb-0"
-                    >
-                      <p class="text-sm font-medium text-slate-900">{{ message.subject }}</p>
-                      <p class="mt-1 text-xs text-slate-500">{{ formatEmailActivityDate(message.sentAt) }}</p>
-                      <div class="mt-2 flex flex-wrap gap-1.5">
-                        <span
-                          class="rounded-full px-2 py-0.5 text-[11px] font-medium ring-1"
-                          :class="message.opened ? 'bg-violet-50 text-violet-800 ring-violet-200' : 'bg-slate-50 text-slate-500 ring-slate-200'"
-                        >
-                          {{ message.opened ? 'Opened' : 'Not opened' }}
-                        </span>
-                        <span
-                          class="rounded-full px-2 py-0.5 text-[11px] font-medium ring-1"
-                          :class="message.clicked ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-slate-50 text-slate-500 ring-slate-200'"
-                        >
-                          {{ message.clicked ? 'Clicked' : 'Not clicked' }}
-                        </span>
-                      </div>
-                    </li>
-                  </ul>
+                  <template v-else>
+                    <div class="mt-3 flex flex-wrap gap-1.5">
+                      <span class="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                        {{ contactEngagementSummary.sent }} sent
+                      </span>
+                      <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                        {{ contactEngagementSummary.delivered }} delivered
+                      </span>
+                      <span class="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-200">
+                        {{ contactEngagementSummary.opened }} opened
+                      </span>
+                      <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
+                        {{ contactEngagementSummary.clicked }} clicked
+                      </span>
+                    </div>
+                    <ol class="mt-4">
+                      <li
+                        v-for="(item, index) in contactEngagementEvents"
+                        :key="`${item.id}-${item.kind}-${index}`"
+                        class="relative flex gap-3"
+                      >
+                        <div class="flex w-3 flex-col items-center">
+                          <span
+                            class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-4 ring-white"
+                            :class="engagementDotClass(item.kind)"
+                          />
+                          <span
+                            v-if="index < contactEngagementEvents.length - 1"
+                            class="w-px flex-1 bg-slate-200"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <div class="min-w-0 flex-1 pb-4">
+                          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                            <p class="text-sm font-semibold text-slate-900">{{ item.label }}</p>
+                            <time class="text-xs text-slate-500" :datetime="item.at">{{ formatEmailActivityDate(item.at) }}</time>
+                          </div>
+                          <p class="mt-0.5 text-sm text-slate-700">{{ item.subject }}</p>
+                          <NuxtLink
+                            v-if="item.campaignId && item.campaignName"
+                            :to="`/tenant/campaigns/${item.campaignId}`"
+                            class="mt-0.5 inline-block text-xs font-medium text-primary-700 hover:underline"
+                          >
+                            {{ item.campaignName }}
+                          </NuxtLink>
+                          <p v-if="item.link" class="mt-0.5 truncate text-xs text-slate-500" :title="item.link">
+                            {{ item.link }}
+                          </p>
+                          <p v-if="item.reason" class="mt-0.5 text-xs text-red-700">
+                            {{ item.reason }}
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                  </template>
                 </section>
 
                 <section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5">
@@ -984,6 +1065,7 @@
 </template>
 
 <script setup lang="ts">
+import { brokerRoleLabels } from '~~/shared/utils/recipientFilterContactField'
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneInput, formatUsPhoneNumber, isUsPhoneInputKeyAllowed } from '~~/shared/utils/usNumberFormatter'
@@ -1006,17 +1088,42 @@ const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 
-type ContactEmailActivity = {
-  messageId: string
+type ContactEngagementKind =
+  | 'sent'
+  | 'delivered'
+  | 'opened'
+  | 'clicked'
+  | 'bounced'
+  | 'unsubscribed'
+  | 'complaint'
+  | 'failed'
+
+type ContactEngagementEvent = {
+  id: string
+  at: string
+  kind: ContactEngagementKind
+  label: string
   subject: string
-  sentAt: string | null
-  opened: boolean
-  clicked: boolean
+  campaignId: string
+  campaignName: string
+  link: string
+  reason: string
 }
 
-const contactEmailActivity = ref<ContactEmailActivity[]>([])
+const contactEngagementEvents = ref<ContactEngagementEvent[]>([])
+const contactEngagementSummary = ref({ sent: 0, delivered: 0, opened: 0, clicked: 0 })
 const contactEmailActivityPending = ref(false)
 const contactEmailActivityError = ref('')
+
+function engagementDotClass(kind: ContactEngagementKind): string {
+  if (kind === 'sent') return 'bg-sky-500'
+  if (kind === 'delivered') return 'bg-emerald-500'
+  if (kind === 'opened') return 'bg-violet-500'
+  if (kind === 'clicked') return 'bg-amber-500'
+  if (kind === 'unsubscribed') return 'bg-slate-400'
+  if (kind === 'complaint') return 'bg-orange-500'
+  return 'bg-red-500'
+}
 
 function formatEmailActivityDate(iso: string | null): string {
   if (!iso) return '—'
@@ -1028,17 +1135,22 @@ function formatEmailActivityDate(iso: string | null): string {
 async function loadContactEmailActivity(contactId: string) {
   contactEmailActivityPending.value = true
   contactEmailActivityError.value = ''
-  contactEmailActivity.value = []
+  contactEngagementEvents.value = []
+  contactEngagementSummary.value = { sent: 0, delivered: 0, opened: 0, clicked: 0 }
   try {
-    const res = await $fetch<{ messages: ContactEmailActivity[] }>(
+    const res = await $fetch<{
+      events?: ContactEngagementEvent[]
+      summary?: { sent: number; delivered: number; opened: number; clicked: number }
+    }>(
       `/api/v1/tenant/contacts/${encodeURIComponent(contactId)}/email-activity`
     )
-    contactEmailActivity.value = res.messages ?? []
+    contactEngagementEvents.value = res.events ?? []
+    contactEngagementSummary.value = res.summary ?? { sent: 0, delivered: 0, opened: 0, clicked: 0 }
   } catch (e: unknown) {
     contactEmailActivityError.value =
       e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message || 'Failed to load emails')
-        : 'Failed to load emails'
+        ? String((e as { data?: { message?: string } }).data?.message || 'Failed to load activity')
+        : 'Failed to load activity'
   } finally {
     contactEmailActivityPending.value = false
   }
@@ -1337,6 +1449,29 @@ const searchQuery = ref('')
 const contactTypeFilter = ref('all')
 /** `'all'`, `'subscribed'`, or `'unsubscribed'`. */
 const subscriptionFilter = ref<'all' | 'subscribed' | 'unsubscribed'>('all')
+const brokerRoleFilter = ref('all')
+const ownerFilter = ref('all')
+
+const brokerRoleFilterOptions = computed(() => {
+  const roles = [...new Set((data.value?.contacts ?? []).flatMap((row) => brokerRoleLabels(row.brokerRole)))]
+    .sort((a, b) => a.localeCompare(b))
+  return [
+    { value: 'all', label: 'All roles' },
+    ...roles.map((role) => ({ value: role, label: role }))
+  ]
+})
+
+const ownerFilterOptions = computed(() => {
+  const emails = [...new Set(
+    (data.value?.contacts ?? [])
+      .map((row) => String(row.ownerEmail ?? '').trim().toLowerCase())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b))
+  return [
+    { value: 'all', label: 'All owners' },
+    ...emails.map((email) => ({ value: email, label: email }))
+  ]
+})
 const currentPage = ref(1)
 const subscriptionSavingId = ref('')
 const subscriptionActionError = ref('')
@@ -1423,6 +1558,16 @@ const filteredContacts = computed(() => {
   } else if (subscriptionFilter.value === 'unsubscribed') {
     list = list.filter((row) => row.is_unsubscribe)
   }
+  if (brokerRoleFilter.value !== 'all') {
+    const role = brokerRoleFilter.value.toLowerCase()
+    list = list.filter((row) =>
+      brokerRoleLabels(row.brokerRole).some((label) => label.toLowerCase() === role)
+    )
+  }
+  if (ownerFilter.value !== 'all') {
+    const owner = ownerFilter.value.toLowerCase()
+    list = list.filter((row) => String(row.ownerEmail ?? '').trim().toLowerCase() === owner)
+  }
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((row) => {
@@ -1433,6 +1578,9 @@ const filteredContacts = computed(() => {
       row.email,
       row.company,
       row.phone,
+      row.priority,
+      row.brokerRole,
+      row.ownerEmail,
       row.primaryTypeLabel,
       ...(row.contactType ?? []),
       ...(row.contactTypeLabels ?? []),
@@ -1482,7 +1630,7 @@ const paginationMeta = computed(() => {
   return { from, to, total }
 })
 
-watch([searchQuery, contactTypeFilter, subscriptionFilter], () => {
+watch([searchQuery, contactTypeFilter, subscriptionFilter, brokerRoleFilter, ownerFilter], () => {
   currentPage.value = 1
 })
 
@@ -1534,6 +1682,11 @@ const contactDetailInitials = computed(() => {
   const value = `${first}${last}`.toUpperCase()
   return value || c.email?.charAt(0)?.toUpperCase() || '?'
 })
+
+function contactMetadataText(key: string): string {
+  const value = viewContactDetail.value?.metadata?.[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
 
 function ownerMetadata(
   contact: TenantContactDetail | null | undefined
@@ -1651,6 +1804,8 @@ function closeContactDetail() {
   viewContactDetail.value = null
   viewContactError.value = ''
   ownerAvatarLoadFailed.value = false
+  contactEngagementEvents.value = []
+  contactEmailActivityError.value = ''
 }
 
 watch([addContactOpen, viewContactOpen], ([addOpen, viewOpen]) => {
