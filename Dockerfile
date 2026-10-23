@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:22-alpine AS builder
+FROM node:24.22.1-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY . .
 RUN npx nuxt prepare && npm run build && npm prune --omit=dev
 
 # Stage 2: Production
-FROM node:22-alpine
+FROM node:24.22.1-alpine
 
 WORKDIR /app
 
