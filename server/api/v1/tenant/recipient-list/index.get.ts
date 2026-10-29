@@ -6,6 +6,7 @@ import {
   isRegisteredTenantAuthContext,
   resolveTenantIdForTenantAuth
 } from '@server/tenant/registry-auth'
+import { dedupeContactsByEmail } from '@server/utils/contact/dedupeContactsByEmail'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
@@ -375,7 +376,7 @@ export default defineEventHandler(async (event) => {
   return {
     tenantId,
     tenantIdConfigured: Boolean(tenantId),
-    contacts: contacts.map((c) => {
+    contacts: dedupeContactsByEmail(contacts.map((c) => {
       const { firstName, lastName } = contactFirstLastFromDoc(c)
       const keys =
         Array.isArray(c.contactType) && c.contactType.length
@@ -393,7 +394,7 @@ export default defineEventHandler(async (event) => {
         source: c.source ?? '',
         address: c.address ?? {}
       }
-    }),
+    })),
     contactTotal,
     contactsTruncated: contactTotal > CONTACT_LIMIT,
     contactCounts,

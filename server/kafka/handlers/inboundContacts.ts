@@ -17,6 +17,10 @@ import {
 } from '@server/utils/contact/contactTypeWrite'
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
 import { resolveMarketingInboundSyncUpsertBatchSize } from '../inboundSyncConstants'
+import {
+  collapseInboundContactsByEmail,
+  type InboundContactCollection
+} from '@server/utils/contact/collapseInboundContactsByEmail'
 
 /** Stable id for Mongo upserts; do not rename without a migration. */
 const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
@@ -170,13 +174,34 @@ type SyncSnapshotUpsertRow = {
   } | null
 }
 
+async function persistInboundContact(
+  tenantConn: Connection,
+  setDoc: Record<string, unknown>
+): Promise<void> {
+  const models = getTenantClientModels(tenantConn)
+  const { keptIds, retiredIds } = await collapseInboundContactsByEmail({
+    Contact: models.Contact as unknown as InboundContactCollection,
+    source: KAFKA_INBOUND_CONTACT_SOURCE,
+    rows: [
+      {
+        email: String(setDoc.email ?? ''),
+        externalId: String(setDoc.externalId ?? ''),
+        setDoc
+      }
+    ]
+  })
+  for (const id of [...keptIds, ...retiredIds]) {
+    if (!Types.ObjectId.isValid(id)) continue
+    await syncContactRecipientListMembership(tenantConn, new Types.ObjectId(id))
+  }
+}
+
 export async function createContactFromCreatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
   const tenantConn = await getTenantConnectionForInboundEvent(contactEvent.tenantId, {
     eventType: contactEvent.eventType,
     dBname: contactEvent.dBname
   })
   if (!tenantConn) return
-  const models = getTenantClientModels(tenantConn)
   const email = String(contactEvent.payload.email || '').toLowerCase()
   const payloadMetadata =
     (contactEvent.payload as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}
@@ -223,24 +248,7 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
       relationships
     }
   }
-  await models.Contact.updateOne(
-    {
-      externalId: contactEvent.payload.externalId,
-      source: KAFKA_INBOUND_CONTACT_SOURCE
-    },
-    { $set: setDoc },
-    { upsert: true }
-  )
-  const doc = await models.Contact.findOne(
-    {
-      externalId: contactEvent.payload.externalId,
-      source: KAFKA_INBOUND_CONTACT_SOURCE
-    },
-    { _id: 1 }
-  ).lean()
-  if (doc?._id) {
-    await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-  }
+  await persistInboundContact(tenantConn, setDoc)
 }
 
 export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEnvelope): Promise<void> {
@@ -249,7 +257,6 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     dBname: contactEvent.dBname
   })
   if (!tenantConn) return
-  const models = getTenantClientModels(tenantConn)
   const email = String(contactEvent.payload.email || '').toLowerCase()
   const payloadMetadata =
     (contactEvent.payload as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}
@@ -296,24 +303,7 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
       relationships: relationshipsU
     }
   }
-  await models.Contact.updateOne(
-    {
-      externalId: contactEvent.payload.externalId,
-      source: KAFKA_INBOUND_CONTACT_SOURCE
-    },
-    { $set: setDocU },
-    { upsert: true }
-  )
-  const doc = await models.Contact.findOne(
-    {
-      externalId: contactEvent.payload.externalId,
-      source: KAFKA_INBOUND_CONTACT_SOURCE
-    },
-    { _id: 1 }
-  ).lean()
-  if (doc?._id) {
-    await syncContactRecipientListMembership(tenantConn, doc._id as Types.ObjectId)
-  }
+  await persistInboundContact(tenantConn, setDocU)
 }
 
 export async function softDeleteContactFromDeletedEvent(
@@ -501,21 +491,15 @@ async function upsertContactSyncSlice(
     })
   )
 
-  await models.Contact.bulkWrite(
-    snapDocs.map(({ row, snapSet }) => ({
-      updateOne: {
-        filter: {
-          externalId: row.externalId,
-          source: KAFKA_INBOUND_CONTACT_SOURCE
-        },
-        update: {
-          $set: snapSet
-        },
-        upsert: true
-      }
-    })),
-    { ordered: false }
-  )
+  await collapseInboundContactsByEmail({
+    Contact: models.Contact as unknown as InboundContactCollection,
+    source: KAFKA_INBOUND_CONTACT_SOURCE,
+    rows: snapDocs.map(({ row, snapSet }) => ({
+      email: row.email,
+      externalId: row.externalId,
+      setDoc: snapSet
+    }))
+  })
 
   // List membership is deferred to end-of-sync (see finalizeInboundSyncRecipientLists).
   return rows.length

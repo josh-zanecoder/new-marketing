@@ -1,5 +1,6 @@
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { dedupeContactsByEmail } from '@server/utils/contact/dedupeContactsByEmail'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
@@ -83,7 +84,7 @@ export default defineEventHandler(async (event) => {
   })
 
   const rows = raw as ContactDoc[]
-  const contacts = rows.map((c) => {
+  const contacts = dedupeContactsByEmail(rows.map((c) => {
     const meta = c.metadata && typeof c.metadata === 'object' ? c.metadata : {}
     const ownerRaw = meta && typeof meta.ownerEmail === 'string' ? meta.ownerEmail : ''
     const { firstName, lastName } = contactFirstLastFromDoc(c)
@@ -118,12 +119,13 @@ export default defineEventHandler(async (event) => {
     createdAt: c.createdAt?.toISOString?.() ?? null,
     updatedAt: c.updatedAt?.toISOString?.() ?? null
   }
-  })
+  }))
 
+  const loadedAll = rows.length === total
   return {
     contacts,
     contactTypes,
-    total,
-    truncated: total > contacts.length
+    total: loadedAll ? contacts.length : total,
+    truncated: !loadedAll
   }
 })

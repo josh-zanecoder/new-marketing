@@ -6,6 +6,7 @@ import {
   onContactSubscribed,
   onContactUnsubscribed
 } from '@server/utils/contact/contactSubscriptionEffects'
+import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 
 type SubscriptionPatchLean = Pick<ContactLean, 'isUnsubscribe' | 'updatedAt'>
@@ -30,20 +31,39 @@ export default defineEventHandler(async (event) => {
     auth
   )
 
-  const updated = await Contact.findOneAndUpdate(
-    filter,
-    { $set: { isUnsubscribe: !body.subscribed } },
-    { new: true, projection: { isUnsubscribe: 1, updatedAt: 1 } }
-  ).lean<SubscriptionPatchLean | null>()
+  const current = await Contact.findOne(filter)
+    .select('email')
+    .lean<{ email?: string } | null>()
 
-  if (!updated) {
+  if (!current) {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
-  if (body.subscribed) {
-    await onContactSubscribed(conn, oid)
-  } else {
-    await onContactUnsubscribed(conn, oid)
+  const email = normalizeMarketingEmail(current.email)
+  const identityFilter = email
+    ? mergeTenantOwnerEmailScopeFilter({ email, deletedAt: null }, auth)
+    : filter
+
+  await Contact.updateMany(identityFilter, { $set: { isUnsubscribe: !body.subscribed } })
+
+  const affected = await Contact.find(identityFilter)
+    .select('_id')
+    .lean<Array<{ _id: mongoose.Types.ObjectId }>>()
+
+  for (const doc of affected) {
+    if (body.subscribed) {
+      await onContactSubscribed(conn, doc._id)
+    } else {
+      await onContactUnsubscribed(conn, doc._id)
+    }
+  }
+
+  const updated = await Contact.findOne(filter)
+    .select('isUnsubscribe updatedAt')
+    .lean<SubscriptionPatchLean | null>()
+
+  if (!updated) {
+    throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
   return {
