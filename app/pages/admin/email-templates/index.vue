@@ -43,11 +43,20 @@ const previewSubject = ref('')
 const previewHtml = ref('')
 const previewPending = ref(false)
 const previewError = ref('')
+const bulkUploadOpen = ref(false)
+const bulkUploadTenantId = ref('')
 
 const tenantFilterSelectOptions = computed(() => [
   { value: '', label: 'All tenants' },
   ...tenants.value.map((t) => ({ value: t.dbName, label: t.name }))
 ])
+
+/** Registry tenantId options for admin bulk upload (skip tenants without an id). */
+const bulkUploadTenantOptions = computed(() =>
+  tenants.value
+    .filter((t) => Boolean(t.tenantId?.trim()))
+    .map((t) => ({ value: t.tenantId!.trim(), label: t.name }))
+)
 
 const requestKey = computed(() =>
   JSON.stringify({
@@ -191,15 +200,43 @@ function closePreview() {
           Live email designs for every tenant, with the campaigns that used each one.
         </p>
       </div>
-      <button
-        type="button"
-        class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-        :disabled="pending"
-        @click="refresh()"
-      >
-        Refresh
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50"
+          @click="bulkUploadOpen = !bulkUploadOpen"
+        >
+          {{ bulkUploadOpen ? 'Hide bulk upload' : 'Bulk upload' }}
+        </button>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+          :disabled="pending"
+          @click="refresh()"
+        >
+          Refresh
+        </button>
+      </div>
     </header>
+
+    <section
+      v-if="bulkUploadOpen"
+      class="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5 shadow-sm sm:p-6"
+    >
+      <div class="mb-4">
+        <h2 class="text-base font-semibold text-slate-900">
+          Bulk upload templates
+        </h2>
+        <p class="mt-1 text-sm text-slate-600">
+          Admin-only. Upload one or more .html files into a tenant’s shared library.
+        </p>
+      </div>
+      <AdminBulkEmailTemplatesPanel
+        v-model:tenant-id="bulkUploadTenantId"
+        :tenant-options="bulkUploadTenantOptions"
+        @uploaded="refresh()"
+      />
+    </section>
 
     <div class="flex flex-col gap-3 sm:flex-row">
       <input

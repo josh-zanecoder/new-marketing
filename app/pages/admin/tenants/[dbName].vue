@@ -67,6 +67,14 @@
         >
           Bulk unsubscribe
         </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'bulkTemplates' }"
+          @click="tab = 'bulkTemplates'"
+        >
+          Bulk templates
+        </button>
       </div>
 
       <TenantTabsOverviewTab
@@ -1214,6 +1222,10 @@
       <TenantTabsBulkUnsubscribeTab v-show="tab === 'bulkUnsubscribe'">
         <AdminBulkUnsubscribePanel :tenant-id="tenant.tenantId" />
       </TenantTabsBulkUnsubscribeTab>
+
+      <TenantTabsBulkEmailTemplatesTab v-show="tab === 'bulkTemplates'">
+        <AdminBulkEmailTemplatesPanel :tenant-id="tenant.tenantId" />
+      </TenantTabsBulkEmailTemplatesTab>
     </template>
 
     <ClientConfirmationModal
@@ -1275,7 +1287,12 @@ const dbName = computed(() =>
 )
 
 const tab = ref<
-  'overview' | 'filters' | 'dynamicVariables' | 'deletedTemplates' | 'bulkUnsubscribe'
+  | 'overview'
+  | 'filters'
+  | 'dynamicVariables'
+  | 'deletedTemplates'
+  | 'bulkUnsubscribe'
+  | 'bulkTemplates'
 >('overview')
 
 interface ContactTypeRow {
