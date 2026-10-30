@@ -11,6 +11,10 @@ import {
 } from '@server/tenant/registry-auth'
 import type { UserMergeSnapshot } from '~~/shared/utils/emailTemplateMerge'
 import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
+import {
+  isContactOwnerSenderPlaceholder,
+  normalizeCampaignSenderDisplayName
+} from '~~/shared/contactOwnerSender'
 
 const BREVO_REPLY_TO_NAME_MAX = 70
 const BREVO_SENDER_NAME_MAX = 70
@@ -74,9 +78,35 @@ export function buildSenderFromContactOwner(
   const ownerName = replyToNameFromUserSnapshot(owner)
   const dynamicName = replyToNameFromUserSnapshot(variableFallback)
   const operatorName = replyToNameFromUserSnapshot(operatorFallback)
-  const storedName = String(campaignSender.name ?? '').trim() || email
+  const storedName = normalizeCampaignSenderDisplayName(campaignSender.name, email) || email
   const name = (ownerName || dynamicName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
   return { name, email }
+}
+
+/**
+ * Fixed From for `senderMode: selected` — never use the legacy "Contact owner" label.
+ * When name is missing/placeholder and the address matches the operator, use their first+last.
+ */
+export function resolveSelectedLoSender(
+  storedSender: { name?: string; email?: string },
+  operatorFallback?: UserMergeSnapshot | CampaignMergeUserSnapshot | null
+): { name: string; email: string } {
+  const email = String(storedSender.email ?? '')
+    .trim()
+    .toLowerCase()
+  const rawName = String(storedSender.name ?? '').trim()
+  if (rawName && !isContactOwnerSenderPlaceholder(rawName)) {
+    return { name: rawName.slice(0, BREVO_SENDER_NAME_MAX), email }
+  }
+  const operator = mergeUserSnapshotsForEmail(operatorFallback)
+  const operatorEmail = operator?.email?.trim().toLowerCase()
+  if (operatorEmail && operatorEmail === email) {
+    const operatorName = replyToNameFromUserSnapshot(operator)
+    if (operatorName) {
+      return { name: operatorName.slice(0, BREVO_SENDER_NAME_MAX), email }
+    }
+  }
+  return { name: (email || rawName).slice(0, BREVO_SENDER_NAME_MAX), email }
 }
 
 /**
@@ -91,7 +121,8 @@ export function applyCampaignFromAddressMode(
   if (mode !== 'contact_owner') return sender
   const email = replyTo?.email?.trim().toLowerCase() ?? ''
   if (!email.includes('@')) return sender
-  const name = (replyTo?.name?.trim() || sender.name || email).slice(0, BREVO_SENDER_NAME_MAX)
+  const senderName = normalizeCampaignSenderDisplayName(sender.name, '')
+  const name = (replyTo?.name?.trim() || senderName || email).slice(0, BREVO_SENDER_NAME_MAX)
   return { name, email }
 }
 

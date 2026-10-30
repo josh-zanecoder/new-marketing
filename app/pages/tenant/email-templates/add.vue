@@ -3,6 +3,7 @@ import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/util
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 import type { TenantDynamicVariableItem, TenantEmailTemplateCategoryRow } from '~/composables/useTenantMarketingApi'
 import { buildEmailTemplateCategoryAssignOptions } from '~~/shared/utils/emailTemplateCategory'
+import { compressCustomMarketingImageFile } from '~/utils/compressCustomMarketingImage'
 
 definePageMeta({ layout: 'default' })
 
@@ -10,6 +11,17 @@ const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const {
+  allowTenantLoRecipientLists,
+  loadDefaultCampaignSender,
+  loaded: loListsFlagLoaded
+} = useDefaultCampaignSender()
+void loadDefaultCampaignSender()
+/** Superadmin LO recipient-list toggle gates template image upload. */
+const canUploadTemplateImage = computed(
+  () => loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+)
+const {
+
   open: unsubscribeFooterModalOpen,
   previewOpen: unsubscribeFooterPreviewOpen,
   previewHtml: unsubscribeFooterPreviewHtml,
@@ -38,13 +50,21 @@ const htmlContent = ref('')
 const formError = ref('')
 const uploadError = ref('')
 const uploadPending = ref(false)
+const imageUploadPending = ref(false)
+const imageUploadError = ref('')
 const saving = ref(false)
 const loading = ref(false)
 const uploadDragOver = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
 const subjectInputRef = ref<HTMLInputElement | null>(null)
 const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const lastFocusedField = ref<'subject' | 'html'>('html')
+
+function emailTemplateImageSnippet(url: string): string {
+  const src = url.replace(/"/g, '&quot;')
+  return `<img src="${src}" alt="" width="600" style="display:block;max-width:100%;height:auto;border:0;" />`
+}
 
 const categoryAssignOptions = computed(() =>
   buildEmailTemplateCategoryAssignOptions(
@@ -141,13 +161,17 @@ async function loadDynamicVariables() {
 
 function editorPreviewSrcdoc(html: string) {
   const trimmed = html.trim()
-  const body = trimmed
-    ? trimmed
-    : `<div style="display:flex;align-items:center;justify-content:center;min-height:240px;color:#94a3b8;font-family:system-ui,sans-serif;font-size:14px;text-align:center;padding:2rem">Paste or upload HTML to see a live preview</div>`
+  if (!trimmed) {
+    return `<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"></head><body><div style="display:flex;align-items:center;justify-content:center;min-height:240px;color:#94a3b8;font-family:system-ui,sans-serif;font-size:14px;text-align:center;padding:2rem">Paste or upload HTML to see a live preview</div></body></html>`
+  }
+  // Full documents (with images) must not be nested inside another body.
+  if (/^<!DOCTYPE/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+    return trimmed
+  }
   return `<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}
 body{margin:0;padding:0;overflow:auto;background:#f8f4ef;min-height:100%}
-</style></head><body>${body}</body></html>`
+</style></head><body>${trimmed}</body></html>`
 }
 
 const previewDoc = computed(() => editorPreviewSrcdoc(htmlContent.value))
@@ -218,6 +242,50 @@ async function onFileChange(ev: Event) {
 
 function onBrowseClick() {
   fileInputRef.value?.click()
+}
+
+function onBrowseImageClick() {
+  if (!canUploadTemplateImage.value) return
+  imageUploadError.value = ''
+  imageInputRef.value?.click()
+}
+
+async function onImageFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!canUploadTemplateImage.value) {
+    imageUploadError.value = 'Image upload is disabled for this tenant'
+    return
+  }
+
+  imageUploadError.value = ''
+  uploadError.value = ''
+  imageUploadPending.value = true
+  lastFocusedField.value = 'html'
+  try {
+    const dataUrl = await compressCustomMarketingImageFile(file)
+    const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
+    const url = typeof uploaded?.url === 'string' ? uploaded.url.trim() : ''
+    if (!url) {
+      throw new Error('Upload succeeded but no image URL was returned.')
+    }
+    const snippet = emailTemplateImageSnippet(url)
+    insertAtCursor(htmlTextareaRef.value, htmlContent.value, snippet, (next) => {
+      htmlContent.value = next
+    })
+    toast.success('Image inserted into HTML')
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? '')
+        : ''
+    imageUploadError.value =
+      msg || (e instanceof Error ? e.message : 'Could not upload image')
+  } finally {
+    imageUploadPending.value = false
+  }
 }
 
 function onDragOver(ev: DragEvent) {
@@ -461,7 +529,13 @@ async function saveTemplate() {
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-sm font-semibold text-slate-900">HTML content</h2>
-              <p class="mt-0.5 text-xs text-slate-500">Paste below or upload a file (.html, .htm)</p>
+              <p class="mt-0.5 text-xs text-slate-500">
+                Paste or upload HTML (.html, .htm).{{
+                  canUploadTemplateImage
+                    ? ' Use Upload image to host a photo and insert it at the cursor.'
+                    : ''
+                }}
+              </p>
             </div>
             <div class="flex flex-wrap gap-2">
               <input
@@ -469,20 +543,39 @@ async function saveTemplate() {
                 type="file"
                 accept=".html,.htm,text/html"
                 class="sr-only"
-                :disabled="uploadPending"
+                :disabled="uploadPending || imageUploadPending"
                 @change="onFileChange"
+              >
+              <input
+                v-if="canUploadTemplateImage"
+                ref="imageInputRef"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                class="sr-only"
+                :disabled="uploadPending || imageUploadPending"
+                @change="onImageFileChange"
               >
               <button
                 type="button"
                 class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
-                :disabled="uploadPending"
+                :disabled="uploadPending || imageUploadPending"
                 @click="onBrowseClick"
               >
                 {{ uploadPending ? 'Reading file…' : 'Upload file' }}
               </button>
               <button
+                v-if="canUploadTemplateImage"
+                type="button"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                :disabled="uploadPending || imageUploadPending"
+                @click="onBrowseImageClick"
+              >
+                {{ imageUploadPending ? 'Uploading image…' : 'Upload image' }}
+              </button>
+              <button
                 type="button"
                 class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                :disabled="uploadPending || imageUploadPending"
                 @click="validatePasteHtml"
               >
                 Validate HTML
@@ -491,6 +584,9 @@ async function saveTemplate() {
           </div>
           <p v-if="uploadError" class="mt-2 text-sm text-red-600" role="alert">
             {{ uploadError }}
+          </p>
+          <p v-if="imageUploadError" class="mt-2 text-sm text-red-600" role="alert">
+            {{ imageUploadError }}
           </p>
         </div>
 
@@ -512,7 +608,7 @@ async function saveTemplate() {
               class="min-h-[240px] flex-1 resize-none border-0 bg-slate-950 px-4 py-4 font-mono text-[13px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500/40"
               placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"
               spellcheck="false"
-              :disabled="uploadPending"
+              :disabled="uploadPending || imageUploadPending"
               @focus="lastFocusedField = 'html'"
             />
           </section>

@@ -25,6 +25,16 @@ export interface RegistryTenantDoc {
    * `contact_owner` = same address as Reply-To (contact AE).
    */
   campaignFromAddressMode?: unknown
+  /**
+   * When true, retail/tenant marketing may edit campaign sender.
+   * Missing/false → sender remains superadmin-managed only.
+   */
+  allowTenantEditSender?: unknown
+  /**
+   * When true, retail/tenant marketing may create LO-scoped recipient lists.
+   * Missing/false → existing recipient-list behavior only.
+   */
+  allowTenantLoRecipientLists?: unknown
   /** Optional per-tenant Brevo transactional API key; empty/missing → env `BREVO_API_KEY`. */
   brevoApiKey?: unknown
   /**
@@ -71,6 +81,16 @@ export interface TenantAdminRow {
   defaultCampaignSenderEmail: string | null
   /** From address: tenant default sender, or per-recipient contact owner (Reply-To). */
   campaignFromAddressMode: 'default' | 'contact_owner'
+  /**
+   * When true, retail/tenant marketing may edit campaign sender.
+   * Default false preserves superadmin-only sender management.
+   */
+  allowTenantEditSender: boolean
+  /**
+   * When true, retail/tenant marketing may create LO-scoped recipient lists.
+   * Default false preserves existing recipient-list behavior.
+   */
+  allowTenantLoRecipientLists: boolean
   /** True when a custom Brevo API key is stored for this tenant. */
   brevoApiKeyConfigured: boolean
   /** Masked prefix of the custom Brevo key (never the full secret). */

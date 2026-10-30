@@ -71,6 +71,44 @@
             <UiRfRecordField label="Campaign sender">
               <UiRfTableCellText :text="campaignSenderLabel(t)" />
             </UiRfRecordField>
+            <UiRfRecordField label="Edit sender">
+              <button
+                type="button"
+                role="switch"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                :class="t.allowTenantEditSender ? 'bg-emerald-600' : 'bg-slate-300'"
+                :aria-checked="t.allowTenantEditSender"
+                :aria-label="t.allowTenantEditSender ? 'Disable tenant sender editing' : 'Allow tenant to edit campaign sender'"
+                :disabled="senderPermissionSavingDb === t.dbName"
+                :title="t.allowTenantEditSender ? 'Tenant can edit campaign sender' : 'Superadmin-only sender'"
+                @click="toggleAllowTenantEditSender(t)"
+              >
+                <span class="sr-only">Edit sender permission</span>
+                <span
+                  class="pointer-events-none inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="t.allowTenantEditSender ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+            </UiRfRecordField>
+            <UiRfRecordField label="LO recipient lists">
+              <button
+                type="button"
+                role="switch"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                :class="t.allowTenantLoRecipientLists ? 'bg-emerald-600' : 'bg-slate-300'"
+                :aria-checked="t.allowTenantLoRecipientLists"
+                :aria-label="t.allowTenantLoRecipientLists ? 'Disable LO-scoped recipient lists' : 'Allow LO-scoped recipient lists'"
+                :disabled="loListsPermissionSavingDb === t.dbName"
+                :title="t.allowTenantLoRecipientLists ? 'Tenant can create LO-scoped recipient lists' : 'Existing recipient lists only'"
+                @click="toggleAllowTenantLoRecipientLists(t)"
+              >
+                <span class="sr-only">LO recipient lists permission</span>
+                <span
+                  class="pointer-events-none inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="t.allowTenantLoRecipientLists ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+            </UiRfRecordField>
             <UiRfRecordField label="API key">
               <UiRfTableCellText :text="t.apiKeyPrefix" monospace />
             </UiRfRecordField>
@@ -127,6 +165,12 @@
                   <th>Email</th>
                   <th>CRM URL</th>
                   <th>Campaign sender</th>
+                  <th title="Allow tenant retail UI to edit campaign sender">
+                    Edit sender
+                  </th>
+                  <th title="Allow tenant to create LO-scoped recipient lists">
+                    LO recipient lists
+                  </th>
                   <th>API key</th>
                   <th>Status</th>
                   <th :class="tenantsThActionsClass">
@@ -164,6 +208,44 @@
                   </td>
                   <td class="td-muted">
                     <UiRfTableCellText :text="campaignSenderLabel(t)" />
+                  </td>
+                  <td class="td-muted">
+                    <button
+                      type="button"
+                      role="switch"
+                      class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      :class="t.allowTenantEditSender ? 'bg-emerald-600' : 'bg-slate-300'"
+                      :aria-checked="t.allowTenantEditSender"
+                      :aria-label="t.allowTenantEditSender ? 'Disable tenant sender editing' : 'Allow tenant to edit campaign sender'"
+                      :disabled="senderPermissionSavingDb === t.dbName"
+                      :title="t.allowTenantEditSender ? 'Tenant can edit campaign sender' : 'Superadmin-only sender'"
+                      @click="toggleAllowTenantEditSender(t)"
+                    >
+                      <span class="sr-only">Edit sender permission</span>
+                      <span
+                        class="pointer-events-none inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                        :class="t.allowTenantEditSender ? 'translate-x-5' : 'translate-x-0'"
+                      />
+                    </button>
+                  </td>
+                  <td class="td-muted">
+                    <button
+                      type="button"
+                      role="switch"
+                      class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      :class="t.allowTenantLoRecipientLists ? 'bg-emerald-600' : 'bg-slate-300'"
+                      :aria-checked="t.allowTenantLoRecipientLists"
+                      :aria-label="t.allowTenantLoRecipientLists ? 'Disable LO-scoped recipient lists' : 'Allow LO-scoped recipient lists'"
+                      :disabled="loListsPermissionSavingDb === t.dbName"
+                      :title="t.allowTenantLoRecipientLists ? 'Tenant can create LO-scoped recipient lists' : 'Existing recipient lists only'"
+                      @click="toggleAllowTenantLoRecipientLists(t)"
+                    >
+                      <span class="sr-only">LO recipient lists permission</span>
+                      <span
+                        class="pointer-events-none inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                        :class="t.allowTenantLoRecipientLists ? 'translate-x-5' : 'translate-x-0'"
+                      />
+                    </button>
                   </td>
                   <td class="td-muted td-mono">
                     <UiRfTableCellText :text="t.apiKeyPrefix" monospace />
@@ -287,6 +369,8 @@ const crmExternalConnectionModal = ref<CrmExternalConnectionMetadata | null>(nul
 const crmModalDbName = ref<string | null>(null)
 const crmModalContext = ref<'create' | 'regenerate' | null>(null)
 const isRegenerating = ref<string | null>(null)
+const senderPermissionSavingDb = ref<string | null>(null)
+const loListsPermissionSavingDb = ref<string | null>(null)
 
 const crmModalTitle = computed(() =>
   crmModalContext.value === 'regenerate'
@@ -317,6 +401,56 @@ function campaignSenderLabel(t: AdminTenantRow): string {
     return sender === '—' ? 'Contact owner' : `Contact owner · fallback ${sender}`
   }
   return sender
+}
+
+async function toggleAllowTenantEditSender(row: AdminTenantRow) {
+  if (senderPermissionSavingDb.value) return
+  const next = !row.allowTenantEditSender
+  const previous = row.allowTenantEditSender
+  row.allowTenantEditSender = next
+  senderPermissionSavingDb.value = row.dbName
+  try {
+    const res = await $fetch<{
+      ok?: boolean
+      tenant?: { allowTenantEditSender?: boolean }
+    }>(
+      `/api/v1/admin/tenants/db/${encodeURIComponent(row.dbName)}/allow-tenant-edit-sender`,
+      {
+        method: 'PATCH',
+        body: { allowTenantEditSender: next }
+      }
+    )
+    row.allowTenantEditSender = Boolean(res?.tenant?.allowTenantEditSender)
+  } catch {
+    row.allowTenantEditSender = previous
+  } finally {
+    senderPermissionSavingDb.value = null
+  }
+}
+
+async function toggleAllowTenantLoRecipientLists(row: AdminTenantRow) {
+  if (loListsPermissionSavingDb.value) return
+  const next = !row.allowTenantLoRecipientLists
+  const previous = row.allowTenantLoRecipientLists
+  row.allowTenantLoRecipientLists = next
+  loListsPermissionSavingDb.value = row.dbName
+  try {
+    const res = await $fetch<{
+      ok?: boolean
+      tenant?: { allowTenantLoRecipientLists?: boolean }
+    }>(
+      `/api/v1/admin/tenants/db/${encodeURIComponent(row.dbName)}/allow-tenant-lo-recipient-lists`,
+      {
+        method: 'PATCH',
+        body: { allowTenantLoRecipientLists: next }
+      }
+    )
+    row.allowTenantLoRecipientLists = Boolean(res?.tenant?.allowTenantLoRecipientLists)
+  } catch {
+    row.allowTenantLoRecipientLists = previous
+  } finally {
+    loListsPermissionSavingDb.value = null
+  }
 }
 
 function openAddTenantModal() {
@@ -431,6 +565,8 @@ async function fetchTenants() {
         defaultCampaignSenderEmail: string | null
         defaultCampaignSenderName: string | null
         campaignFromAddressMode?: 'default' | 'contact_owner'
+        allowTenantEditSender?: boolean
+        allowTenantLoRecipientLists?: boolean
         brevoApiKeyConfigured?: boolean
         brevoApiKeyPrefix?: string | null
         brevoWebhookSecretConfigured?: boolean
@@ -459,6 +595,8 @@ async function fetchTenants() {
       defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
       campaignFromAddressMode:
         t.campaignFromAddressMode === 'contact_owner' ? 'contact_owner' : 'default',
+      allowTenantEditSender: t.allowTenantEditSender === true,
+      allowTenantLoRecipientLists: t.allowTenantLoRecipientLists === true,
       brevoApiKeyConfigured: Boolean(t.brevoApiKeyConfigured),
       brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
       brevoWebhookSecretConfigured: Boolean(t.brevoWebhookSecretConfigured),

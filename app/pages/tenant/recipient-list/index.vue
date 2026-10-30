@@ -317,6 +317,8 @@ interface ListRow {
   updatedAt: string | null
   /** Resolved members visible to the current user (from API). */
   memberCount?: number | null
+  associatedLoanOfficerEmail?: string
+  associatedLoanOfficerName?: string
 }
 
 interface RegistryFilterRow {
@@ -488,6 +490,11 @@ async function confirmDeleteList() {
 }
 
 function listCardSubtitle(row: ListRow): string {
+  const loEmail = row.associatedLoanOfficerEmail?.trim()
+  if (loEmail) {
+    const loName = row.associatedLoanOfficerName?.trim()
+    return loName ? `LO: ${loName}` : `LO: ${loEmail}`
+  }
   if (row.audience?.trim()) {
     const show = formatRegistryLabelForDisplay(row.audience)
     return show.replace(/\b\w/g, (m) => m.toUpperCase())

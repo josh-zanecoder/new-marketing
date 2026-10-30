@@ -77,6 +77,8 @@ export default defineEventHandler(async (event) => {
       name: senderName,
       email: source.sender?.email?.trim() || senderDefaults.email
     },
+    // Copies keep contact-owner send; re-select LO explicitly if needed.
+    senderMode: 'contact_owner',
     recipientsType: source.recipientsType,
     recipientsListId: source.recipientsListId || '',
     emailTemplate: emailTemplateId,

@@ -126,6 +126,7 @@ export default defineEventHandler(async (event) => {
       id: String(campaign._id),
       name: campaign.name,
       sender: campaign.sender,
+      senderMode: campaign.senderMode === 'selected' ? 'selected' : 'contact_owner',
       recipientsType: campaign.recipientsType,
       recipientsListId: campaign.recipientsListId,
       subject: campaign.subject,

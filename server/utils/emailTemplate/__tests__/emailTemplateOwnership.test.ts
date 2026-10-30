@@ -23,12 +23,6 @@ const tenantWideAuth = {
 
 const emptyScopeAuth = { ...aeAuth, contactOwnerScope: [] }
 
-const sharedOr = [
-  { 'metadata.ownerEmail': { $exists: false } },
-  { 'metadata.ownerEmail': null },
-  { 'metadata.ownerEmail': '' }
-]
-
 describe('emailTemplateOwnershipFromAuth', () => {
   it('stamps the AE as owner for owner-scoped sessions', () => {
     expect(emailTemplateOwnershipFromAuth(aeAuth).metadata).toEqual({
@@ -56,18 +50,34 @@ describe('mergeEmailTemplateVisibilityFilter', () => {
     expect(mergeEmailTemplateVisibilityFilter(base, { role: 'tenant', dbName: 'x' })).toBe(base)
   })
 
-  it('limits owner-scoped sessions to shared templates and their own', () => {
+  it('includes shared templates plus own for owner-scoped sessions', () => {
     expect(mergeEmailTemplateVisibilityFilter(base, aeAuth)).toEqual({
       $and: [
         base,
-        { $or: [...sharedOr, { 'metadata.ownerEmail': { $in: ['lthompson@myfcltpo.com'] } }] }
+        {
+          $or: [
+            { 'metadata.ownerEmail': { $exists: false } },
+            { 'metadata.ownerEmail': null },
+            { 'metadata.ownerEmail': '' },
+            { 'metadata.ownerEmail': { $in: ['lthompson@myfcltpo.com'] } }
+          ]
+        }
       ]
     })
   })
 
-  it('limits empty-scope sessions to shared templates only', () => {
+  it('shows only shared templates for empty-scope sessions', () => {
     expect(mergeEmailTemplateVisibilityFilter(base, emptyScopeAuth)).toEqual({
-      $and: [base, { $or: sharedOr }]
+      $and: [
+        base,
+        {
+          $or: [
+            { 'metadata.ownerEmail': { $exists: false } },
+            { 'metadata.ownerEmail': null },
+            { 'metadata.ownerEmail': '' }
+          ]
+        }
+      ]
     })
   })
 })

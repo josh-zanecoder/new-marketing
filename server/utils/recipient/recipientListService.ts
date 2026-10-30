@@ -19,14 +19,19 @@ import {
   recipientListOwnershipFromAuth,
   tenantCreatedByFromAuth
 } from '@server/tenant/registry-auth'
+import { getRegistryConnection } from '@server/lib/mongoose'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { assertRecipientListAudience } from '@server/utils/recipient/recipientListAudience'
 import { rebuildRecipientListMembers } from '@server/utils/recipient/recipientListMembershipQuery'
 import {
   pickJoinsForQuery,
+  recipientListExcludedContactIds,
   resolveRecipientListFiltersFromBody
 } from '@server/utils/recipient/recipientListMutation'
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
+import { isAllowedSelectedCampaignSenderEmail } from '@server/utils/campaign/listCampaignSenderCandidates'
+import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import type { ContactModel } from '@server/types/tenant/contact.model'
 
 /** JSON `list` object returned by POST/PATCH. */
 export type RecipientListApiRow = {
@@ -39,6 +44,8 @@ export type RecipientListApiRow = {
   criterionJoins: ('and' | 'or')[]
   membershipScope: 'tenant' | 'owner_emails'
   membershipOwnerEmails: string[]
+  associatedLoanOfficerEmail: string
+  associatedLoanOfficerName: string
   memberCount: number
   createdAt: string | null
   updatedAt: string | null
@@ -53,8 +60,20 @@ type CreatedLean = {
   criterionJoins?: string[]
   membershipScope?: string
   membershipOwnerEmails?: string[]
+  associatedLoanOfficerEmail?: string
+  associatedLoanOfficerName?: string
   createdAt?: Date | null
   updatedAt?: Date | null
+}
+
+function associatedLoFromDoc(rawEmail: unknown, rawName: unknown): {
+  associatedLoanOfficerEmail: string
+  associatedLoanOfficerName: string
+} {
+  const associatedLoanOfficerEmail =
+    typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : ''
+  const associatedLoanOfficerName = typeof rawName === 'string' ? rawName.trim() : ''
+  return { associatedLoanOfficerEmail, associatedLoanOfficerName }
 }
 
 function requireTenantAuth(auth: unknown): void {
@@ -97,6 +116,7 @@ function listRowFromCreated(
     lean.membershipScope === 'tenant' || lean.membershipScope === 'owner_emails'
       ? lean.membershipScope
       : 'owner_emails'
+  const lo = associatedLoFromDoc(lean.associatedLoanOfficerEmail, lean.associatedLoanOfficerName)
   return {
     id,
     name: lean.name ?? '',
@@ -107,6 +127,7 @@ function listRowFromCreated(
     criterionJoins: criterionJoinsForResponse(lean.criterionJoins),
     membershipScope: scope,
     membershipOwnerEmails: membershipEmailsFromDoc(lean.membershipOwnerEmails),
+    ...lo,
     memberCount,
     createdAt: lean.createdAt?.toISOString?.() ?? null,
     updatedAt: lean.updatedAt?.toISOString?.() ?? null
@@ -124,6 +145,10 @@ function listRowFromPatch(
     updated?.membershipScope === 'tenant' || updated?.membershipScope === 'owner_emails'
       ? (updated.membershipScope as 'tenant' | 'owner_emails')
       : 'owner_emails'
+  const lo = associatedLoFromDoc(
+    updated?.associatedLoanOfficerEmail,
+    updated?.associatedLoanOfficerName
+  )
   return {
     id: String(listId),
     name: typeof updated?.name === 'string' ? updated.name : name,
@@ -134,6 +159,7 @@ function listRowFromPatch(
     criterionJoins: normalized.criterionJoins ?? [],
     membershipScope: scope,
     membershipOwnerEmails: membershipEmailsFromDoc(updated?.membershipOwnerEmails),
+    ...lo,
     memberCount,
     createdAt:
       updated?.createdAt instanceof Date ? updated.createdAt.toISOString() : null,
@@ -161,6 +187,12 @@ async function loadWritePayload(
   groupJoinsToStore: RecipientListCriterionJoin[] | null
   membershipScope: RecipientListMembershipScope
   membershipOwnerEmails: string[]
+  associatedLoanOfficerEmail: string
+  associatedLoanOfficerName: string
+  applyAssociatedLoanOfficer: boolean
+  /** Set only for LO-scoped writes; omitted on classic path. */
+  excludedContactIds: Types.ObjectId[]
+  applyExcludedContactIds: boolean
 }> {
   requireTenantAuth(auth)
   const name = assertName(body)
@@ -181,11 +213,67 @@ async function loadWritePayload(
       ? criterionJoinsFromBody
       : Array.from({ length: Math.max(0, criterionGroups.length - 1) }, () => 'and' as const)
 
-  const membershipScope = recipientListMembershipScopeFromAuth(auth)
-  const membershipOwnerEmails =
+  let membershipScope = recipientListMembershipScopeFromAuth(auth)
+  let membershipOwnerEmails =
     membershipScope === 'owner_emails'
       ? recipientListMembershipOwnerEmailsFromAuth(auth)
       : []
+  let associatedLoanOfficerEmail = ''
+  let associatedLoanOfficerName = ''
+  let applyAssociatedLoanOfficer = false
+  let excludedContactIds: Types.ObjectId[] = []
+  let applyExcludedContactIds = false
+
+  const dbName =
+    isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
+  let allowLoLists = false
+  if (dbName) {
+    try {
+      const registry = await getRegistryConnection()
+      const doc = await registry.collection('clients').findOne(
+        { dbName },
+        { projection: { allowTenantLoRecipientLists: 1 } }
+      )
+      allowLoLists = parseAllowTenantLoRecipientLists(doc?.allowTenantLoRecipientLists)
+    } catch {
+      allowLoLists = false
+    }
+  }
+
+  // LO mode only when toggle ON + LO email in body. OFF path ignores LO fields.
+  if (allowLoLists) {
+    const loEmail = String(body?.associatedLoanOfficerEmail ?? '')
+      .trim()
+      .toLowerCase()
+    const loName = String(body?.associatedLoanOfficerName ?? '').trim()
+    if (loEmail) {
+      if (!isRegisteredTenantAuthContext(auth)) {
+        throw createError({ statusCode: 403, message: 'Tenant access required' })
+      }
+      const { Contact } = getTenantClientModels(tenantConn)
+      const allowed = await isAllowedSelectedCampaignSenderEmail(
+        Contact as ContactModel,
+        auth,
+        loEmail
+      )
+      if (!allowed) {
+        throw createError({
+          statusCode: 400,
+          message: 'Loan officer must be a profile from the tenant directory'
+        })
+      }
+      associatedLoanOfficerEmail = loEmail
+      associatedLoanOfficerName = loName || loEmail
+      membershipScope = 'owner_emails'
+      membershipOwnerEmails = [loEmail]
+      applyAssociatedLoanOfficer = true
+      // Unchecked borrowers on the LO create/edit form → soft exclusions.
+      applyExcludedContactIds = true
+      excludedContactIds = recipientListExcludedContactIds({
+        excludedContactIds: body?.excludedContactIds
+      })
+    }
+  }
 
   return {
     name,
@@ -200,7 +288,12 @@ async function loadWritePayload(
     persistedFilterGroups,
     groupJoinsToStore,
     membershipScope,
-    membershipOwnerEmails
+    membershipOwnerEmails,
+    associatedLoanOfficerEmail,
+    associatedLoanOfficerName,
+    applyAssociatedLoanOfficer,
+    excludedContactIds,
+    applyExcludedContactIds
   }
 }
 
@@ -228,6 +321,13 @@ export async function createRecipientList(params: {
     clientId: '',
     membershipScope: w.membershipScope,
     membershipOwnerEmails: w.membershipOwnerEmails,
+    ...(w.applyAssociatedLoanOfficer
+      ? {
+          associatedLoanOfficerEmail: w.associatedLoanOfficerEmail,
+          associatedLoanOfficerName: w.associatedLoanOfficerName
+        }
+      : {}),
+    ...(w.applyExcludedContactIds ? { excludedContactIds: w.excludedContactIds } : {}),
     ...recipientListOwnershipFromAuth(auth)
   })
 
@@ -283,6 +383,13 @@ export async function updateRecipientList(params: {
     filterRows: w.persistedFilterRows,
     membershipScope: w.membershipScope,
     membershipOwnerEmails: w.membershipOwnerEmails
+  }
+  if (w.applyAssociatedLoanOfficer) {
+    updateDoc.associatedLoanOfficerEmail = w.associatedLoanOfficerEmail
+    updateDoc.associatedLoanOfficerName = w.associatedLoanOfficerName
+  }
+  if (w.applyExcludedContactIds) {
+    updateDoc.excludedContactIds = w.excludedContactIds
   }
   if (w.criterionJoinsFromBody !== null) {
     updateDoc.criterionJoins = w.criterionJoinsFromBody

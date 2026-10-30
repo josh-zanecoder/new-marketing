@@ -39,13 +39,23 @@
             </h1>
             <div class="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-sm text-zinc-500">
               <span
-                v-if="payload.list.audience"
+                v-if="payload.list.associatedLoanOfficerEmail"
+                class="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-zinc-700"
+              >
+                LO:
+                {{
+                  payload.list.associatedLoanOfficerName
+                    || payload.list.associatedLoanOfficerEmail
+                }}
+              </span>
+              <span
+                v-else-if="payload.list.audience"
                 class="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-700"
               >
                 {{ payload.list.audience }}
               </span>
               <span
-                v-if="payload.list.audience && payload.list.updatedAt"
+                v-if="(payload.list.associatedLoanOfficerEmail || payload.list.audience) && payload.list.updatedAt"
                 class="text-zinc-300"
                 aria-hidden="true"
               >·</span>

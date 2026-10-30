@@ -15,6 +15,16 @@ export interface AdminTenantRow {
   defaultCampaignSenderEmail: string | null
   /** From address: tenant default sender, or per-recipient contact owner (same as Reply-To). */
   campaignFromAddressMode: 'default' | 'contact_owner'
+  /**
+   * When true, retail/tenant marketing may edit campaign sender.
+   * Default false = superadmin-managed sender only.
+   */
+  allowTenantEditSender: boolean
+  /**
+   * When true, retail/tenant marketing may create LO-scoped recipient lists.
+   * Default false = existing recipient-list behavior only.
+   */
+  allowTenantLoRecipientLists: boolean
   /** Default campaign From name; null uses global fallback. */
   defaultCampaignSenderName: string | null
   /** True when a custom Brevo API key is stored for this tenant. */

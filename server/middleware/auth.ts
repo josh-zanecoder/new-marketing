@@ -180,6 +180,9 @@ export default defineEventHandler(async (event) => {
                 ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
                 ...(contactOwnerEmails?.length
                   ? { contactOwnerScope: contactOwnerEmails }
+                  : {}),
+                ...(row.allowTenantLoRecipientLists === true
+                  ? { allowTenantLoRecipientLists: true as const }
                   : {})
               }
               return
@@ -215,7 +218,10 @@ export default defineEventHandler(async (event) => {
         ...(forwarded.tenantUserLastName ? { tenantUserLastName: forwarded.tenantUserLastName } : {}),
         ...(forwarded.tenantUserPhone ? { tenantUserPhone: forwarded.tenantUserPhone } : {}),
         ...(forwarded.tenantUserRole ? { tenantUserRole: forwarded.tenantUserRole } : {}),
-        ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {})
+        ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {}),
+        ...(row.allowTenantLoRecipientLists === true
+          ? { allowTenantLoRecipientLists: true as const }
+          : {})
       }
       return
     }

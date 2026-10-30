@@ -2,6 +2,8 @@ import type { Connection } from 'mongoose'
 import type { RecipientListMembershipScope } from '@server/types/tenant/recipientList.model'
 import { hashTenantApiKey } from './api-key'
 import { parseCampaignFromAddressMode, type CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
+import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
+import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 
 export const ADMIN_ROLE = 'admin' as const
 export const TENANT_ROLE = 'tenant' as const
@@ -33,6 +35,11 @@ export type TenantApiKeyAuthContext = {
   contactOwnerScope?: string[]
   /** User may see all contacts for the tenant (no owner filter). */
   tenantWideContacts?: true
+  /**
+   * Registry feature flag. When true, LO/OM audience rules and LO-scoped lists apply.
+   * Missing/false → classic handoff scope only.
+   */
+  allowTenantLoRecipientLists?: true
 }
 
 /** Firebase session for a tenant or client user (registry row resolved). */
@@ -261,6 +268,10 @@ export async function findRegistryTenantByDbName(
   /** SHA256 hex of `nmk_` — used to sign browser session cookie. */
   clientKeyHash: string | null
   campaignFromAddressMode: CampaignFromAddressMode
+  /** When true, campaign sender is the selected LO identity (not per-contact owner rewrite). */
+  allowTenantEditSender: boolean
+  /** When true, LO-scoped recipient lists + role audience rules are enabled. */
+  allowTenantLoRecipientLists: boolean
 } | null> {
   const key = dbName.trim()
   if (!key) return null
@@ -277,6 +288,8 @@ export async function findRegistryTenantByDbName(
           clientKeyHash?: string
           apiKeyHash?: string
           campaignFromAddressMode?: unknown
+          allowTenantEditSender?: unknown
+          allowTenantLoRecipientLists?: unknown
         } | null
     )
   if (!doc?.name || !doc?.dbName) return null
@@ -293,11 +306,17 @@ export async function findRegistryTenantByDbName(
     crmAppUrl?: string
     clientKeyHash: string | null
     campaignFromAddressMode: CampaignFromAddressMode
+    allowTenantEditSender: boolean
+    allowTenantLoRecipientLists: boolean
   } = {
     tenantName: doc.name,
     dbName: doc.dbName,
     clientKeyHash: hashRaw,
-    campaignFromAddressMode: parseCampaignFromAddressMode(doc.campaignFromAddressMode)
+    campaignFromAddressMode: parseCampaignFromAddressMode(doc.campaignFromAddressMode),
+    allowTenantEditSender: parseAllowTenantEditSender(doc.allowTenantEditSender),
+    allowTenantLoRecipientLists: parseAllowTenantLoRecipientLists(
+      doc.allowTenantLoRecipientLists
+    )
   }
   if (typeof doc.tenantId === 'string' && doc.tenantId) {
     out.tenantId = doc.tenantId
@@ -315,6 +334,7 @@ export async function findRegistryTenantByApiKey(
   dbName: string
   tenantId?: string
   crmAppUrl?: string
+  allowTenantLoRecipientLists: boolean
 } | null> {
   const hash = hashTenantApiKey(apiKey)
   const doc = await registryConn
@@ -327,6 +347,7 @@ export async function findRegistryTenantByApiKey(
           dbName?: string
           tenantId?: string
           crmAppUrl?: string
+          allowTenantLoRecipientLists?: unknown
         } | null
     )
   if (!doc?.name || !doc?.dbName) return null
@@ -335,9 +356,13 @@ export async function findRegistryTenantByApiKey(
     dbName: string
     tenantId?: string
     crmAppUrl?: string
+    allowTenantLoRecipientLists: boolean
   } = {
     tenantName: doc.name,
-    dbName: doc.dbName
+    dbName: doc.dbName,
+    allowTenantLoRecipientLists: parseAllowTenantLoRecipientLists(
+      doc.allowTenantLoRecipientLists
+    )
   }
   if (typeof doc.tenantId === 'string' && doc.tenantId) {
     out.tenantId = doc.tenantId

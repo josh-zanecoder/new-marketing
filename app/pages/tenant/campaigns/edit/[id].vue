@@ -75,9 +75,58 @@
         </div>
 
         <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
-        <!-- Sender (read-only; From name is each contact's CRM account owner at send time) -->
+        <!-- Sender: read-only by default; editable LO identity when superadmin allowTenantEditSender -->
         <div class="border-b border-slate-100 last:border-b-0">
-          <div class="flex w-full items-center gap-4 px-5 py-4 sm:px-6 sm:py-5">
+          <button
+            v-if="allowTenantEditSender"
+            type="button"
+            class="flex w-full flex-col items-stretch gap-3 px-4 py-4 text-left transition-colors hover:bg-slate-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-6 sm:py-5"
+            @click="senderOpen = !senderOpen"
+          >
+            <div class="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div
+                class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold sm:h-12 sm:w-12 sm:text-sm"
+                :class="form.senderEmail || form.senderName
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-slate-100 text-slate-400'"
+              >
+                <img
+                  v-if="selectedSenderAvatarUrl && !senderAvatarFailed"
+                  :src="selectedSenderAvatarUrl"
+                  :alt="form.senderName"
+                  class="h-full w-full object-cover"
+                  @error="senderAvatarFailed = true"
+                >
+                <span v-else>{{ senderInitials }}</span>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-base font-semibold text-slate-900">Sender</div>
+                <div
+                  v-if="form.senderName || form.senderEmail"
+                  class="mt-0.5 break-words text-sm font-medium text-slate-900 sm:text-[15px]"
+                >
+                  {{ form.senderName || '—' }}
+                </div>
+                <div
+                  v-if="form.senderEmail"
+                  class="mt-0.5 break-words text-sm text-slate-600 sm:text-[15px]"
+                >
+                  {{ form.senderEmail }}
+                </div>
+                <div
+                  v-else
+                  class="mt-0.5 text-sm text-slate-500 sm:text-[15px]"
+                >
+                  Select a sender
+                </div>
+              </div>
+            </div>
+            <span class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:w-auto sm:px-4 sm:text-[15px]">{{ senderOpen ? 'Close' : 'Edit' }}</span>
+          </button>
+          <div
+            v-else
+            class="flex w-full items-center gap-4 px-5 py-4 sm:px-6 sm:py-5"
+          >
             <div
               class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 sm:h-12 sm:w-12"
             >
@@ -91,6 +140,21 @@
                 {{ form.senderName }} &lt;{{ form.senderEmail }}&gt;
               </div>
             </div>
+          </div>
+          <div v-if="allowTenantEditSender && senderOpen" class="border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-6 sm:py-6">
+            <template v-if="canSelectAnyLoanOfficer">
+              <CampaignSenderEmailPicker
+                v-model="form.senderEmail"
+                @typed="onSenderEmailTyped"
+                @select="onSenderCandidateSelect"
+              />
+              <p class="mt-2 text-xs text-slate-500">
+                Select an LO profile or enter a sender email. That name and email are used as the From identity.
+              </p>
+            </template>
+            <p v-else class="text-sm text-slate-600 sm:text-[15px]">
+              Your sender is fixed to your profile for this role.
+            </p>
           </div>
         </div>
 
@@ -766,10 +830,23 @@ import { useCampaignStore } from '~/store/campaignStore'
 import { campaignTemplateHtmlSourceFromMode } from '~~/shared/campaignTemplateSource'
 import { buildCampaignTemplatePersistFields } from '~~/shared/buildCampaignTemplatePersistFields'
 import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
+import { resolveEditableCampaignSenderMode } from '~~/shared/resolveEditableCampaignSenderMode'
+import { normalizeCampaignSenderDisplayName } from '~~/shared/contactOwnerSender'
+import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
 
 const campaignStore = useCampaignStore()
-const { defaultSenderEmail, senderDisplayName, loadDefaultCampaignSender } =
-  useDefaultCampaignSender()
+const {
+  defaultSenderName,
+  defaultSenderEmail,
+  senderDisplayName,
+  initialSenderName,
+  initialSenderEmail,
+  sessionUser,
+  allowTenantEditSender,
+  canSelectAnyLoanOfficer,
+  isSelfOnlyAudience,
+  loadDefaultCampaignSender
+} = useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
@@ -793,7 +870,9 @@ const PENDING_CAMPAIGN_KEY = 'mortdash-pending-campaign'
 const form = ref({
   name: '',
   senderName: '',
-  senderEmail: defaultSenderEmail.value,
+  senderEmail: '',
+  /** `selected` when an LO is picked or a complete From email is entered (edit sender ON). */
+  senderMode: 'contact_owner' as 'contact_owner' | 'selected',
   subject: '',
   previewText: '',
   recipientsMode: 'list' as 'list' | 'manual',
@@ -825,6 +904,101 @@ const {
 
 const recipientsOpen = ref(false)
 const subjectOpen = ref(false)
+const senderOpen = ref(false)
+const selectedSenderAvatarUrl = ref('')
+const senderAvatarFailed = ref(false)
+
+const senderInitials = computed(() => {
+  const name = String(form.value.senderName || '').trim()
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase()
+  }
+  if (parts.length === 1 && parts[0]) return parts[0].charAt(0).toUpperCase()
+  const email = String(form.value.senderEmail || '').trim()
+  if (email) return email.charAt(0).toUpperCase()
+  return '?'
+})
+
+let senderNameLookupSeq = 0
+
+async function syncSenderNameForTypedEmail() {
+  const seq = ++senderNameLookupSeq
+  const email = String(form.value.senderEmail || '')
+    .trim()
+    .toLowerCase()
+  const sessionEmail = String(sessionUser.value?.email || '')
+    .trim()
+    .toLowerCase()
+  let matchedName = ''
+  let matchedAvatar = ''
+  let directoryMatch: boolean | null = null
+  if (email.includes('@')) {
+    directoryMatch = false
+    if (sessionEmail && email === sessionEmail) directoryMatch = true
+    try {
+      const res = await marketingApi.fetchCampaignSenderCandidates(email)
+      if (seq !== senderNameLookupSeq) return
+      const match = (res.candidates ?? []).find(
+        (c) => String(c.email || '').trim().toLowerCase() === email
+      )
+      if (match) {
+        matchedName = String(match.displayName || '').trim()
+        matchedAvatar = String(match.avatarUrl || '').trim()
+        directoryMatch = true
+      }
+    } catch {
+      if (seq !== senderNameLookupSeq) return
+    }
+  }
+  if (seq !== senderNameLookupSeq) return
+  // Existing LO/session → their name; otherwise tenant display-name field (not stale John Broker).
+  form.value.senderName = resolveTypedCampaignSenderName({
+    senderEmail: email,
+    defaultDisplayName: defaultSenderName.value,
+    sessionEmail: sessionUser.value?.email,
+    sessionDisplayName: senderDisplayName.value,
+    matchedCandidateDisplayName: matchedName || null
+  })
+  // Directory/session match → selected; unknown typed email → contact_owner (save/test parity).
+  form.value.senderMode = resolveEditableCampaignSenderMode({
+    allowTenantEditSender: true,
+    senderEmail: email,
+    preferredMode: 'contact_owner',
+    directoryMatch
+  })
+  selectedSenderAvatarUrl.value = matchedAvatar
+  senderAvatarFailed.value = false
+}
+
+function onSenderEmailTyped() {
+  if (!allowTenantEditSender.value || isSelfOnlyAudience.value) return
+  selectedSenderAvatarUrl.value = ''
+  void syncSenderNameForTypedEmail()
+}
+
+function onSenderCandidateSelect(c: {
+  email: string
+  displayName: string
+  avatarUrl: string
+}) {
+  if (isSelfOnlyAudience.value) return
+  senderNameLookupSeq += 1
+  form.value.senderEmail = c.email
+  form.value.senderName = c.displayName || c.email
+  form.value.senderMode = 'selected'
+  selectedSenderAvatarUrl.value = c.avatarUrl || ''
+  senderAvatarFailed.value = false
+  senderOpen.value = false
+}
+
+function resolvedSenderModeForSave(): 'contact_owner' | 'selected' {
+  return resolveEditableCampaignSenderMode({
+    allowTenantEditSender: allowTenantEditSender.value,
+    senderEmail: form.value.senderEmail,
+    preferredMode: form.value.senderMode
+  })
+}
 const designModalOpen = ref(false)
 const changeDesignConfirmOpen = ref(false)
 const emailTemplatesLoaded = ref(false)
@@ -854,6 +1028,8 @@ const saveError = ref<string | null>(null)
 interface RecipientListOption {
   id: string
   name: string
+  associatedLoanOfficerEmail?: string
+  associatedLoanOfficerName?: string
 }
 
 const recipientLists = ref<RecipientListOption[]>([])
@@ -1078,6 +1254,7 @@ function buildCampaignForSend(savedId: string): Campaign {
     id: savedId,
     name: form.value.name.trim(),
     sender: { name: form.value.senderName, email: form.value.senderEmail },
+    senderMode: resolvedSenderModeForSave(),
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     recipients: manualRecipients.map((email) => ({ email })),
@@ -1093,13 +1270,52 @@ async function loadRecipientLists() {
   recipientListsError.value = ''
   try {
     const res = await fetchRecipientListsIndexOnce()
-    recipientLists.value = Array.isArray(res.lists) ? res.lists : []
+    const rows = Array.isArray(res.lists) ? res.lists : []
+    recipientLists.value = rows.map((row) => {
+      const r = row as RecipientListOption
+      return {
+        id: String(r.id ?? ''),
+        name: String(r.name ?? ''),
+        associatedLoanOfficerEmail:
+          typeof r.associatedLoanOfficerEmail === 'string'
+            ? r.associatedLoanOfficerEmail.trim().toLowerCase()
+            : '',
+        associatedLoanOfficerName:
+          typeof r.associatedLoanOfficerName === 'string'
+            ? r.associatedLoanOfficerName.trim()
+            : ''
+      }
+    })
   } catch {
     recipientListsError.value = 'Could not load recipient lists.'
     recipientLists.value = []
   } finally {
     recipientListsPending.value = false
   }
+}
+
+/**
+ * Marketing/OM: when a LO-scoped list is selected, fill campaign From from that list's LO.
+ * LO/LOA stay locked to self (skip).
+ */
+function applySenderFromSelectedRecipientList(opts?: { onlyIfEmpty?: boolean }) {
+  if (!allowTenantEditSender.value || isSelfOnlyAudience.value) return
+  if (form.value.recipientsMode !== 'list') return
+  if (opts?.onlyIfEmpty && String(form.value.senderEmail ?? '').trim()) return
+  const listId = form.value.recipientsListId?.trim()
+  if (!listId) return
+  const list = recipientLists.value.find((l) => l.id === listId)
+  const email = String(list?.associatedLoanOfficerEmail ?? '')
+    .trim()
+    .toLowerCase()
+  if (!email.includes('@')) return
+  const name = String(list?.associatedLoanOfficerName ?? '').trim() || email
+  senderNameLookupSeq += 1
+  form.value.senderEmail = email
+  form.value.senderName = name
+  form.value.senderMode = 'selected'
+  selectedSenderAvatarUrl.value = ''
+  senderAvatarFailed.value = false
 }
 
 async function loadListContactsPreview() {
@@ -1208,6 +1424,7 @@ function deselectAllListContacts() {
 watch(
   () => [form.value.recipientsMode, form.value.recipientsListId] as const,
   () => {
+    if (!editLoadPending.value) applySenderFromSelectedRecipientList()
     void loadListContactsPreview()
   },
   { immediate: true }
@@ -1352,10 +1569,18 @@ function applyCampaignToEditForm(c: TenantCampaignDetail) {
   }
   manualRecipientLabels.value = labels
   listSelectionSyncedForId.value = ''
+  selectedSenderAvatarUrl.value = ''
+  senderAvatarFailed.value = false
+  const selectedLo = allowTenantEditSender.value && c.senderMode === 'selected'
+  const storedSenderName = normalizeCampaignSenderDisplayName(c.sender?.name, '')
   form.value = {
     name: c.name,
-    senderName: senderDisplayName.value,
-    senderEmail: c.sender?.email || defaultSenderEmail.value,
+    // Toggle ON + empty admin: stay empty until LO pick; never force session LO.
+    senderName:
+      storedSenderName ||
+      (allowTenantEditSender.value ? initialSenderName.value : senderDisplayName.value),
+    senderEmail: c.sender?.email || initialSenderEmail.value,
+    senderMode: selectedLo ? 'selected' : 'contact_owner',
     subject: c.subject || '',
     previewText: c.previewText || '',
     recipientsMode: c.recipientsType || 'manual',
@@ -1404,6 +1629,8 @@ async function bootEditPage() {
     await loadFromEditorReturn()
   } finally {
     editLoadPending.value = false
+    // Marketing often has empty admin sender — fill from the list LO when missing.
+    applySenderFromSelectedRecipientList({ onlyIfEmpty: true })
   }
 }
 
@@ -1447,10 +1674,18 @@ async function loadFromEditorReturn() {
       }
       manualRecipientLabels.value = labels
       listSelectionSyncedForId.value = ''
+      selectedSenderAvatarUrl.value = ''
+      senderAvatarFailed.value = false
+      const selectedLo = allowTenantEditSender.value && c.senderMode === 'selected'
+      const storedSenderName = normalizeCampaignSenderDisplayName(c.sender?.name, '')
       form.value = {
         name: c.name,
-        senderName: senderDisplayName.value,
-        senderEmail: c.sender?.email || defaultSenderEmail.value,
+        // Toggle ON + empty admin: stay empty until LO pick; never force session LO.
+        senderName:
+          storedSenderName ||
+          (allowTenantEditSender.value ? initialSenderName.value : senderDisplayName.value),
+        senderEmail: c.sender?.email || initialSenderEmail.value,
+        senderMode: selectedLo ? 'selected' : 'contact_owner',
         subject: c.subject || '',
     previewText: c.previewText || '',
         recipientsMode: c.recipientsType || 'manual',
@@ -1475,12 +1710,17 @@ async function loadFromEditorReturn() {
       try {
         const { form: storedForm } = JSON.parse(stored)
         if (storedForm) {
-          form.value = {
-            ...form.value,
-            ...storedForm,
-            senderName: senderDisplayName.value,
-            senderEmail: defaultSenderEmail.value
-          }
+          form.value = allowTenantEditSender.value
+            ? {
+                ...form.value,
+                ...storedForm
+              }
+            : {
+                ...form.value,
+                ...storedForm,
+                senderName: senderDisplayName.value,
+                senderEmail: initialSenderEmail.value
+              }
         }
       } catch {
         /* ignore invalid stored JSON */
@@ -1663,6 +1903,7 @@ function buildTestEmailDraftPayload() {
     previewText: form.value.previewText.trim(),
     senderName: form.value.senderName,
     senderEmail: form.value.senderEmail,
+    senderMode: resolvedSenderModeForSave(),
     templateHtml: savedTemplateHtml.value,
     recipientsType: form.value.recipientsMode === 'manual' ? 'manual' as const : 'list' as const,
     recipientsListId: form.value.recipientsMode === 'list' ? form.value.recipientsListId : undefined,
@@ -1828,6 +2069,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     id: campaignId,
     name: form.value.name.trim(),
     sender: { name: form.value.senderName, email: form.value.senderEmail },
+    senderMode: resolvedSenderModeForSave(),
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
     subject: form.value.subject,
@@ -1866,6 +2108,7 @@ async function persistSavedCampaign(): Promise<string> {
     name: form.value.name.trim(),
     senderName: form.value.senderName,
     senderEmail: form.value.senderEmail,
+    senderMode: resolvedSenderModeForSave(),
     subject: form.value.subject,
     previewText: form.value.previewText,
     recipientsType: form.value.recipientsMode,

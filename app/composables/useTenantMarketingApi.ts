@@ -15,6 +15,8 @@ export interface TenantCampaignDetail {
   id: string
   name: string
   sender: { name: string; email: string }
+  /** `selected` = fixed LO From; missing/`contact_owner` = per-contact rewrite. */
+  senderMode?: 'contact_owner' | 'selected'
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
   subject: string
@@ -369,6 +371,21 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     return $fetch<unknown>('/api/v1/tenant/me', tenantFetchInit())
   }
 
+  async function fetchCampaignSenderCandidates(q = '') {
+    return $fetch<{
+      candidates: Array<{
+        email: string
+        firstName: string
+        lastName: string
+        displayName: string
+        avatarUrl: string
+      }>
+    }>('/api/v1/tenant/campaign-sender-candidates', {
+      ...tenantFetchInit(),
+      query: { q: q.trim() || undefined, limit: 12 }
+    })
+  }
+
   async function fetchDashboard() {
     return $fetch<TenantDashboardResponse>('/api/v1/tenant/dashboard', tenantFetchInit())
   }
@@ -535,6 +552,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     previewText?: string
     senderName?: string
     senderEmail?: string
+    senderMode?: string
     templateHtml?: string
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
@@ -553,6 +571,14 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
   }) {
     return $fetch<{ ok: boolean; url: string; objectPath: string }>(
       '/api/v1/tenant/custom-marketing/images',
+      tenantFetchInit({ method: 'POST', body, timeout: 60000 })
+    )
+  }
+
+  /** Host an image for HTML email templates; returns public HTTPS URL for img src. */
+  async function uploadEmailTemplateImage(body: { dataUrl: string }) {
+    return $fetch<{ ok: boolean; url: string; objectPath: string }>(
+      '/api/v1/tenant/email-templates/images',
       tenantFetchInit({ method: 'POST', body, timeout: 60000 })
     )
   }
@@ -580,6 +606,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     updateEmailTemplateCategory,
     deleteEmailTemplateCategory,
     fetchTenantMe,
+    fetchCampaignSenderCandidates,
     fetchDashboard,
     fetchSendCampaignStatus,
     fetchCampaignSendRecipients,
@@ -594,6 +621,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     restartCampaignSend,
     abortCampaignRecipients,
     sendTestEmail,
-    uploadCustomMarketingImage
+    uploadCustomMarketingImage,
+    uploadEmailTemplateImage
   }
 }

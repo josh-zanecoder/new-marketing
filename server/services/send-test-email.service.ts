@@ -7,8 +7,14 @@ import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/email
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { getRegistryConnection } from '../lib/mongoose'
-import { findRegistryTenantByDbName } from '../tenant/registry-auth'
+import {
+  findRegistryTenantByDbName,
+  isRegisteredTenantAuthContext
+} from '../tenant/registry-auth'
 import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
+import { isAllowedSelectedCampaignSenderEmail } from '@server/utils/campaign/listCampaignSenderCandidates'
+import type { ContactModel } from '../types/tenant/contact.model'
+import { shouldUsePersistedSelectedLoSender } from '~~/shared/persistedSelectedLoSender'
 import {
   type DraftRecipientContext,
   previewContactForDraft,
@@ -27,7 +33,8 @@ import { userMergeSnapshotFromDynamicVariableFallbacks } from '../utils/emailMer
 import {
   buildReplyToFromContactOwner,
   buildSenderFromContactOwner,
-  applyCampaignFromAddressMode
+  applyCampaignFromAddressMode,
+  resolveSelectedLoSender
 } from '@server/utils/email/replyToFromContactMetadata'
 import { getMarketingPublicBaseUrl } from '@server/utils/marketingPublicBaseUrl'
 import { listUnsubscribeHeadersForContact } from '@server/utils/email/listUnsubscribeHeaders'
@@ -35,6 +42,7 @@ import { sendCampaignOutboundEmail } from './campaignOutboundEmail.service'
 import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
+import { isSelectedCampaignSenderMode } from '~~/shared/campaignSenderMode'
 
 export interface SendCampaignTestEmailInput {
   recipient: string
@@ -43,6 +51,8 @@ export interface SendCampaignTestEmailInput {
   previewText?: string
   senderName?: string
   senderEmail?: string
+  /** Draft test only: must be `selected` with toggle ON to skip contact-owner rewrite. */
+  senderMode?: string
   templateHtml?: string
   recipientsType?: 'list' | 'manual'
   recipientsListId?: string
@@ -83,11 +93,13 @@ async function resolveRegistryMeta(dbName: string): Promise<{
   unsubscribeSigningSecret?: string
   crmAppUrl?: string
   campaignFromAddressMode: CampaignFromAddressMode
+  allowTenantEditSender: boolean
 }> {
   let brevoTenantTagValue = dbName
   let unsubscribeSigningSecret: string | undefined
   let crmAppUrl: string | undefined
   let campaignFromAddressMode: CampaignFromAddressMode = 'default'
+  let allowTenantEditSender = false
   try {
     const registry = await getRegistryConnection()
     const row = await findRegistryTenantByDbName(registry, dbName)
@@ -96,10 +108,17 @@ async function resolveRegistryMeta(dbName: string): Promise<{
     if (row?.clientKeyHash) unsubscribeSigningSecret = row.clientKeyHash
     if (row?.crmAppUrl) crmAppUrl = row.crmAppUrl
     if (row?.campaignFromAddressMode) campaignFromAddressMode = row.campaignFromAddressMode
+    allowTenantEditSender = row?.allowTenantEditSender === true
   } catch (err) {
     console.warn('[TestEmail] registry lookup failed', { dbName, err })
   }
-  return { brevoTenantTagValue, unsubscribeSigningSecret, crmAppUrl, campaignFromAddressMode }
+  return {
+    brevoTenantTagValue,
+    unsubscribeSigningSecret,
+    crmAppUrl,
+    campaignFromAddressMode,
+    allowTenantEditSender
+  }
 }
 
 function crmAppUrlFromAuth(auth: unknown): string | undefined {
@@ -124,7 +143,7 @@ export async function sendCampaignTestEmail(
   }
 
   const models = getTenantClientModels(conn)
-  const { Campaign, EmailDynamicVariable, EmailTemplate } = models
+  const { Campaign, Contact, EmailDynamicVariable, EmailTemplate } = models
   const dynamicVariableBindings = await fetchEnabledEmailDynamicVariableBindings(
     EmailDynamicVariable as EmailDynamicVariableModel
   )
@@ -172,10 +191,25 @@ export async function sendCampaignTestEmail(
     const contact = await previewContactForSavedCampaign(conn, campaignId)
     unsubscribeContactId = contact?._id ? String(contact._id) : undefined
     const operatorFallback = mergeUserSnapshotsForEmail(authSnap, campaign.mergeUserSnapshot)
-    sender = buildSenderFromContactOwner(contact ?? null, {
+    const storedSender = {
       name: String(campaign.sender?.name ?? '').trim(),
       email: String(campaign.sender?.email ?? '').trim()
-    }, operatorFallback, variableFallback)
+    }
+    // Honor DB `selected` even if the registry toggle was later turned off.
+    const useSelectedLoSender = shouldUsePersistedSelectedLoSender({
+      senderMode: campaign.senderMode,
+      senderEmail: storedSender.email
+    })
+    if (useSelectedLoSender) {
+      sender = resolveSelectedLoSender(storedSender, operatorFallback)
+    } else {
+      sender = buildSenderFromContactOwner(
+        contact ?? null,
+        storedSender,
+        operatorFallback,
+        variableFallback
+      )
+    }
     mergeRoot = composeEmailMergeRoot(
       contact ?? null,
       dynamicVariableBindings,
@@ -193,7 +227,9 @@ export async function sendCampaignTestEmail(
       buildReplyToFromContactOwner(null, operatorFallback) ??
       buildReplyToFromContactOwner(contact) ??
       buildReplyToFromContactOwner(null, undefined, variableFallback)
-    sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
+    if (!useSelectedLoSender) {
+      sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
+    }
     campaignTag = campaignId
   } else {
     templateHtml = String(input.templateHtml ?? '').trim()
@@ -234,15 +270,47 @@ export async function sendCampaignTestEmail(
       crmAppUrl,
       previewPlaceholder: previewUnsubscribePlaceholder
     })
-    sender = buildSenderFromContactOwner(contact ?? null, {
+    const draftSender = {
       name: String(input.senderName ?? '').trim(),
       email: senderEmail
-    }, authSnap, variableFallback)
+    }
+    const wantsSelectedLoSender =
+      registryMeta.allowTenantEditSender &&
+      isSelectedCampaignSenderMode(input.senderMode) &&
+      Boolean(draftSender.email.trim())
+    let useSelectedLoSender = false
+    if (wantsSelectedLoSender) {
+      if (!isRegisteredTenantAuthContext(auth)) {
+        throw createError({ statusCode: 403, message: 'Missing or invalid tenant context' })
+      }
+      const allowed = await isAllowedSelectedCampaignSenderEmail(
+        Contact as ContactModel,
+        auth,
+        draftSender.email
+      )
+      if (!allowed) {
+        throw createError({
+          statusCode: 400,
+          message: 'Sender must be a loan officer profile from the tenant directory'
+        })
+      }
+      useSelectedLoSender = true
+      sender = resolveSelectedLoSender(draftSender, authSnap)
+    } else {
+      sender = buildSenderFromContactOwner(
+        contact ?? null,
+        draftSender,
+        authSnap,
+        variableFallback
+      )
+    }
     replyTo =
       buildReplyToFromContactOwner(null, authSnap) ??
       buildReplyToFromContactOwner(contact) ??
       buildReplyToFromContactOwner(null, undefined, variableFallback)
-    sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
+    if (!useSelectedLoSender) {
+      sender = applyCampaignFromAddressMode(sender, replyTo, registryMeta.campaignFromAddressMode)
+    }
   }
 
   const cur = mergeRoot.recipient

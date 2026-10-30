@@ -187,6 +187,14 @@ function serializeRecipientLists(
       membershipOwnerEmails: recipientListStoredMembershipEmails(
         doc as { membershipOwnerEmails?: unknown }
       ),
+      associatedLoanOfficerEmail:
+        typeof doc.associatedLoanOfficerEmail === 'string'
+          ? doc.associatedLoanOfficerEmail.trim().toLowerCase()
+          : '',
+      associatedLoanOfficerName:
+        typeof doc.associatedLoanOfficerName === 'string'
+          ? doc.associatedLoanOfficerName.trim()
+          : '',
       memberCount: memberCountByListId.get(String(doc._id)) ?? 0,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
       updatedAt: doc.updatedAt?.toISOString?.() ?? null

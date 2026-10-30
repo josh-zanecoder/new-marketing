@@ -8,6 +8,8 @@ import {
   parseCampaignFromAddressMode,
   type CampaignFromAddressMode
 } from '~~/shared/campaignFromAddressMode'
+import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
+import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -32,6 +34,14 @@ export function parseRegistryCampaignFromAddressMode(
   doc: RegistryTenantDoc
 ): CampaignFromAddressMode {
   return parseCampaignFromAddressMode(doc.campaignFromAddressMode)
+}
+
+export function parseRegistryAllowTenantEditSender(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantEditSender(doc.allowTenantEditSender)
+}
+
+export function parseRegistryAllowTenantLoRecipientLists(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantLoRecipientLists(doc.allowTenantLoRecipientLists)
 }
 
 export function normalizeCampaignSenderEmailInput(
@@ -315,6 +325,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const { defaultCampaignSenderEmail, defaultCampaignSenderName } =
     parseRegistryCampaignSenderFields(doc)
   const campaignFromAddressMode = parseRegistryCampaignFromAddressMode(doc)
+  const allowTenantEditSender = parseRegistryAllowTenantEditSender(doc)
+  const allowTenantLoRecipientLists = parseRegistryAllowTenantLoRecipientLists(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
   const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
     parseRegistryBrevoWebhookSecret(doc)
@@ -333,6 +345,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     defaultCampaignSenderEmail,
     defaultCampaignSenderName,
     campaignFromAddressMode,
+    allowTenantEditSender,
+    allowTenantLoRecipientLists,
     brevoApiKeyConfigured,
     brevoApiKeyPrefix,
     brevoWebhookSecretConfigured,

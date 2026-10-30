@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   applyCampaignFromAddressMode,
   buildSenderFromContactOwner,
-  buildReplyToFromContactOwner
+  buildReplyToFromContactOwner,
+  resolveSelectedLoSender
 } from '../replyToFromContactMetadata'
 
 const operator = {
@@ -72,6 +73,57 @@ describe('buildSenderFromContactOwner', () => {
       email: 'marketing@example.com'
     })
   })
+
+  it('ignores legacy Contact owner placeholder and uses operator name', () => {
+    expect(
+      buildSenderFromContactOwner(
+        null,
+        { name: 'Contact owner', email: 'marketing@example.com' },
+        operator
+      )
+    ).toEqual({
+      name: 'Alex Operator',
+      email: 'marketing@example.com'
+    })
+  })
+})
+
+describe('resolveSelectedLoSender', () => {
+  it('keeps an explicit LO display name', () => {
+    expect(
+      resolveSelectedLoSender(
+        { name: 'Neovern Enricoso', email: 'neovern.e@zanecoder.com' },
+        operator
+      )
+    ).toEqual({
+      name: 'Neovern Enricoso',
+      email: 'neovern.e@zanecoder.com'
+    })
+  })
+
+  it('replaces Contact owner placeholder with matching operator first+last', () => {
+    expect(
+      resolveSelectedLoSender(
+        { name: 'Contact owner', email: 'alex@example.com' },
+        operator
+      )
+    ).toEqual({
+      name: 'Alex Operator',
+      email: 'alex@example.com'
+    })
+  })
+
+  it('falls back to email when placeholder and operator email differ', () => {
+    expect(
+      resolveSelectedLoSender(
+        { name: 'Contact owner', email: 'lo@example.com' },
+        operator
+      )
+    ).toEqual({
+      name: 'lo@example.com',
+      email: 'lo@example.com'
+    })
+  })
 })
 
 describe('buildReplyToFromContactOwner', () => {
@@ -139,5 +191,18 @@ describe('applyCampaignFromAddressMode', () => {
 
   it('keeps the default sender when contact_owner has no Reply-To', () => {
     expect(applyCampaignFromAddressMode(sender, undefined, 'contact_owner')).toEqual(sender)
+  })
+
+  it('does not copy Contact owner placeholder onto From when Reply-To has no name', () => {
+    expect(
+      applyCampaignFromAddressMode(
+        { name: 'Contact owner', email: 'marketing@example.com' },
+        { name: '', email: 'jane@example.com' },
+        'contact_owner'
+      )
+    ).toEqual({
+      name: 'jane@example.com',
+      email: 'jane@example.com'
+    })
   })
 })

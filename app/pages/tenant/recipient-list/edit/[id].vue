@@ -17,13 +17,18 @@
           Edit recipient list
         </h1>
         <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
-          Update name, audience, or registry filters. Saving refreshes who’s on the list.
+          <template v-if="isLoMode">
+            Update the list name or loan officer. Saving refreshes that LO’s borrowers.
+          </template>
+          <template v-else>
+            Update name, audience, or registry filters. Saving refreshes who’s on the list.
+          </template>
         </p>
       </header>
 
       <div class="space-y-8">
       <div
-        v-if="data && !data.tenantIdConfigured"
+        v-if="!isLoMode && data && !data.tenantIdConfigured"
         class="flex gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm sm:text-[0.9375rem]"
         role="status"
       >
@@ -44,21 +49,321 @@
       </div>
 
       <div
-        v-if="loadError"
+        v-if="pageLoadError"
         class="flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50 px-5 py-4 text-sm leading-snug text-red-900 shadow-sm sm:text-[0.9375rem]"
         role="alert"
       >
         <svg class="mt-0.5 h-5 w-5 shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
         </svg>
-        {{ loadError }}
+        {{ pageLoadError }}
       </div>
 
-      <div v-if="loadPending" class="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+      <div v-if="pagePending" class="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
         <div class="h-10 max-w-sm animate-pulse rounded-xl bg-slate-100" />
         <div class="h-12 w-full animate-pulse rounded-xl bg-slate-100" />
         <div class="h-32 animate-pulse rounded-xl bg-slate-50" />
       </div>
+
+      <!-- LO-scoped simple form (toggle ON + list already LO-scoped) -->
+      <form
+        v-else-if="isLoMode"
+        class="space-y-8"
+        @submit.prevent="loSubmitUpdate"
+      >
+        <div class="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-start">
+          <div class="min-w-0 lg:col-span-5 xl:col-span-4">
+            <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] lg:sticky lg:top-6">
+              <div class="border-b border-slate-100 px-5 py-4 sm:px-6 sm:py-5">
+                <h2 class="text-base font-semibold text-slate-900">List details</h2>
+                <p class="mt-1 text-sm text-slate-500 sm:text-[0.9375rem]">
+                  Name this borrower list.
+                </p>
+              </div>
+              <div class="p-5 sm:p-6">
+                <label for="rl-lo-name" class="mb-2 block text-sm font-medium text-slate-700">
+                  List name
+                  <span class="text-red-600" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="rl-lo-name"
+                  v-model="loForm.name"
+                  type="text"
+                  required
+                  aria-required="true"
+                  maxlength="200"
+                  placeholder="e.g. Jane Smith – Borrowers"
+                  class="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20 sm:text-[15px]"
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="relative z-20 min-w-0 lg:col-span-7 xl:col-span-8">
+            <div class="rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">
+              <div class="border-b border-slate-100 bg-slate-50/50 px-5 py-5 sm:px-6">
+                <h2 class="text-base font-semibold text-slate-900">Loan officer & borrowers</h2>
+                <p class="mt-1 text-sm text-slate-500 sm:text-[0.9375rem]">
+                  Pick a loan officer; this list includes only their borrowers.
+                </p>
+              </div>
+              <div class="space-y-6 p-5 sm:p-6">
+                <div class="space-y-2">
+                  <p class="text-sm font-medium text-slate-700">
+                    Loan officer email
+                    <span class="text-red-600" aria-hidden="true">*</span>
+                  </p>
+                  <template v-if="loIsSelfOnlyAudience">
+                    <p class="text-xs leading-relaxed text-slate-500 sm:text-sm">
+                      This list includes only your borrowers.
+                    </p>
+                    <p class="rounded-xl border border-slate-200/90 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                      <span class="font-semibold">{{ loForm.associatedLoanOfficerName || 'You' }}</span>
+                      <span v-if="loForm.associatedLoanOfficerEmail" class="mt-0.5 block text-slate-600">
+                        {{ loForm.associatedLoanOfficerEmail }}
+                      </span>
+                    </p>
+                  </template>
+                  <template v-else>
+                    <p class="text-xs leading-relaxed text-slate-500 sm:text-sm">
+                      This list includes only borrowers owned by the selected loan officer.
+                    </p>
+                    <CampaignSenderEmailPicker
+                      v-model="loForm.associatedLoanOfficerEmail"
+                      label="Loan officer"
+                      @typed="loOnLoanOfficerTyped"
+                      @select="loOnLoanOfficerSelect"
+                    />
+                    <p v-if="loForm.associatedLoanOfficerName" class="text-sm text-slate-600">
+                      Associated with
+                      <span class="font-semibold text-slate-900">{{ loForm.associatedLoanOfficerName }}</span>
+                    </p>
+                  </template>
+                </div>
+
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-0">
+                    <div
+                      class="flex items-center gap-1"
+                      role="tablist"
+                      aria-label="Borrowers views"
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        class="-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition"
+                        :class="loBorrowersTab === 'list'
+                          ? 'border-primary-600 text-primary-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'"
+                        :aria-selected="loBorrowersTab === 'list'"
+                        @click="loSetBorrowersTab('list')"
+                      >
+                        Borrowers
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        class="-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition"
+                        :class="loBorrowersTab === 'manual'
+                          ? 'border-primary-600 text-primary-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'"
+                        :aria-selected="loBorrowersTab === 'manual'"
+                        @click="loSetBorrowersTab('manual')"
+                      >
+                        Manual Add
+                      </button>
+                    </div>
+                    <div
+                      v-if="loBorrowersTab === 'list' && loBorrowers.length"
+                      class="pb-2"
+                    >
+                      <button
+                        type="button"
+                        class="rounded-lg px-2.5 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                        @click="loToggleAllBorrowers"
+                      >
+                        {{ loToggleAllBorrowersLabel }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="loBorrowersTab === 'manual'"
+                    role="tabpanel"
+                    class="space-y-3"
+                  >
+                    <p class="text-sm text-slate-500">
+                      Look up a borrower by email for this loan officer and include them in the list.
+                    </p>
+                    <div
+                      v-if="!loForm.associatedLoanOfficerEmail.trim()"
+                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                    >
+                      Select a loan officer first.
+                    </div>
+                    <template v-else>
+                      <p class="text-xs text-slate-500">
+                        Search is limited to borrowers owned by
+                        <span class="font-semibold text-slate-700">
+                          {{ loForm.associatedLoanOfficerName || loForm.associatedLoanOfficerEmail }}
+                        </span>.
+                      </p>
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div class="relative min-w-0 flex-1">
+                          <label for="rl-lo-manual-email" class="sr-only">Add borrower by email</label>
+                          <input
+                            id="rl-lo-manual-email"
+                            v-model="loManualEmail"
+                            type="email"
+                            autocomplete="off"
+                            placeholder="Search borrower email or name…"
+                            class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+                            :disabled="loManualAddPending"
+                            :aria-expanded="loManualSuggestionsOpen"
+                            aria-autocomplete="list"
+                            aria-controls="rl-lo-manual-suggestions"
+                            @input="loOnManualEmailInput"
+                            @focus="loOnManualEmailFocus"
+                            @blur="loCloseManualSuggestions"
+                            @keydown.enter.prevent="loAddBorrowerByEmail"
+                            @keydown.escape="loCloseManualSuggestions"
+                          >
+                          <ul
+                            v-if="loManualSuggestionsOpen && (loManualSuggestions.length || loManualSuggestionsLoading || loManualEmail.trim().length >= 2)"
+                            id="rl-lo-manual-suggestions"
+                            role="listbox"
+                            class="absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto overscroll-contain rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
+                          >
+                            <li
+                              v-if="loManualSuggestionsLoading"
+                              class="px-3 py-2.5 text-sm text-slate-500"
+                            >
+                              Searching this LO’s borrowers…
+                            </li>
+                            <template v-else-if="loManualSuggestions.length">
+                              <li
+                                v-for="s in loManualSuggestions"
+                                :key="s.id"
+                                role="option"
+                                class="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-primary-50"
+                                @mousedown.prevent="loSelectManualSuggestion(s)"
+                              >
+                                <span class="min-w-0 truncate font-medium text-slate-900">{{ s.name }}</span>
+                                <span class="shrink-0 truncate text-slate-500">{{ s.email }}</span>
+                              </li>
+                            </template>
+                            <li
+                              v-else
+                              class="px-3 py-2.5 text-sm text-slate-500"
+                            >
+                              No borrowers match for this loan officer.
+                            </li>
+                          </ul>
+                        </div>
+                        <button
+                          type="button"
+                          class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          :disabled="loManualAddPending || !loManualEmail.trim()"
+                          @click="loAddBorrowerByEmail"
+                        >
+                          {{ loManualAddPending ? 'Adding…' : 'Add' }}
+                        </button>
+                      </div>
+                      <p
+                        v-if="loManualAddError"
+                        class="text-sm text-red-700"
+                        role="alert"
+                      >
+                        {{ loManualAddError }}
+                      </p>
+                    </template>
+                  </div>
+
+                  <div
+                    v-else
+                    role="tabpanel"
+                    class="space-y-3"
+                  >
+                    <div
+                      v-if="loBorrowersLoading"
+                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                    >
+                      Loading borrowers…
+                    </div>
+                    <div
+                      v-else-if="loBorrowersError"
+                      class="rounded-xl border border-red-200/90 bg-red-50 px-4 py-4 text-sm text-red-800"
+                    >
+                      {{ loBorrowersError }}
+                    </div>
+                    <div
+                      v-else-if="!loForm.associatedLoanOfficerEmail.trim()"
+                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                    >
+                      Select a loan officer to see their borrowers.
+                    </div>
+                    <div
+                      v-else-if="!loBorrowers.length"
+                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                    >
+                      No borrowers found for this loan officer. Use Manual Add to look one up by email.
+                    </div>
+                    <ul
+                      v-else
+                      class="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200/80"
+                    >
+                      <li
+                        v-for="b in loBorrowers"
+                        :key="b.id"
+                        class="flex items-center gap-3 px-4 py-2.5 text-sm"
+                      >
+                        <input
+                          :id="`rl-lo-borrower-${b.id}`"
+                          type="checkbox"
+                          class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
+                          :checked="loBorrowerChecked[b.id] !== false"
+                          @change="loSetBorrowerChecked(b.id, ($event.target as HTMLInputElement).checked)"
+                        >
+                        <label
+                          :for="`rl-lo-borrower-${b.id}`"
+                          class="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3"
+                        >
+                          <span class="min-w-0 truncate font-medium text-slate-900">{{ b.name }}</span>
+                          <span class="shrink-0 truncate text-slate-500">{{ b.email }}</span>
+                        </label>
+                      </li>
+                    </ul>
+                    <p
+                      v-if="loBorrowerTotal > loBorrowers.length"
+                      class="text-xs text-slate-500"
+                    >
+                      Showing {{ loBorrowers.length }} of {{ loBorrowerTotal }} borrowers.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="loSaveError"
+          class="flex gap-3.5 rounded-2xl border border-red-200/90 bg-red-50 px-5 py-4 text-sm text-red-900 shadow-sm"
+          role="alert"
+        >
+          {{ loSaveError }}
+        </div>
+
+        <TenantRecipientListFormActions
+          :reasons="loSubmitBlockReasons"
+          hint-heading="Complete the following to save changes:"
+          submit-label="Save changes"
+          :cancel-to="`/tenant/recipient-list/${listId}`"
+          :can-submit="loCanSubmitForm"
+          :saving="loSaving"
+          cancel-first-on-mobile
+        />
+      </form>
 
       <form
         v-else-if="data"
@@ -377,10 +682,62 @@
 </template>
 
 <script setup lang="ts">
-
 definePageMeta({ layout: 'default' })
 
 const route = useRoute()
+const listIdRef = computed(() => String(route.params.id ?? ''))
+
+const {
+  allowTenantLoRecipientLists,
+  loadDefaultCampaignSender,
+  loaded: flagLoaded
+} = useDefaultCampaignSender()
+void loadDefaultCampaignSender()
+
+const {
+  loadPending: loLoadPending,
+  loadError: loLoadError,
+  saveError: loSaveError,
+  saving: loSaving,
+  form: loForm,
+  borrowers: loBorrowers,
+  borrowerTotal: loBorrowerTotal,
+  borrowersLoading: loBorrowersLoading,
+  borrowersError: loBorrowersError,
+  borrowerChecked: loBorrowerChecked,
+  setBorrowerChecked: loSetBorrowerChecked,
+  toggleAllBorrowers: loToggleAllBorrowers,
+  toggleAllBorrowersLabel: loToggleAllBorrowersLabel,
+  manualEmail: loManualEmail,
+  manualAddError: loManualAddError,
+  manualAddPending: loManualAddPending,
+  manualSuggestions: loManualSuggestions,
+  manualSuggestionsOpen: loManualSuggestionsOpen,
+  manualSuggestionsLoading: loManualSuggestionsLoading,
+  onManualEmailInput: loOnManualEmailInput,
+  onManualEmailFocus: loOnManualEmailFocus,
+  closeManualSuggestions: loCloseManualSuggestions,
+  selectManualSuggestion: loSelectManualSuggestion,
+  borrowersTab: loBorrowersTab,
+  setBorrowersTab: loSetBorrowersTab,
+  addBorrowerByEmail: loAddBorrowerByEmail,
+  submitBlockReasons: loSubmitBlockReasons,
+  canSubmitForm: loCanSubmitForm,
+  onLoanOfficerSelect: loOnLoanOfficerSelect,
+  isSelfOnlyAudience: loIsSelfOnlyAudience,
+  onLoanOfficerTyped: loOnLoanOfficerTyped,
+  submitUpdate: loSubmitUpdate
+} = useLoRecipientListSimpleForm({
+  mode: 'edit',
+  listId: listIdRef
+})
+
+const isLoMode = computed(
+  () =>
+    flagLoaded.value &&
+    allowTenantLoRecipientLists.value === true &&
+    Boolean(loForm.associatedLoanOfficerEmail.trim())
+)
 
 const {
   listId,
@@ -415,6 +772,20 @@ const {
   submitUpdate
 } = useRecipientListForm({
   mode: 'edit',
-  listId: computed(() => String(route.params.id ?? ''))
+  listId: listIdRef
+})
+
+const pagePending = computed(() => {
+  if (!flagLoaded.value) return true
+  if (allowTenantLoRecipientLists.value) {
+    if (loLoadPending.value) return true
+    if (Boolean(loForm.associatedLoanOfficerEmail.trim())) return false
+  }
+  return loadPending.value
+})
+
+const pageLoadError = computed(() => {
+  if (isLoMode.value) return loLoadError.value
+  return loadError.value
 })
 </script>

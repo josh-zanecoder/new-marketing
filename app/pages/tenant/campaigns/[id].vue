@@ -6,12 +6,14 @@ import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type TenantBrevoCampaignSmtpStatsPanel from '~/components/tenant/BrevoCampaignSmtpStatsPanel.vue'
 import type TenantBrevoTrackingEventsPanel from '~/components/tenant/BrevoTrackingEventsPanel.vue'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
-import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
+import { campaignSenderDisplayName } from '~~/shared/campaignSenderDisplayName'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
 const { sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const marketingApi = useTenantMarketingApi()
+const { sessionUser, loadDefaultCampaignSender } = useDefaultCampaignSender()
+void loadDefaultCampaignSender()
 const {
   canSendDraft,
   canSendScheduled,
@@ -80,6 +82,18 @@ const { data, error, pending, refresh } = detailAsync
 const { data: mergeRootPayload } = mergeAsync
 
 const campaign = computed((): TenantCampaignDetail | null => data.value?.campaign ?? null)
+
+const senderOverviewLabel = computed(() => {
+  const c = campaign.value
+  if (!c) return ''
+  return campaignSenderDisplayName({
+    senderMode: c.senderMode,
+    sender: c.sender,
+    replyTo: c.replyTo,
+    mergeUserSnapshot: c.mergeUserSnapshot,
+    sessionUser: sessionUser.value
+  })
+})
 
 const isScheduledCampaign = computed(
   () => campaign.value?.status === 'Scheduled' && !!campaign.value?.scheduledAt
@@ -836,7 +850,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Sender</dt>
                     <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
-                      {{ CONTACT_OWNER_SENDER_LABEL }} &lt;{{ campaign.sender?.email }}&gt;
+                      {{ senderOverviewLabel }} &lt;{{ campaign.sender?.email }}&gt;
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">

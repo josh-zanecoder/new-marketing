@@ -4,11 +4,15 @@ import {
   DEFAULT_CAMPAIGN_SENDER_NAME
 } from '~~/shared/defaultCampaignSender'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
-import { parseRegistryCampaignSenderFields } from '@server/utils/registry/tenantAdminRow'
+import {
+  parseRegistryAllowTenantEditSender,
+  parseRegistryCampaignSenderFields
+} from '@server/utils/registry/tenantAdminRow'
 
 export type ResolvedCampaignSenderDefaults = {
   name: string
   email: string
+  allowTenantEditSender: boolean
 }
 
 export function resolveCampaignSenderDefaultsFromDoc(
@@ -17,14 +21,25 @@ export function resolveCampaignSenderDefaultsFromDoc(
   if (!doc) {
     return {
       name: DEFAULT_CAMPAIGN_SENDER_NAME,
-      email: DEFAULT_CAMPAIGN_SENDER_EMAIL
+      email: DEFAULT_CAMPAIGN_SENDER_EMAIL,
+      allowTenantEditSender: false
     }
   }
   const { defaultCampaignSenderEmail, defaultCampaignSenderName } =
     parseRegistryCampaignSenderFields(doc)
+  const allowTenantEditSender = parseRegistryAllowTenantEditSender(doc)
+  // When tenants may edit sender, keep admin blanks empty — do not invent Forge defaults.
+  if (allowTenantEditSender) {
+    return {
+      name: defaultCampaignSenderName ?? '',
+      email: defaultCampaignSenderEmail ?? '',
+      allowTenantEditSender: true
+    }
+  }
   return {
     name: defaultCampaignSenderName ?? DEFAULT_CAMPAIGN_SENDER_NAME,
-    email: defaultCampaignSenderEmail ?? DEFAULT_CAMPAIGN_SENDER_EMAIL
+    email: defaultCampaignSenderEmail ?? DEFAULT_CAMPAIGN_SENDER_EMAIL,
+    allowTenantEditSender: false
   }
 }
 

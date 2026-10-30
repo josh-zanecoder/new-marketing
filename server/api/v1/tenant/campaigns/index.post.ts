@@ -15,16 +15,20 @@ import {
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveCampaignSenderForPersistence } from '@server/utils/campaign/campaignSenderFromAuth'
+import { isAllowedSelectedCampaignSenderEmail } from '@server/utils/campaign/listCampaignSenderCandidates'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/resolveCampaignEmailTemplateOnSave'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { normalizeEmailPreviewText } from '~~/shared/emailPreviewText'
+import { CAMPAIGN_SENDER_MODE_SELECTED } from '~~/shared/campaignSenderMode'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
     name: string
     senderName: string
     senderEmail: string
+    /** `selected` only when Edit sender is ON and an LO profile was picked. */
+    senderMode?: string
     subject: string
     previewText?: string
     recipientsType?: 'manual' | 'list'
@@ -108,14 +112,38 @@ export default defineEventHandler(async (event) => {
 
   const registryConn = await getRegistryConnection()
   const senderDefaults = await resolveDefaultCampaignSenderForDbName(registryConn, dbName)
-  const sender = resolveCampaignSenderForPersistence(auth, senderDefaults, {
-    senderEmail: body.senderEmail
-  })
+  const resolvedSender = resolveCampaignSenderForPersistence(
+    auth,
+    senderDefaults,
+    {
+      senderEmail: body.senderEmail,
+      senderName: body.senderName,
+      senderMode: body.senderMode
+    },
+    { allowTenantEditSender: senderDefaults.allowTenantEditSender }
+  )
+  if (resolvedSender.senderMode === CAMPAIGN_SENDER_MODE_SELECTED) {
+    if (!isRegisteredTenantAuthContext(auth)) {
+      throw createError({ statusCode: 403, message: 'Missing or invalid tenant context' })
+    }
+    const allowed = await isAllowedSelectedCampaignSenderEmail(
+      Contact as ContactModel,
+      auth,
+      resolvedSender.email
+    )
+    if (!allowed) {
+      throw createError({
+        statusCode: 400,
+        message: 'Sender must be a loan officer profile from the tenant directory'
+      })
+    }
+  }
 
   const mergeSnap = tenantUserFieldsFromAuth(event.context.auth)
   const campaignData: Record<string, unknown> = {
     name: body.name.trim(),
-    sender,
+    sender: { name: resolvedSender.name, email: resolvedSender.email },
+    senderMode: resolvedSender.senderMode,
     recipientsType,
     recipientsListId,
     subject: body.subject?.trim() || '',
