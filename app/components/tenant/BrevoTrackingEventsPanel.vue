@@ -251,7 +251,7 @@ async function refreshFromBrevo() {
 defineExpose({ refresh: refreshFromBrevo, pending: isLoading })
 
 /**
- * Campaign Logs: if Mongo has no events for this campaign/range, pull from the email provider once.
+ * Campaign Logs: if Mongo has no events for this campaign/range, pull latest from the provider once.
  */
 watch(
   [pending, data, error, () => props.campaignId, effectiveDateRange, trackingScope],

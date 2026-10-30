@@ -66,7 +66,8 @@ function mapSesOrArchiveEventName(raw: string): string {
     delivery_delay: 'deferred',
     subscription: 'unsubscribed',
     failed: 'hardBounces',
-    sent: 'delivered'
+    // Archive/SES "sent" = accepted for send, not inbox delivery (matches webhook normalize).
+    sent: 'requests'
   }
   if (ses[key]) return ses[key]
   return normalizeBrevoWebhookEventName(t) || t
@@ -172,9 +173,17 @@ function statusFallbackEvents(item: ZcMailArchiveListItem, tag: string): BrevoTr
   const events: BrevoTrackingEmailEvent[] = [
     toTrackingEvent({ ...base, event: 'requests' })
   ]
-  if (status === 'sent') {
+  // List-row `sent` only means accepted for send — do not invent a Delivery.
+  // Delivered/bounce come from SES detail events or the webhook.
+  if (status === 'delivered' || status === 'delivery') {
     events.push(toTrackingEvent({ ...base, event: 'delivered' }))
-  } else if (status === 'failed') {
+  } else if (
+    status === 'failed' ||
+    status === 'bounce' ||
+    status === 'bounced' ||
+    status === 'hardbounce' ||
+    status === 'hard_bounce'
+  ) {
     events.push(
       toTrackingEvent({
         ...base,

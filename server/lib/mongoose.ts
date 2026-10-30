@@ -56,20 +56,44 @@ function registryConnectRetryDelayMs(attempt: number): number {
   return Math.min(15_000, 1_000 * attempt)
 }
 
-const DEFAULT_MONGODB_MAX_POOL_SIZE = 15
+/**
+ * Atlas connection budget is shared across every Cloud Run instance
+ * (web + send worker + kafka worker + brevo webhook). Prefer a small
+ * per-process pool; tenants already share this pool via `useDb()`.
+ * Same class of fix as CRM ratesheet DB-load hardening (CRM-974):
+ * stop holding more sockets than traffic needs.
+ */
+const DEFAULT_MONGODB_MAX_POOL_SIZE = 5
+const MONGODB_POOL_SIZE_HARD_CAP = 50
+const DEFAULT_MONGODB_MAX_IDLE_TIME_MS = 120_000
 
-function resolveMaxPoolSize(): number {
-  const raw = Number(process.env.MONGODB_MAX_POOL_SIZE)
-  return Number.isFinite(raw) && raw >= 1 && raw <= 100 ? Math.floor(raw) : DEFAULT_MONGODB_MAX_POOL_SIZE
+/** Exported for unit tests — clamps deployment env only (never HTTP input). */
+export function resolveMaxPoolSize(
+  rawEnv: string | undefined = process.env.MONGODB_MAX_POOL_SIZE
+): number {
+  if (rawEnv === undefined || rawEnv.trim() === '') return DEFAULT_MONGODB_MAX_POOL_SIZE
+  const raw = Number(rawEnv)
+  if (!Number.isFinite(raw) || raw < 1) return DEFAULT_MONGODB_MAX_POOL_SIZE
+  return Math.min(MONGODB_POOL_SIZE_HARD_CAP, Math.floor(raw))
+}
+
+function resolveMaxIdleTimeMs(): number {
+  const rawEnv = process.env.MONGODB_MAX_IDLE_TIME_MS
+  if (rawEnv === undefined || rawEnv.trim() === '') return DEFAULT_MONGODB_MAX_IDLE_TIME_MS
+  const raw = Number(rawEnv)
+  if (!Number.isFinite(raw) || raw < 30_000) return DEFAULT_MONGODB_MAX_IDLE_TIME_MS
+  return Math.min(1_800_000, Math.floor(raw))
 }
 
 /** Shared driver options for registry and per-tenant connections. */
 function mongoConnectionOptions(): mongoose.ConnectOptions {
   return {
-    maxIdleTimeMS: 60_000,
+    maxPoolSize: resolveMaxPoolSize(),
+    minPoolSize: 0,
+    maxIdleTimeMS: resolveMaxIdleTimeMs(),
+    waitQueueTimeoutMS: 10_000,
     serverSelectionTimeoutMS: 15_000,
-    socketTimeoutMS: 45_000,
-    maxPoolSize: resolveMaxPoolSize()
+    socketTimeoutMS: 45_000
   }
 }
 

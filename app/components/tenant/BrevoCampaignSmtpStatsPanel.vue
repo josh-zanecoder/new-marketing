@@ -134,6 +134,7 @@ async function refreshFromProvider() {
 
 const autoSyncedKeys = ref(new Set<string>())
 
+/** When Mongo has nothing for this campaign/range, pull latest from the provider once. */
 watch([pending, data, error, () => props.campaignId, effectiveDateRange], () => {
   if (!import.meta.client) return
   if (!props.campaignId?.trim()) return
@@ -149,6 +150,7 @@ watch([pending, data, error, () => props.campaignId, effectiveDateRange], () => 
   autoSyncedKeys.value = next
   void refreshFromProvider()
 })
+
 const {
   statsRangeTitleLong,
   totalEmailsSent,

@@ -185,6 +185,26 @@ function addToKeyedSet(
   for (const id of ids) set.add(id)
 }
 
+const NON_DELIVERED_FUNNEL: Array<keyof BrevoSmtpDailyRow> = [
+  'hardBounces',
+  'softBounces',
+  'blocked',
+  'invalid'
+]
+
+/** A message that bounced/blocked must not also count as delivered. */
+function excludeFailedFromDelivered(
+  funnel: Map<keyof BrevoSmtpDailyRow, Set<string>>
+): void {
+  const delivered = funnel.get('delivered')
+  if (!delivered?.size) return
+  for (const key of NON_DELIVERED_FUNNEL) {
+    const set = funnel.get(key)
+    if (!set?.size) continue
+    for (const id of set) delivered.delete(id)
+  }
+}
+
 /**
  * Roll Mongo `$group` rows into SMTP aggregated + daily series.
  * Exported so campaign Statistics can be unit-tested without a live tenant DB.
@@ -286,6 +306,11 @@ export function rollupStoredSmtpStatsFromGroups(params: {
         clickUniqueTotal.add(k)
       }
     }
+  }
+
+  excludeFailedFromDelivered(funnelUniqueTotal)
+  for (const keyMap of funnelUniqueByDay.values()) {
+    excludeFailedFromDelivered(keyMap)
   }
 
   for (const [key, set] of funnelUniqueTotal) {

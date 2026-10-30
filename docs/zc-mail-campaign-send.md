@@ -37,8 +37,10 @@ zcMail `email.status` webhooks upsert into the same tenant `brevo_tracking_event
 **Refresh** pulls zcMail **archive** (`GET /v1/mail/archive`) instead of Brevo’s events API:
 
 - List rows in the selected date range → `requests` / `delivered` / `hardBounces`
-- Archive detail SES events → opens, clicks, bounces (same labels as Brevo)
-- For campaigns with ≤400 stored recipient message ids, Refresh uses parallel `q=<sesMessageId>` (capped). Larger campaigns try campaign/tag filters first (early abort on wrong rows), then a parallel tenant list scan that keeps matching ids — never unbounded per-id lookups.
+- Archive detail SES events → opens, clicks, deliveries, bounces (same labels as Brevo). Detail fan-out is capped (2500) so very large campaigns still rely on webhooks for complete open coverage.
+- Refresh prefers campaign/tag archive list first (few pages). Per-id `q=<sesMessageId>` only gap-fills missing recipients (capped at 400). If the filter is empty/wrong **or** the list is partial with more than 400 gaps, Refresh falls back to a parallel tenant list scan that keeps matching ids — never unbounded per-id lookups.
+- Campaign Statistics / Tracking still auto-Refresh once when Mongo is empty for the selected range (so you get latest archive data, not only webhooks). Manual **Refresh** does the same gap-fill on demand.
+- Archive list status `sent` counts as **requests only** (not delivered). Delivered requires SES Delivery / webhook. Bounced messages are excluded from the delivered rate so “100% delivered + hard bounces” cannot happen.
 - Analytics **All campaigns** Refresh is list-only (no archive detail GETs) with a hard page cap; opens/clicks rely on webhooks. Select a campaign for a deeper Refresh.
 - Campaign **Send test email** (`source: new-marketing-test`) is excluded from campaign Statistics
 

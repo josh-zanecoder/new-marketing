@@ -9,7 +9,8 @@ export const BREVO_SMTP_METRIC_EXPLANATIONS: ReadonlyArray<{ label: string; desc
   },
   {
     label: 'Delivered',
-    description: 'Share of sent emails that were successfully delivered.',
+    description:
+      'Share of sent emails with a confirmed delivery (bounces are not counted as delivered).',
   },
   {
     label: 'Estimated openers',

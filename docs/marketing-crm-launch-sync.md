@@ -45,7 +45,7 @@ Previously, handler errors were logged and **swallowed** → Kafka committed the
 |-----------|--------|
 | **Re-throw** on inbound handler failure | Failed chunk offset is **not** committed |
 | **3× retry** on sync upsert for transient Mongo errors | Covers `EPIPE`, `ECONNRESET`, `MongoNetworkError`, `MongoNotConnectedError`, `MongoTopologyClosedError`, `MongooseServerSelectionError`, `ReplicaSetNoPrimary` |
-| **Registry connect** (`server/lib/mongoose.ts`) | Single-flight connect, 3× retry, `invalidateRegistryConnection` on failure (forces `readyState` back to disconnected after `MongoTopologyClosedError` so the next connect is a new client), `maxPoolSize` default **15**. Test: `server/lib/__tests__/isTransientMongoError.test.ts` |
+| **Registry connect** (`server/lib/mongoose.ts`) | Single-flight connect, 3× retry, `invalidateRegistryConnection` on failure (forces `readyState` back to disconnected after `MongoTopologyClosedError` so the next connect is a new client), `maxPoolSize` default **5** (hard cap **50**), `minPoolSize: 0`, idle socket eviction. Test: `server/lib/__tests__/isTransientMongoError.test.ts` |
 | **Sync upsert** (`inboundContacts.ts`) | One **`bulkWrite`** per chunk (`ordered: false`) — upsert by `externalId` + `source: crm-kafka` |
 | **Consumer restart** after run loop exit | Restarts after `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` (default 30s) |
 
@@ -162,7 +162,8 @@ Code hardening prevents **new** gaps after worker deploy; it does **not** replay
 | `KAFKA_INBOUND_CONSUMER_START_RETRY_MS` | `30000` | Consumer start/restart backoff |
 | `KAFKA_CONSUMER_GROUP_ID` | `new-marketing-inbound-events` | Consumer group |
 | `KAFKA_CONSUMER_FROM_BEGINNING` | `false` | New topics start at latest offset |
-| `MONGODB_MAX_POOL_SIZE` | **`15` in code** | Optional override; per-instance pool cap |
+| `MONGODB_MAX_POOL_SIZE` | **`5` in code** (hard cap **50**) | Per-process pool size; tenants share via `useDb`. Keep low — Cloud Run multiplies this by every web/worker instance against the same Atlas cluster |
+| `MONGODB_MAX_IDLE_TIME_MS` | **`120000`** | Closes idle pool sockets so Atlas connection % drops when traffic is quiet |
 
 ---
 

@@ -20,18 +20,25 @@ export const ZC_MAIL_ARCHIVE_TENANT_WIDE_MAX_PAGES = 8
 
 /**
  * Parallel archive `q` lookups by CampaignRecipient SES/message id when
- * campaign/tag filters miss or return the wrong campaign.
+ * campaign/tag filters miss recipients (gap fill only — not the happy path).
  */
 export const ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_CONCURRENCY = 25
 
 /** Hard cap so a 5k+ recipient campaign never fans out into a 15+ minute Refresh. */
 export const ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX = 400
 
-/** Max archive detail fetches per Tracking Refresh (SES open/click events). */
-export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 500
+/**
+ * Max archive detail fetches per Tracking Refresh (SES open/click/bounce events).
+ * Raised so large client campaigns (~4–5k) can gap-fill engagement on Refresh
+ * when webhooks were incomplete — still capped to bound runtime.
+ */
+export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 2500
 
 /** Parallel detail GETs per Refresh. Archive list scoping is campaign-tagged; keep polite under API limits. */
-export const ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY = 30
+export const ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY = 40
 
 /** Parallel archive list pages when scanning a date range (tenant-wide / backfill). */
-export const ZC_MAIL_ARCHIVE_LIST_PAGE_CONCURRENCY = 4
+export const ZC_MAIL_ARCHIVE_LIST_PAGE_CONCURRENCY = 8
+
+/** Retries for transient archive HTTP failures (429 / 5xx). */
+export const ZC_MAIL_ARCHIVE_HTTP_MAX_ATTEMPTS = 3

@@ -32,12 +32,17 @@ function baseItem(overrides: Partial<ZcMailArchiveListItem> = {}): ZcMailArchive
 }
 
 describe('mapZcMailArchiveToTrackingEvents', () => {
-  it('maps sent archive rows to requests + delivered using SES message id', () => {
+  it('maps sent archive rows to requests only (sent ≠ inbox delivery)', () => {
     const events = mapZcMailArchiveItemToTrackingEvents(baseItem())
     expect(canonicalZcMailArchiveMessageId(baseItem())).toBe('ses-1')
-    expect(events.map((e) => e.event)).toEqual(['requests', 'delivered'])
+    expect(events.map((e) => e.event)).toEqual(['requests'])
     expect(events[0]?.messageId).toBe('ses-1')
     expect(events[0]?.tag).toContain(`campaign:${campaignId}`)
+  })
+
+  it('maps delivered archive status to requests + delivered', () => {
+    const events = mapZcMailArchiveItemToTrackingEvents(baseItem({ status: 'delivered' }))
+    expect(events.map((e) => e.event)).toEqual(['requests', 'delivered'])
   })
 
   it('maps failed archive rows to requests + hardBounces', () => {
@@ -161,5 +166,7 @@ describe('mapZcMailArchiveToTrackingEvents', () => {
   it('maps SES Bounce to hardBounces', () => {
     expect(mapZcMailArchiveEventName('Bounce')).toBe('hardBounces')
     expect(mapZcMailArchiveEventName('Delivery')).toBe('delivered')
+    expect(mapZcMailArchiveEventName('sent')).toBe('requests')
   })
 })
+

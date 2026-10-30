@@ -74,6 +74,49 @@ describe('zcMailArchiveClient', () => {
     expect(url).toContain('tag=campaign%3A6a6cc9c694cfdfdb1fb29cab')
   })
 
+  it('retries archive list on 429 then succeeds', async () => {
+    vi.useFakeTimers()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => JSON.stringify({ error: 'rate limited' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            total: 1,
+            items: [
+              {
+                id: 'arc-1',
+                recipient: 'a@example.com',
+                status: 'sent',
+                createdAt: '2026-08-31T00:00:00.000Z'
+              }
+            ]
+          })
+      })
+    try {
+      const pending = listZcMailArchive(
+        {
+          baseUrl: 'https://apizcmail.zanecoder.com/',
+          apiKey: 'zcm_test',
+          tenantName: 'crm-test2'
+        },
+        fetchImpl as unknown as typeof fetch
+      )
+      await vi.runAllTimersAsync()
+      const result = await pending
+      expect(result.items).toHaveLength(1)
+      expect(fetchImpl).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('parses campaign tags from string arrays', () => {
     const item = normalizeZcMailArchiveListItem({
       id: 'arc-1',

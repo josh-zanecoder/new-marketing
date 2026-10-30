@@ -3,6 +3,7 @@
  */
 
 import {
+  ZC_MAIL_ARCHIVE_HTTP_MAX_ATTEMPTS,
   ZC_MAIL_ARCHIVE_PATH,
   ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT
 } from '@server/constants/zcMailWebhook'
@@ -12,6 +13,45 @@ import type {
   ZcMailArchiveListResult
 } from '@server/utils/zcmail/types/zcMailArchive'
 import { ZcMailSendError } from '@server/utils/zcmail/sendZcMailEmail'
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function shouldRetryArchiveStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504
+}
+
+async function fetchArchiveWithRetry(
+  url: string,
+  apiKey: string,
+  fetchImpl: typeof fetch
+): Promise<{ response: Response; body: unknown }> {
+  const maxAttempts = Math.max(1, ZC_MAIL_ARCHIVE_HTTP_MAX_ATTEMPTS)
+  let lastStatus = 0
+  let lastBody: unknown = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        'X-API-Key': apiKey
+      }
+    })
+    const body = await parseJsonResponse(response)
+    if (response.ok) return { response, body }
+    lastStatus = response.status
+    lastBody = body
+    if (!shouldRetryArchiveStatus(response.status) || attempt >= maxAttempts) {
+      return { response, body }
+    }
+    await sleep(Math.min(2000, 250 * 2 ** (attempt - 1)))
+  }
+  return {
+    response: { ok: false, status: lastStatus } as Response,
+    body: lastBody
+  }
+}
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '')
@@ -107,20 +147,11 @@ export function unwrapZcMailArchiveDetailBody(body: unknown): ZcMailArchiveDetai
           smtpResponse: asOptionalString(entry.smtpResponse) || undefined
         }))
     : []
-  const previewRaw =
-    record.preview && typeof record.preview === 'object'
-      ? (record.preview as Record<string, unknown>)
-      : null
+  // Tracking Refresh only needs SES events — skip preview HTML to cut memory.
   return {
     ...list,
     downloadUrl: asOptionalString(record.downloadUrl) || null,
     storageError: asOptionalString(record.storageError) || undefined,
-    preview: previewRaw
-      ? {
-          html: typeof previewRaw.html === 'string' ? previewRaw.html : null,
-          text: typeof previewRaw.text === 'string' ? previewRaw.text : null
-        }
-      : undefined,
     events
   }
 }
@@ -175,14 +206,11 @@ export async function listZcMailArchive(
     qs.set('tag', `campaign:${params.campaign.trim()}`)
   }
 
-  const response = await fetchImpl(`${baseUrl}${ZC_MAIL_ARCHIVE_PATH}?${qs.toString()}`, {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-      'X-API-Key': apiKey
-    }
-  })
-  const body = await parseJsonResponse(response)
+  const { response, body } = await fetchArchiveWithRetry(
+    `${baseUrl}${ZC_MAIL_ARCHIVE_PATH}?${qs.toString()}`,
+    apiKey,
+    fetchImpl
+  )
   if (!response.ok) {
     throw new ZcMailSendError(
       `zcMail archive list failed (${response.status})`,
@@ -211,17 +239,11 @@ export async function getZcMailArchiveById(
       null
     )
   }
-  const response = await fetchImpl(
+  const { response, body } = await fetchArchiveWithRetry(
     `${baseUrl}${ZC_MAIL_ARCHIVE_PATH}/${encodeURIComponent(archiveId)}`,
-    {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        'X-API-Key': apiKey
-      }
-    }
+    apiKey,
+    fetchImpl
   )
-  const body = await parseJsonResponse(response)
   if (!response.ok) {
     throw new ZcMailSendError(
       `zcMail archive detail failed (${response.status})`,

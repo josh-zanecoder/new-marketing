@@ -224,6 +224,25 @@ function uniqueStrippedMessageIds(messageIds: Set<string>): string[] {
   return [...unique]
 }
 
+/** Stripped recipient message ids that appear on archive list rows. */
+function strippedMessageIdsFoundInArchives(
+  items: ZcMailArchiveListItem[],
+  campaignMessageIds: Set<string>
+): Set<string> {
+  const found = new Set<string>()
+  if (!campaignMessageIds.size || items.length === 0) return found
+  for (const item of items) {
+    for (const id of zcMailArchiveLookupIds(item)) {
+      const stripped = id.replace(/^<|>$/g, '').trim()
+      if (!stripped) continue
+      if (campaignMessageIds.has(id) || campaignMessageIds.has(stripped)) {
+        found.add(stripped)
+      }
+    }
+  }
+  return found
+}
+
 /**
  * Parallel archive `q=<sesMessageId>` lookups. Capped — never unbounded fan-out.
  */
@@ -489,12 +508,66 @@ async function runZcMailArchiveSync(params: {
 
       const uniqueRecipientIds = uniqueStrippedMessageIds(campaignMessageIds)
 
-      // Small/medium campaigns: parallel `q` by SES id (capped). Faster than probing a
-      // flaky campaign/tag filter that often pages thousands of unrelated rows.
-      if (
+      // Prefer campaign/tag list (few pages). Only fall back to per-id `q` for
+      // missing recipients — that path used to run for every ≤400-recipient
+      // campaign and made Refresh feel multi-minute even when tags worked.
+      const archives = await loadCampaignArchivesFast({
+        client,
+        baseUrl: params.config.zcMailBaseUrl,
+        apiKey: params.config.apiKey,
+        tenantName: params.config.zcMailTenant,
+        fromYmd: params.fromYmd,
+        toYmd: params.toYmd,
+        campaignId,
+        matchMessageIds: campaignMessageIds.size > 0 ? campaignMessageIds : undefined
+      })
+      usedTenantListFallback = archives.usedTenantListFallback
+
+      const matchedItems =
+        campaignMessageIds.size > 0
+          ? archives.items.filter((item) =>
+              archiveItemMatchesMessageIds(item, campaignMessageIds)
+            )
+          : archives.items
+      const foundStripped = strippedMessageIdsFoundInArchives(matchedItems, campaignMessageIds)
+      const missingIds = uniqueRecipientIds.filter((id) => !foundStripped.has(id))
+
+      if (matchedItems.length > 0 && missingIds.length === 0) {
+        listed = matchedItems
+      } else if (
+        matchedItems.length > 0 &&
+        missingIds.length > 0 &&
+        missingIds.length <= ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX
+      ) {
+        console.warn('[zcMail tracking] campaign archive list incomplete; q-backfill missing ids', {
+          campaignId,
+          matched: matchedItems.length,
+          missing: missingIds.length
+        })
+        const backfill = await loadArchivesByMessageIdQueries({
+          client,
+          baseUrl: params.config.zcMailBaseUrl,
+          apiKey: params.config.apiKey,
+          tenantName: params.config.zcMailTenant,
+          fromYmd: params.fromYmd,
+          toYmd: params.toYmd,
+          messageIds: new Set(missingIds)
+        })
+        listed = uniqueArchiveItems([...matchedItems, ...backfill])
+        usedMessageIdBackfill = true
+      } else if (
+        matchedItems.length === 0 &&
         uniqueRecipientIds.length > 0 &&
         uniqueRecipientIds.length <= ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX
       ) {
+        console.warn(
+          '[zcMail tracking] campaign archive filter empty/wrong; using message-id q',
+          {
+            campaignId,
+            listed: archives.items.length,
+            campaignRecipientMessageIds: uniqueRecipientIds.length
+          }
+        )
         listed = await loadArchivesByMessageIdQueries({
           client,
           baseUrl: params.config.zcMailBaseUrl,
@@ -506,52 +579,40 @@ async function runZcMailArchiveSync(params: {
         })
         usedMessageIdBackfill = true
         usedTenantListFallback = true
-      } else {
-        const archives = await loadCampaignArchivesFast({
+      } else if (
+        uniqueRecipientIds.length > 0 &&
+        (matchedItems.length === 0 || missingIds.length > ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX)
+      ) {
+        console.warn(
+          '[zcMail tracking] campaign archive list incomplete for large campaign; scanning tenant list',
+          {
+            campaignId,
+            listed: archives.items.length,
+            matched: matchedItems.length,
+            missing: missingIds.length,
+            campaignRecipientMessageIds: uniqueRecipientIds.length
+          }
+        )
+        // Large campaigns: page the tenant list in parallel and keep matches —
+        // never unbounded per-id `q` (that is what caused 15+ minute Refreshes).
+        // Also used when the campaign filter returned a partial set with >400 gaps
+        // (old path kept the incomplete list and under-counted opens/bounces).
+        const scanned = await loadArchivesInRange({
           client,
           baseUrl: params.config.zcMailBaseUrl,
           apiKey: params.config.apiKey,
           tenantName: params.config.zcMailTenant,
           fromYmd: params.fromYmd,
           toYmd: params.toYmd,
-          campaignId,
-          matchMessageIds: campaignMessageIds.size > 0 ? campaignMessageIds : undefined
+          matchMessageIds: campaignMessageIds,
+          keepMatchedOnly: true,
+          maxPages: ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
         })
-        usedTenantListFallback = archives.usedTenantListFallback
-
-        const matchedItems = archives.items.filter((item) =>
-          archiveItemMatchesMessageIds(item, campaignMessageIds)
-        )
-
-        if (campaignMessageIds.size > 0 && matchedItems.length === 0) {
-          console.warn(
-            '[zcMail tracking] campaign archive list missed recipient message ids; scanning tenant list',
-            {
-              campaignId,
-              listed: archives.items.length,
-              campaignRecipientMessageIds: campaignMessageIds.size
-            }
-          )
-          // Large campaigns: page the tenant list in parallel and keep matches —
-          // never unbounded per-id `q` (that is what caused 15+ minute Refreshes).
-          listed = await loadArchivesInRange({
-            client,
-            baseUrl: params.config.zcMailBaseUrl,
-            apiKey: params.config.apiKey,
-            tenantName: params.config.zcMailTenant,
-            fromYmd: params.fromYmd,
-            toYmd: params.toYmd,
-            matchMessageIds: campaignMessageIds,
-            keepMatchedOnly: true,
-            maxPages: ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
-          })
-          usedMessageIdBackfill = true
-          usedTenantListFallback = true
-        } else if (campaignMessageIds.size > 0 && matchedItems.length < archives.items.length) {
-          listed = matchedItems
-        } else {
-          listed = archives.items
-        }
+        listed = uniqueArchiveItems([...matchedItems, ...scanned])
+        usedMessageIdBackfill = true
+        usedTenantListFallback = true
+      } else {
+        listed = matchedItems
       }
     } else {
       // Analytics “All campaigns”: list-only snapshot, hard page cap. Opens/clicks
@@ -730,6 +791,54 @@ async function runZcMailArchiveSync(params: {
     const result = await BrevoTrackingEvent.bulkWrite(ops, { ordered: false })
     upserted += result.upsertedCount ?? 0
     modified += result.modifiedCount ?? 0
+  }
+
+  // Older syncs mapped archive `sent` → delivered. Clear those invented rows when
+  // this Refresh did not confirm SES Delivery for the message.
+  const confirmedDeliveredIds = new Set<string>()
+  for (const ev of usable) {
+    if (String(ev.event || '').trim().toLowerCase() !== 'delivered') continue
+    const id = String(ev.messageId || '').trim()
+    if (!id) continue
+    confirmedDeliveredIds.add(id)
+    const stripped = id.replace(/^<|>$/g, '')
+    if (stripped) confirmedDeliveredIds.add(stripped)
+  }
+  const clearDeliveredIds = new Set<string>()
+  for (const item of scoped) {
+    for (const id of zcMailArchiveLookupIds(item)) {
+      const stripped = id.replace(/^<|>$/g, '').trim()
+      if (confirmedDeliveredIds.has(id) || (stripped && confirmedDeliveredIds.has(stripped))) {
+        continue
+      }
+      if (id) clearDeliveredIds.add(id)
+      if (stripped) clearDeliveredIds.add(stripped)
+    }
+  }
+  if (clearDeliveredIds.size > 0) {
+    const variants = [...clearDeliveredIds].flatMap((id) => {
+      const stripped = id.replace(/^<|>$/g, '')
+      return stripped ? [id, stripped, `<${stripped}>`] : [id]
+    })
+    const clearFilter: Record<string, unknown> = {
+      messageId: { $in: [...new Set(variants)] },
+      event: { $in: ['delivered', 'delivery'] }
+    }
+    if (campaignId) clearFilter.campaignId = campaignId
+    try {
+      const cleared = await BrevoTrackingEvent.deleteMany(clearFilter)
+      if ((cleared?.deletedCount || 0) > 0) {
+        console.info('[zcMail tracking] cleared invented delivered events', {
+          campaignId,
+          deleted: cleared.deletedCount
+        })
+      }
+    } catch (err) {
+      console.warn('[zcMail tracking] clear invented delivered failed', {
+        campaignId,
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
   }
 
   if (campaignId) {

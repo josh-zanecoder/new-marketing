@@ -67,10 +67,40 @@ describe('rollupStoredSmtpStatsFromGroups', () => {
       ]
     })
     expect(aggregated.requests).toBe(1)
+    // Same message cannot be both delivered and hard-bounced.
+    expect(aggregated.delivered).toBe(0)
+    expect(aggregated.hardBounces).toBe(1)
+    expect(aggregated.rates.deliveredPct).toBe(0)
+    expect(aggregated.rates.hardBouncesPct).toBe(100)
+  })
+
+  it('keeps delivered when the message did not bounce', () => {
+    const { aggregated } = rollupStoredSmtpStatsFromGroups({
+      startDate: '2026-08-25',
+      endDate: '2026-08-31',
+      rows: [
+        {
+          _id: { day: '2026-08-31', event: 'requests' },
+          count: 2,
+          uniqueMessageIds: ['msg-ok', 'msg-bounce']
+        },
+        {
+          _id: { day: '2026-08-31', event: 'delivered' },
+          count: 2,
+          uniqueMessageIds: ['msg-ok', 'msg-bounce']
+        },
+        {
+          _id: { day: '2026-08-31', event: 'hardBounces' },
+          count: 1,
+          uniqueMessageIds: ['msg-bounce']
+        }
+      ]
+    })
+    expect(aggregated.requests).toBe(2)
     expect(aggregated.delivered).toBe(1)
     expect(aggregated.hardBounces).toBe(1)
-    expect(aggregated.rates.deliveredPct).toBe(100)
-    expect(aggregated.rates.hardBouncesPct).toBe(100)
+    expect(aggregated.rates.deliveredPct).toBe(50)
+    expect(aggregated.rates.hardBouncesPct).toBe(50)
   })
 
   it('infers emails sent from delivered/bounce rows when no requests event exists', () => {

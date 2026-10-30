@@ -49,7 +49,8 @@ vi.mock('@server/models/tenant/tenantClientModels', () => ({
     BrevoTrackingEvent: {
       find: trackingFind,
       bulkWrite,
-      updateMany
+      updateMany,
+      deleteMany: vi.fn(async () => ({ deletedCount: 0 }))
     },
     CampaignRecipient: {
       find: recipientFind
@@ -71,6 +72,31 @@ vi.mock('@server/utils/zcmail/zcMailArchiveClient', () => ({
   getZcMailArchiveById: vi.fn()
 }))
 
+const zcMailConfig = {
+  provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
+  apiKey: 'key',
+  zcMailBaseUrl: 'https://example.test',
+  zcMailTenant: 't',
+  zcMailArchive: true
+} as const
+
+function archiveItem(overrides: Record<string, unknown>) {
+  return {
+    id: 'arc-1',
+    messageId: 'msg-1',
+    sesMessageId: 'msg-1',
+    to: ['a@example.com'],
+    from: 'from@example.com',
+    subject: 'Hi',
+    tenantName: 't',
+    recipient: 'a@example.com',
+    status: 'delivered',
+    createdAt: '2026-09-01T12:00:00.000Z',
+    tags: { campaign: 'camp-1', db: 'tenant_db', source: 'new-marketing-campaign' },
+    ...overrides
+  }
+}
+
 describe('syncTenantZcMailTrackingEvents performance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -78,45 +104,22 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
     dedupeBrevoTrackingEvents.mockResolvedValue({ removed: 0 })
   })
 
-  it('lists archives by message-id q for small campaigns — not once per page of tenant mail', async () => {
+  it('uses campaign/tag archive list when it covers all recipients — no per-id q fan-out', async () => {
     const listCalls: Array<{ q?: string; campaign?: string }> = []
     const list = vi.fn(async (params: { q?: string; campaign?: string }) => {
       listCalls.push({ q: params.q, campaign: params.campaign })
-      const q = params.q || ''
-      if (q === 'msg-1' || q === 'msg-2' || q === 'msg-3') {
-        return {
-          total: 1,
-          items: [
-            {
-              id: `arc-${q}`,
-              messageId: q,
-              sesMessageId: q,
-              to: ['a@example.com'],
-              from: 'from@example.com',
-              subject: 'Hi',
-              tenantName: 't',
-              recipient: 'a@example.com',
-              status: 'delivered',
-              createdAt: '2026-09-01T12:00:00.000Z',
-              tags: { campaign: 'camp-1', db: 'tenant_db', source: 'new-marketing-campaign' }
-            }
-          ]
-        }
+      if (!params.campaign && !params.q) return { total: 0, items: [] }
+      return {
+        total: 3,
+        items: [
+          archiveItem({ id: 'arc-1', messageId: 'msg-1', sesMessageId: 'msg-1' }),
+          archiveItem({ id: 'arc-2', messageId: 'msg-2', sesMessageId: 'msg-2' }),
+          archiveItem({ id: 'arc-3', messageId: 'msg-3', sesMessageId: 'msg-3' })
+        ]
       }
-      return { total: 0, items: [] }
     })
     const getById = vi.fn(async (item: { archiveId: string }) => ({
-      id: item.archiveId,
-      messageId: 'msg-1',
-      sesMessageId: 'msg-1',
-      to: ['a@example.com'],
-      from: 'from@example.com',
-      subject: 'Hi',
-      tenantName: 't',
-      recipient: 'a@example.com',
-      status: 'delivered',
-      createdAt: '2026-09-01T12:00:00.000Z',
-      tags: { campaign: 'camp-1', db: 'tenant_db', source: 'new-marketing-campaign' },
+      ...archiveItem({ id: item.archiveId }),
       events: []
     }))
 
@@ -125,64 +128,44 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       campaignId: 'camp-1',
       fromYmd: '2026-09-01',
       toYmd: '2026-09-01',
-      config: {
-        provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
-        apiKey: 'key',
-        zcMailBaseUrl: 'https://example.test',
-        zcMailTenant: 't',
-        zcMailArchive: true
-      },
+      config: { ...zcMailConfig },
       archiveClient: { list, getById }
     })
 
-    expect(result.debug?.usedMessageIdBackfill).toBe(true)
-    expect(listCalls.every((c) => c.q === 'msg-1' || c.q === 'msg-2' || c.q === 'msg-3')).toBe(
+    expect(result.debug?.usedMessageIdBackfill).toBe(false)
+    expect(listCalls.some((c) => c.campaign === 'camp-1')).toBe(true)
+    expect(listCalls.every((c) => c.q !== 'msg-1' && c.q !== 'msg-2' && c.q !== 'msg-3')).toBe(
       true
     )
-    expect(listCalls.some((c) => c.campaign === 'camp-1')).toBe(false)
     expect(result.fetched).toBeGreaterThan(0)
   })
 
-  it('falls back to tenant archive list when campaign filter returns empty', async () => {
+  it('falls back to message-id q when campaign filter returns empty', async () => {
     const listCalls: Array<{ q?: string; campaign?: string }> = []
     const list = vi.fn(async (params: { q?: string; campaign?: string }) => {
       listCalls.push({ q: params.q, campaign: params.campaign })
       if (params.campaign) {
         return { total: 0, items: [] }
       }
-      // message-id q lookup (no campaign param)
       if (params.q === 'msg-1' || params.q === 'msg-2' || params.q === 'msg-3') {
         return {
           total: 1,
           items: [
-            {
+            archiveItem({
               id: `arc-${params.q}`,
               messageId: params.q,
               sesMessageId: params.q,
-              to: ['a@example.com'],
-              from: 'from@example.com',
               subject: 'A quick note from Santiago',
-              tenantName: 't',
-              recipient: 'a@example.com',
               status: 'sent',
-              createdAt: '2026-09-01T12:00:00.000Z'
-            }
+              tags: undefined
+            })
           ]
         }
       }
       return { total: 0, items: [] }
     })
     const getById = vi.fn(async (item: { archiveId: string }) => ({
-      id: item.archiveId,
-      messageId: 'msg-1',
-      sesMessageId: 'msg-1',
-      to: ['a@example.com'],
-      from: 'from@example.com',
-      subject: 'A quick note from Santiago',
-      tenantName: 't',
-      recipient: 'a@example.com',
-      status: 'sent',
-      createdAt: '2026-09-01T12:00:00.000Z',
+      ...archiveItem({ id: item.archiveId, status: 'sent', subject: 'A quick note from Santiago' }),
       events: []
     }))
 
@@ -191,18 +174,54 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       campaignId: 'camp-1',
       fromYmd: '2026-09-01',
       toYmd: '2026-09-01',
-      config: {
-        provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
-        apiKey: 'key',
-        zcMailBaseUrl: 'https://example.test',
-        zcMailTenant: 't',
-        zcMailArchive: true
-      },
+      config: { ...zcMailConfig },
       archiveClient: { list, getById }
     })
 
+    expect(listCalls.some((c) => c.campaign === 'camp-1')).toBe(true)
     expect(listCalls.some((c) => c.q === 'msg-1')).toBe(true)
     expect(result.debug?.usedMessageIdBackfill).toBe(true)
+    expect(result.fetched).toBeGreaterThan(0)
+  })
+
+  it('q-backfills only missing recipients when campaign list is partial', async () => {
+    const listCalls: Array<{ q?: string; campaign?: string }> = []
+    const list = vi.fn(async (params: { q?: string; campaign?: string }) => {
+      listCalls.push({ q: params.q, campaign: params.campaign })
+      if (params.q === 'msg-3') {
+        return {
+          total: 1,
+          items: [archiveItem({ id: 'arc-3', messageId: 'msg-3', sesMessageId: 'msg-3' })]
+        }
+      }
+      if (params.campaign || params.q) {
+        return {
+          total: 2,
+          items: [
+            archiveItem({ id: 'arc-1', messageId: 'msg-1', sesMessageId: 'msg-1' }),
+            archiveItem({ id: 'arc-2', messageId: 'msg-2', sesMessageId: 'msg-2' })
+          ]
+        }
+      }
+      return { total: 0, items: [] }
+    })
+    const getById = vi.fn(async (item: { archiveId: string }) => ({
+      ...archiveItem({ id: item.archiveId }),
+      events: []
+    }))
+
+    const result = await syncTenantZcMailTrackingEvents({
+      dbName: 'tenant_db',
+      campaignId: 'camp-1',
+      fromYmd: '2026-09-01',
+      toYmd: '2026-09-01',
+      config: { ...zcMailConfig },
+      archiveClient: { list, getById }
+    })
+
+    expect(result.debug?.usedMessageIdBackfill).toBe(true)
+    expect(listCalls.filter((c) => c.q === 'msg-1' || c.q === 'msg-2')).toHaveLength(0)
+    expect(listCalls.some((c) => c.q === 'msg-3')).toBe(true)
     expect(result.fetched).toBeGreaterThan(0)
   })
 
@@ -278,13 +297,7 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
       campaignId: 'camp-1',
       fromYmd: '2026-09-03',
       toYmd: '2026-09-09',
-      config: {
-        provider: TENANT_EMAIL_PROVIDER_ZC_MAIL,
-        apiKey: 'key',
-        zcMailBaseUrl: 'https://example.test',
-        zcMailTenant: 't',
-        zcMailArchive: true
-      },
+      config: { ...zcMailConfig },
       archiveClient: { list, getById }
     })
 
