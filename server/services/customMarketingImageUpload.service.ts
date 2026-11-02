@@ -7,6 +7,7 @@ import {
   extensionForCustomMarketingImageMime,
   parseCustomMarketingImageDataUrl,
   replaceCustomMarketingImageSrc,
+  sanitizeCustomMarketingGcsPathSegment,
   type ParsedCustomMarketingImageDataUrl
 } from '~~/shared/customMarketingHostedImages'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
@@ -208,6 +209,125 @@ async function uploadParsedCustomMarketingImageToGcs(input: {
     buffer: Buffer.from(input.parsed.base64, 'base64'),
     contentType: input.parsed.mime
   })
+}
+
+export type TenantHostedImageListItem = {
+  id: string
+  url: string
+  objectPath: string
+  fileName: string
+  contentType: string
+  size: number
+  createdAt: string
+}
+
+const IMAGE_CONTENT_TYPE_RE = /^image\/(png|jpe?g|gif|webp)$/i
+
+/**
+ * List hosted image objects under `custom-marketing/{tenant}/…`
+ * (library, email-templates, custom-marketing list folders, etc.).
+ */
+export async function listCustomMarketingTenantImages(
+  tenantName: string,
+  opts?: { maxResults?: number }
+): Promise<TenantHostedImageListItem[]> {
+  const tenant = sanitizeCustomMarketingGcsPathSegment(tenantName, 'tenant')
+  const prefix = `custom-marketing/${tenant}/`
+  const maxResults = Math.min(500, Math.max(1, opts?.maxResults ?? 300))
+  const bucket = getGcsBucket()
+
+  let files: Awaited<ReturnType<Bucket['getFiles']>>[0]
+  try {
+    ;[files] = await bucket.getFiles({
+      prefix,
+      maxResults,
+      autoPaginate: false
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'GCS list failed'
+    console.error('Custom Marketing GCS list failed', message)
+    throw createError({
+      statusCode: 502,
+      message: 'Could not list hosted images. Check GCS_BUCKET and credentials.'
+    })
+  }
+
+  const items: TenantHostedImageListItem[] = []
+  for (const file of files) {
+    const objectPath = String(file.name ?? '').trim()
+    if (!objectPath || objectPath.endsWith('/')) continue
+    const contentType = String(file.metadata?.contentType ?? '').trim()
+    if (contentType && !IMAGE_CONTENT_TYPE_RE.test(contentType)) continue
+    // Skip unknown types that are clearly not images by extension.
+    if (!contentType) {
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(objectPath)) continue
+    }
+    const fileName = objectPath.split('/').pop() || objectPath
+    const sizeRaw = file.metadata?.size
+    const size =
+      typeof sizeRaw === 'string'
+        ? Number(sizeRaw) || 0
+        : typeof sizeRaw === 'number'
+          ? sizeRaw
+          : 0
+    const createdRaw =
+      (typeof file.metadata?.timeCreated === 'string' && file.metadata.timeCreated) ||
+      (typeof file.metadata?.updated === 'string' && file.metadata.updated) ||
+      ''
+    const createdAt = createdRaw || new Date(0).toISOString()
+    items.push({
+      id: objectPath,
+      url: buildPublicGcsObjectUrl(bucket.name, objectPath),
+      objectPath,
+      fileName,
+      contentType: contentType || 'image/jpeg',
+      size,
+      createdAt
+    })
+  }
+
+  items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+  return items
+}
+
+/**
+ * Delete hosted image objects for a tenant. Paths must stay under
+ * `custom-marketing/{tenant}/` (no path escape).
+ */
+export async function deleteCustomMarketingTenantImages(
+  tenantName: string,
+  objectPaths: string[]
+): Promise<{ deleted: string[]; skipped: string[] }> {
+  const tenant = sanitizeCustomMarketingGcsPathSegment(tenantName, 'tenant')
+  const prefix = `custom-marketing/${tenant}/`
+  const bucket = getGcsBucket()
+  const deleted: string[] = []
+  const skipped: string[] = []
+
+  const unique = [
+    ...new Set(
+      objectPaths
+        .map((p) => String(p ?? '').trim().replace(/^\/+/, ''))
+        .filter(Boolean)
+    )
+  ].slice(0, 100)
+
+  for (const objectPath of unique) {
+    if (!objectPath.startsWith(prefix) || objectPath.includes('..')) {
+      skipped.push(objectPath)
+      continue
+    }
+    try {
+      await bucket.file(objectPath).delete({ ignoreNotFound: true })
+      deleted.push(objectPath)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'GCS delete failed'
+      console.error('Custom Marketing GCS delete failed', objectPath, message)
+      skipped.push(objectPath)
+    }
+  }
+
+  return { deleted, skipped }
 }
 
 /**
