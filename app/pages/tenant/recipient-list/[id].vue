@@ -176,18 +176,36 @@
               <span class="min-w-[11.5rem]">{{ recipientsStatusLabel }}</span>
             </p>
           </div>
-          <div class="relative w-full sm:w-72">
-            <label for="rl-detail-member-search" class="sr-only">Search recipients by name or email</label>
-            <input
-              id="rl-detail-member-search"
-              v-model="memberSearchInput"
-              type="search"
-              autocomplete="off"
-              placeholder="Search by name or email…"
-              class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
-              :aria-busy="pageLoading"
-              @input="onMemberSearchInput"
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div class="relative w-full sm:w-72">
+              <label for="rl-detail-member-search" class="sr-only">Search recipients by name or email</label>
+              <input
+                id="rl-detail-member-search"
+                v-model="memberSearchInput"
+                type="search"
+                autocomplete="off"
+                placeholder="Search by name or email…"
+                class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+                :aria-busy="pageLoading"
+                @input="onMemberSearchInput"
+              >
+            </div>
+            <div
+              v-if="selectedMemberCount > 0"
+              class="flex flex-wrap items-center justify-end gap-2"
             >
+              <p class="text-sm font-medium tabular-nums text-zinc-600">
+                {{ selectedMemberCount }} selected
+              </p>
+              <button
+                type="button"
+                class="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                :disabled="bulkRemovePending || pageLoading"
+                @click="openBulkRemove"
+              >
+                Remove Selected
+              </button>
+            </div>
           </div>
         </div>
         <div
@@ -267,9 +285,37 @@
             v-else-if="payload.members.total"
             :class="showLoMemberSearch ? 'min-h-[20rem]' : undefined"
           >
+          <div
+            v-if="showLoMemberSearch"
+            class="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3 lg:hidden"
+          >
+            <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/30"
+                :checked="allPageMembersSelected"
+                :indeterminate.prop="somePageMembersSelected && !allPageMembersSelected"
+                @change="toggleSelectAllPage(($event.target as HTMLInputElement).checked)"
+              >
+              Select all on this page
+            </label>
+          </div>
           <ul class="divide-y divide-zinc-100 lg:hidden">
             <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-5">
               <div class="flex items-start justify-between gap-4">
+                <div
+                  v-if="showLoMemberSearch"
+                  class="flex shrink-0 items-start pt-0.5"
+                >
+                  <input
+                    :id="`rl-member-select-mobile-${m.id}`"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/30"
+                    :checked="isMemberSelected(m.id)"
+                    :aria-label="`Select ${m.name || m.email || 'recipient'}`"
+                    @change="setMemberSelected(m.id, ($event.target as HTMLInputElement).checked)"
+                  >
+                </div>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-[0.9375rem] font-semibold text-zinc-900">
                     {{ m.name }}
@@ -306,7 +352,7 @@
                   <button
                     type="button"
                     class="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                    @click="openRemoveMember(m)"
+                    @click="onRowRemoveClick(m)"
                   >
                     Remove
                   </button>
@@ -319,6 +365,21 @@
             <table class="min-w-full text-left text-sm">
               <thead>
                 <tr class="border-b border-zinc-100 bg-zinc-50/80">
+                  <th
+                    v-if="showLoMemberSearch"
+                    scope="col"
+                    class="w-10 whitespace-nowrap px-4 py-3.5"
+                  >
+                    <input
+                      id="rl-member-select-all"
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/30"
+                      :checked="allPageMembersSelected"
+                      :indeterminate.prop="somePageMembersSelected && !allPageMembersSelected"
+                      aria-label="Select all recipients on this page"
+                      @change="toggleSelectAllPage(($event.target as HTMLInputElement).checked)"
+                    >
+                  </th>
                   <th scope="col" class="whitespace-nowrap px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">
                     Name
                   </th>
@@ -342,6 +403,19 @@
                   :key="m.id"
                   class="bg-white transition-colors hover:bg-zinc-50/70"
                 >
+                  <td
+                    v-if="showLoMemberSearch"
+                    class="w-10 whitespace-nowrap px-4 py-5"
+                  >
+                    <input
+                      :id="`rl-member-select-${m.id}`"
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500/30"
+                      :checked="isMemberSelected(m.id)"
+                      :aria-label="`Select ${m.name || m.email || 'recipient'}`"
+                      @change="setMemberSelected(m.id, ($event.target as HTMLInputElement).checked)"
+                    >
+                  </td>
                   <td class="whitespace-nowrap px-6 py-5 font-semibold text-zinc-900">
                     {{ m.name }}
                   </td>
@@ -373,7 +447,7 @@
                       <button
                         type="button"
                         class="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                        @click="openRemoveMember(m)"
+                        @click="onRowRemoveClick(m)"
                       >
                         Remove
                       </button>
@@ -525,6 +599,16 @@
       variant="danger"
       @confirm="confirmRemoveMember"
       @cancel="cancelRemoveMember"
+    />
+    <ClientConfirmationModal
+      :open="bulkRemoveOpen"
+      title="Remove recipients"
+      :message="bulkRemoveMessage"
+      confirm-text="Remove"
+      variant="danger"
+      :confirm-loading="bulkRemovePending"
+      @confirm="confirmBulkRemove"
+      @cancel="cancelBulkRemove"
     />
     <ClientConfirmationModal
       :open="restoreMemberOpen"
@@ -819,6 +903,26 @@ const removeMemberOpen = ref(false)
 const removeMemberPending = ref(false)
 const memberPendingRemove = ref<TenantRecipientListMemberRow | null>(null)
 
+/** LO-flag bulk remove selection (contact ids on the current page / retained across page until cleared). */
+const selectedMemberIds = ref<string[]>([])
+const bulkRemoveOpen = ref(false)
+const bulkRemovePending = ref(false)
+const selectedMemberCount = computed(() => selectedMemberIds.value.length)
+const pageMemberIds = computed(
+  () => (payload.value?.members?.items ?? []).map((m) => m.id).filter(Boolean)
+)
+const allPageMembersSelected = computed(() => {
+  const ids = pageMemberIds.value
+  return ids.length > 0 && ids.every((id) => selectedMemberIds.value.includes(id))
+})
+const somePageMembersSelected = computed(() =>
+  pageMemberIds.value.some((id) => selectedMemberIds.value.includes(id))
+)
+/** When 2+ are checked, row Remove opens the same bulk confirm (label stays "Remove"). */
+const bulkRowRemoveActive = computed(
+  () => showLoMemberSearch.value && selectedMemberCount.value >= 2
+)
+
 const restoreMemberOpen = ref(false)
 const restoreMemberPending = ref(false)
 const memberPendingRestore = ref<TenantRecipientListMemberRow | null>(null)
@@ -843,6 +947,82 @@ const removeMemberMessage = computed(() => {
   const label = m?.name?.trim() || m?.email?.trim() || 'this contact'
   return `Remove ${label} from this list? This is a soft remove — they stay in Contacts, campaign history is preserved, and you can restore them later. They will not appear in this active list until restored.`
 })
+
+const bulkRemoveMessage = computed(() => {
+  const n = selectedMemberCount.value
+  const noun = n === 1 ? 'recipient' : 'recipients'
+  return `Remove ${n} selected ${noun} from this list? This is a soft remove — they stay in Contacts, campaign history is preserved, and you can restore them later. They will not appear in this active list until restored.`
+})
+
+function isMemberSelected(id: string): boolean {
+  return selectedMemberIds.value.includes(id)
+}
+
+function setMemberSelected(id: string, checked: boolean) {
+  if (!id) return
+  if (checked) {
+    if (!selectedMemberIds.value.includes(id)) {
+      selectedMemberIds.value = [...selectedMemberIds.value, id]
+    }
+    return
+  }
+  selectedMemberIds.value = selectedMemberIds.value.filter((x) => x !== id)
+}
+
+function toggleSelectAllPage(checked: boolean) {
+  const pageIds = pageMemberIds.value
+  if (!pageIds.length) return
+  if (checked) {
+    selectedMemberIds.value = [...new Set([...selectedMemberIds.value, ...pageIds])]
+    return
+  }
+  const drop = new Set(pageIds)
+  selectedMemberIds.value = selectedMemberIds.value.filter((id) => !drop.has(id))
+}
+
+function clearMemberSelection() {
+  selectedMemberIds.value = []
+}
+
+function openBulkRemove() {
+  if (!selectedMemberCount.value || bulkRemovePending.value) return
+  bulkRemoveOpen.value = true
+}
+
+function cancelBulkRemove() {
+  if (bulkRemovePending.value) return
+  bulkRemoveOpen.value = false
+}
+
+async function confirmBulkRemove() {
+  const list = listId.value
+  const ids = [...selectedMemberIds.value]
+  if (!list || !ids.length || bulkRemovePending.value) return
+  bulkRemovePending.value = true
+  try {
+    const res = await marketingApi.bulkRemoveRecipientListMembers(list, ids)
+    bulkRemoveOpen.value = false
+    clearMemberSelection()
+    const n = res.removedCount ?? ids.length
+    toast.success(
+      n === 1 ? 'Recipient removed from list.' : `${n} recipients removed from list.`
+    )
+    await load(page.value)
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String(
+            (e as { data?: { message?: string } }).data?.message ??
+              'Failed to remove selected recipients'
+          )
+        : 'Failed to remove selected recipients'
+    loadError.value = message
+    toast.error(message)
+    bulkRemoveOpen.value = false
+  } finally {
+    bulkRemovePending.value = false
+  }
+}
 
 const restoreMemberMessage = computed(() => {
   const m = memberPendingRestore.value
@@ -1065,6 +1245,16 @@ function openRemoveMember(member: TenantRecipientListMemberRow) {
   removeMemberOpen.value = true
 }
 
+/** Row Remove: single confirm normally; with 2+ checked, open bulk confirm instead. */
+function onRowRemoveClick(member: TenantRecipientListMemberRow) {
+  if (bulkRowRemoveActive.value) {
+    if (member?.id) setMemberSelected(member.id, true)
+    openBulkRemove()
+    return
+  }
+  openRemoveMember(member)
+}
+
 function cancelRemoveMember() {
   if (removeMemberPending.value) return
   removeMemberOpen.value = false
@@ -1080,6 +1270,7 @@ async function confirmRemoveMember() {
     await marketingApi.removeRecipientListMember(list, member.id)
     removeMemberOpen.value = false
     memberPendingRemove.value = null
+    setMemberSelected(member.id, false)
     toast.success('Recipient removed from list.')
     await load(page.value)
   } catch (e: unknown) {
@@ -1166,6 +1357,9 @@ async function load(p: number) {
     )
     payload.value = res
     page.value = res.members.page
+    if (res.members.total === 0) {
+      clearMemberSelection()
+    }
     // If this page is empty after a remove but earlier pages exist, step back.
     if (!res.members.items.length && res.members.page > 1 && res.members.total > 0) {
       await load(res.members.page - 1)
@@ -1234,10 +1428,15 @@ watch(
     page.value = 1
     memberSearchInput.value = ''
     memberSearchQ.value = ''
+    clearMemberSelection()
     load(1)
   },
   { immediate: true }
 )
+
+watch(memberSearchQ, () => {
+  clearMemberSelection()
+})
 
 onBeforeUnmount(() => {
   if (viewMemberEscListener) {

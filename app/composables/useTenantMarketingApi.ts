@@ -213,6 +213,23 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** LO recipient-list flag path only — soft-remove many members in one request. */
+  async function bulkRemoveRecipientListMembers(listId: string, contactIds: string[]) {
+    return $fetch<{
+      ok: boolean
+      removedCount: number
+      contactIds: string[]
+      listId: string
+    }>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}/members/bulk-remove`,
+      tenantFetchInit({
+        method: 'POST',
+        body: { contactIds },
+        timeout: 60000
+      })
+    )
+  }
+
   async function restoreRecipientListMember(listId: string, contactId: string) {
     return $fetch<{ ok: boolean; restored: boolean; contactId: string; listId: string }>(
       `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}/members/${encodeURIComponent(contactId)}/restore`,
@@ -592,6 +609,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchRecipientListResource,
     fetchRecipientListById,
     removeRecipientListMember,
+    bulkRemoveRecipientListMembers,
     restoreRecipientListMember,
     fetchDynamicVariables,
     createContact,
