@@ -3,6 +3,19 @@ import { marketingSidebarNavItems } from '~/constants/marketingSidebarNav'
 import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
 
 const { data: me, pending, refresh } = useMarketingMe()
+const {
+  allowTenantLoRecipientLists,
+  loadDefaultCampaignSender,
+  loaded: loListsFlagLoaded
+} = useDefaultCampaignSender()
+void loadDefaultCampaignSender()
+
+const visibleSidebarNavItems = computed(() =>
+  marketingSidebarNavItems.filter((item) => {
+    if (!item.requiresLoRecipientLists) return true
+    return loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+  })
+)
 
 const route = useRoute()
 
@@ -266,7 +279,7 @@ function navLinkLayoutClass(compact: boolean) {
         aria-label="Primary"
       >
         <NuxtLink
-          v-for="item in marketingSidebarNavItems"
+          v-for="item in visibleSidebarNavItems"
           :key="item.to"
           :to="item.to"
           :title="sidebarCompact ? item.label : undefined"

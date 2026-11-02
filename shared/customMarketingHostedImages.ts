@@ -74,6 +74,9 @@ export function sanitizeCustomMarketingGcsPathSegment(value: string, fallback: s
  */
 export const CUSTOM_MARKETING_GCS_NO_LIST_FOLDER = 'no-list'
 
+/** Dedicated gallery uploads: `custom-marketing/{tenant}/library/…`. */
+export const CUSTOM_MARKETING_GCS_LIBRARY_FOLDER = 'library'
+
 export function buildCustomMarketingGcsObjectPath(input: {
   tenantName: string
   recipientListId?: string

@@ -3,7 +3,12 @@ import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/util
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 import type { TenantDynamicVariableItem, TenantEmailTemplateCategoryRow } from '~/composables/useTenantMarketingApi'
 import { buildEmailTemplateCategoryAssignOptions } from '~~/shared/utils/emailTemplateCategory'
-import { compressCustomMarketingImageFile } from '~/utils/compressCustomMarketingImage'
+import {
+  emailTemplateHtmlImageLabel,
+  listEmailTemplateHtmlImages,
+  replaceEmailTemplateHtmlImageSrc
+} from '~~/shared/utils/emailTemplateHtmlImages'
+import type { TenantHostedImage } from '~~/shared/tenantHostedImages'
 
 definePageMeta({ layout: 'default' })
 
@@ -16,7 +21,7 @@ const {
   loaded: loListsFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
-/** Superadmin LO recipient-list toggle gates template image upload. */
+/** Superadmin LO recipient-list toggle gates template image insert/replace from Images library. */
 const canUploadTemplateImage = computed(
   () => loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
 )
@@ -50,13 +55,15 @@ const htmlContent = ref('')
 const formError = ref('')
 const uploadError = ref('')
 const uploadPending = ref(false)
-const imageUploadPending = ref(false)
 const imageUploadError = ref('')
+/** When set, picker selection replaces that `<img>` src instead of inserting. */
+const replaceImageIndex = ref<number | null>(null)
+const imagePickerOpen = ref(false)
+const imagePickerMode = ref<'insert' | 'replace'>('insert')
 const saving = ref(false)
 const loading = ref(false)
 const uploadDragOver = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const imageInputRef = ref<HTMLInputElement | null>(null)
 const subjectInputRef = ref<HTMLInputElement | null>(null)
 const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const lastFocusedField = ref<'subject' | 'html'>('html')
@@ -65,6 +72,18 @@ function emailTemplateImageSnippet(url: string): string {
   const src = url.replace(/"/g, '&quot;')
   return `<img src="${src}" alt="" width="600" style="display:block;max-width:100%;height:auto;border:0;" />`
 }
+
+const templateHtmlImages = computed(() => listEmailTemplateHtmlImages(htmlContent.value))
+const showTemplateImageReplace = computed(
+  () => canUploadTemplateImage.value && templateHtmlImages.value.length > 0
+)
+const anyImageBusy = computed(() => uploadPending.value)
+const imagePickerTitle = computed(() =>
+  imagePickerMode.value === 'replace' ? 'Replace with hosted image' : 'Insert hosted image'
+)
+const imagePickerConfirmText = computed(() =>
+  imagePickerMode.value === 'replace' ? 'Replace image' : 'Insert image'
+)
 
 const categoryAssignOptions = computed(() =>
   buildEmailTemplateCategoryAssignOptions(
@@ -244,48 +263,62 @@ function onBrowseClick() {
   fileInputRef.value?.click()
 }
 
-function onBrowseImageClick() {
-  if (!canUploadTemplateImage.value) return
+function openInsertImagePicker() {
+  if (!canUploadTemplateImage.value || anyImageBusy.value) return
   imageUploadError.value = ''
-  imageInputRef.value?.click()
+  replaceImageIndex.value = null
+  imagePickerMode.value = 'insert'
+  imagePickerOpen.value = true
 }
 
-async function onImageFileChange(ev: Event) {
-  const input = ev.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  if (!canUploadTemplateImage.value) {
-    imageUploadError.value = 'Image upload is disabled for this tenant'
+function openReplaceImagePicker(index: number) {
+  if (!canUploadTemplateImage.value || anyImageBusy.value) return
+  imageUploadError.value = ''
+  replaceImageIndex.value = index
+  imagePickerMode.value = 'replace'
+  imagePickerOpen.value = true
+}
+
+function closeImagePicker() {
+  imagePickerOpen.value = false
+  if (imagePickerMode.value === 'replace') {
+    replaceImageIndex.value = null
+  }
+}
+
+function onHostedImagePicked(item: TenantHostedImage) {
+  const url = item.url?.trim()
+  if (!url) {
+    imageUploadError.value = 'Selected image has no hosted link'
+    closeImagePicker()
     return
   }
 
+  lastFocusedField.value = 'html'
   imageUploadError.value = ''
   uploadError.value = ''
-  imageUploadPending.value = true
-  lastFocusedField.value = 'html'
-  try {
-    const dataUrl = await compressCustomMarketingImageFile(file)
-    const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
-    const url = typeof uploaded?.url === 'string' ? uploaded.url.trim() : ''
-    if (!url) {
-      throw new Error('Upload succeeded but no image URL was returned.')
+
+  if (imagePickerMode.value === 'replace') {
+    const index = replaceImageIndex.value
+    imagePickerOpen.value = false
+    replaceImageIndex.value = null
+    if (index == null || index < 0) return
+    const next = replaceEmailTemplateHtmlImageSrc(htmlContent.value, index, url)
+    if (next === htmlContent.value) {
+      imageUploadError.value = 'Could not find that image in the HTML anymore. Try again.'
+      return
     }
-    const snippet = emailTemplateImageSnippet(url)
-    insertAtCursor(htmlTextareaRef.value, htmlContent.value, snippet, (next) => {
-      htmlContent.value = next
-    })
-    toast.success('Image inserted into HTML')
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? '')
-        : ''
-    imageUploadError.value =
-      msg || (e instanceof Error ? e.message : 'Could not upload image')
-  } finally {
-    imageUploadPending.value = false
+    htmlContent.value = next
+    toast.success(`Image ${index + 1} replaced`)
+    return
   }
+
+  imagePickerOpen.value = false
+  const snippet = emailTemplateImageSnippet(url)
+  insertAtCursor(htmlTextareaRef.value, htmlContent.value, snippet, (next) => {
+    htmlContent.value = next
+  })
+  toast.success('Image inserted into HTML')
 }
 
 function onDragOver(ev: DragEvent) {
@@ -532,7 +565,7 @@ async function saveTemplate() {
               <p class="mt-0.5 text-xs text-slate-500">
                 Paste or upload HTML (.html, .htm).{{
                   canUploadTemplateImage
-                    ? ' Use Upload image to host a photo and insert it at the cursor.'
+                    ? ' Insert image picks a hosted link from Images (upload new photos there). Use Replace to swap an existing image the same way.'
                     : ''
                 }}
               </p>
@@ -543,22 +576,13 @@ async function saveTemplate() {
                 type="file"
                 accept=".html,.htm,text/html"
                 class="sr-only"
-                :disabled="uploadPending || imageUploadPending"
+                :disabled="anyImageBusy"
                 @change="onFileChange"
-              >
-              <input
-                v-if="canUploadTemplateImage"
-                ref="imageInputRef"
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                class="sr-only"
-                :disabled="uploadPending || imageUploadPending"
-                @change="onImageFileChange"
               >
               <button
                 type="button"
                 class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
-                :disabled="uploadPending || imageUploadPending"
+                :disabled="anyImageBusy"
                 @click="onBrowseClick"
               >
                 {{ uploadPending ? 'Reading file…' : 'Upload file' }}
@@ -567,15 +591,15 @@ async function saveTemplate() {
                 v-if="canUploadTemplateImage"
                 type="button"
                 class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-                :disabled="uploadPending || imageUploadPending"
-                @click="onBrowseImageClick"
+                :disabled="anyImageBusy"
+                @click="openInsertImagePicker"
               >
-                {{ imageUploadPending ? 'Uploading image…' : 'Upload image' }}
+                Insert image
               </button>
               <button
                 type="button"
                 class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                :disabled="uploadPending || imageUploadPending"
+                :disabled="anyImageBusy"
                 @click="validatePasteHtml"
               >
                 Validate HTML
@@ -588,6 +612,52 @@ async function saveTemplate() {
           <p v-if="imageUploadError" class="mt-2 text-sm text-red-600" role="alert">
             {{ imageUploadError }}
           </p>
+
+          <div
+            v-if="showTemplateImageReplace"
+            class="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-3"
+            aria-label="Images in this template"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Images in this template
+                <span class="ml-1 tabular-nums text-slate-400">({{ templateHtmlImages.length }})</span>
+              </p>
+              <p class="text-xs text-slate-500">
+                Replace updates that image only — no HTML editing needed.
+              </p>
+            </div>
+            <ul class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <li
+                v-for="img in templateHtmlImages"
+                :key="`tpl-img-${img.index}-${img.tagStart}`"
+                class="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-2"
+              >
+                <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white">
+                  <img
+                    v-if="img.src"
+                    :src="img.src"
+                    alt=""
+                    class="max-h-full max-w-full object-contain"
+                  >
+                  <span v-else class="px-1 text-center text-[10px] font-medium text-slate-400">No src</span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-semibold text-slate-800" :title="emailTemplateHtmlImageLabel(img.src, img.index)">
+                    {{ emailTemplateHtmlImageLabel(img.src, img.index) }}
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-1.5 inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="anyImageBusy"
+                    @click="openReplaceImagePicker(img.index)"
+                  >
+                    Replace
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div class="grid min-h-[480px] lg:grid-cols-2">
@@ -608,7 +678,7 @@ async function saveTemplate() {
               class="min-h-[240px] flex-1 resize-none border-0 bg-slate-950 px-4 py-4 font-mono text-[13px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500/40"
               placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"
               spellcheck="false"
-              :disabled="uploadPending || imageUploadPending"
+              :disabled="anyImageBusy"
               @focus="lastFocusedField = 'html'"
             />
           </section>
@@ -667,6 +737,14 @@ async function saveTemplate() {
       :html="unsubscribeFooterPreviewHtml"
       elevated
       @close="closeUnsubscribeFooterPreview"
+    />
+    <TenantHostedImagePickerModal
+      v-if="canUploadTemplateImage"
+      :open="imagePickerOpen"
+      :title="imagePickerTitle"
+      :confirm-text="imagePickerConfirmText"
+      @close="closeImagePicker"
+      @select="onHostedImagePicked"
     />
   </div>
 </template>

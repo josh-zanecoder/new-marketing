@@ -600,6 +600,47 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** LO-flag Images gallery — list hosted tenant images (HTTPS URLs). */
+  async function fetchTenantHostedImages() {
+    return $fetch<{
+      ok: boolean
+      items: Array<{
+        id: string
+        url: string
+        objectPath: string
+        fileName: string
+        contentType: string
+        size: number
+        createdAt: string
+      }>
+      total: number
+    }>('/api/v1/tenant/images', tenantFetchInit({ timeout: 60000 }))
+  }
+
+  /** LO-flag Images gallery — upload into `library/` and return public HTTPS URL. */
+  async function uploadTenantHostedImage(body: { dataUrl: string }) {
+    return $fetch<{ ok: boolean; url: string; objectPath: string; id: string }>(
+      '/api/v1/tenant/images',
+      tenantFetchInit({ method: 'POST', body, timeout: 60000 })
+    )
+  }
+
+  /** LO-flag Images gallery — delete one or more hosted objects. */
+  async function deleteTenantHostedImages(objectPaths: string[]) {
+    return $fetch<{
+      ok: boolean
+      deletedCount: number
+      deleted: string[]
+      skipped: string[]
+    }>('/api/v1/tenant/images', {
+      ...tenantFetchInit({
+        method: 'DELETE',
+        body: { objectPaths },
+        timeout: 60000
+      })
+    })
+  }
+
   return {
     serverAuthHeaders,
     tenantFetchInit,
@@ -640,6 +681,9 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     abortCampaignRecipients,
     sendTestEmail,
     uploadCustomMarketingImage,
-    uploadEmailTemplateImage
+    uploadEmailTemplateImage,
+    fetchTenantHostedImages,
+    uploadTenantHostedImage,
+    deleteTenantHostedImages
   }
 }

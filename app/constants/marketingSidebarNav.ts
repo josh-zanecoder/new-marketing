@@ -2,6 +2,8 @@ export type MarketingSidebarNavItem = {
   to: string
   label: string
   iconPath: string
+  /** When true, only show if superadmin LO Recipients toggle is ON. */
+  requiresLoRecipientLists?: boolean
 }
 
 export const marketingSidebarNavItems: MarketingSidebarNavItem[] = [
@@ -28,6 +30,13 @@ export const marketingSidebarNavItems: MarketingSidebarNavItem[] = [
     label: 'Email templates',
     iconPath:
       'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z'
+  },
+  {
+    to: '/tenant/images',
+    label: 'Images',
+    requiresLoRecipientLists: true,
+    iconPath:
+      'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
   },
   {
     to: '/tenant/email-templates/categories',
