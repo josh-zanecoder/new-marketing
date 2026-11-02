@@ -8,6 +8,7 @@ import {
   clearNuxtPayloadCache,
   TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY
 } from '~/composables/useNuxtPayloadCache'
+import { loadAllLoBorrowerPages } from '~~/shared/loBorrowersPreviewPage'
 
 export type LoBorrowerPreviewRow = {
   id: string
@@ -314,22 +315,36 @@ export function useLoRecipientListSimpleForm(options: {
     borrowersLoading.value = true
     borrowersError.value = ''
     try {
-      const res = await $fetch<{
-        total: number
-        borrowers: LoBorrowerPreviewRow[]
-      }>('/api/v1/tenant/recipient-list/lo-borrowers', {
-        credentials: 'include',
-        ...serverAuthHeaders(),
-        query: { ownerEmail: email, limit: 50 }
+      // LO-list toggle path only: page until every LO borrower is in the checklist.
+      const loaded = await loadAllLoBorrowerPages({
+        fetchPage: async ({ skip, limit }) => {
+          if (seq !== previewSeq) {
+            return { total: 0, borrowers: [] }
+          }
+          return await $fetch<{
+            total: number
+            borrowers: LoBorrowerPreviewRow[]
+          }>('/api/v1/tenant/recipient-list/lo-borrowers', {
+            credentials: 'include',
+            ...serverAuthHeaders(),
+            query: {
+              ownerEmail: email,
+              limit,
+              skip
+            }
+          })
+        }
       })
       if (seq !== previewSeq) return
-      const rows = res.borrowers ?? []
-      borrowers.value = rows
-      borrowerTotal.value = res.total ?? 0
-      resetBorrowerChecks(rows, opts?.uncheckedIds)
+      const allRows = loaded.borrowers
+      borrowers.value = allRows
+      borrowerTotal.value = loaded.total
+      resetBorrowerChecks(allRows, opts?.uncheckedIds)
       if (opts?.uncheckedIds) {
-        const previewIds = new Set(rows.map((r) => r.id))
+        const previewIds = new Set(allRows.map((r) => r.id))
         excludedOutsidePreview.value = [...opts.uncheckedIds].filter((id) => !previewIds.has(id))
+      } else {
+        excludedOutsidePreview.value = []
       }
     } catch (e: unknown) {
       if (seq !== previewSeq) return
