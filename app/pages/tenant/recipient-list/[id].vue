@@ -158,7 +158,42 @@
       </section>
 
       <section aria-label="Recipients">
-        <div class="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+        <!-- LO flag ON: search + anti-flicker header. Flag OFF: classic header only. -->
+        <div
+          v-if="showLoMemberSearch"
+          class="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <div class="min-w-0 flex-1">
+            <h2 class="text-lg font-semibold tracking-tight text-zinc-900">
+              Recipients
+            </h2>
+            <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-zinc-500">
+              <span class="inline-flex min-w-[7.5rem] items-center justify-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-emerald-800 ring-1 ring-inset ring-emerald-600/15">
+                {{ displayedMemberTotal.toLocaleString() }}
+                {{ displayedMemberTotal === 1 ? 'contact' : 'contacts' }}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span class="min-w-[11.5rem]">{{ recipientsStatusLabel }}</span>
+            </p>
+          </div>
+          <div class="relative w-full sm:w-72">
+            <label for="rl-detail-member-search" class="sr-only">Search recipients by name or email</label>
+            <input
+              id="rl-detail-member-search"
+              v-model="memberSearchInput"
+              type="search"
+              autocomplete="off"
+              placeholder="Search by name or email…"
+              class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+              :aria-busy="pageLoading"
+              @input="onMemberSearchInput"
+            >
+          </div>
+        </div>
+        <div
+          v-else
+          class="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between"
+        >
           <div>
             <h2 class="text-lg font-semibold tracking-tight text-zinc-900">
               Recipients
@@ -181,8 +216,9 @@
           </p>
         </div>
 
+        <!-- Classic empty state (flag OFF) — unchanged -->
         <div
-          v-if="!payload.members.total"
+          v-if="!showLoMemberSearch && !payload.members.total"
           class="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center"
         >
           <p class="text-sm font-semibold text-zinc-900">
@@ -193,10 +229,44 @@
           </p>
         </div>
 
+        <!-- LO flag ON: stable shell + overlay. Flag OFF with members: classic card only. -->
         <div
           v-else
-          class="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
+          :class="showLoMemberSearch
+            ? [
+                'relative min-h-[20rem] overflow-hidden rounded-2xl border bg-white',
+                payload.members.total ? 'border-zinc-200' : 'border-dashed border-zinc-200'
+              ]
+            : 'overflow-hidden rounded-2xl border border-zinc-200 bg-white'"
         >
+          <div
+            v-if="showLoMemberSearch && pageLoading"
+            class="absolute inset-0 z-10 flex items-start justify-center bg-white/55 pt-24 backdrop-blur-[1px]"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <p class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 shadow-sm">
+              <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" aria-hidden="true" />
+              Updating results…
+            </p>
+          </div>
+
+          <div
+            v-if="showLoMemberSearch && !payload.members.total"
+            class="flex min-h-[20rem] flex-col items-center justify-center px-6 py-16 text-center"
+          >
+            <p class="text-sm font-semibold text-zinc-900">
+              No matching contacts
+            </p>
+            <p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
+              Try a different name or email, or clear the search.
+            </p>
+          </div>
+
+          <div
+            v-else-if="payload.members.total"
+            :class="showLoMemberSearch ? 'min-h-[20rem]' : undefined"
+          >
           <ul class="divide-y divide-zinc-100 lg:hidden">
             <li v-for="m in payload.members.items" :key="`mobile-${m.id}`" class="p-5">
               <div class="flex items-start justify-between gap-4">
@@ -341,6 +411,7 @@
                 Next
               </button>
             </nav>
+          </div>
           </div>
         </div>
       </section>
@@ -711,6 +782,17 @@ const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const listId = computed(() => String(route.params.id ?? ''))
+const {
+  allowTenantLoRecipientLists,
+  loadDefaultCampaignSender,
+  loaded: loFlagLoaded
+} = useDefaultCampaignSender()
+void loadDefaultCampaignSender()
+
+/** Search UI only when LO recipient-list feature flag is ON. */
+const showLoMemberSearch = computed(
+  () => loFlagLoaded.value && allowTenantLoRecipientLists.value === true
+)
 
 const makeCampaignHref = computed(
   () => `/tenant/campaigns/add?recipientListId=${encodeURIComponent(listId.value)}`
@@ -721,6 +803,15 @@ const pageLoading = ref(false)
 const loadError = ref('')
 const payload = ref<TenantRecipientListDetailPayload | null>(null)
 const page = ref(1)
+const memberSearchInput = ref('')
+const memberSearchQ = ref('')
+let memberSearchTimer: ReturnType<typeof setTimeout> | null = null
+const memberSearchActive = computed(() => memberSearchQ.value.trim().length >= 2)
+/** Keep prior totals visible while a search request is in flight (payload not cleared). */
+const displayedMemberTotal = computed(() => payload.value?.members?.total ?? 0)
+const recipientsStatusLabel = computed(() =>
+  memberSearchActive.value ? 'Matching your search' : 'Matching this list right now'
+)
 const deleteConfirmOpen = ref(false)
 const deleteDetailPending = ref(false)
 
@@ -1039,6 +1130,16 @@ async function confirmRestoreMember() {
   }
 }
 
+function onMemberSearchInput() {
+  if (memberSearchTimer) clearTimeout(memberSearchTimer)
+  memberSearchTimer = setTimeout(() => {
+    const next = memberSearchInput.value.trim()
+    if (next === memberSearchQ.value) return
+    memberSearchQ.value = next
+    void load(1)
+  }, 300)
+}
+
 async function load(p: number) {
   const id = listId.value
   if (!id) {
@@ -1050,12 +1151,17 @@ async function load(p: number) {
   if (!isInitial) pageLoading.value = true
   loadError.value = ''
   try {
+    const q = showLoMemberSearch.value ? memberSearchQ.value.trim() : ''
     const res = await $fetch<TenantRecipientListDetailPayload>(
       `/api/v1/tenant/recipient-list/${encodeURIComponent(id)}`,
       {
         credentials: 'include',
         ...serverAuthHeaders(),
-        query: { page: p, limit: 50 }
+        query: {
+          page: p,
+          limit: 50,
+          ...(q.length >= 2 ? { q } : {})
+        }
       }
     )
     payload.value = res
@@ -1121,21 +1227,27 @@ watch(viewMemberOpen, (open) => {
   }
 })
 
+watch(
+  listId,
+  () => {
+    pending.value = true
+    page.value = 1
+    memberSearchInput.value = ''
+    memberSearchQ.value = ''
+    load(1)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   if (viewMemberEscListener) {
     window.removeEventListener('keydown', viewMemberEscListener)
     viewMemberEscListener = null
   }
   if (import.meta.client) document.body.style.overflow = ''
+  if (memberSearchTimer) {
+    clearTimeout(memberSearchTimer)
+    memberSearchTimer = null
+  }
 })
-
-watch(
-  listId,
-  () => {
-    pending.value = true
-    page.value = 1
-    load(1)
-  },
-  { immediate: true }
-)
 </script>

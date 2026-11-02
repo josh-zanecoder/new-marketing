@@ -15,6 +15,11 @@ import {
   recipientListExcludedContactIds,
   recipientListStoredMembershipEmails
 } from '@server/utils/recipient/recipientListMutation'
+import {
+  isActiveRecipientListMemberSearch,
+  normalizeRecipientListMemberSearchQ,
+  recipientListMemberSearchOrClauses
+} from '~~/shared/recipientListMemberSearch'
 
 function rowCriterionDisplay(
   filterDoc: Record<string, unknown>,
@@ -233,6 +238,8 @@ export default defineEventHandler(async (event) => {
     Math.max(1, parseInt(String(query.limit ?? '50'), 10) || 50)
   )
   const skip = (page - 1) * pageSize
+  const memberSearchQ = normalizeRecipientListMemberSearchQ(query.q)
+  const memberSearchActive = isActiveRecipientListMemberSearch(memberSearchQ)
 
   const excludedContactIds = recipientListExcludedContactIds(
     doc as { excludedContactIds?: unknown }
@@ -254,78 +261,116 @@ export default defineEventHandler(async (event) => {
     })
     .filter((x): x is mongoose.Types.ObjectId => x != null)
 
-  const memberTotal =
-    memberObjectIds.length === 0
-      ? 0
-      : await Contact.countDocuments(
-          mergeTenantOwnerEmailScopeFilter(
-            withMarketableContactFilter({ _id: { $in: memberObjectIds } }),
-            auth
-          )
-        )
+  const contactSelect = {
+    firstName: 1,
+    lastName: 1,
+    name: 1,
+    email: 1,
+    phone: 1,
+    contactType: 1,
+    company: 1,
+    channel: 1,
+    source: 1,
+    address: 1
+  } as const
 
-  const memberQuery: Record<string, unknown> = { recipientListId: listId }
-  if (excludedContactIds.length) {
-    memberQuery.contactId = { $nin: excludedContactIds }
+  function mapContactItems(rows: ContactRow[], orderIds?: Array<mongoose.Types.ObjectId | string | null | undefined>) {
+    if (orderIds) {
+      const byId = new Map(rows.map((c) => [String(c._id), c]))
+      return orderIds
+        .map((cid) => byId.get(String(cid)))
+        .filter(Boolean)
+        .map((c) => mapOneContact(c!))
+    }
+    return rows.map((c) => mapOneContact(c))
   }
 
-  const memberRows = (await RecipientListMember.find(memberQuery)
-    .select('contactId')
-    .sort({ createdAt: 1 })
-    .skip(skip)
-    .limit(pageSize)
-    .lean()
-    .exec()) as RecipientListMemberRow[]
+  function mapOneContact(c: ContactRow) {
+    const { firstName, lastName } = contactFirstLastFromDoc(c)
+    return {
+      id: String(c._id),
+      firstName,
+      lastName,
+      name: formatContactFullName(firstName, lastName),
+      email: c.email ?? '',
+      phone: c.phone ?? '',
+      contactType:
+        Array.isArray(c.contactType) && c.contactType.length
+          ? [...new Set(c.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean))]
+          : [],
+      company: c.company ?? '',
+      channel: c.channel ?? '',
+      source: c.source ?? '',
+      address: c.address ?? {}
+    }
+  }
 
-  const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
+  let memberTotal = 0
+  let items: ReturnType<typeof mapOneContact>[] = []
 
-  const contactByIdsFilter = mergeTenantOwnerEmailScopeFilter(
-    withMarketableContactFilter({ _id: { $in: contactIds } }),
-    auth
-  )
+  if (memberSearchActive) {
+    // Name/email search among list members (used by LO-flag detail UI). Empty `q` keeps classic path below.
+    const searchFilter = mergeTenantOwnerEmailScopeFilter(
+      withMarketableContactFilter({
+        _id: { $in: memberObjectIds },
+        $or: recipientListMemberSearchOrClauses(memberSearchQ)
+      }),
+      auth
+    )
+    memberTotal =
+      memberObjectIds.length === 0 ? 0 : await Contact.countDocuments(searchFilter)
+    const contacts: ContactRow[] =
+      memberObjectIds.length === 0 || memberTotal === 0
+        ? []
+        : ((await Contact.find(searchFilter)
+            .select(contactSelect)
+            .sort({ lastName: 1, firstName: 1, email: 1, _id: 1 })
+            .skip(skip)
+            .limit(pageSize)
+            .lean()
+            .exec()) as ContactRow[])
+    items = mapContactItems(contacts)
+  } else {
+    memberTotal =
+      memberObjectIds.length === 0
+        ? 0
+        : await Contact.countDocuments(
+            mergeTenantOwnerEmailScopeFilter(
+              withMarketableContactFilter({ _id: { $in: memberObjectIds } }),
+              auth
+            )
+          )
 
-  const contacts: ContactRow[] =
-    contactIds.length === 0
-      ? []
-      : ((await Contact.find(contactByIdsFilter)
-          .select({
-            firstName: 1,
-            lastName: 1,
-            name: 1,
-            email: 1,
-            phone: 1,
-            contactType: 1,
-            company: 1,
-            channel: 1,
-            source: 1,
-            address: 1
-          })
-          .lean()
-          .exec()) as ContactRow[])
+    const memberQuery: Record<string, unknown> = { recipientListId: listId }
+    if (excludedContactIds.length) {
+      memberQuery.contactId = { $nin: excludedContactIds }
+    }
 
-  const byId = new Map(contacts.map((c) => [String(c._id), c]))
-  const items = contactIds
-    .map((cid) => byId.get(String(cid)))
-    .filter(Boolean)
-    .map((c) => {
-      const { firstName, lastName } = contactFirstLastFromDoc(c!)
-      return {
-        id: String(c!._id),
-        firstName,
-        lastName,
-        name: formatContactFullName(firstName, lastName),
-        email: c!.email ?? '',
-        phone: c!.phone ?? '',
-        contactType:
-          Array.isArray(c!.contactType) && c!.contactType.length
-            ? [...new Set(c!.contactType.map((k) => String(k).trim().toLowerCase()).filter(Boolean))]
-            : [],
-        company: c!.company ?? '',
-        channel: c!.channel ?? '',
-        source: c!.source ?? '',
-        address: c!.address ?? {}
-      }
-    })
+    const memberRows = (await RecipientListMember.find(memberQuery)
+      .select('contactId')
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(pageSize)
+      .lean()
+      .exec()) as RecipientListMemberRow[]
+
+    const contactIds = memberRows.map((m) => m.contactId).filter(Boolean)
+
+    const contactByIdsFilter = mergeTenantOwnerEmailScopeFilter(
+      withMarketableContactFilter({ _id: { $in: contactIds } }),
+      auth
+    )
+
+    const contacts: ContactRow[] =
+      contactIds.length === 0
+        ? []
+        : ((await Contact.find(contactByIdsFilter)
+            .select(contactSelect)
+            .lean()
+            .exec()) as ContactRow[])
+
+    items = mapContactItems(contacts, contactIds)
+  }
 
   const removedContactIds = excludedContactIds.slice(0, MAX_PAGE_SIZE)
   const removedContacts: ContactRow[] =
