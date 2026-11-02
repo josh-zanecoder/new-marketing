@@ -6,6 +6,10 @@ import {
 } from '@server/tenant/registry-auth'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import {
+  LO_BORROWERS_PREVIEW_MAX_LIMIT,
+  LO_BORROWERS_PREVIEW_PAGE_SIZE
+} from '~~/shared/loBorrowersPreviewPage'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
 import { marketingAudienceOwnerEmailsFromAuth } from '@server/utils/auth/marketingAudienceFromAuth'
@@ -55,7 +59,12 @@ export default defineEventHandler(async (event) => {
 
   const q = getQuery(event)
   const limitRaw = Number(q.limit)
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 50
+  // LO-list toggle endpoint only. Cap raised so the checklist can page past the old 50-row UI.
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(Math.max(Math.floor(limitRaw), 1), LO_BORROWERS_PREVIEW_MAX_LIMIT)
+    : LO_BORROWERS_PREVIEW_PAGE_SIZE
+  const skipRaw = Number(q.skip)
+  const skip = Number.isFinite(skipRaw) ? Math.max(Math.floor(skipRaw), 0) : 0
   const emailFilter = String(q.email ?? '')
     .trim()
     .toLowerCase()
@@ -99,6 +108,7 @@ export default defineEventHandler(async (event) => {
     Contact.find(filter)
       .select({ firstName: 1, lastName: 1, name: 1, email: 1 })
       .sort({ updatedAt: -1 })
+      .skip(emailFilter ? 0 : skip)
       .limit(emailFilter ? 1 : limit)
       .lean()
       .exec()
