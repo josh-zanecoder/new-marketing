@@ -1,3 +1,5 @@
+import { dedupeByNormalizedEmailKeepFirst } from '~~/shared/dedupeByNormalizedEmail'
+
 /**
  * LO-recipient-list toggle path only — page size for `/lo-borrowers` preview.
  * Classic recipient-list form does not use this.
@@ -49,7 +51,7 @@ export async function loadAllLoBorrowerPages(params: {
   const pageSize = params.pageSize ?? LO_BORROWERS_PREVIEW_PAGE_SIZE
   const maxPages = params.maxPages ?? LO_BORROWERS_PREVIEW_MAX_PAGES
   const allRows: LoBorrowerPreviewPageRow[] = []
-  const seen = new Set<string>()
+  const seenIds = new Set<string>()
   let total = 0
   let skip = 0
   let pagesFetched = 0
@@ -60,8 +62,8 @@ export async function loadAllLoBorrowerPages(params: {
     total = Number(res.total) || 0
     const rows = Array.isArray(res.borrowers) ? res.borrowers : []
     for (const row of rows) {
-      if (!row?.id || seen.has(row.id)) continue
-      seen.add(row.id)
+      if (!row?.id || seenIds.has(row.id)) continue
+      seenIds.add(row.id)
       allRows.push(row)
     }
     skip += rows.length
@@ -76,9 +78,12 @@ export async function loadAllLoBorrowerPages(params: {
     }
   }
 
+  // LO flag path: one checklist row per email (duplicate Contact docs collapse).
+  const borrowers = dedupeByNormalizedEmailKeepFirst(allRows)
+
   return {
-    total: Math.max(total, allRows.length),
-    borrowers: allRows,
+    total: borrowers.length,
+    borrowers,
     pagesFetched
   }
 }
