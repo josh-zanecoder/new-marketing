@@ -13,6 +13,7 @@ import {
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { audienceBaseQuery } from '@server/utils/contact/contactTypeWrite'
 import { marketingAudienceOwnerEmailsFromAuth } from '@server/utils/auth/marketingAudienceFromAuth'
+import { dedupeByNormalizedEmailKeepFirst } from '~~/shared/dedupeByNormalizedEmail'
 
 /**
  * Preview borrowers owned by a selected LO.
@@ -114,14 +115,17 @@ export default defineEventHandler(async (event) => {
       .exec()
   ])
 
-  const borrowers = rows.map((doc) => {
-    const { firstName, lastName } = contactFirstLastFromDoc(doc as Record<string, unknown>)
-    return {
-      id: String((doc as { _id: unknown })._id),
-      name: formatContactFullName(firstName, lastName) || '—',
-      email: typeof (doc as { email?: string }).email === 'string' ? (doc as { email: string }).email : ''
-    }
-  })
+  const borrowers = dedupeByNormalizedEmailKeepFirst(
+    rows.map((doc) => {
+      const { firstName, lastName } = contactFirstLastFromDoc(doc as Record<string, unknown>)
+      return {
+        id: String((doc as { _id: unknown })._id),
+        name: formatContactFullName(firstName, lastName) || '—',
+        email: typeof (doc as { email?: string }).email === 'string' ? (doc as { email: string }).email : ''
+      }
+    })
+  )
 
+  // Collapse same-email Contact docs on this page (full checklist also dedupes in loadAllLoBorrowerPages).
   return { total, borrowers }
 })

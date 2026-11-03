@@ -553,7 +553,9 @@ export async function rebuildRecipientListMembers(
   membershipScope: RecipientListMembershipScope,
   membershipOwnerEmails: string[],
   storedCriterionJoins?: RecipientListCriterionJoin[] | null,
-  nested?: { groups: NestedFilterGroup[]; groupJoins: ('and' | 'or')[] } | null
+  nested?: { groups: NestedFilterGroup[]; groupJoins: ('and' | 'or')[] } | null,
+  /** LO recipient-list flag: one member per email (duplicate Contact docs collapse). */
+  opts?: { dedupeByEmail?: boolean }
 ): Promise<number> {
   const { Contact, RecipientList, RecipientListMember } = getTenantClientModels(tenantConn)
   await RecipientListMember.deleteMany({ recipientListId: listId })
@@ -565,6 +567,7 @@ export async function rebuildRecipientListMembers(
     (listLean ?? {}) as { excludedContactIds?: unknown }
   )
   const excludedSet = new Set(excludedIds.map((id) => String(id)))
+  const dedupeByEmail = opts?.dedupeByEmail === true
 
   const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
   const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
@@ -601,12 +604,25 @@ export async function rebuildRecipientListMembers(
 
   let memberCount = 0
   const seen = new Set<string>()
-  const cursor = Contact.find(scopedContactQuery).select('_id').lean().cursor()
+  const seenEmails = new Set<string>()
+  const cursor = Contact.find(scopedContactQuery)
+    .select(dedupeByEmail ? { _id: 1, email: 1 } : { _id: 1 })
+    .lean()
+    .cursor()
   let batch: MemberInsert[] = []
 
   for await (const doc of cursor) {
     const id = String(doc._id)
     if (excludedSet.has(id) || seen.has(id)) continue
+    if (dedupeByEmail) {
+      const email = String((doc as { email?: string }).email ?? '')
+        .trim()
+        .toLowerCase()
+      if (email.includes('@')) {
+        if (seenEmails.has(email)) continue
+        seenEmails.add(email)
+      }
+    }
     seen.add(id)
     batch.push({ recipientListId: listId, contactId: doc._id })
     if (batch.length >= MEMBER_INSERT_BATCH) {
