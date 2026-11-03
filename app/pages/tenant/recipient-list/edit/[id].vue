@@ -142,148 +142,36 @@
                 </div>
 
                 <div class="space-y-3">
-                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-0">
-                    <div
-                      class="flex items-center gap-1"
-                      role="tablist"
-                      aria-label="Borrowers views"
-                    >
-                      <button
-                        type="button"
-                        role="tab"
-                        class="-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition"
-                        :class="loBorrowersTab === 'list'
-                          ? 'border-primary-600 text-primary-700'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'"
-                        :aria-selected="loBorrowersTab === 'list'"
-                        @click="loSetBorrowersTab('list')"
-                      >
-                        Borrowers
-                      </button>
-                      <button
-                        type="button"
-                        role="tab"
-                        class="-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition"
-                        :class="loBorrowersTab === 'manual'
-                          ? 'border-primary-600 text-primary-700'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'"
-                        :aria-selected="loBorrowersTab === 'manual'"
-                        @click="loSetBorrowersTab('manual')"
-                      >
-                        Manual Add
-                      </button>
-                    </div>
-                    <div
-                      v-if="loBorrowersTab === 'list' && loBorrowers.length"
-                      class="pb-2"
-                    >
-                      <button
-                        type="button"
-                        class="rounded-lg px-2.5 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
-                        @click="loToggleAllBorrowers"
-                      >
-                        {{ loToggleAllBorrowersLabel }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="loBorrowersTab === 'manual'"
-                    role="tabpanel"
-                    class="space-y-3"
-                  >
-                    <p class="text-sm text-slate-500">
-                      Look up a borrower by email for this loan officer and include them in the list.
+                  <div class="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100">
+                    <p class="-mb-px border-b-2 border-primary-600 px-3 py-2 text-sm font-semibold text-slate-800">
+                      Borrowers
                     </p>
-                    <div
-                      v-if="!loForm.associatedLoanOfficerEmail.trim()"
-                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                    <button
+                      v-if="loBorrowers.length"
+                      type="button"
+                      class="mb-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50"
+                      @click="loToggleAllBorrowers"
                     >
-                      Select a loan officer first.
-                    </div>
-                    <template v-else>
-                      <p class="text-xs text-slate-500">
-                        Search is limited to borrowers owned by
-                        <span class="font-semibold text-slate-700">
-                          {{ loForm.associatedLoanOfficerName || loForm.associatedLoanOfficerEmail }}
-                        </span>.
-                      </p>
-                      <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
-                        <div class="relative min-w-0 flex-1">
-                          <label for="rl-lo-manual-email" class="sr-only">Add borrower by email</label>
-                          <input
-                            id="rl-lo-manual-email"
-                            v-model="loManualEmail"
-                            type="email"
-                            autocomplete="off"
-                            placeholder="Search borrower email or name…"
-                            class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
-                            :disabled="loManualAddPending"
-                            :aria-expanded="loManualSuggestionsOpen"
-                            aria-autocomplete="list"
-                            aria-controls="rl-lo-manual-suggestions"
-                            @input="loOnManualEmailInput"
-                            @focus="loOnManualEmailFocus"
-                            @blur="loCloseManualSuggestions"
-                            @keydown.enter.prevent="loAddBorrowerByEmail"
-                            @keydown.escape="loCloseManualSuggestions"
-                          >
-                          <ul
-                            v-if="loManualSuggestionsOpen && (loManualSuggestions.length || loManualSuggestionsLoading || loManualEmail.trim().length >= 2)"
-                            id="rl-lo-manual-suggestions"
-                            role="listbox"
-                            class="absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto overscroll-contain rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
-                          >
-                            <li
-                              v-if="loManualSuggestionsLoading"
-                              class="px-3 py-2.5 text-sm text-slate-500"
-                            >
-                              Searching this LO’s borrowers…
-                            </li>
-                            <template v-else-if="loManualSuggestions.length">
-                              <li
-                                v-for="s in loManualSuggestions"
-                                :key="s.id"
-                                role="option"
-                                class="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-primary-50"
-                                @mousedown.prevent="loSelectManualSuggestion(s)"
-                              >
-                                <span class="min-w-0 truncate font-medium text-slate-900">{{ s.name }}</span>
-                                <span class="shrink-0 truncate text-slate-500">{{ s.email }}</span>
-                              </li>
-                            </template>
-                            <li
-                              v-else
-                              class="px-3 py-2.5 text-sm text-slate-500"
-                            >
-                              No borrowers match for this loan officer.
-                            </li>
-                          </ul>
-                        </div>
-                        <button
-                          type="button"
-                          class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          :disabled="loManualAddPending || !loManualEmail.trim()"
-                          @click="loAddBorrowerByEmail"
-                        >
-                          {{ loManualAddPending ? 'Adding…' : 'Add' }}
-                        </button>
-                      </div>
-                      <p
-                        v-if="loManualAddError"
-                        class="text-sm text-red-700"
-                        role="alert"
-                      >
-                        {{ loManualAddError }}
-                      </p>
-                    </template>
+                      {{ loToggleAllBorrowersLabel }}
+                    </button>
                   </div>
 
                   <div
-                    v-else
-                    role="tabpanel"
-                    class="space-y-3"
+                    v-if="loForm.associatedLoanOfficerEmail.trim() && !loBorrowersLoading && !loBorrowersError"
+                    class="space-y-2"
                   >
+                    <label for="rl-lo-borrower-search-edit" class="sr-only">Search borrowers</label>
+                    <input
+                      id="rl-lo-borrower-search-edit"
+                      v-model="loBorrowerSearchQ"
+                      type="search"
+                      autocomplete="off"
+                      placeholder="Search by name or email…"
+                      class="w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 transition focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+                    >
+                  </div>
+
+                  <div class="space-y-3">
                     <div
                       v-if="loBorrowersLoading"
                       class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
@@ -306,39 +194,67 @@
                       v-else-if="!loBorrowers.length"
                       class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
                     >
-                      No borrowers found for this loan officer. Use Manual Add to look one up by email.
+                      No borrowers found for this loan officer.
                     </div>
-                    <ul
-                      v-else
-                      class="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200/80"
+                    <div
+                      v-else-if="!loFilteredBorrowers.length"
+                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
                     >
-                      <li
-                        v-for="b in loBorrowers"
-                        :key="b.id"
-                        class="flex items-center gap-3 px-4 py-2.5 text-sm"
+                      No borrowers match your search.
+                    </div>
+                    <template v-else>
+                      <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200/80">
+                        <li
+                          v-for="b in loPagedBorrowers"
+                          :key="b.id"
+                          class="flex items-center gap-3 px-4 py-2.5 text-sm"
+                        >
+                          <input
+                            :id="`rl-lo-borrower-${b.id}`"
+                            type="checkbox"
+                            class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
+                            :checked="loBorrowerChecked[b.id] !== false"
+                            @change="loSetBorrowerChecked(b.id, ($event.target as HTMLInputElement).checked)"
+                          >
+                          <label
+                            :for="`rl-lo-borrower-${b.id}`"
+                            class="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3"
+                          >
+                            <span class="min-w-0 truncate font-medium text-slate-900">{{ b.name }}</span>
+                            <span class="shrink-0 truncate text-slate-500">{{ b.email }}</span>
+                          </label>
+                        </li>
+                      </ul>
+                      <div
+                        v-if="loBorrowerPageMeta.pageCount > 1"
+                        class="flex items-center justify-between gap-3 pt-1"
                       >
-                        <input
-                          :id="`rl-lo-borrower-${b.id}`"
-                          type="checkbox"
-                          class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
-                          :checked="loBorrowerChecked[b.id] !== false"
-                          @change="loSetBorrowerChecked(b.id, ($event.target as HTMLInputElement).checked)"
-                        >
-                        <label
-                          :for="`rl-lo-borrower-${b.id}`"
-                          class="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3"
-                        >
-                          <span class="min-w-0 truncate font-medium text-slate-900">{{ b.name }}</span>
-                          <span class="shrink-0 truncate text-slate-500">{{ b.email }}</span>
-                        </label>
-                      </li>
-                    </ul>
-                    <p
-                      v-if="loBorrowerTotal > loBorrowers.length"
-                      class="text-xs text-slate-500"
-                    >
-                      Showing {{ loBorrowers.length }} of {{ loBorrowerTotal }} borrowers.
-                    </p>
+                        <p class="text-xs tabular-nums text-slate-500">
+                          {{ loBorrowerPageMeta.from }}–{{ loBorrowerPageMeta.to }}
+                          of {{ loBorrowerPageMeta.total }}
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="!loCanGoBorrowerPrev"
+                            aria-label="Previous borrowers page"
+                            @click="loGoBorrowerPrev"
+                          >
+                            <ChevronLeft class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="!loCanGoBorrowerNext"
+                            aria-label="Next borrowers page"
+                            @click="loGoBorrowerNext"
+                          >
+                            <ChevronRight class="h-4 w-4" :stroke-width="2" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -682,6 +598,8 @@
 </template>
 
 <script setup lang="ts">
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+
 definePageMeta({ layout: 'default' })
 
 const route = useRoute()
@@ -701,6 +619,14 @@ const {
   saving: loSaving,
   form: loForm,
   borrowers: loBorrowers,
+  filteredBorrowers: loFilteredBorrowers,
+  pagedBorrowers: loPagedBorrowers,
+  borrowerSearchQ: loBorrowerSearchQ,
+  borrowerPageMeta: loBorrowerPageMeta,
+  canGoBorrowerPrev: loCanGoBorrowerPrev,
+  canGoBorrowerNext: loCanGoBorrowerNext,
+  goBorrowerPrev: loGoBorrowerPrev,
+  goBorrowerNext: loGoBorrowerNext,
   borrowerTotal: loBorrowerTotal,
   borrowersLoading: loBorrowersLoading,
   borrowersError: loBorrowersError,
@@ -708,19 +634,6 @@ const {
   setBorrowerChecked: loSetBorrowerChecked,
   toggleAllBorrowers: loToggleAllBorrowers,
   toggleAllBorrowersLabel: loToggleAllBorrowersLabel,
-  manualEmail: loManualEmail,
-  manualAddError: loManualAddError,
-  manualAddPending: loManualAddPending,
-  manualSuggestions: loManualSuggestions,
-  manualSuggestionsOpen: loManualSuggestionsOpen,
-  manualSuggestionsLoading: loManualSuggestionsLoading,
-  onManualEmailInput: loOnManualEmailInput,
-  onManualEmailFocus: loOnManualEmailFocus,
-  closeManualSuggestions: loCloseManualSuggestions,
-  selectManualSuggestion: loSelectManualSuggestion,
-  borrowersTab: loBorrowersTab,
-  setBorrowersTab: loSetBorrowersTab,
-  addBorrowerByEmail: loAddBorrowerByEmail,
   submitBlockReasons: loSubmitBlockReasons,
   canSubmitForm: loCanSubmitForm,
   onLoanOfficerSelect: loOnLoanOfficerSelect,
