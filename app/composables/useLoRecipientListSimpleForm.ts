@@ -3,12 +3,15 @@
  * Classic form stays in useRecipientListForm — this path does not touch it.
  */
 import type { MaybeRefOrGetter } from 'vue'
-import { toValue } from 'vue'
+import { toValue, watch } from 'vue'
 import {
   clearNuxtPayloadCache,
   TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY
 } from '~/composables/useNuxtPayloadCache'
 import { loadAllLoBorrowerPages } from '~~/shared/loBorrowersPreviewPage'
+
+/** Rows per page in the LO borrowers checklist UI. */
+export const LO_BORROWERS_CHECKLIST_PAGE_SIZE = 10
 
 export type LoBorrowerPreviewRow = {
   id: string
@@ -50,19 +53,65 @@ export function useLoRecipientListSimpleForm(options: {
   const borrowerChecked = reactive<Record<string, boolean>>({})
   /** Exclusions outside the current preview page (edit hydrate). */
   const excludedOutsidePreview = ref<string[]>([])
-
-  const manualEmail = ref('')
-  const manualAddError = ref('')
-  const manualAddPending = ref(false)
-  const manualSuggestions = ref<LoBorrowerPreviewRow[]>([])
-  const manualSuggestionsOpen = ref(false)
-  const manualSuggestionsLoading = ref(false)
-  /** `list` = borrowers checklist; `manual` = add-by-email. */
-  const borrowersTab = ref<'list' | 'manual'>('list')
+  /** Client-side filter for the LO borrowers checklist. */
+  const borrowerSearchQ = ref('')
+  /** 1-based page within filtered borrowers. */
+  const borrowerPage = ref(1)
 
   let previewSeq = 0
-  let manualSearchSeq = 0
-  let manualSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+  const filteredBorrowers = computed(() => {
+    const q = borrowerSearchQ.value.trim().toLowerCase()
+    if (!q) return borrowers.value
+    return borrowers.value.filter((b) => {
+      const name = b.name.trim().toLowerCase()
+      const email = b.email.trim().toLowerCase()
+      return name.includes(q) || email.includes(q)
+    })
+  })
+
+  const borrowerPageCount = computed(() =>
+    Math.max(1, Math.ceil(filteredBorrowers.value.length / LO_BORROWERS_CHECKLIST_PAGE_SIZE))
+  )
+
+  const pagedBorrowers = computed(() => {
+    const page = Math.min(Math.max(1, borrowerPage.value), borrowerPageCount.value)
+    const start = (page - 1) * LO_BORROWERS_CHECKLIST_PAGE_SIZE
+    return filteredBorrowers.value.slice(start, start + LO_BORROWERS_CHECKLIST_PAGE_SIZE)
+  })
+
+  const borrowerPageMeta = computed(() => {
+    const total = filteredBorrowers.value.length
+    if (!total) return { from: 0, to: 0, total: 0, page: 1, pageCount: 1 }
+    const page = Math.min(Math.max(1, borrowerPage.value), borrowerPageCount.value)
+    const from = (page - 1) * LO_BORROWERS_CHECKLIST_PAGE_SIZE + 1
+    const to = Math.min(page * LO_BORROWERS_CHECKLIST_PAGE_SIZE, total)
+    return { from, to, total, page, pageCount: borrowerPageCount.value }
+  })
+
+  const canGoBorrowerPrev = computed(() => borrowerPageMeta.value.page > 1)
+  const canGoBorrowerNext = computed(
+    () => borrowerPageMeta.value.page < borrowerPageMeta.value.pageCount
+  )
+
+  function goBorrowerPrev() {
+    if (!canGoBorrowerPrev.value) return
+    borrowerPage.value -= 1
+  }
+
+  function goBorrowerNext() {
+    if (!canGoBorrowerNext.value) return
+    borrowerPage.value += 1
+  }
+
+  watch(borrowerSearchQ, () => {
+    borrowerPage.value = 1
+  })
+
+  watch(filteredBorrowers, (rows) => {
+    const maxPage = Math.max(1, Math.ceil(rows.length / LO_BORROWERS_CHECKLIST_PAGE_SIZE))
+    if (borrowerPage.value > maxPage) borrowerPage.value = maxPage
+  })
 
   const uncheckedBorrowerIds = computed(() =>
     borrowers.value.filter((b) => borrowerChecked[b.id] === false).map((b) => b.id)
@@ -129,102 +178,13 @@ export function useLoRecipientListSimpleForm(options: {
     allBorrowersChecked.value ? 'Uncheck all' : 'Check all'
   )
 
-  function clearManualAdd() {
-    if (manualSearchTimer) {
-      clearTimeout(manualSearchTimer)
-      manualSearchTimer = null
-    }
-    manualEmail.value = ''
-    manualAddError.value = ''
-    manualAddPending.value = false
-    manualSuggestions.value = []
-    manualSuggestionsOpen.value = false
-    manualSuggestionsLoading.value = false
-  }
-
-  function setBorrowersTab(tab: 'list' | 'manual') {
-    borrowersTab.value = tab
-    if (tab === 'manual') manualAddError.value = ''
-    else {
-      manualSuggestions.value = []
-      manualSuggestionsOpen.value = false
-    }
-  }
-
-  function includeBorrowerRow(row: LoBorrowerPreviewRow) {
-    borrowers.value = [row, ...borrowers.value.filter((b) => b.id !== row.id)]
-    borrowerChecked[row.id] = true
-    excludedOutsidePreview.value = excludedOutsidePreview.value.filter((id) => id !== row.id)
-    if (borrowerTotal.value < borrowers.value.length) {
-      borrowerTotal.value = borrowers.value.length
-    }
-    clearManualAdd()
-    borrowersTab.value = 'list'
-  }
-
-  async function searchManualBorrowers(raw: string) {
-    const ownerEmail = form.associatedLoanOfficerEmail.trim().toLowerCase()
-    const q = raw.trim()
-    manualAddError.value = ''
-    if (!ownerEmail || !ownerEmail.includes('@') || q.length < 2) {
-      manualSuggestions.value = []
-      manualSuggestionsOpen.value = false
-      manualSuggestionsLoading.value = false
-      return
-    }
-    const seq = ++manualSearchSeq
-    manualSuggestionsLoading.value = true
-    try {
-      const res = await $fetch<{
-        total: number
-        borrowers: LoBorrowerPreviewRow[]
-      }>('/api/v1/tenant/recipient-list/lo-borrowers', {
-        credentials: 'include',
-        ...serverAuthHeaders(),
-        query: { ownerEmail, q, limit: 12 }
-      })
-      if (seq !== manualSearchSeq) return
-      manualSuggestions.value = res.borrowers ?? []
-      manualSuggestionsOpen.value = true
-    } catch {
-      if (seq !== manualSearchSeq) return
-      manualSuggestions.value = []
-      manualSuggestionsOpen.value = false
-    } finally {
-      if (seq === manualSearchSeq) manualSuggestionsLoading.value = false
-    }
-  }
-
-  function onManualEmailInput() {
-    manualAddError.value = ''
-    if (manualSearchTimer) clearTimeout(manualSearchTimer)
-    const value = manualEmail.value
-    manualSearchTimer = setTimeout(() => {
-      void searchManualBorrowers(value)
-    }, 250)
-  }
-
-  function onManualEmailFocus() {
-    if (manualEmail.value.trim().length >= 2) {
-      void searchManualBorrowers(manualEmail.value)
-    }
-  }
-
-  function closeManualSuggestions() {
-    manualSuggestionsOpen.value = false
-  }
-
-  function selectManualSuggestion(row: LoBorrowerPreviewRow) {
-    includeBorrowerRow(row)
-  }
-
   function onLoanOfficerSelect(c: { email: string; displayName: string }) {
     if (isSelfOnlyAudience.value) return
     form.associatedLoanOfficerEmail = c.email
     form.associatedLoanOfficerName = c.displayName || c.email
     excludedOutsidePreview.value = []
-    clearManualAdd()
-    borrowersTab.value = 'list'
+    borrowerSearchQ.value = ''
+    borrowerPage.value = 1
     void loadBorrowers()
   }
 
@@ -234,8 +194,8 @@ export function useLoRecipientListSimpleForm(options: {
     borrowers.value = []
     borrowerTotal.value = 0
     excludedOutsidePreview.value = []
-    clearManualAdd()
-    borrowersTab.value = 'list'
+    borrowerSearchQ.value = ''
+    borrowerPage.value = 1
     resetBorrowerChecks([])
   }
 
@@ -249,58 +209,6 @@ export function useLoRecipientListSimpleForm(options: {
     form.associatedLoanOfficerEmail = email
     form.associatedLoanOfficerName = senderDisplayName.value || email
     void loadBorrowers()
-  }
-
-  async function addBorrowerByEmail(): Promise<void> {
-    manualAddError.value = ''
-    const ownerEmail = form.associatedLoanOfficerEmail.trim().toLowerCase()
-    const email = manualEmail.value.trim().toLowerCase()
-    if (!ownerEmail || !ownerEmail.includes('@')) {
-      manualAddError.value = 'Select a loan officer first.'
-      return
-    }
-    if (!email || !email.includes('@')) {
-      manualAddError.value = 'Enter a valid borrower email for this loan officer.'
-      return
-    }
-
-    const existing = borrowers.value.find((b) => b.email.trim().toLowerCase() === email)
-    if (existing) {
-      includeBorrowerRow(existing)
-      return
-    }
-
-    // Prefer an open suggestion with exact email match (same LO search results).
-    const fromSuggestions = manualSuggestions.value.find(
-      (b) => b.email.trim().toLowerCase() === email
-    )
-    if (fromSuggestions) {
-      includeBorrowerRow(fromSuggestions)
-      return
-    }
-
-    manualAddPending.value = true
-    try {
-      const res = await $fetch<{
-        total: number
-        borrowers: LoBorrowerPreviewRow[]
-      }>('/api/v1/tenant/recipient-list/lo-borrowers', {
-        credentials: 'include',
-        ...serverAuthHeaders(),
-        query: { ownerEmail, email, limit: 1 }
-      })
-      const row = res.borrowers?.[0]
-      if (!row?.id) {
-        manualAddError.value =
-          'No borrower with that email for this loan officer. Only borrowers owned by the selected LO can be added.'
-        return
-      }
-      includeBorrowerRow(row)
-    } catch (e: unknown) {
-      manualAddError.value = fetchErrorMessage(e, 'Failed to look up email')
-    } finally {
-      manualAddPending.value = false
-    }
   }
 
   async function loadBorrowers(opts?: { uncheckedIds?: Set<string> }) {
@@ -498,6 +406,15 @@ export function useLoRecipientListSimpleForm(options: {
     saving,
     form,
     borrowers,
+    filteredBorrowers,
+    pagedBorrowers,
+    borrowerSearchQ,
+    borrowerPage,
+    borrowerPageMeta,
+    canGoBorrowerPrev,
+    canGoBorrowerNext,
+    goBorrowerPrev,
+    goBorrowerNext,
     borrowerTotal,
     borrowersLoading,
     borrowersError,
@@ -509,19 +426,6 @@ export function useLoRecipientListSimpleForm(options: {
     toggleAllBorrowersLabel,
     allBorrowersChecked,
     noBorrowersChecked,
-    manualEmail,
-    manualAddError,
-    manualAddPending,
-    manualSuggestions,
-    manualSuggestionsOpen,
-    manualSuggestionsLoading,
-    onManualEmailInput,
-    onManualEmailFocus,
-    closeManualSuggestions,
-    selectManualSuggestion,
-    borrowersTab,
-    setBorrowersTab,
-    addBorrowerByEmail,
     submitBlockReasons,
     canSubmitForm,
     onLoanOfficerSelect,
