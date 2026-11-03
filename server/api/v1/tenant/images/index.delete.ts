@@ -1,0 +1,55 @@
+import { getTenantConnectionFromEvent } from '@server/tenant/connection'
+import { deleteCustomMarketingTenantImages } from '@server/services/customMarketingImageUpload.service'
+import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
+import { requireTenantLoRecipientLists } from '@server/utils/requireTenantLoRecipientLists'
+
+/**
+ * Delete one or more hosted tenant images from GCS.
+ * Gated by superadmin `allowTenantLoRecipientLists`.
+ */
+export default defineEventHandler(async (event) => {
+  await getTenantConnectionFromEvent(event)
+  const { auth } = await requireTenantLoRecipientLists(
+    event,
+    'Image library is disabled for this tenant'
+  )
+
+  const body = (await readBody(event).catch(() => null)) as {
+    objectPaths?: unknown
+    objectPath?: unknown
+  } | null
+
+  const rawList = Array.isArray(body?.objectPaths)
+    ? body!.objectPaths
+    : typeof body?.objectPath === 'string'
+      ? [body.objectPath]
+      : []
+
+  const objectPaths = rawList
+    .map((p) => (typeof p === 'string' ? p.trim() : ''))
+    .filter(Boolean)
+
+  if (!objectPaths.length) {
+    throw createError({
+      statusCode: 400,
+      message: 'Select at least one image to delete'
+    })
+  }
+
+  const tenantName = await resolveCustomMarketingTenantFolderName(auth)
+  const result = await deleteCustomMarketingTenantImages(tenantName, objectPaths)
+
+  if (!result.deleted.length) {
+    throw createError({
+      statusCode: 404,
+      message: 'No matching images were deleted'
+    })
+  }
+
+  return {
+    ok: true,
+    deletedCount: result.deleted.length,
+    deleted: result.deleted,
+    skipped: result.skipped
+  }
+})

@@ -144,6 +144,10 @@ export interface TenantRecipientListDetailList {
   } | null
   membershipScope?: 'tenant' | 'owner_emails'
   membershipOwnerEmails?: string[]
+  associatedLoanOfficerEmail?: string
+  associatedLoanOfficerName?: string
+  /** Soft-excluded contact ids (unchecked borrowers on LO lists). */
+  excludedContactIds?: string[]
   createdAt: string | null
   updatedAt: string | null
 }

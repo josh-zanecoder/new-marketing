@@ -15,6 +15,8 @@ export interface TenantCampaignDetail {
   id: string
   name: string
   sender: { name: string; email: string }
+  /** `selected` = fixed LO From; missing/`contact_owner` = per-contact rewrite. */
+  senderMode?: 'contact_owner' | 'selected'
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
   subject: string
@@ -211,6 +213,23 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** LO recipient-list flag path only — soft-remove many members in one request. */
+  async function bulkRemoveRecipientListMembers(listId: string, contactIds: string[]) {
+    return $fetch<{
+      ok: boolean
+      removedCount: number
+      contactIds: string[]
+      listId: string
+    }>(
+      `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}/members/bulk-remove`,
+      tenantFetchInit({
+        method: 'POST',
+        body: { contactIds },
+        timeout: 60000
+      })
+    )
+  }
+
   async function restoreRecipientListMember(listId: string, contactId: string) {
     return $fetch<{ ok: boolean; restored: boolean; contactId: string; listId: string }>(
       `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}/members/${encodeURIComponent(contactId)}/restore`,
@@ -367,6 +386,21 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
 
   async function fetchTenantMe() {
     return $fetch<unknown>('/api/v1/tenant/me', tenantFetchInit())
+  }
+
+  async function fetchCampaignSenderCandidates(q = '') {
+    return $fetch<{
+      candidates: Array<{
+        email: string
+        firstName: string
+        lastName: string
+        displayName: string
+        avatarUrl: string
+      }>
+    }>('/api/v1/tenant/campaign-sender-candidates', {
+      ...tenantFetchInit(),
+      query: { q: q.trim() || undefined, limit: 12 }
+    })
   }
 
   async function fetchDashboard() {
@@ -535,6 +569,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     previewText?: string
     senderName?: string
     senderEmail?: string
+    senderMode?: string
     templateHtml?: string
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
@@ -557,6 +592,55 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** Host an image for HTML email templates; returns public HTTPS URL for img src. */
+  async function uploadEmailTemplateImage(body: { dataUrl: string }) {
+    return $fetch<{ ok: boolean; url: string; objectPath: string }>(
+      '/api/v1/tenant/email-templates/images',
+      tenantFetchInit({ method: 'POST', body, timeout: 60000 })
+    )
+  }
+
+  /** LO-flag Images gallery — list hosted tenant images (HTTPS URLs). */
+  async function fetchTenantHostedImages() {
+    return $fetch<{
+      ok: boolean
+      items: Array<{
+        id: string
+        url: string
+        objectPath: string
+        fileName: string
+        contentType: string
+        size: number
+        createdAt: string
+      }>
+      total: number
+    }>('/api/v1/tenant/images', tenantFetchInit({ timeout: 60000 }))
+  }
+
+  /** LO-flag Images gallery — upload into `library/` and return public HTTPS URL. */
+  async function uploadTenantHostedImage(body: { dataUrl: string }) {
+    return $fetch<{ ok: boolean; url: string; objectPath: string; id: string }>(
+      '/api/v1/tenant/images',
+      tenantFetchInit({ method: 'POST', body, timeout: 60000 })
+    )
+  }
+
+  /** LO-flag Images gallery — delete one or more hosted objects. */
+  async function deleteTenantHostedImages(objectPaths: string[]) {
+    return $fetch<{
+      ok: boolean
+      deletedCount: number
+      deleted: string[]
+      skipped: string[]
+    }>('/api/v1/tenant/images', {
+      ...tenantFetchInit({
+        method: 'DELETE',
+        body: { objectPaths },
+        timeout: 60000
+      })
+    })
+  }
+
   return {
     serverAuthHeaders,
     tenantFetchInit,
@@ -566,6 +650,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchRecipientListResource,
     fetchRecipientListById,
     removeRecipientListMember,
+    bulkRemoveRecipientListMembers,
     restoreRecipientListMember,
     fetchDynamicVariables,
     createContact,
@@ -580,6 +665,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     updateEmailTemplateCategory,
     deleteEmailTemplateCategory,
     fetchTenantMe,
+    fetchCampaignSenderCandidates,
     fetchDashboard,
     fetchSendCampaignStatus,
     fetchCampaignSendRecipients,
@@ -594,6 +680,10 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     restartCampaignSend,
     abortCampaignRecipients,
     sendTestEmail,
-    uploadCustomMarketingImage
+    uploadCustomMarketingImage,
+    uploadEmailTemplateImage,
+    fetchTenantHostedImages,
+    uploadTenantHostedImage,
+    deleteTenantHostedImages
   }
 }

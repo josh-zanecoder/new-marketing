@@ -86,6 +86,40 @@ describe('sendCampaignOutboundBatch', () => {
     expect(sendCampaignBatchWithMessageVersions).not.toHaveBeenCalled()
   })
 
+  it('forwards hosted HTTPS img htmlContent unchanged to ZC Mail bulk', async () => {
+    vi.mocked(resolveTenantEmailSendConfig).mockResolvedValue(zcMailConfig)
+    vi.mocked(sendZcMailBulk).mockResolvedValue({
+      ok: true,
+      jobId: 'job-img',
+      status: 'completed',
+      sent: 1,
+      failed: 0,
+      results: [{ status: 'sent', sesMessageId: 'ses-img' }]
+    })
+
+    const hosted =
+      'https://storage.googleapis.com/custom-marketing-images/custom-marketing/demo/library/hero.jpg'
+    const htmlContent = `<!DOCTYPE html><html><body><img src="${hosted}" alt="" width="600" /><p>Hi</p></body></html>`
+
+    await sendCampaignOutboundBatch({
+      sender: { name: 'Acme', email: 'from@acme.com' },
+      messageVersions: [
+        {
+          to: [{ email: 'a@example.com' }],
+          subject: '[Test] Newsletter',
+          htmlContent
+        }
+      ],
+      dbName: 'acme_db',
+      tenantId: 'tid-1'
+    })
+
+    const call = vi.mocked(sendZcMailBulk).mock.calls[0]?.[0]
+    expect(call?.recipients[0]?.html).toBe(htmlContent)
+    expect(call?.recipients[0]?.html).toContain(hosted)
+    expect(call?.recipients[0]?.html).not.toContain('data:image')
+  })
+
   it('routes Brevo configs to the Brevo batch sender', async () => {
     vi.mocked(resolveTenantEmailSendConfig).mockResolvedValue({ provider: 'BREVO' })
     vi.mocked(sendCampaignBatchWithMessageVersions).mockResolvedValue({

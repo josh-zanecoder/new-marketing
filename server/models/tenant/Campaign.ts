@@ -46,6 +46,15 @@ export const campaignSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true }
   },
+  /**
+   * `selected` = send as stored LO sender (only when tenant Edit sender is ON at send).
+   * Missing / `contact_owner` = existing per-contact owner From rewrite.
+   */
+  senderMode: {
+    type: String,
+    enum: ['contact_owner', 'selected'],
+    default: 'contact_owner'
+  },
   recipientsType: { type: String, enum: recipientsTypeEnum, default: 'manual' },
   recipientsListId: { type: String, default: '' },
   emailTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },

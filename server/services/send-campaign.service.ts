@@ -38,8 +38,10 @@ import { mergeTenantOwnerEmailScopeFilter } from '../utils/contactOwnerFilter'
 import {
   applyCampaignFromAddressMode,
   buildReplyToFromContactOwner,
-  buildSenderFromContactOwner
+  buildSenderFromContactOwner,
+  resolveSelectedLoSender
 } from '@server/utils/email/replyToFromContactMetadata'
+import { shouldUsePersistedSelectedLoSender } from '~~/shared/persistedSelectedLoSender'
 import type { CampaignFromAddressMode } from '~~/shared/campaignFromAddressMode'
 import { sendCampaignOutboundBatch } from './campaignOutboundEmail.service'
 import { applyEmailPreviewText } from '~~/shared/emailPreviewText'
@@ -851,11 +853,22 @@ export async function processBatch(
         [contact?.firstName, contact?.lastName].filter(Boolean).join(' ').trim() || undefined
       const params = recipientBrevoParams(contact)
       const replyTo = buildReplyToFromContactOwner(contact, operatorUser, variableFallback)
-      const sender = applyCampaignFromAddressMode(
-        buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback),
-        replyTo,
-        campaignFromAddressMode
-      )
+      const storedSender = {
+        name: String(campaign.sender?.name ?? '').trim(),
+        email: String(campaign.sender?.email ?? '').trim().toLowerCase()
+      }
+      // Honor DB `selected` even if the registry toggle was later turned off.
+      const useSelectedLoSender = shouldUsePersistedSelectedLoSender({
+        senderMode: campaign.senderMode,
+        senderEmail: storedSender.email
+      })
+      const sender = useSelectedLoSender
+        ? resolveSelectedLoSender(storedSender, operatorUser)
+        : applyCampaignFromAddressMode(
+            buildSenderFromContactOwner(contact, campaign.sender, operatorUser, variableFallback),
+            replyTo,
+            campaignFromAddressMode
+          )
       const headers = listUnsubscribeHeadersForContact({
         dbName: tenantDbNameForTags,
         contactId: contact?._id ? String(contact._id) : undefined,

@@ -39,6 +39,44 @@ describe('toTenantAdminRow', () => {
     expect(row?.campaignFromAddressMode).toBe('default')
   })
 
+  it('defaults allowTenantEditSender to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantEditSender).toBe(false)
+  })
+
+  it('reads allowTenantEditSender true from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantEditSender: true
+    })
+    expect(row?.allowTenantEditSender).toBe(true)
+  })
+
+  it('defaults allowTenantLoRecipientLists to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantLoRecipientLists).toBe(false)
+  })
+
+  it('reads allowTenantLoRecipientLists true from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantLoRecipientLists: true
+    })
+    expect(row?.allowTenantLoRecipientLists).toBe(true)
+  })
+
   it('reads contact_owner From address mode from the registry doc', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

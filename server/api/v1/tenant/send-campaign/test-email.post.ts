@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
     previewText?: string
     senderName?: string
     senderEmail?: string
+    senderMode?: string
     templateHtml?: string
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
     previewText: body?.previewText,
     senderName: body?.senderName,
     senderEmail: body?.senderEmail,
+    senderMode: body?.senderMode,
     templateHtml: body?.templateHtml,
     recipientsType: body?.recipientsType,
     recipientsListId: body?.recipientsListId,

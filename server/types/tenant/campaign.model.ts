@@ -25,6 +25,10 @@ export interface CampaignLean {
   _id: Types.ObjectId
   name: string
   sender: { name: string; email: string }
+  /**
+   * `selected` = fixed LO From from `sender`. Missing/`contact_owner` = per-contact rewrite.
+   */
+  senderMode?: 'contact_owner' | 'selected'
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
   subject: string

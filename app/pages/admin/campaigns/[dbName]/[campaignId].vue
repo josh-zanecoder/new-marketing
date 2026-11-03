@@ -12,8 +12,8 @@ import {
 } from '~/composables/useCampaignSendFlow'
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
-import { CONTACT_OWNER_SENDER_LABEL } from '~~/shared/contactOwnerSender'
 import { campaignCreatorLabel } from '~~/shared/campaignCreatorLabel'
+import { campaignSenderDisplayName } from '~~/shared/campaignSenderDisplayName'
 
 import { forceReleaseMarketingScrollLock } from '~/composables/useMarketingScrollLock'
 
@@ -283,6 +283,24 @@ const creatorLabel = computed(() => {
     ownerEmail: c.ownerEmail,
     createdBy: c.createdBy,
     creator:
+      snap && typeof snap === 'object'
+        ? {
+            firstName: typeof snap.firstName === 'string' ? snap.firstName : '',
+            lastName: typeof snap.lastName === 'string' ? snap.lastName : '',
+            email: typeof snap.email === 'string' ? snap.email : ''
+          }
+        : undefined
+  })
+})
+const senderOverviewLabel = computed(() => {
+  const c = campaign.value
+  if (!c) return ''
+  const snap = c.mergeUserSnapshot
+  return campaignSenderDisplayName({
+    senderMode: c.senderMode,
+    sender: c.sender,
+    replyTo: c.replyTo,
+    mergeUserSnapshot:
       snap && typeof snap === 'object'
         ? {
             firstName: typeof snap.firstName === 'string' ? snap.firstName : '',
@@ -721,7 +739,7 @@ const recipientListTruncated = computed(() => {
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">
                     <dt class="text-sm font-medium text-slate-500 sm:text-[15px]">Sender</dt>
                     <dd class="break-words text-sm text-slate-900 sm:col-span-2 sm:text-[15px]">
-                      {{ CONTACT_OWNER_SENDER_LABEL }} &lt;{{ campaign.sender?.email }}&gt;
+                      {{ senderOverviewLabel }} &lt;{{ campaign.sender?.email }}&gt;
                     </dd>
                   </div>
                   <div class="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-3 sm:gap-4 sm:px-6 sm:py-5">

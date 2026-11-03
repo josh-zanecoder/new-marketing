@@ -113,6 +113,22 @@ export const recipientListSchema = new mongoose.Schema(
       default: () => []
     },
     /**
+     * LO-scoped lists (when `allowTenantLoRecipientLists` is ON): borrowers for this LO email.
+     * Empty for classic lists.
+     */
+    associatedLoanOfficerEmail: {
+      type: String,
+      default: '',
+      trim: true,
+      lowercase: true,
+      index: true
+    },
+    associatedLoanOfficerName: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    /**
      * Soft-removed contacts: kept out of membership across rebuild/sync until cleared.
      * Used when an operator removes a contact from a dynamic/hybrid list.
      */

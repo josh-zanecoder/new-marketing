@@ -1,4 +1,5 @@
 import { isTenantApiKeyAuthContext } from '@server/tenant/registry-auth'
+import { marketingAudienceOwnerEmailsFromAuth } from '@server/utils/auth/marketingAudienceFromAuth'
 
 /**
  * Restricts contacts to rows whose `metadata.ownerEmail` is in `scopedEmails`
@@ -33,8 +34,8 @@ export function mergeContactOwnerScopeFilter(
 }
 
 /**
- * Same email scope as contacts: `contactOwnerScope` on tenant API key sessions, unless
- * `tenantWideContacts` is set (then no row filter).
+ * Same email scope as contacts: classic handoff `contactOwnerScope` / `tenantWideContacts`.
+ * When LO-list feature flag is ON, applies LO/OM role audience rules instead.
  * Scoped sessions with an empty owner list return no rows (do not leak tenant-wide).
  */
 export function mergeTenantOwnerEmailScopeFilter(
@@ -42,6 +43,18 @@ export function mergeTenantOwnerEmailScopeFilter(
   auth: unknown
 ): Record<string, unknown> {
   if (!isTenantApiKeyAuthContext(auth)) return base
+
+  // Feature-flagged LO/OM audience — only when allowTenantLoRecipientLists is on the session.
+  if (auth.allowTenantLoRecipientLists === true) {
+    const emails = marketingAudienceOwnerEmailsFromAuth(auth)
+    if (emails === null) return base
+    if (!emails.length) {
+      return { $and: [base, { _id: { $in: [] } }] }
+    }
+    return mergeContactOwnerScopeFilter(base, emails)
+  }
+
+  // Classic: handoff scope only.
   if (auth.tenantWideContacts === true) return base
   const scope = auth.contactOwnerScope
   if (!scope?.length) {

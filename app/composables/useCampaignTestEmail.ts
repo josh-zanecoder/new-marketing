@@ -3,6 +3,7 @@ export interface CampaignTestEmailDraftPayload {
   previewText?: string
   senderName: string
   senderEmail: string
+  senderMode?: 'contact_owner' | 'selected'
   templateHtml: string
   recipientsType: 'list' | 'manual'
   recipientsListId?: string
@@ -89,6 +90,7 @@ export function useCampaignTestEmail() {
         previewText: draft.previewText,
         senderName: draft.senderName,
         senderEmail: draft.senderEmail,
+        senderMode: draft.senderMode,
         templateHtml: draft.templateHtml,
         recipientsType: draft.recipientsType,
         recipientsListId: draft.recipientsListId,

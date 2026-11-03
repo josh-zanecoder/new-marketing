@@ -42,6 +42,9 @@ export interface RecipientListLean {
   membershipScope?: RecipientListMembershipScope
   /** Snapshot for `owner_emails` membership; empty for `tenant`. */
   membershipOwnerEmails?: string[]
+  /** Set for LO-scoped lists; empty for classic lists. */
+  associatedLoanOfficerEmail?: string
+  associatedLoanOfficerName?: string
   /** Soft-removed from this list; excluded from rebuild/sync membership. */
   excludedContactIds?: Types.ObjectId[]
   createdAt?: Date
