@@ -291,6 +291,13 @@ async function rebuildOneNonStaticListFromDoc(
   )
   const membershipScope = membershipScopeFromListDoc(listDoc)
   const membershipOwnerEmails = membershipOwnerEmailsForRebuild(listDoc)
+  // LO-scoped lists only (`associatedLoanOfficerEmail` is set under the LO flag).
+  // Classic lists never set that field — rebuild stays identical to prior behavior.
+  const loEmail =
+    typeof listDoc.associatedLoanOfficerEmail === 'string'
+      ? listDoc.associatedLoanOfficerEmail.trim()
+      : ''
+  const dedupeByEmail = Boolean(loEmail)
 
   return rebuildRecipientListMembers(
     tenantConn,
@@ -303,7 +310,8 @@ async function rebuildOneNonStaticListFromDoc(
     membershipScope,
     membershipOwnerEmails,
     joinsForRebuild,
-    nested
+    nested,
+    { dedupeByEmail }
   )
 }
 

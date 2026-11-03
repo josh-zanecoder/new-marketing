@@ -1,6 +1,9 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
+import {
+  isRegisteredTenantAuthContext,
+  isTenantApiKeyAuthContext
+} from '@server/tenant/registry-auth'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
@@ -20,6 +23,7 @@ import {
   normalizeRecipientListMemberSearchQ,
   recipientListMemberSearchOrClauses
 } from '~~/shared/recipientListMemberSearch'
+import { dedupeByNormalizedEmailKeepFirst } from '~~/shared/dedupeByNormalizedEmail'
 
 function rowCriterionDisplay(
   filterDoc: Record<string, unknown>,
@@ -240,6 +244,16 @@ export default defineEventHandler(async (event) => {
   const skip = (page - 1) * pageSize
   const memberSearchQ = normalizeRecipientListMemberSearchQ(query.q)
   const memberSearchActive = isActiveRecipientListMemberSearch(memberSearchQ)
+  // LO feature-flag path only: collapse duplicate emails on LO-scoped lists.
+  // Classic lists (no associatedLoanOfficerEmail) keep prior multi-contact behavior.
+  const associatedLoEmail =
+    typeof doc.associatedLoanOfficerEmail === 'string'
+      ? doc.associatedLoanOfficerEmail.trim()
+      : ''
+  const dedupeMemberEmails =
+    isTenantApiKeyAuthContext(auth) &&
+    auth.allowTenantLoRecipientLists === true &&
+    Boolean(associatedLoEmail)
 
   const excludedContactIds = recipientListExcludedContactIds(
     doc as { excludedContactIds?: unknown }
@@ -308,7 +322,43 @@ export default defineEventHandler(async (event) => {
   let memberTotal = 0
   let items: ReturnType<typeof mapOneContact>[] = []
 
-  if (memberSearchActive) {
+  if (dedupeMemberEmails) {
+    // Flag path: load all members, keep first contact per email, then search/paginate.
+    const memberQuery: Record<string, unknown> = { recipientListId: listId }
+    if (excludedContactIds.length) {
+      memberQuery.contactId = { $nin: excludedContactIds }
+    }
+    const allMemberRows = (await RecipientListMember.find(memberQuery)
+      .select('contactId')
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec()) as RecipientListMemberRow[]
+    const orderedIds = allMemberRows.map((m) => m.contactId).filter(Boolean)
+    const allContacts: ContactRow[] =
+      orderedIds.length === 0
+        ? []
+        : ((await Contact.find(
+            mergeTenantOwnerEmailScopeFilter(
+              withMarketableContactFilter({ _id: { $in: orderedIds } }),
+              auth
+            )
+          )
+            .select(contactSelect)
+            .lean()
+            .exec()) as ContactRow[])
+    let uniqueItems = dedupeByNormalizedEmailKeepFirst(
+      mapContactItems(allContacts, orderedIds)
+    )
+    if (memberSearchActive) {
+      const q = memberSearchQ.toLowerCase()
+      uniqueItems = uniqueItems.filter((row) => {
+        const hay = `${row.name} ${row.firstName} ${row.lastName} ${row.email}`.toLowerCase()
+        return hay.includes(q)
+      })
+    }
+    memberTotal = uniqueItems.length
+    items = uniqueItems.slice(skip, skip + pageSize)
+  } else if (memberSearchActive) {
     // Name/email search among list members (used by LO-flag detail UI). Empty `q` keeps classic path below.
     const searchFilter = mergeTenantOwnerEmailScopeFilter(
       withMarketableContactFilter({

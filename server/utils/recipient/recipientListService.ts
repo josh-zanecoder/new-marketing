@@ -193,6 +193,11 @@ async function loadWritePayload(
   /** Set only for LO-scoped writes; omitted on classic path. */
   excludedContactIds: Types.ObjectId[]
   applyExcludedContactIds: boolean
+  /**
+   * True only when `allowTenantLoRecipientLists` is ON and this write is LO-scoped.
+   * Classic recipient lists always keep `false` (unchanged membership behavior).
+   */
+  dedupeMemberEmails: boolean
 }> {
   requireTenantAuth(auth)
   const name = assertName(body)
@@ -223,6 +228,7 @@ async function loadWritePayload(
   let applyAssociatedLoanOfficer = false
   let excludedContactIds: Types.ObjectId[] = []
   let applyExcludedContactIds = false
+  let dedupeMemberEmails = false
 
   const dbName =
     isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
@@ -267,6 +273,7 @@ async function loadWritePayload(
       membershipScope = 'owner_emails'
       membershipOwnerEmails = [loEmail]
       applyAssociatedLoanOfficer = true
+      dedupeMemberEmails = true
       // Unchecked borrowers on the LO create/edit form → soft exclusions.
       applyExcludedContactIds = true
       excludedContactIds = recipientListExcludedContactIds({
@@ -293,7 +300,8 @@ async function loadWritePayload(
     associatedLoanOfficerName,
     applyAssociatedLoanOfficer,
     excludedContactIds,
-    applyExcludedContactIds
+    applyExcludedContactIds,
+    dedupeMemberEmails
   }
 }
 
@@ -348,7 +356,8 @@ export async function createRecipientList(params: {
     w.membershipScope,
     w.membershipOwnerEmails,
     joinsForRebuild,
-    w.nested
+    w.nested,
+    { dedupeByEmail: w.dedupeMemberEmails }
   )
 
   return {
@@ -419,7 +428,8 @@ export async function updateRecipientList(params: {
     w.membershipScope,
     w.membershipOwnerEmails,
     joinsForRebuild,
-    w.nested
+    w.nested,
+    { dedupeByEmail: w.dedupeMemberEmails }
   )
 
   const updated = (await RecipientList.findById(listId).lean().exec()) as Record<
