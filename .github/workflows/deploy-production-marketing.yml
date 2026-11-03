@@ -7,18 +7,18 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: poc-1-aima-pmu
-  SERVICE_NAME: marketing-production
-  WORKER_SERVICE_NAME: marketing-kafka-worker-production
-  SEND_WORKER_SERVICE_NAME: marketing-send-worker-production
-  BREVO_WEBHOOK_SERVICE_NAME: marketing-brevo-webhook-production
-  ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/poc-1-aima-pmu/marketing-production
-  BRIDGE_SERVICE_NAME: marketing-kafka-producer-bridge-production
-  BRIDGE_IMAGE_NAME: marketing-kafka-producer-bridge-production
-  BRIDGE_SECRET_NAME: marketing-kafka-producer-bridge-production
-  SERVICE_ACCOUNT: 980800581325-compute@developer.gserviceaccount.com
-  SECRET_NAME: marketing-production
-  ARTIFACT_REGISTRY_NAME: marketing-production
+  PROJECT_ID: crm-convere
+  SERVICE_NAME: marketing-v2-prod
+  WORKER_SERVICE_NAME: marketing-v2-prod-kafka-worker
+  SEND_WORKER_SERVICE_NAME: marketing-v2-prod-send-worker
+  BREVO_WEBHOOK_SERVICE_NAME: marketing-v2-prod-brevo-webhook
+  ARTIFACT_REGISTRY: us-west1-docker.pkg.dev/crm-convere/marketing-v2-prod
+  BRIDGE_SERVICE_NAME: marketing-v2-prod-kafka-producer-bridge
+  BRIDGE_IMAGE_NAME: marketing-v2-prod-kafka-producer-bridge
+  BRIDGE_SECRET_NAME: marketing-v2-prod-kafka-producer-bridge
+  SERVICE_ACCOUNT: 401745812644-compute@developer.gserviceaccount.com
+  SECRET_NAME: marketing-v2-prod
+  ARTIFACT_REGISTRY_NAME: marketing-v2-prod
   REGION: us-west1
   VPC_CONNECTOR: marketing-run-kafka
   VPC_EGRESS: private-ranges-only
@@ -35,9 +35,9 @@ env:
   # Dedicated Brevo ingress (fast ack + Cloud Tasks); requires send worker.
   DEPLOY_BREVO_WEBHOOK: 'true'
   # Set to 'true' to deploy marketing-kafka-worker-production on production pushes.
-  DEPLOY_KAFKA_WORKER: 'false'
+  DEPLOY_KAFKA_WORKER: 'true'
   # Set to 'true' to deploy marketing-kafka-producer-bridge-production on production pushes.
-  DEPLOY_KAFKA_BRIDGE: 'false'
+  DEPLOY_KAFKA_BRIDGE: 'true'
 
 jobs:
   deploy:
@@ -74,7 +74,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_NEW_MARKETING }}
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
 
       - name: Fetch environment variables from Secret Manager
         id: secrets
@@ -372,7 +372,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_NEW_MARKETING }}
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
 
       - name: Fetch environment variables from Secret Manager
         run: |
@@ -443,7 +443,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_NEW_MARKETING }}
+          credentials_json: ${{ secrets.GCP_SA_KEY_CONVERE }}
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
