@@ -837,6 +837,7 @@ import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
 import { resolveEditableCampaignSenderMode } from '~~/shared/resolveEditableCampaignSenderMode'
 import { normalizeCampaignSenderDisplayName } from '~~/shared/contactOwnerSender'
 import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
+import { campaignSaveMissingFieldsMessage } from '~~/shared/campaignSaveRequiredFields'
 
 const campaignStore = useCampaignStore()
 const {
@@ -847,6 +848,7 @@ const {
   initialSenderEmail,
   sessionUser,
   allowTenantEditSender,
+  allowTenantLoRecipientLists,
   canSelectAnyLoanOfficer,
   isSelfOnlyAudience,
   loadDefaultCampaignSender
@@ -1891,7 +1893,7 @@ async function submitTestEmail() {
   await sendTestEmailForDraft(draft)
 }
 
-/** Name, recipients, subject, and template — required before "Save campaign" is enabled. */
+/** Name, recipients, subject, and template — required to actually persist. */
 const readyToSaveCampaign = computed(
   () =>
     !!form.value.name?.trim()
@@ -1900,12 +1902,28 @@ const readyToSaveCampaign = computed(
     && designComplete.value
 )
 
+/**
+ * Classic: disable Save until required fields are complete.
+ * LO recipient-list flag: keep Save enabled; click shows which fields are missing.
+ */
 const saveCampaignActionDisabled = computed(
   () =>
     isSaving.value
     || !!sendingCampaignId.value
-    || !readyToSaveCampaign.value
+    || (
+      allowTenantLoRecipientLists.value !== true
+      && !readyToSaveCampaign.value
+    )
 )
+
+function campaignSaveRequiredFlags() {
+  return {
+    hasName: !!form.value.name?.trim(),
+    hasRecipients: recipientsComplete.value,
+    hasDesign: designComplete.value,
+    hasSubject: subjectComplete.value
+  }
+}
 
 const manualRecipientsListed = computed(() =>
   form.value.recipientsManual
@@ -2252,7 +2270,15 @@ async function handleSendFromWizard() {
 
 async function handleCreate() {
   saveError.value = null
-  if (!form.value.name.trim()) {
+
+  // LO flag path: button stays enabled — surface every incomplete required field.
+  if (allowTenantLoRecipientLists.value === true) {
+    const missingMsg = campaignSaveMissingFieldsMessage(campaignSaveRequiredFlags())
+    if (missingMsg) {
+      saveError.value = missingMsg
+      return
+    }
+  } else if (!form.value.name.trim()) {
     saveError.value = 'Campaign name is required'
     return
   }
