@@ -49,14 +49,14 @@ describe('campaign Sender name from LO recipient list', () => {
     expect(classic).not.toContain('isEmailShapedSenderDisplayName')
   })
 
-  it('shared typed-name resolver keeps classic behavior (no LO-only skip)', () => {
+  it('shared typed-name resolver uses tenant optional Sender name (empty stays empty)', () => {
     const helper = readFileSync(
       resolve(root, 'shared/resolveTypedCampaignSenderName.ts'),
       'utf8'
     )
-    // Classic order: matched → session → default → email (no email-shaped skip).
+    // Order: matched → session → tenant optional Sender name (empty stays empty).
     expect(helper).toContain('if (matchedName) return matchedName')
-    expect(helper).toContain('if (defaultName) return defaultName')
-    expect(helper).toContain('return email')
+    expect(helper).toContain('return defaultName')
+    expect(helper).toContain('empty means empty')
   })
 })

@@ -50,15 +50,27 @@ describe('buildSenderFromContactOwner', () => {
     })
   })
 
-  it('falls back to operator name when owner and dynamic fallbacks are missing', () => {
+  it('prefers campaign/company name over operator when From email is not the operator', () => {
     expect(
       buildSenderFromContactOwner(null, {
         name: 'Forge Capital Lending',
-        email: 'marketing@example.com'
+        email: 'wilson@zanecoder.com'
+      }, operator)
+    ).toEqual({
+      name: 'Forge Capital Lending',
+      email: 'wilson@zanecoder.com'
+    })
+  })
+
+  it('uses operator name when From email is the operator (self send)', () => {
+    expect(
+      buildSenderFromContactOwner(null, {
+        name: 'Forge Capital Lending',
+        email: 'alex@example.com'
       }, operator)
     ).toEqual({
       name: 'Alex Operator',
-      email: 'marketing@example.com'
+      email: 'alex@example.com'
     })
   })
 
@@ -74,7 +86,7 @@ describe('buildSenderFromContactOwner', () => {
     })
   })
 
-  it('ignores legacy Contact owner placeholder and uses operator name', () => {
+  it('ignores legacy Contact owner placeholder and uses company name for non-operator From', () => {
     expect(
       buildSenderFromContactOwner(
         null,
@@ -82,7 +94,8 @@ describe('buildSenderFromContactOwner', () => {
         operator
       )
     ).toEqual({
-      name: 'Alex Operator',
+      // Placeholder stripped → email fallback as storedName; not operator (different email).
+      name: 'marketing@example.com',
       email: 'marketing@example.com'
     })
   })

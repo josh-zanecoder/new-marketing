@@ -927,11 +927,14 @@ const senderInitials = computed(() => {
 
 let senderNameLookupSeq = 0
 
-async function syncSenderNameForTypedEmail() {
+async function syncSenderNameForTypedEmail(emailOverride?: string) {
   const seq = ++senderNameLookupSeq
-  const email = String(form.value.senderEmail || '')
+  const email = String(emailOverride ?? form.value.senderEmail ?? '')
     .trim()
     .toLowerCase()
+  if (emailOverride != null) {
+    form.value.senderEmail = email
+  }
   const sessionEmail = String(sessionUser.value?.email || '')
     .trim()
     .toLowerCase()
@@ -957,7 +960,7 @@ async function syncSenderNameForTypedEmail() {
     }
   }
   if (seq !== senderNameLookupSeq) return
-  // Existing LO/session → their name; otherwise tenant display-name field (not stale John Broker).
+  // LO/session match → their name; unknown email → tenant company default (not stale LO name).
   form.value.senderName = resolveTypedCampaignSenderName({
     senderEmail: email,
     defaultDisplayName: defaultSenderName.value,
@@ -976,10 +979,10 @@ async function syncSenderNameForTypedEmail() {
   senderAvatarFailed.value = false
 }
 
-function onSenderEmailTyped() {
+function onSenderEmailTyped(email?: string) {
   if (!allowTenantEditSender.value || isSelfOnlyAudience.value) return
   selectedSenderAvatarUrl.value = ''
-  void syncSenderNameForTypedEmail()
+  void syncSenderNameForTypedEmail(email)
 }
 
 function onSenderCandidateSelect(c: {
