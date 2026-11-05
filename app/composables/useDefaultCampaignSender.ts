@@ -124,6 +124,8 @@ export function useDefaultCampaignSender() {
       const nameFromMe = me?.defaultCampaignSenderName?.trim() || ''
       const emailFromMe = me?.defaultCampaignSenderEmail?.trim() || ''
       if (allow) {
+        // Edit-sender ON: use tenant optional Sender name/email as-is (empty stays empty).
+        // Do NOT inject a product default company name.
         defaultSenderName.value = nameFromMe
         defaultSenderEmail.value = emailFromMe
       } else {

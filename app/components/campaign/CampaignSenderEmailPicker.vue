@@ -91,8 +91,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
-  /** Fired on keyboard input only (not on LO profile select). */
-  typed: []
+  /** Fired on keyboard input only (not on LO profile select). Passes the latest draft email. */
+  typed: [email: string]
   select: [candidate: SenderCandidate]
 }>()
 
@@ -158,7 +158,10 @@ function onFocus() {
 function onInput() {
   dropdownOpen.value = true
   scheduleSearch()
-  emit('typed')
+  const next = draft.value.trim()
+  // Emit email before typed so parent sync does not read a stale v-model (kept LO name).
+  emit('update:modelValue', next)
+  emit('typed', next)
 }
 
 function closeDropdown() {

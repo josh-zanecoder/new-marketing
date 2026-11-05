@@ -18,12 +18,12 @@ export function isEmailShapedSenderDisplayName(
 
 /**
  * Display name after the user types a sender email (not an LO picker select).
- * Existing LO / session match → their name; otherwise the tenant display-name field.
- * Classic behavior — do not change for non–LO-list flows.
+ * LO directory / session match → their name; otherwise tenant optional Sender name.
+ * If that tenant field is empty, name stays empty (no product default inject).
  */
 export function resolveTypedCampaignSenderName(params: {
   senderEmail: string | null | undefined
-  /** Tenant `defaultCampaignSenderName` (display name field). */
+  /** Tenant optional `defaultCampaignSenderName` (Sender name field). */
   defaultDisplayName: string | null | undefined
   sessionEmail?: string | null
   sessionDisplayName?: string | null
@@ -42,6 +42,6 @@ export function resolveTypedCampaignSenderName(params: {
 
   if (matchedName) return matchedName
   if (sessionEmail && email === sessionEmail && sessionName) return sessionName
-  if (defaultName) return defaultName
-  return email
+  // Tenant optional Sender name — empty means empty (depends on that admin field only).
+  return defaultName
 }

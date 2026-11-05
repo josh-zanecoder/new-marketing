@@ -65,7 +65,11 @@ export function buildCampaignCreatorReplyTo(
 /**
  * Per-recipient From display name: contact CRM account owner (`metadata.owner*`),
  * then tenant dynamic-variable fallbacks for `user.firstName` / `user.lastName`,
- * then the operator who created/triggered the send, then campaign stored sender name.
+ * then campaign stored sender name (tenant company default), then operator.
+ *
+ * When Marketing/OM types a From email that is not the operator, do NOT paste the
+ * logged-in user's name (e.g. "Michael Jordan") onto that address — use the
+ * campaign/company display name instead.
  */
 export function buildSenderFromContactOwner(
   contact: ContactLean | null | undefined,
@@ -77,9 +81,22 @@ export function buildSenderFromContactOwner(
   const owner = userMergeSnapshotFromContactOwner(contact)
   const ownerName = replyToNameFromUserSnapshot(owner)
   const dynamicName = replyToNameFromUserSnapshot(variableFallback)
+  const operator = mergeUserSnapshotsForEmail(operatorFallback)
+  const operatorEmail = String(operator?.email ?? '')
+    .trim()
+    .toLowerCase()
   const operatorName = replyToNameFromUserSnapshot(operatorFallback)
   const storedName = normalizeCampaignSenderDisplayName(campaignSender.name, email) || email
-  const name = (ownerName || dynamicName || operatorName || storedName).slice(0, BREVO_SENDER_NAME_MAX)
+  // Operator name only when From is that person; otherwise keep company/campaign name.
+  const operatorNameIfFromSelf =
+    operatorEmail && email === operatorEmail ? operatorName : ''
+  const name = (
+    ownerName ||
+    dynamicName ||
+    operatorNameIfFromSelf ||
+    storedName ||
+    operatorName
+  ).slice(0, BREVO_SENDER_NAME_MAX)
   return { name, email }
 }
 
