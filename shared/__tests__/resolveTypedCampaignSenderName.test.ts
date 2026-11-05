@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTypedCampaignSenderName } from '../resolveTypedCampaignSenderName'
+import {
+  isEmailShapedSenderDisplayName,
+  resolveTypedCampaignSenderName
+} from '../resolveTypedCampaignSenderName'
+
+describe('isEmailShapedSenderDisplayName', () => {
+  it('treats empty or email-equal names as needing a directory lookup', () => {
+    expect(isEmailShapedSenderDisplayName('', 'hello@example.com')).toBe(true)
+    expect(isEmailShapedSenderDisplayName('hello@example.com', 'hello@example.com')).toBe(true)
+    expect(isEmailShapedSenderDisplayName('Hello@Example.com', 'hello@example.com')).toBe(true)
+    expect(isEmailShapedSenderDisplayName('Jane Smith', 'hello@example.com')).toBe(false)
+  })
+})
 
 describe('resolveTypedCampaignSenderName', () => {
   it('uses tenant display name when email is not an existing LO or session user', () => {
@@ -34,5 +46,17 @@ describe('resolveTypedCampaignSenderName', () => {
         matchedCandidateDisplayName: 'Jane Loan Officer'
       })
     ).toBe('Jane Loan Officer')
+  })
+
+  it('keeps classic matched-name behavior even when the match equals the email', () => {
+    expect(
+      resolveTypedCampaignSenderName({
+        senderEmail: 'hello+sistarlo@zanecoder.com',
+        defaultDisplayName: 'Forge Capital Lending',
+        sessionEmail: 'admin@example.com',
+        sessionDisplayName: 'Admin',
+        matchedCandidateDisplayName: 'hello+sistarlo@zanecoder.com'
+      })
+    ).toBe('hello+sistarlo@zanecoder.com')
   })
 })

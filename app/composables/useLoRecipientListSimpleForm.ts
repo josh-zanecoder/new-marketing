@@ -9,6 +9,7 @@ import {
   TENANT_RECIPIENT_LIST_INDEX_CACHE_KEY
 } from '~/composables/useNuxtPayloadCache'
 import { loadAllLoBorrowerPages } from '~~/shared/loBorrowersPreviewPage'
+import { isEmailShapedSenderDisplayName } from '~~/shared/resolveTypedCampaignSenderName'
 
 /** Rows per page in the LO borrowers checklist UI. */
 export const LO_BORROWERS_CHECKLIST_PAGE_SIZE = 10
@@ -23,7 +24,7 @@ export function useLoRecipientListSimpleForm(options: {
   mode: 'create' | 'edit'
   listId?: MaybeRefOrGetter<string>
 }) {
-  const { serverAuthHeaders } = useTenantMarketingApi()
+  const { serverAuthHeaders, fetchCampaignSenderCandidates } = useTenantMarketingApi()
   const {
     allowTenantLoRecipientLists,
     isSelfOnlyAudience,
@@ -197,25 +198,81 @@ export function useLoRecipientListSimpleForm(options: {
     allBorrowersChecked.value ? 'Uncheck all' : 'Check all'
   )
 
-  function onLoanOfficerSelect(c: { email: string; displayName: string }) {
+  let loNameLookupSeq = 0
+
+  function displayNameFromLoanOfficerCandidate(c: {
+    email: string
+    displayName?: string
+    firstName?: string
+    lastName?: string
+  }): string {
+    const fromParts = [String(c.firstName ?? '').trim(), String(c.lastName ?? '').trim()]
+      .filter(Boolean)
+      .join(' ')
+    if (fromParts) return fromParts
+    const display = String(c.displayName ?? '').trim()
+    if (display && !isEmailShapedSenderDisplayName(display, c.email)) return display
+    return display || String(c.email ?? '').trim()
+  }
+
+  /** Resolve first+last for the typed LO email so lists don't persist email-as-name. */
+  async function resolveAssociatedLoanOfficerNameFromDirectory() {
+    const email = form.associatedLoanOfficerEmail.trim().toLowerCase()
+    if (!email.includes('@')) return
+    const seq = ++loNameLookupSeq
+    try {
+      const res = await fetchCampaignSenderCandidates(email)
+      if (seq !== loNameLookupSeq) return
+      const match = (res.candidates ?? []).find(
+        (c) => String(c.email || '').trim().toLowerCase() === email
+      )
+      if (!match) return
+      form.associatedLoanOfficerName = displayNameFromLoanOfficerCandidate(match)
+    } catch {
+      /* keep empty — save still works with email fallback server-side */
+    }
+  }
+
+  function onLoanOfficerSelect(c: {
+    email: string
+    displayName: string
+    firstName?: string
+    lastName?: string
+  }) {
     if (isSelfOnlyAudience.value) return
+    loNameLookupSeq += 1
     form.associatedLoanOfficerEmail = c.email
-    form.associatedLoanOfficerName = c.displayName || c.email
+    form.associatedLoanOfficerName = displayNameFromLoanOfficerCandidate(c)
     excludedOutsidePreview.value = []
     borrowerSearchQ.value = ''
     borrowerPage.value = 1
     void loadBorrowers()
   }
 
+  let loTypedResolveTimer: ReturnType<typeof setTimeout> | null = null
+
   function onLoanOfficerTyped() {
     if (isSelfOnlyAudience.value) return
     form.associatedLoanOfficerName = ''
     borrowers.value = []
     borrowerTotal.value = 0
+    borrowersLoadProgress.value = { loaded: 0, totalHint: 0 }
     excludedOutsidePreview.value = []
     borrowerSearchQ.value = ''
     borrowerPage.value = 1
     resetBorrowerChecks([])
+    if (loTypedResolveTimer) clearTimeout(loTypedResolveTimer)
+    // Debounce: picker emits typed on every keystroke; avoid spamming borrower pages.
+    loTypedResolveTimer = setTimeout(() => {
+      const email = form.associatedLoanOfficerEmail.trim().toLowerCase()
+      if (!email.includes('@')) return
+      void (async () => {
+        await resolveAssociatedLoanOfficerNameFromDirectory()
+        if (form.associatedLoanOfficerEmail.trim().toLowerCase() === email) {
+          await loadBorrowers()
+        }
+      })()
+    }, 320)
   }
 
   /** LO/LOA: lock associated officer to the signed-in user and load their borrowers. */

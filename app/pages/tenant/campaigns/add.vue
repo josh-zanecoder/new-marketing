@@ -836,7 +836,10 @@ import { buildCampaignTemplatePersistFields } from '~~/shared/buildCampaignTempl
 import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
 import { resolveEditableCampaignSenderMode } from '~~/shared/resolveEditableCampaignSenderMode'
 import { normalizeCampaignSenderDisplayName } from '~~/shared/contactOwnerSender'
-import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
+import {
+  isEmailShapedSenderDisplayName,
+  resolveTypedCampaignSenderName
+} from '~~/shared/resolveTypedCampaignSenderName'
 import { campaignSaveMissingFieldsMessage } from '~~/shared/campaignSaveRequiredFields'
 
 const campaignStore = useCampaignStore()
@@ -987,11 +990,26 @@ function onSenderCandidateSelect(c: {
   email: string
   displayName: string
   avatarUrl: string
+  firstName?: string
+  lastName?: string
 }) {
   if (isSelfOnlyAudience.value) return
   senderNameLookupSeq += 1
   form.value.senderEmail = c.email
-  form.value.senderName = c.displayName || c.email
+  // LO recipient-list flag: prefer first+last. Flag OFF: classic displayName || email.
+  if (allowTenantLoRecipientLists.value === true) {
+    const fromParts = [String(c.firstName ?? '').trim(), String(c.lastName ?? '').trim()]
+      .filter(Boolean)
+      .join(' ')
+    const display = String(c.displayName || '').trim()
+    form.value.senderName =
+      fromParts ||
+      (!isEmailShapedSenderDisplayName(display, c.email) ? display : '') ||
+      display ||
+      c.email
+  } else {
+    form.value.senderName = c.displayName || c.email
+  }
   form.value.senderMode = 'selected'
   selectedSenderAvatarUrl.value = c.avatarUrl || ''
   senderAvatarFailed.value = false
@@ -1297,8 +1315,44 @@ async function loadRecipientLists() {
 }
 
 /**
+ * LO recipient-list flag only: fill first+last for a selected LO list sender.
+ * Must NOT reuse syncSenderNameForTypedEmail — that can flip senderMode to contact_owner.
+ */
+async function resolveSelectedListSenderDisplayName(email: string) {
+  const seq = ++senderNameLookupSeq
+  try {
+    const res = await marketingApi.fetchCampaignSenderCandidates(email)
+    if (seq !== senderNameLookupSeq) return
+    const match = (res.candidates ?? []).find(
+      (c) => String(c.email || '').trim().toLowerCase() === email
+    )
+    if (!match) return
+    const fromParts = [String(match.firstName ?? '').trim(), String(match.lastName ?? '').trim()]
+      .filter(Boolean)
+      .join(' ')
+    const display = String(match.displayName || '').trim()
+    const resolved =
+      fromParts ||
+      (!isEmailShapedSenderDisplayName(display, email) ? display : '') ||
+      display
+    if (resolved && !isEmailShapedSenderDisplayName(resolved, email)) {
+      form.value.senderName = resolved
+    }
+    selectedSenderAvatarUrl.value = String(match.avatarUrl || '').trim()
+    senderAvatarFailed.value = false
+  } catch {
+    /* keep list name / email — mode stays selected */
+  }
+  // Always preserve selected mode from the LO list association.
+  if (seq === senderNameLookupSeq) {
+    form.value.senderMode = 'selected'
+  }
+}
+
+/**
  * Marketing/OM: when a LO-scoped list is selected, fill campaign From from that list's LO.
  * LO/LOA stay locked to self (skip).
+ * When allowTenantLoRecipientLists is ON and the list stored email-as-name, resolve first+last.
  */
 function applySenderFromSelectedRecipientList() {
   if (!allowTenantEditSender.value || isSelfOnlyAudience.value) return
@@ -1310,13 +1364,19 @@ function applySenderFromSelectedRecipientList() {
     .trim()
     .toLowerCase()
   if (!email.includes('@')) return
-  const name = String(list?.associatedLoanOfficerName ?? '').trim() || email
+  const listName = String(list?.associatedLoanOfficerName ?? '').trim()
   senderNameLookupSeq += 1
   form.value.senderEmail = email
-  form.value.senderName = name
+  form.value.senderName = listName || email
   form.value.senderMode = 'selected'
   selectedSenderAvatarUrl.value = ''
   senderAvatarFailed.value = false
+  if (
+    allowTenantLoRecipientLists.value === true &&
+    isEmailShapedSenderDisplayName(listName, email)
+  ) {
+    void resolveSelectedListSenderDisplayName(email)
+  }
 }
 
 async function loadListContactsPreview() {
