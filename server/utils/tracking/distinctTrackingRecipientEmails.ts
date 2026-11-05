@@ -3,17 +3,20 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionByDbName } from '@server/tenant/connection'
 import type { BrevoEmailEventType } from '@server/utils/tracking/brevoEventType'
 import { parseYmdToExactUtcBounds } from '@server/utils/tracking/brevoTrackingEventDateBounds'
+import { mongoEventValuesForFilter } from '@server/utils/tracking/mongoEventValuesForFilter'
 
 function eventValuesForFilter(brevoEventTypes: BrevoEmailEventType[] | null): string[] | null {
   if (!brevoEventTypes?.length) return null
-  const types = new Set<string>(brevoEventTypes)
-  if (types.has('requests')) types.add('sent')
-  if (types.has('opened')) {
-    types.add('unique_opened')
-    types.add('open')
+  const types = new Set<string>()
+  for (const t of brevoEventTypes) {
+    const expanded = mongoEventValuesForFilter(t)
+    if (expanded?.length) {
+      for (const v of expanded) types.add(v)
+    } else {
+      types.add(t)
+    }
   }
-  if (types.has('clicks')) types.add('click')
-  return [...types]
+  return types.size ? [...types] : null
 }
 
 function escapeRegex(s: string): string {

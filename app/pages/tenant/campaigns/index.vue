@@ -438,6 +438,12 @@ onUnmounted(() => {
           Stop all sends
         </button>
         <NuxtLink
+          to="/tenant/campaigns/compare"
+          class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
+        >
+          Compare
+        </NuxtLink>
+        <NuxtLink
           to="/tenant/campaigns/add"
           class="btn-cta group"
         >

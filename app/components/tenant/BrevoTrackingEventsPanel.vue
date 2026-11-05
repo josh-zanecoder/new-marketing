@@ -663,6 +663,49 @@ async function confirmSaveList() {
   }
 }
 
+const excludeBouncesPending = ref(false)
+
+async function excludeHardBouncesFromCampaignList() {
+  const campaignId = props.campaignId?.trim()
+  if (!campaignId || excludeBouncesPending.value || props.adminTracking) return
+  if (
+    !confirm(
+      'Remove hard-bounced contacts from this campaign’s recipient list? They stay in Contacts and can be restored from the list later.'
+    )
+  ) {
+    return
+  }
+  excludeBouncesPending.value = true
+  try {
+    const res = await $fetch<{
+      listName: string
+      bounceEmails: number
+      matchedContacts: number
+      removedMembers: number
+    }>('/api/v1/tracking/exclude-bounces', {
+      method: 'POST',
+      body: { campaignId },
+      credentials: 'include',
+      headers: adminTenantHeaders.value
+    })
+    toast.success(
+      res.removedMembers
+        ? `Removed ${res.removedMembers} hard-bounce contact(s) from “${res.listName || 'list'}”.`
+        : res.bounceEmails
+          ? `Found ${res.bounceEmails} bounce email(s); none matched list members.`
+          : 'No hard bounces found for this campaign.'
+    )
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || '')
+        : ''
+    toast.error(message || 'Failed to exclude hard bounces from the list')
+  } finally {
+    excludeBouncesPending.value = false
+  }
+}
+
 function openMessageHistory(row: TrackingTableRow) {
   historyRow.value = row
 }
@@ -995,7 +1038,17 @@ const EVENT_FILTER_SKELETON_COUNT = 4
           </div>
         </template>
 
-        <div v-if="!adminTracking" class="flex justify-end">
+        <div v-if="!adminTracking" class="flex flex-wrap justify-end gap-2">
+          <button
+            v-if="isCampaignScoped"
+            type="button"
+            class="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-semibold text-amber-950 shadow-sm hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoading || excludeBouncesPending"
+            title="Soft-remove hard-bounced contacts from this campaign’s recipient list"
+            @click="excludeHardBouncesFromCampaignList"
+          >
+            {{ excludeBouncesPending ? 'Removing bounces…' : 'Remove hard bounces from list' }}
+          </button>
           <button
             type="button"
             class="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"

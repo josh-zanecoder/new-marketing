@@ -109,14 +109,15 @@ const isBusy = computed(() => pending.value || syncing.value)
 
 const stats = computed(() => data.value?.stats ?? null)
 
-async function refreshFromProvider() {
+async function refreshFromProvider(options?: { deepBackfill?: boolean }) {
   if (syncing.value) return
   syncing.value = true
   eventsPage.value = 1
   try {
-    const body: Record<string, string> = {
+    const body: Record<string, string | boolean> = {
       campaignId: props.campaignId.trim()
     }
+    if (options?.deepBackfill) body.deepBackfill = true
     const from = effectiveDateRange.value.from?.trim()
     const to = effectiveDateRange.value.to?.trim()
     if (from) body.from = from
@@ -130,6 +131,10 @@ async function refreshFromProvider() {
   } finally {
     syncing.value = false
   }
+}
+
+async function deepRefreshFromProvider() {
+  await refreshFromProvider({ deepBackfill: true })
 }
 
 const autoSyncedKeys = ref(new Set<string>())
@@ -237,6 +242,7 @@ const FILL_CLASS: Record<string, string> = {
 
 defineExpose({
   refresh: refreshFromProvider,
+  deepRefresh: deepRefreshFromProvider,
   pending: isBusy
 })
 </script>

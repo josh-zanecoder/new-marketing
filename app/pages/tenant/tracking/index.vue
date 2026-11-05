@@ -32,6 +32,7 @@ function onRefreshTracking() {
         @click="onRefreshTracking"
       />
     </header>
+    <TenantTrackingWebhookHealthBanner class="mb-4" />
     <TenantBrevoTrackingEventsPanel ref="trackingPanelRef" />
   </div>
 </template>
