@@ -16,26 +16,46 @@ function makeBorrowers(count: number): LoBorrowerPreviewPageRow[] {
 }
 
 describe('loBorrowersPreviewPage (LO-list toggle path)', () => {
-  it('uses a page size above the previous 50-cap so multi-page loads can finish', () => {
-    expect(LO_BORROWERS_PREVIEW_PAGE_SIZE).toBeGreaterThan(50)
+  it('uses max page size to cut round-trips for large LO borrower sets', () => {
+    expect(LO_BORROWERS_PREVIEW_PAGE_SIZE).toBe(200)
     expect(LO_BORROWERS_PREVIEW_MAX_LIMIT).toBeGreaterThanOrEqual(LO_BORROWERS_PREVIEW_PAGE_SIZE)
   })
 
-  it('keeps fetching until loaded count reaches total (e.g. 50 then 335)', () => {
+  it('keeps fetching while a full page returns and skip is still under total', () => {
     expect(
-      shouldFetchMoreLoBorrowers({ loadedCount: 50, total: 335, lastPageCount: 50 })
+      shouldFetchMoreLoBorrowers({
+        skipAfterPage: 200,
+        total: 335,
+        lastPageCount: 200,
+        pageSize: 200
+      })
     ).toBe(true)
     expect(
-      shouldFetchMoreLoBorrowers({ loadedCount: 150, total: 335, lastPageCount: 100 })
-    ).toBe(true)
-    expect(
-      shouldFetchMoreLoBorrowers({ loadedCount: 335, total: 335, lastPageCount: 85 })
+      shouldFetchMoreLoBorrowers({
+        skipAfterPage: 400,
+        total: 335,
+        lastPageCount: 135,
+        pageSize: 200
+      })
     ).toBe(false)
   })
 
-  it('stops when the last page is empty', () => {
+  it('stops when the last page is empty or short', () => {
     expect(
-      shouldFetchMoreLoBorrowers({ loadedCount: 100, total: 335, lastPageCount: 0 })
+      shouldFetchMoreLoBorrowers({
+        skipAfterPage: 200,
+        total: 335,
+        lastPageCount: 0,
+        pageSize: 200
+      })
+    ).toBe(false)
+    expect(
+      shouldFetchMoreLoBorrowers({
+        skipAfterPage: 100,
+        total: 335,
+        lastPageCount: 50,
+        pageSize: 100
+      })
     ).toBe(false)
   })
 
@@ -65,6 +85,25 @@ describe('loBorrowersPreviewPage (LO-list toggle path)', () => {
     expect(result.borrowers).toHaveLength(335)
     expect(result.borrowers[0]?.id).toBe('id-1')
     expect(result.borrowers[334]?.id).toBe('id-335')
+  })
+
+  it('invokes onPage progressively so UI can show the first page early', async () => {
+    const all = makeBorrowers(250)
+    const pageEvents: number[] = []
+    const result = await loadAllLoBorrowerPages({
+      pageSize: 100,
+      fetchPage: async ({ skip, limit }) => ({
+        total: all.length,
+        borrowers: all.slice(skip, skip + limit)
+      }),
+      onPage: ({ accumulated, done }) => {
+        pageEvents.push(accumulated.length)
+        if (done) expect(accumulated.length).toBe(250)
+      }
+    })
+    expect(pageEvents[0]).toBe(100)
+    expect(pageEvents.at(-1)).toBe(250)
+    expect(result.borrowers).toHaveLength(250)
   })
 
   it('does not stop at the old first-50 window', async () => {

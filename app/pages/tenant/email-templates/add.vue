@@ -8,6 +8,11 @@ import {
   listEmailTemplateHtmlImages,
   replaceEmailTemplateHtmlImageSrc
 } from '~~/shared/utils/emailTemplateHtmlImages'
+import {
+  fetchRemoteImageAsDataUrlInBrowser,
+  hostUploadedEmailTemplateImages
+} from '~~/shared/utils/hostUploadedEmailTemplateImages'
+import { emailTemplateHtmlNeedsImageHosting } from '~~/shared/utils/emailTemplateHostableImages'
 import type { TenantHostedImage } from '~~/shared/tenantHostedImages'
 
 definePageMeta({ layout: 'default' })
@@ -239,13 +244,51 @@ watch(editTemplateId, () => {
   void loadExistingTemplate()
 })
 
+async function hostImagesInUploadedHtml(html: string): Promise<string> {
+  if (!canUploadTemplateImage.value || !emailTemplateHtmlNeedsImageHosting(html)) {
+    return html
+  }
+  const result = await hostUploadedEmailTemplateImages({
+    html,
+    uploadDataUrl: async (dataUrl) => {
+      const uploaded = await marketingApi.uploadTenantHostedImage({ dataUrl })
+      return String(uploaded?.url ?? '').trim()
+    },
+    fetchRemoteAsDataUrl: fetchRemoteImageAsDataUrlInBrowser
+  })
+  if (result.hostedCount > 0) {
+    toast.success(
+      result.hostedCount === 1
+        ? '1 image uploaded to Images and linked in the template'
+        : `${result.hostedCount} images uploaded to Images and linked in the template`
+    )
+  }
+  if (result.failedCount > 0 || result.skippedUnsupportedCount > 0) {
+    const bits: string[] = []
+    if (result.failedCount > 0) {
+      bits.push(`${result.failedCount} could not be hosted yet (will retry on save)`)
+    }
+    if (result.skippedUnsupportedCount > 0) {
+      bits.push(`${result.skippedUnsupportedCount} relative/cid image(s) need manual Replace`)
+    }
+    imageUploadError.value = bits.join('. ')
+  }
+  return result.html
+}
+
 async function ingestFile(file: File) {
   uploadError.value = ''
+  imageUploadError.value = ''
   uploadPending.value = true
   try {
     const check = ensureEmailTemplateUnsubscribe(await readUploadedHtmlFile(file))
-    htmlContent.value = check.html
-    await openUnsubscribeFooterModalIfAppended(check.footerAppended, check.html)
+    const hostedHtml = await hostImagesInUploadedHtml(check.html)
+    const finalCheck = ensureEmailTemplateUnsubscribe(hostedHtml)
+    htmlContent.value = finalCheck.html
+    await openUnsubscribeFooterModalIfAppended(
+      check.footerAppended || finalCheck.footerAppended,
+      finalCheck.html
+    )
   } catch (e) {
     uploadError.value = e instanceof Error ? e.message : 'Could not read file'
   } finally {
@@ -378,7 +421,7 @@ async function saveTemplate() {
   try {
     const resolvedCategoryId = categoryId.value.trim() || null
     if (isEdit.value) {
-      await marketingApi.updateEmailTemplate(editTemplateId.value, {
+      const updated = await marketingApi.updateEmailTemplate(editTemplateId.value, {
         name: trimmedName,
         subject: trimmedSubject,
         htmlTemplate: html,
@@ -386,8 +429,16 @@ async function saveTemplate() {
         saveToLibrary: true,
         categoryId: resolvedCategoryId
       })
+      const hostedOnSave = Number((updated as { imagesHostedCount?: number })?.imagesHostedCount ?? 0)
+      if (hostedOnSave > 0) {
+        toast.success(
+          hostedOnSave === 1
+            ? 'Saved — 1 image hosted in Images'
+            : `Saved — ${hostedOnSave} images hosted in Images`
+        )
+      }
     } else {
-      await marketingApi.createEmailTemplate({
+      const created = await marketingApi.createEmailTemplate({
         name: trimmedName,
         subject: trimmedSubject,
         htmlTemplate: html,
@@ -395,6 +446,14 @@ async function saveTemplate() {
         saveToLibrary: true,
         categoryId: resolvedCategoryId
       })
+      const hostedOnSave = Number((created as { imagesHostedCount?: number })?.imagesHostedCount ?? 0)
+      if (hostedOnSave > 0) {
+        toast.success(
+          hostedOnSave === 1
+            ? 'Saved — 1 image hosted in Images'
+            : `Saved — ${hostedOnSave} images hosted in Images`
+        )
+      }
     }
     clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     await navigateTo('/tenant/email-templates')
@@ -565,8 +624,8 @@ async function saveTemplate() {
               <p class="mt-0.5 text-xs text-slate-500">
                 Paste or upload HTML (.html, .htm).{{
                   canUploadTemplateImage
-                    ? ' Insert image picks a hosted link from Images (upload new photos there). Use Replace to swap an existing image the same way.'
-                    : ''
+                    ? ' Upload auto-hosts embedded/remote images into Images. Insert/Replace still work for manual picks. Relative paths need Replace.'
+                    : ' Saving hosts embedded/remote images so sends stay unbroken.'
                 }}
               </p>
             </div>
@@ -585,7 +644,7 @@ async function saveTemplate() {
                 :disabled="anyImageBusy"
                 @click="onBrowseClick"
               >
-                {{ uploadPending ? 'Reading file…' : 'Upload file' }}
+                {{ uploadPending ? 'Uploading & hosting images…' : 'Upload file' }}
               </button>
               <button
                 v-if="canUploadTemplateImage"

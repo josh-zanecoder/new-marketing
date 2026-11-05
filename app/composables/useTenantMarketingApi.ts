@@ -318,9 +318,16 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     saveToLibrary?: boolean
     categoryId?: string | null
   }) {
-    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+    // Longer timeout when LO Lists flag hosts images on save; flag-off saves are unchanged/fast.
+    return $fetch<{
+      ok: boolean
+      template: TenantEmailTemplateRow
+      imagesHostedCount?: number
+      imagesSkippedRemoteCount?: number
+      imagesSkippedUnsupportedCount?: number
+    }>(
       '/api/v1/tenant/email-templates',
-      tenantFetchInit({ method: 'POST', body, timeout: 30000 })
+      tenantFetchInit({ method: 'POST', body, timeout: 120000 })
     )
   }
 
@@ -336,9 +343,15 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
       categoryId?: string | null
     }
   ) {
-    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+    return $fetch<{
+      ok: boolean
+      template: TenantEmailTemplateRow
+      imagesHostedCount?: number
+      imagesSkippedRemoteCount?: number
+      imagesSkippedUnsupportedCount?: number
+    }>(
       `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
-      tenantFetchInit({ method: 'PUT', body, timeout: 30000 })
+      tenantFetchInit({ method: 'PUT', body, timeout: 120000 })
     )
   }
 

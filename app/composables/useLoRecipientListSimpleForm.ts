@@ -48,6 +48,13 @@ export function useLoRecipientListSimpleForm(options: {
   const borrowers = ref<LoBorrowerPreviewRow[]>([])
   const borrowerTotal = ref(0)
   const borrowersLoading = ref(false)
+  /** True while later pages stream in after the first page is already shown. */
+  const borrowersLoadingMore = ref(false)
+  /** Progressive load hint: unique rows loaded so far vs server total hint. */
+  const borrowersLoadProgress = ref<{ loaded: number; totalHint: number }>({
+    loaded: 0,
+    totalHint: 0
+  })
   const borrowersError = ref('')
   /** Contact id → included in list (default true). */
   const borrowerChecked = reactive<Record<string, boolean>>({})
@@ -117,6 +124,10 @@ export function useLoRecipientListSimpleForm(options: {
     borrowers.value.filter((b) => borrowerChecked[b.id] === false).map((b) => b.id)
   )
 
+  const checkedBorrowerCount = computed(
+    () => borrowers.value.filter((b) => borrowerChecked[b.id] !== false).length
+  )
+
   const allBorrowersChecked = computed(
     () =>
       borrowers.value.length > 0 &&
@@ -148,6 +159,14 @@ export function useLoRecipientListSimpleForm(options: {
       delete borrowerChecked[key]
     }
     for (const row of rows) {
+      borrowerChecked[row.id] = defaultUncheckedIds ? !defaultUncheckedIds.has(row.id) : true
+    }
+  }
+
+  /** Preserve user toggles while progressive pages append new borrowers. */
+  function mergeBorrowerChecks(rows: LoBorrowerPreviewRow[], defaultUncheckedIds?: Set<string>) {
+    for (const row of rows) {
+      if (Object.prototype.hasOwnProperty.call(borrowerChecked, row.id)) continue
       borrowerChecked[row.id] = defaultUncheckedIds ? !defaultUncheckedIds.has(row.id) : true
     }
   }
@@ -216,14 +235,22 @@ export function useLoRecipientListSimpleForm(options: {
     if (!email || !email.includes('@')) {
       borrowers.value = []
       borrowerTotal.value = 0
+      borrowersLoadProgress.value = { loaded: 0, totalHint: 0 }
+      borrowersLoadingMore.value = false
       resetBorrowerChecks([])
       return
     }
     const seq = ++previewSeq
     borrowersLoading.value = true
+    borrowersLoadingMore.value = false
     borrowersError.value = ''
+    borrowers.value = []
+    borrowerTotal.value = 0
+    borrowersLoadProgress.value = { loaded: 0, totalHint: 0 }
+    resetBorrowerChecks([])
+    borrowerPage.value = 1
     try {
-      // LO-list toggle path only: page until every LO borrower is in the checklist.
+      // Progressive: paint first page ASAP, keep paging in the background.
       const loaded = await loadAllLoBorrowerPages({
         fetchPage: async ({ skip, limit }) => {
           if (seq !== previewSeq) {
@@ -241,13 +268,32 @@ export function useLoRecipientListSimpleForm(options: {
               skip
             }
           })
+        },
+        onPage: async ({ accumulated, totalHint, done, pageIndex }) => {
+          if (seq !== previewSeq) return
+          const dedupedSoFar = accumulated
+          borrowers.value = dedupedSoFar
+          borrowerTotal.value = Math.max(dedupedSoFar.length, totalHint)
+          borrowersLoadProgress.value = {
+            loaded: dedupedSoFar.length,
+            totalHint: Math.max(dedupedSoFar.length, totalHint)
+          }
+          if (pageIndex === 0) {
+            resetBorrowerChecks(dedupedSoFar, opts?.uncheckedIds)
+            borrowersLoading.value = false
+            borrowersLoadingMore.value = !done
+          } else {
+            mergeBorrowerChecks(dedupedSoFar, opts?.uncheckedIds)
+            borrowersLoadingMore.value = !done
+          }
         }
       })
       if (seq !== previewSeq) return
       const allRows = loaded.borrowers
       borrowers.value = allRows
       borrowerTotal.value = loaded.total
-      resetBorrowerChecks(allRows, opts?.uncheckedIds)
+      borrowersLoadProgress.value = { loaded: allRows.length, totalHint: allRows.length }
+      mergeBorrowerChecks(allRows, opts?.uncheckedIds)
       if (opts?.uncheckedIds) {
         const previewIds = new Set(allRows.map((r) => r.id))
         excludedOutsidePreview.value = [...opts.uncheckedIds].filter((id) => !previewIds.has(id))
@@ -258,21 +304,29 @@ export function useLoRecipientListSimpleForm(options: {
       if (seq !== previewSeq) return
       borrowers.value = []
       borrowerTotal.value = 0
+      borrowersLoadProgress.value = { loaded: 0, totalHint: 0 }
       resetBorrowerChecks([])
       borrowersError.value =
         e && typeof e === 'object' && 'data' in e
           ? String((e as { data?: { message?: string } }).data?.message ?? 'Failed to load borrowers')
           : 'Failed to load borrowers'
     } finally {
-      if (seq === previewSeq) borrowersLoading.value = false
+      if (seq === previewSeq) {
+        borrowersLoading.value = false
+        borrowersLoadingMore.value = false
+      }
     }
   }
 
   function buildSaveBody(): Record<string, unknown> {
+    const uncheckedRows = borrowers.value.filter((b) => borrowerChecked[b.id] === false)
     const excludedContactIds = [
       ...excludedOutsidePreview.value,
-      ...uncheckedBorrowerIds.value
+      ...uncheckedRows.map((b) => b.id)
     ]
+    const excludedContactEmails = uncheckedRows
+      .map((b) => b.email.trim().toLowerCase())
+      .filter((email) => email.includes('@'))
     return {
       name: form.name.trim(),
       audience: 'borrower',
@@ -280,7 +334,8 @@ export function useLoRecipientListSimpleForm(options: {
       filterRows: [],
       associatedLoanOfficerEmail: form.associatedLoanOfficerEmail.trim().toLowerCase(),
       associatedLoanOfficerName: form.associatedLoanOfficerName.trim(),
-      excludedContactIds
+      excludedContactIds,
+      excludedContactEmails
     }
   }
 
@@ -417,6 +472,8 @@ export function useLoRecipientListSimpleForm(options: {
     goBorrowerNext,
     borrowerTotal,
     borrowersLoading,
+    borrowersLoadingMore,
+    borrowersLoadProgress,
     borrowersError,
     borrowerChecked,
     setBorrowerChecked,
@@ -424,6 +481,7 @@ export function useLoRecipientListSimpleForm(options: {
     uncheckAllBorrowers,
     toggleAllBorrowers,
     toggleAllBorrowersLabel,
+    checkedBorrowerCount,
     allBorrowersChecked,
     noBorrowersChecked,
     submitBlockReasons,

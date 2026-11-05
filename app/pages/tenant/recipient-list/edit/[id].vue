@@ -145,6 +145,12 @@
                   <div class="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100">
                     <p class="-mb-px border-b-2 border-primary-600 px-3 py-2 text-sm font-semibold text-slate-800">
                       Borrowers
+                      <span
+                        v-if="loBorrowers.length"
+                        class="ml-1.5 text-xs font-medium tabular-nums text-slate-500"
+                      >
+                        ({{ loCheckedBorrowerCount }} of {{ loBorrowers.length }} selected)
+                      </span>
                     </p>
                     <button
                       v-if="loBorrowers.length"
@@ -173,10 +179,37 @@
 
                   <div class="space-y-3">
                     <div
-                      v-if="loBorrowersLoading"
-                      class="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-500"
+                      v-if="loBorrowersLoading && !loBorrowers.length"
+                      class="overflow-hidden rounded-xl border border-slate-200/80 bg-white"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading borrowers"
                     >
-                      Loading borrowers…
+                      <div class="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-primary-50/80 via-white to-violet-50/60 px-4 py-3">
+                        <span
+                          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700"
+                          aria-hidden="true"
+                        >
+                          <span class="h-4 w-4 animate-spin rounded-full border-2 border-primary-300 border-t-primary-700" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                          <p class="text-sm font-semibold text-slate-800">Loading borrowers</p>
+                          <p class="text-xs text-slate-500">
+                            Fetching the first page so you can start selecting right away…
+                          </p>
+                        </div>
+                      </div>
+                      <ul class="divide-y divide-slate-100 p-2" aria-hidden="true">
+                        <li
+                          v-for="n in 6"
+                          :key="`lo-borrower-edit-skel-${n}`"
+                          class="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                        >
+                          <span class="h-4 w-4 shrink-0 animate-pulse rounded bg-slate-200" />
+                          <span class="h-3 flex-1 animate-pulse rounded bg-slate-100" :style="{ maxWidth: `${46 + (n % 3) * 12}%` }" />
+                          <span class="h-3 w-28 shrink-0 animate-pulse rounded bg-slate-100" />
+                        </li>
+                      </ul>
                     </div>
                     <div
                       v-else-if="loBorrowersError"
@@ -203,6 +236,46 @@
                       No borrowers match your search.
                     </div>
                     <template v-else>
+                      <div
+                        v-if="loBorrowersLoadingMore"
+                        class="overflow-hidden rounded-xl border border-primary-200/70 bg-gradient-to-r from-primary-50 via-white to-violet-50 px-4 py-3"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex min-w-0 items-center gap-2.5">
+                            <span
+                              class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-primary-300 border-t-primary-700"
+                              aria-hidden="true"
+                            />
+                            <p class="truncate text-xs font-medium text-slate-700">
+                              Loading more borrowers…
+                              <span class="tabular-nums text-slate-500">
+                                {{ loBorrowersLoadProgress.loaded.toLocaleString() }}
+                                <template v-if="loBorrowersLoadProgress.totalHint > loBorrowersLoadProgress.loaded">
+                                  of ~{{ loBorrowersLoadProgress.totalHint.toLocaleString() }}
+                                </template>
+                              </span>
+                            </p>
+                          </div>
+                          <p class="shrink-0 text-[11px] text-slate-500">You can select now</p>
+                        </div>
+                        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                          <div
+                            class="h-full rounded-full bg-gradient-to-r from-primary-500 to-violet-500 transition-[width] duration-500 ease-out"
+                            :style="{
+                              width: `${Math.min(
+                                100,
+                                Math.round(
+                                  (loBorrowersLoadProgress.loaded /
+                                    Math.max(loBorrowersLoadProgress.totalHint, loBorrowersLoadProgress.loaded, 1)) *
+                                    100
+                                )
+                              )}%`
+                            }"
+                          />
+                        </div>
+                      </div>
                       <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200/80">
                         <li
                           v-for="b in loPagedBorrowers"
@@ -210,14 +283,14 @@
                           class="flex items-center gap-3 px-4 py-2.5 text-sm"
                         >
                           <input
-                            :id="`rl-lo-borrower-${b.id}`"
+                            :id="`rl-lo-borrower-edit-${b.id}`"
                             type="checkbox"
                             class="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
                             :checked="loBorrowerChecked[b.id] !== false"
                             @change="loSetBorrowerChecked(b.id, ($event.target as HTMLInputElement).checked)"
                           >
                           <label
-                            :for="`rl-lo-borrower-${b.id}`"
+                            :for="`rl-lo-borrower-edit-${b.id}`"
                             class="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3"
                           >
                             <span class="min-w-0 truncate font-medium text-slate-900">{{ b.name }}</span>
@@ -629,11 +702,14 @@ const {
   goBorrowerNext: loGoBorrowerNext,
   borrowerTotal: loBorrowerTotal,
   borrowersLoading: loBorrowersLoading,
+  borrowersLoadingMore: loBorrowersLoadingMore,
+  borrowersLoadProgress: loBorrowersLoadProgress,
   borrowersError: loBorrowersError,
   borrowerChecked: loBorrowerChecked,
   setBorrowerChecked: loSetBorrowerChecked,
   toggleAllBorrowers: loToggleAllBorrowers,
   toggleAllBorrowersLabel: loToggleAllBorrowersLabel,
+  checkedBorrowerCount: loCheckedBorrowerCount,
   submitBlockReasons: loSubmitBlockReasons,
   canSubmitForm: loCanSubmitForm,
   onLoanOfficerSelect: loOnLoanOfficerSelect,

@@ -15,6 +15,7 @@ import {
   canWriteEmailTemplate,
   mergeEmailTemplateVisibilityFilter
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import { hostEmailTemplateHtmlImagesOnSave } from '@server/utils/emailTemplate/hostEmailTemplateHtmlImages'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
@@ -54,11 +55,19 @@ export default defineEventHandler(async (event) => {
 
   const set: Record<string, unknown> = {}
   let unsubscribeFooterAppended = false
+  let imagesHostedCount = 0
+  let imagesSkippedRemoteCount = 0
+  let imagesSkippedUnsupportedCount = 0
   if (typeof body.name === 'string' && body.name.trim()) set.name = body.name.trim()
   if (typeof body.subject === 'string' && body.subject.trim()) set.subject = body.subject.trim()
   if (typeof body.description === 'string') set.description = body.description.trim()
   if (typeof body.htmlTemplate === 'string' && body.htmlTemplate.trim()) {
-    const unsubscribeCheck = ensureEmailTemplateUnsubscribe(body.htmlTemplate.trim())
+    // allowTenantLoRecipientLists ON → host images; OFF → HTML unchanged.
+    const hosted = await hostEmailTemplateHtmlImagesOnSave(event, body.htmlTemplate.trim())
+    imagesHostedCount = hosted.hostedCount
+    imagesSkippedRemoteCount = hosted.skippedRemoteCount
+    imagesSkippedUnsupportedCount = hosted.skippedUnsupportedCount
+    const unsubscribeCheck = ensureEmailTemplateUnsubscribe(hosted.html)
     set.htmlTemplate = unsubscribeCheck.html
     unsubscribeFooterAppended = unsubscribeCheck.footerAppended
   }
@@ -92,6 +101,9 @@ export default defineEventHandler(async (event) => {
   return {
     ok: true,
     unsubscribeFooterAppended,
+    imagesHostedCount,
+    imagesSkippedRemoteCount,
+    imagesSkippedUnsupportedCount,
     template: {
       id: String(doc._id),
       name: doc.name,

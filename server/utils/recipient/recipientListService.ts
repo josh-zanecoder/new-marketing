@@ -31,6 +31,7 @@ import {
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
 import { isAllowedSelectedCampaignSenderEmail } from '@server/utils/campaign/listCampaignSenderCandidates'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { expandLoRecipientListExcludedContactIds } from '@server/utils/recipient/expandLoRecipientListExcludedContactIds'
 import type { ContactModel } from '@server/types/tenant/contact.model'
 
 /** JSON `list` object returned by POST/PATCH. */
@@ -275,9 +276,21 @@ async function loadWritePayload(
       applyAssociatedLoanOfficer = true
       dedupeMemberEmails = true
       // Unchecked borrowers on the LO create/edit form → soft exclusions.
+      // Checklist rows are email-deduped; expand to every Contact sharing those emails
+      // so duplicate docs cannot reappear as list members.
       applyExcludedContactIds = true
-      excludedContactIds = recipientListExcludedContactIds({
+      const seedIds = recipientListExcludedContactIds({
         excludedContactIds: body?.excludedContactIds
+      })
+      const seedEmails = Array.isArray(body?.excludedContactEmails)
+        ? body.excludedContactEmails.map((e) => String(e ?? ''))
+        : []
+      excludedContactIds = await expandLoRecipientListExcludedContactIds({
+        Contact: Contact as Parameters<typeof expandLoRecipientListExcludedContactIds>[0]['Contact'],
+        audience,
+        ownerEmail: loEmail,
+        seedIds,
+        seedEmails
       })
     }
   }

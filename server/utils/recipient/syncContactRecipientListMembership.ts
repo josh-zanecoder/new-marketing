@@ -155,6 +155,37 @@ async function syncContactToList(
     await RecipientListMember.deleteOne({ recipientListId: listId, contactId })
     return
   }
+  // LO recipient lists only (`associatedLoanOfficerEmail` set when flag was ON at create).
+  // Checklist exclusions are email-scoped: a new Contact with the same email as an
+  // excluded id must stay off the list even though its id differs.
+  if (
+    excluded.length &&
+    typeof listDoc.associatedLoanOfficerEmail === 'string' &&
+    listDoc.associatedLoanOfficerEmail.trim()
+  ) {
+    const [contactLean, excludedLean] = await Promise.all([
+      Contact.findById(contactId).select({ email: 1 }).lean(),
+      Contact.find({ _id: { $in: excluded } }).select({ email: 1 }).lean()
+    ])
+    const contactEmail = String((contactLean as { email?: string } | null)?.email ?? '')
+      .trim()
+      .toLowerCase()
+    if (contactEmail.includes('@')) {
+      const excludedEmails = new Set(
+        excludedLean
+          .map((doc) =>
+            String((doc as { email?: string }).email ?? '')
+              .trim()
+              .toLowerCase()
+          )
+          .filter((email) => email.includes('@'))
+      )
+      if (excludedEmails.has(contactEmail)) {
+        await RecipientListMember.deleteOne({ recipientListId: listId, contactId })
+        return
+      }
+    }
+  }
 
   const normalized = normalizeRecipientListDoc(listDoc)
   const { audience, filters, filterMode } = normalized
