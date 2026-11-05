@@ -568,6 +568,22 @@ export async function rebuildRecipientListMembers(
   )
   const excludedSet = new Set(excludedIds.map((id) => String(id)))
   const dedupeByEmail = opts?.dedupeByEmail === true
+  /**
+   * LO recipient-list path only (`dedupeByEmail`, set when allowTenantLoRecipientLists + LO write).
+   * Also skip any Contact whose email matches an excluded checklist row.
+   */
+  const excludedEmails = new Set<string>()
+  if (dedupeByEmail && excludedIds.length) {
+    const excludedDocs = await Contact.find({ _id: { $in: excludedIds } })
+      .select({ email: 1 })
+      .lean()
+    for (const doc of excludedDocs) {
+      const email = String((doc as { email?: string }).email ?? '')
+        .trim()
+        .toLowerCase()
+      if (email.includes('@')) excludedEmails.add(email)
+    }
+  }
 
   const nonEmptyGroups = criterionGroups.filter((g) => g.length > 0)
   const groupsForQuery = nonEmptyGroups.length > 0 ? criterionGroups : undefined
@@ -619,6 +635,7 @@ export async function rebuildRecipientListMembers(
         .trim()
         .toLowerCase()
       if (email.includes('@')) {
+        if (excludedEmails.has(email)) continue
         if (seenEmails.has(email)) continue
         seenEmails.add(email)
       }

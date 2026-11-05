@@ -78,13 +78,11 @@ export default defineEventHandler(async (event) => {
 
   const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+  // Exact lowercase match (owner emails are stored lowercased) — much faster than regex.
   const filter: Record<string, unknown> = {
     ...audienceBaseQuery('borrower'),
     deletedAt: null,
-    'metadata.ownerEmail': {
-      $regex: `^${escapeRe(ownerEmail)}$`,
-      $options: 'i'
-    }
+    'metadata.ownerEmail': ownerEmail
   }
   if (emailFilter) {
     if (!emailFilter.includes('@')) {

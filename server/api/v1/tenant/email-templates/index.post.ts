@@ -14,6 +14,7 @@ import {
   canWriteEmailTemplate,
   emailTemplateOwnershipFromAuth
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import { hostEmailTemplateHtmlImagesOnSave } from '@server/utils/emailTemplate/hostEmailTemplateHtmlImages'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
 export default defineEventHandler(async (event) => {
@@ -34,7 +35,10 @@ export default defineEventHandler(async (event) => {
   if (!subject) throw createError({ statusCode: 400, message: 'Default subject is required' })
   if (!rawHtml) throw createError({ statusCode: 400, message: 'Template HTML is required' })
 
-  const unsubscribeCheck = ensureEmailTemplateUnsubscribe(rawHtml)
+  // When allowTenantLoRecipientLists is ON: host embedded/remote images into Images library.
+  // Flag OFF: no-op (classic save).
+  const hosted = await hostEmailTemplateHtmlImagesOnSave(event, rawHtml)
+  const unsubscribeCheck = ensureEmailTemplateUnsubscribe(hosted.html)
   const htmlTemplate = unsubscribeCheck.html
 
   const conn = await getTenantConnectionFromEvent(event)
@@ -59,6 +63,9 @@ export default defineEventHandler(async (event) => {
   return {
     ok: true,
     unsubscribeFooterAppended: unsubscribeCheck.footerAppended,
+    imagesHostedCount: hosted.hostedCount,
+    imagesSkippedRemoteCount: hosted.skippedRemoteCount,
+    imagesSkippedUnsupportedCount: hosted.skippedUnsupportedCount,
     template: {
       id: String(doc._id),
       name: doc.name,
