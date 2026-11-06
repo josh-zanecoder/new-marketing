@@ -338,6 +338,7 @@ export async function removeScheduledCampaignJob(
   campaignId: string
 ): Promise<RemoveScheduledCampaignJobResult> {
   if (isCampaignCloudTasksEnabled()) {
+    // Throws if Cloud Tasks delete is denied — do not pretend cancel succeeded.
     const removedCt = await removeScheduledCampaignCloudTasks(campaignId, dbName)
     // Also clear any leftover BullMQ schedule job from before the CT migration.
     try {

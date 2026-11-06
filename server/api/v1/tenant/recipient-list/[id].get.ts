@@ -319,8 +319,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  let memberTotal = 0
-  let items: ReturnType<typeof mapOneContact>[] = []
+  let memberTotal: number
+  let items: ReturnType<typeof mapOneContact>[]
 
   if (dedupeMemberEmails) {
     // Flag path: load all members, keep first contact per email, then search/paginate.

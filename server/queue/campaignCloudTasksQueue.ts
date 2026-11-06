@@ -229,11 +229,23 @@ export async function enqueueCampaignBatchCloudTask(
       principal: resolved.principal ?? '(Cloud Run / ADC service account)',
       hint:
         msg.includes('PERMISSION_DENIED') || msg.includes('cloudtasks.tasks.create')
-          ? 'Grant roles/cloudtasks.enqueuer on the queue (or project) to the principal above. Do not use FIREBASE_CLIENT_EMAIL for Cloud Tasks.'
+          ? 'Grant roles/cloudtasks.admin (or create+delete+list) on the queue/project to the Cloud Run SA. Do not use FIREBASE_CLIENT_EMAIL for Cloud Tasks.'
           : undefined
     })
     throw e
   }
+}
+
+function isAlreadyExistsError(err: unknown): boolean {
+  const code = (err as { code?: number })?.code
+  const msg = err instanceof Error ? err.message : String(err)
+  return code === 6 || msg.includes('ALREADY_EXISTS')
+}
+
+function isNotFoundError(err: unknown): boolean {
+  const code = (err as { code?: number })?.code
+  const msg = err instanceof Error ? err.message : String(err)
+  return code === 5 || msg.includes('NOT_FOUND')
 }
 
 /** Delayed Cloud Task that starts a Scheduled campaign (replaces BullMQ delay jobs). */
@@ -261,7 +273,7 @@ export async function enqueueScheduledCampaignCloudTask(params: {
   const scheduleTime =
     delayMs > 0 ? { seconds: Math.floor((Date.now() + delayMs) / 1000) } : undefined
 
-  try {
+  const createOnce = async () => {
     await conn.client.createTask({
       parent: conn.queuePath,
       task: {
@@ -278,6 +290,10 @@ export async function enqueueScheduledCampaignCloudTask(params: {
         }
       }
     })
+  }
+
+  try {
+    await createOnce()
     logCt('enqueue.schedule', {
       campaignId,
       dbName,
@@ -287,14 +303,56 @@ export async function enqueueScheduledCampaignCloudTask(params: {
     })
     return { taskId }
   } catch (e: unknown) {
-    const code = (e as { code?: number })?.code
     const msg = e instanceof Error ? e.message : String(e)
-    if (code === 6 || msg.includes('ALREADY_EXISTS')) {
-      logCt('enqueue.schedule.duplicate', { campaignId, dbName, taskId })
-      return { taskId, duplicate: true }
+    if (!isAlreadyExistsError(e)) {
+      logCt('enqueue.schedule.failed', { campaignId, dbName, taskId, error: msg })
+      throw e
     }
-    logCt('enqueue.schedule.failed', { campaignId, dbName, taskId, error: msg })
-    throw e
+
+    // Same deterministic task id — must replace, never keep the old scheduleTime.
+    logCt('enqueue.schedule.duplicate', { campaignId, dbName, taskId })
+    try {
+      await conn.client.deleteTask({ name: taskName })
+    } catch (delErr: unknown) {
+      if (!isNotFoundError(delErr)) {
+        const delMsg = delErr instanceof Error ? delErr.message : String(delErr)
+        logCt('enqueue.schedule.replaceDelete.failed', {
+          campaignId,
+          dbName,
+          taskId,
+          error: delMsg
+        })
+        throw new Error(
+          `Cannot reschedule campaign: failed to replace Cloud Tasks job (${delMsg}). ` +
+            'Grant cloudtasks.tasks.delete to the Cloud Run service account.',
+          { cause: delErr }
+        )
+      }
+    }
+
+    try {
+      await createOnce()
+      logCt('enqueue.schedule.replaced', {
+        campaignId,
+        dbName,
+        taskId,
+        delayMs,
+        queue: cfg.queueName
+      })
+      return { taskId }
+    } catch (retryErr: unknown) {
+      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+      logCt('enqueue.schedule.replaceCreate.failed', {
+        campaignId,
+        dbName,
+        taskId,
+        error: retryMsg
+      })
+      throw new Error(
+        `Cannot reschedule campaign: Cloud Tasks job still exists with the old send time (${retryMsg})`,
+        { cause: retryErr }
+      )
+    }
   }
 }
 
@@ -312,12 +370,14 @@ export async function removeScheduledCampaignCloudTasks(
     await conn.client.deleteTask({ name: primaryName })
     removed += 1
   } catch (e: unknown) {
-    const code = (e as { code?: number })?.code
-    if (code !== 5) {
-      logCt('delete.schedule.skip', {
-        taskName: primaryName,
-        error: e instanceof Error ? e.message : String(e)
-      })
+    if (!isNotFoundError(e)) {
+      const error = e instanceof Error ? e.message : String(e)
+      logCt('delete.schedule.failed', { taskName: primaryName, error })
+      throw new Error(
+        `Cannot cancel scheduled send: failed to delete Cloud Tasks job (${error}). ` +
+          'Grant cloudtasks.tasks.delete to the Cloud Run service account.',
+        { cause: e }
+      )
     }
   }
 
@@ -337,8 +397,13 @@ export async function removeScheduledCampaignCloudTasks(
         /* ignore */
       }
     }
-  } catch {
-    /* ignore list failures */
+  } catch (e: unknown) {
+    // List is best-effort cleanup of legacy ids; primary delete already succeeded/not-found.
+    logCt('delete.schedule.list.skip', {
+      campaignId,
+      dbName,
+      error: e instanceof Error ? e.message : String(e)
+    })
   }
 
   if (removed > 0) {

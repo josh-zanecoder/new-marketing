@@ -21,7 +21,7 @@ function copyTextWithFallback(text: string): boolean {
   ta.focus()
   ta.select()
   ta.setSelectionRange(0, value.length)
-  let ok = false
+  let ok: boolean
   try {
     ok = document.execCommand('copy')
   } catch {

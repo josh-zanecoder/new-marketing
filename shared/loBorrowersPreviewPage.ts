@@ -52,10 +52,14 @@ export async function loadAllLoBorrowerPages(params: {
   const maxPages = params.maxPages ?? LO_BORROWERS_PREVIEW_MAX_PAGES
   const allRows: LoBorrowerPreviewPageRow[] = []
   const seenIds = new Set<string>()
-  let total = 0
   let skip = 0
   let pagesFetched = 0
 
+  if (maxPages <= 0) {
+    return { total: 0, borrowers: [], pagesFetched: 0 }
+  }
+
+  let total!: number
   for (let page = 0; page < maxPages; page++) {
     const res = await params.fetchPage({ skip, limit: pageSize })
     pagesFetched += 1

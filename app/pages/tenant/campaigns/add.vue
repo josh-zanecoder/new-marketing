@@ -841,7 +841,6 @@ import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSe
 const campaignStore = useCampaignStore()
 const {
   defaultSenderName,
-  defaultSenderEmail,
   senderDisplayName,
   initialSenderName,
   initialSenderEmail,

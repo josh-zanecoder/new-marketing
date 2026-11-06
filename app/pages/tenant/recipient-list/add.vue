@@ -629,7 +629,6 @@ const {
   canGoBorrowerNext: loCanGoBorrowerNext,
   goBorrowerPrev: loGoBorrowerPrev,
   goBorrowerNext: loGoBorrowerNext,
-  borrowerTotal: loBorrowerTotal,
   borrowersLoading: loBorrowersLoading,
   borrowersError: loBorrowersError,
   borrowerChecked: loBorrowerChecked,
