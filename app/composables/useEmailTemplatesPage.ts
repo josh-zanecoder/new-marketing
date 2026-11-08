@@ -9,7 +9,12 @@ import {
   parseEmailTemplateCategoryFilterQuery,
   type EmailTemplateCategoryFilterValue
 } from '~~/shared/utils/emailTemplateCategory'
-import { EMAIL_TEMPLATE_APPROVAL_PENDING } from '~~/shared/emailTemplateApproval'
+import {
+  EMAIL_TEMPLATE_APPROVAL_APPROVED,
+  EMAIL_TEMPLATE_APPROVAL_PENDING,
+  EMAIL_TEMPLATE_APPROVAL_REJECTED,
+  resolveEmailTemplateApprovalStatus
+} from '~~/shared/emailTemplateApproval'
 
 type EmailTemplateListRow = TenantEmailTemplateRow & {
   description?: string
@@ -86,6 +91,26 @@ export function useEmailTemplatesPage() {
     } catch {
       return '—'
     }
+  }
+
+  /** LO / LOA card line: who approved/rejected, or awaiting review. */
+  function formatApprovalMeta(template: EmailTemplateListRow): string {
+    const status = resolveEmailTemplateApprovalStatus(template.approvalStatus)
+    const by = String(template.approvalReviewedBy ?? '').trim()
+    if (status === EMAIL_TEMPLATE_APPROVAL_PENDING) {
+      return 'Awaiting approval'
+    }
+    if (status === EMAIL_TEMPLATE_APPROVAL_REJECTED) {
+      return by ? `Rejected by ${by}` : 'Rejected'
+    }
+    if (status === EMAIL_TEMPLATE_APPROVAL_APPROVED) {
+      return by ? `Approved by ${by}` : 'Approved'
+    }
+    return ''
+  }
+
+  function templatesMissingApprovalFields(rows: EmailTemplateListRow[]): boolean {
+    return rows.some((t) => typeof t.approvalStatus !== 'string' || !t.approvalStatus)
   }
 
   const filteredTemplates = computed(() => {
@@ -218,10 +243,13 @@ export function useEmailTemplatesPage() {
         | EmailTemplateListRow[]
         | undefined
       if (Array.isArray(cached)) {
-        templates.value = cached
-        pending.value = false
-        loadError.value = ''
-        return
+        // Stale payload from before approval fields existed would hide LO/LOA badges.
+        if (!(approvalUiEnabled.value && templatesMissingApprovalFields(cached))) {
+          templates.value = cached
+          pending.value = false
+          loadError.value = ''
+          return
+        }
       }
     }
 
@@ -241,6 +269,14 @@ export function useEmailTemplatesPage() {
       pending.value = false
     }
   }
+
+  // Flag often resolves after first paint — refresh so LO/LOA get status + reviewer email.
+  watch(approvalUiEnabled, (enabled) => {
+    if (!enabled) return
+    if (templatesMissingApprovalFields(templates.value)) {
+      void loadTemplates({ force: true })
+    }
+  })
 
   const templateToDelete = ref<EmailTemplateListRow | null>(null)
   const deleteConfirmLoading = ref(false)
@@ -316,6 +352,7 @@ export function useEmailTemplatesPage() {
     paginatedTemplates,
     paginationMeta,
     formatUpdated,
+    formatApprovalMeta,
     makeCampaignHref,
     editTemplateHref,
     applyCategoryFilter,
