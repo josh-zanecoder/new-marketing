@@ -7,6 +7,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
+import { assertCampaignEmailTemplateApprovedForSend } from '@server/utils/emailTemplate/assertCampaignEmailTemplateApprovedForSend'
 
 const MIN_LEAD_MS = 60_000
 
@@ -42,12 +43,19 @@ export default defineEventHandler(async (event) => {
   const campaignScope = mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
   const campaign = await (Campaign as CampaignModel)
     .findOne(campaignScope)
-    .select('_id status')
+    .select('_id status emailTemplate')
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
   if (campaign.status !== 'Draft') {
     throw createError({ statusCode: 400, message: 'Only draft campaigns can be scheduled' })
   }
+
+  await assertCampaignEmailTemplateApprovedForSend({
+    conn,
+    campaignId,
+    auth: event.context.auth,
+    campaign
+  })
 
   const snap = tenantUserFieldsFromAuth(event.context.auth)
   const updateResult = await (Campaign as CampaignModel).updateOne(campaignScope, {

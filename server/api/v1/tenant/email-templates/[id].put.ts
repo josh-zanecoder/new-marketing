@@ -15,6 +15,10 @@ import {
   canWriteEmailTemplate,
   mergeEmailTemplateVisibilityFilter
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import {
+  emailTemplateApprovalApiPayload,
+  emailTemplateApprovalFieldsOnUpdate
+} from '@server/utils/emailTemplate/emailTemplateApproval'
 import { hostEmailTemplateHtmlImagesOnSave } from '@server/utils/emailTemplate/hostEmailTemplateHtmlImages'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
@@ -85,6 +89,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No valid fields to update' })
   }
 
+  Object.assign(set, emailTemplateApprovalFieldsOnUpdate(event.context.auth, Object.keys(set)))
+
   const doc = await (EmailTemplate as EmailTemplateModel).findOneAndUpdate(
     { _id: rawId, ...ACTIVE_EMAIL_TEMPLATE_FILTER },
     { $set: set },
@@ -97,6 +103,7 @@ export default defineEventHandler(async (event) => {
 
   const idStr = categoryIdToString(doc.categoryId)
   const nameById = await loadCategoryNameMap(categoryModel, [idStr])
+  const approval = emailTemplateApprovalApiPayload(doc, event.context.auth)
 
   return {
     ok: true,
@@ -113,7 +120,8 @@ export default defineEventHandler(async (event) => {
       categoryId: idStr,
       categoryName: idStr ? (nameById.get(idStr) ?? null) : null,
       createdAt: doc.createdAt?.toISOString?.() ?? null,
-      updatedAt: doc.updatedAt?.toISOString?.() ?? null
+      updatedAt: doc.updatedAt?.toISOString?.() ?? null,
+      ...(approval ?? {})
     }
   }
 })

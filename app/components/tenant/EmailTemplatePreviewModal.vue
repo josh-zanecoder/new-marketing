@@ -1,29 +1,54 @@
 <script setup lang="ts">
-import { Megaphone, Monitor, Smartphone, X } from 'lucide-vue-next'
+import { Mail, Megaphone, Monitor, Smartphone, X } from 'lucide-vue-next'
 
-const props = defineProps<{
-  open: boolean
-  name: string
-  subject?: string
-  html: string
-  templateId?: string
-  /** Stack above other dialogs (e.g. unsubscribe footer notice at z-200). */
-  elevated?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    name: string
+    subject?: string
+    html: string
+    templateId?: string
+    /** Stack above other dialogs (e.g. unsubscribe footer notice at z-200). */
+    elevated?: boolean
+    /**
+     * Footer CTAs. Default = Make campaign only.
+     * Template approvals uses `both` (Make campaign + Send test email).
+     */
+    primaryAction?: 'campaign' | 'test-email' | 'both'
+  }>(),
+  {
+    primaryAction: 'campaign'
+  }
+)
 
 const emit = defineEmits<{
   close: []
+  'send-test-email': []
 }>()
 
 const overlayZClass = computed(() => (props.elevated ? 'z-[210]' : 'z-[100]'))
 
 const view = ref<'desktop' | 'mobile'>('desktop')
 
+const showCampaignAction = computed(
+  () =>
+    (props.primaryAction === 'campaign' || props.primaryAction === 'both') &&
+    Boolean(props.templateId)
+)
+
+const showTestEmailAction = computed(
+  () => props.primaryAction === 'test-email' || props.primaryAction === 'both'
+)
+
 const campaignHref = computed(() =>
   props.templateId
     ? `/tenant/campaigns/add?templateId=${encodeURIComponent(props.templateId)}`
     : ''
 )
+
+function onSendTestEmail() {
+  emit('send-test-email')
+}
 
 function previewSrcdoc(html: string) {
   return `<!DOCTYPE html><html><head><meta charset=utf-8><meta name="viewport" content="width=device-width,initial-scale=1"><style>
@@ -156,17 +181,32 @@ onBeforeUnmount(() => {
           </p>
         </div>
         <div
-          class="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:pb-4"
+          class="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3 sm:px-6 sm:pb-4"
         >
           <NuxtLink
-            v-if="campaignHref"
+            v-if="showCampaignAction && campaignHref"
             :to="campaignHref"
-            class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:order-2 sm:w-auto"
+            class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:order-3 sm:w-auto"
             @click="emit('close')"
           >
             <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />
             Make campaign
           </NuxtLink>
+          <button
+            v-if="showTestEmailAction"
+            type="button"
+            class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-900 shadow-sm transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:order-2 sm:w-auto"
+            :class="
+              showCampaignAction
+                ? ''
+                : 'border-transparent bg-primary-600 text-white shadow-md shadow-primary-600/25 hover:bg-primary-700 hover:text-white'
+            "
+            :disabled="!html.trim()"
+            @click="onSendTestEmail"
+          >
+            <Mail class="h-4 w-4 shrink-0" aria-hidden="true" />
+            Send test email
+          </button>
           <button
             type="button"
             class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 sm:order-1 sm:w-auto"

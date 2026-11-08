@@ -14,6 +14,10 @@ import {
   canWriteEmailTemplate,
   emailTemplateOwnershipFromAuth
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import {
+  emailTemplateApprovalApiPayload,
+  emailTemplateApprovalFieldsOnCreate
+} from '@server/utils/emailTemplate/emailTemplateApproval'
 import { hostEmailTemplateHtmlImagesOnSave } from '@server/utils/emailTemplate/hostEmailTemplateHtmlImages'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 
@@ -54,11 +58,13 @@ export default defineEventHandler(async (event) => {
     htmlSource,
     saveToLibrary,
     categoryId: categoryId ?? null,
-    ...emailTemplateOwnershipFromAuth(event.context.auth)
+    ...emailTemplateOwnershipFromAuth(event.context.auth),
+    ...emailTemplateApprovalFieldsOnCreate(event.context.auth)
   })
 
   const idStr = categoryIdToString(doc.categoryId)
   const nameById = await loadCategoryNameMap(categoryModel, [idStr])
+  const approval = emailTemplateApprovalApiPayload(doc, event.context.auth)
 
   return {
     ok: true,
@@ -76,7 +82,8 @@ export default defineEventHandler(async (event) => {
       categoryName: idStr ? (nameById.get(idStr) ?? null) : null,
       canEdit: canWriteEmailTemplate(doc, event.context.auth),
       createdAt: doc.createdAt?.toISOString?.() ?? null,
-      updatedAt: doc.updatedAt?.toISOString?.() ?? null
+      updatedAt: doc.updatedAt?.toISOString?.() ?? null,
+      ...(approval ?? {})
     }
   }
 })

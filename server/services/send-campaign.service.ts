@@ -15,6 +15,7 @@ import type {
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import { assertCampaignEmailTemplateApprovedForSend } from '../utils/emailTemplate/assertCampaignEmailTemplateApprovedForSend'
 import {
   inspectCampaignUnsubscribeSecondCheck,
   persistCampaignTemplateHtmlAfterUnsubscribeCheck
@@ -310,6 +311,13 @@ export async function beginCampaignSend(
   if (!allowedStatuses.includes(campaign.status)) {
     throw createError({ statusCode: 400, message: 'Campaign cannot be sent in its current status' })
   }
+
+  await assertCampaignEmailTemplateApprovedForSend({
+    conn,
+    campaignId,
+    auth: options?.auth,
+    campaign
+  })
 
   if (mode === 'new') {
     const awaitApproval = options?.awaitUnsubscribeApproval !== false

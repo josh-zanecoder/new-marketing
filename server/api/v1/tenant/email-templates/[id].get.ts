@@ -12,6 +12,7 @@ import {
   canWriteEmailTemplate,
   mergeEmailTemplateVisibilityFilter
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import { emailTemplateApprovalApiPayload } from '@server/utils/emailTemplate/emailTemplateApproval'
 import { ACTIVE_EMAIL_TEMPLATE_FILTER } from '~~/shared/utils/emailTemplateActive'
 
 export default defineEventHandler(async (event) => {
@@ -47,6 +48,8 @@ export default defineEventHandler(async (event) => {
   const categoryId = categoryIdToString(doc.categoryId)
   const nameById = await loadCategoryNameMap(categoryModel, [categoryId])
 
+  const approval = emailTemplateApprovalApiPayload(doc, event.context.auth)
+
   return {
     template: {
       id: String(doc._id),
@@ -61,7 +64,8 @@ export default defineEventHandler(async (event) => {
       categoryName: categoryId ? (nameById.get(categoryId) ?? null) : null,
       canEdit: canWriteEmailTemplate(doc, event.context.auth),
       createdAt: doc.createdAt?.toISOString?.() ?? null,
-      updatedAt: doc.updatedAt?.toISOString?.() ?? null
+      updatedAt: doc.updatedAt?.toISOString?.() ?? null,
+      ...(approval ?? {})
     }
   }
 })

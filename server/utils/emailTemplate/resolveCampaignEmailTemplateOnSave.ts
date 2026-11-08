@@ -9,6 +9,10 @@ import {
   emailTemplateOwnershipFromAuth,
   mergeEmailTemplateVisibilityFilter
 } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import {
+  emailTemplateApprovalFieldsOnCreate,
+  emailTemplateApprovalFieldsOnUpdate
+} from '@server/utils/emailTemplate/emailTemplateApproval'
 import { resolveCampaignTemplateHtmlSource } from '~~/shared/campaignTemplateSource'
 import {
   CUSTOM_MARKETING_GCS_NO_LIST_FOLDER,
@@ -116,16 +120,19 @@ export async function resolveCampaignEmailTemplateOnSave(
         auth: input.auth
       }))
     ) {
+      const updateSet: Record<string, unknown> = {
+        htmlTemplate: html,
+        htmlSource,
+        subject: input.subject?.trim() || input.campaignName.trim(),
+        saveToLibrary
+      }
+      Object.assign(
+        updateSet,
+        emailTemplateApprovalFieldsOnUpdate(input.auth, Object.keys(updateSet))
+      )
       await EmailTemplate.updateOne(
         { _id: new mongoose.Types.ObjectId(currentId) },
-        {
-          $set: {
-            htmlTemplate: html,
-            htmlSource,
-            subject: input.subject?.trim() || input.campaignName.trim(),
-            saveToLibrary
-          }
-        }
+        { $set: updateSet }
       )
       return { emailTemplateId: currentId }
     }
@@ -136,7 +143,8 @@ export async function resolveCampaignEmailTemplateOnSave(
       htmlTemplate: html,
       htmlSource,
       saveToLibrary,
-      ...ownership
+      ...ownership,
+      ...emailTemplateApprovalFieldsOnCreate(input.auth)
     }).save()
     return { emailTemplateId: template._id.toString() }
   }
@@ -160,7 +168,8 @@ export async function resolveCampaignEmailTemplateOnSave(
       htmlTemplate: source.htmlTemplate ?? source.html ?? '',
       htmlSource: source.htmlSource ?? 'editor',
       saveToLibrary: false,
-      ...ownership
+      ...ownership,
+      ...emailTemplateApprovalFieldsOnCreate(input.auth)
     }).save()
     return { emailTemplateId: copy._id.toString() }
   }

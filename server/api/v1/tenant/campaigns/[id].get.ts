@@ -9,6 +9,11 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { materializeEmailTemplateHtmlIfNeeded } from '@server/utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import { emailTemplateApprovalApiPayload } from '@server/utils/emailTemplate/emailTemplateApproval'
+import {
+  isEmailTemplateSendableStatus,
+  resolveEmailTemplateApprovalStatus
+} from '~~/shared/emailTemplateApproval'
 import { resolveRecipientListContactRows } from '@server/utils/recipient/resolveRecipientListEmails'
 
 export default defineEventHandler(async (event) => {
@@ -121,6 +126,18 @@ export default defineEventHandler(async (event) => {
     ? linkedTemplate.saveToLibrary !== false
     : undefined
 
+  const approval = linkedTemplate
+    ? emailTemplateApprovalApiPayload(linkedTemplate, event.context.auth)
+    : null
+  const emailTemplateApprovalStatus = approval
+    ? resolveEmailTemplateApprovalStatus(linkedTemplate?.approvalStatus)
+    : undefined
+  // Approvers (Marketing / OM) may send even while the linked template is pending.
+  const emailTemplateSendable =
+    !approval ||
+    isEmailTemplateSendableStatus(linkedTemplate?.approvalStatus) ||
+    approval.canApprove === true
+
   return {
     campaign: {
       id: String(campaign._id),
@@ -141,6 +158,13 @@ export default defineEventHandler(async (event) => {
       templateHtml,
       templateHtmlSource,
       saveHtmlToLibrary,
+      ...(emailTemplateApprovalStatus
+        ? {
+            emailTemplateApprovalStatus,
+            emailTemplateSendable,
+            emailTemplateCanApprove: approval?.canApprove === true
+          }
+        : {}),
       mergeUserSnapshot: campaign.mergeUserSnapshot,
       replyTo: campaign.replyTo,
       ownerEmail: campaign.metadata?.ownerEmail?.trim() || undefined,
