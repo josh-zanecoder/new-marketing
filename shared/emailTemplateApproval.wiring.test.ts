@@ -55,12 +55,11 @@ describe('email template approval phase 2 wiring', () => {
     expect(add).toContain('Approved by')
     expect(approvalsPage).toContain('approveEmailTemplate')
     expect(approvalsPage).toContain('rejectEmailTemplate')
-    expect(approvalsPage).toContain('Send test email')
     expect(approvalsPage).toContain('Make campaign')
-    expect(approvalsPage).toContain('sendTestEmailForDraft')
+    expect(approvalsPage).not.toContain('Send test email')
+    expect(approvalsPage).not.toContain('sendTestEmailForDraft')
     expect(approvalsPage).toContain('TenantEmailTemplateThumbnail')
     expect(approvalsPage).toContain('searchQuery')
-    expect(approvalsPage).toContain('primary-action="both"')
   })
 
   it('email templates library excludes pending for approvers', () => {

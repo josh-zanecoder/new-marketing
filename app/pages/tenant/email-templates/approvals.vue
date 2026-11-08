@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Mail, Maximize2, Megaphone, X } from 'lucide-vue-next'
+import { Check, Maximize2, Megaphone, X } from 'lucide-vue-next'
 import type { TenantEmailTemplateRow } from '~/composables/useTenantMarketingApi'
 
 definePageMeta({ layout: 'default' })
@@ -10,26 +10,11 @@ const {
   allowTenantLoRecipientLists,
   canSelectAnyLoanOfficer,
   loadDefaultCampaignSender,
-  initialSenderName,
-  initialSenderEmail,
   loaded: loFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 
 const { syncFromTemplatesLength } = usePendingEmailTemplateApprovalsCount()
-
-const {
-  open: testEmailModalOpen,
-  recipient: testEmailRecipient,
-  sending: testEmailSending,
-  error: testEmailError,
-  successModalOpen: testEmailSuccessModalOpen,
-  sentToRecipient: testEmailSentToRecipient,
-  openModal: openTestEmailModal,
-  closeModal: closeTestEmailModal,
-  closeSuccessModal: closeTestEmailSuccessModal,
-  sendForDraft: sendTestEmailForDraft
-} = useCampaignTestEmail()
 
 const pending = ref(true)
 const loadError = ref('')
@@ -41,7 +26,6 @@ const previewTemplate = ref<TenantEmailTemplateRow | null>(null)
 const rejectOpen = ref(false)
 const rejectTarget = ref<TenantEmailTemplateRow | null>(null)
 const rejectReason = ref('')
-const testEmailTarget = ref<TenantEmailTemplateRow | null>(null)
 
 const canAccess = computed(
   () =>
@@ -166,47 +150,6 @@ async function confirmReject() {
   } finally {
     actionId.value = ''
   }
-}
-
-function openSendTestEmail(row: TenantEmailTemplateRow) {
-  const html = row.htmlTemplate?.trim() || ''
-  if (!html) {
-    toast.error('This template has no HTML to send')
-    return
-  }
-  testEmailTarget.value = row
-  openTestEmailModal(initialSenderEmail.value || undefined)
-}
-
-function openSendTestEmailFromPreview() {
-  const row = previewTemplate.value
-  if (!row) return
-  openSendTestEmail(row)
-}
-
-async function submitTestEmail() {
-  const row = testEmailTarget.value
-  if (!row) return
-  const html = row.htmlTemplate?.trim() || ''
-  const subject = row.subject?.trim() || row.name?.trim() || 'Email template'
-  const senderEmail = initialSenderEmail.value.trim()
-  const senderName = initialSenderName.value.trim() || 'Marketing'
-  if (!html) {
-    toast.error('This template has no HTML to send')
-    return
-  }
-  if (!senderEmail) {
-    toast.error('No sender email available for test send')
-    return
-  }
-  await sendTestEmailForDraft({
-    subject,
-    senderName,
-    senderEmail,
-    templateHtml: html,
-    recipientsType: 'manual',
-    recipientsManual: []
-  })
 }
 
 watch(canAccess, (ok) => {
@@ -421,24 +364,13 @@ onMounted(() => {
                   Reject
                 </button>
               </div>
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-900 shadow-sm transition-colors hover:bg-violet-100/90 disabled:opacity-50"
-                  :disabled="!row.htmlTemplate?.trim() || testEmailSending"
-                  @click="openSendTestEmail(row)"
-                >
-                  <Mail class="h-4 w-4 shrink-0" aria-hidden="true" />
-                  Send test email
-                </button>
-                <NuxtLink
-                  :to="makeCampaignHref(row.id)"
-                  class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
-                >
-                  <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />
-                  Make campaign
-                </NuxtLink>
-              </div>
+              <NuxtLink
+                :to="makeCampaignHref(row.id)"
+                class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+              >
+                <Megaphone class="h-4 w-4 shrink-0" aria-hidden="true" />
+                Make campaign
+              </NuxtLink>
             </div>
           </div>
         </article>
@@ -452,25 +384,7 @@ onMounted(() => {
       :subject="previewTemplate.subject"
       :html="previewTemplate.htmlTemplate || ''"
       :template-id="previewTemplate.id"
-      primary-action="both"
       @close="closePreview"
-      @send-test-email="openSendTestEmailFromPreview"
-    />
-
-    <ClientTestEmailModal
-      :open="testEmailModalOpen"
-      :recipient="testEmailRecipient"
-      :sending="testEmailSending"
-      :error="testEmailError"
-      @update:recipient="testEmailRecipient = $event"
-      @close="closeTestEmailModal()"
-      @send="submitTestEmail()"
-    />
-
-    <ClientTestEmailSuccessModal
-      :open="testEmailSuccessModalOpen"
-      :recipient="testEmailSentToRecipient"
-      @close="closeTestEmailSuccessModal()"
     />
 
     <div
