@@ -59,6 +59,7 @@ const categories = ref<TenantEmailTemplateCategoryRow[]>([])
 const htmlContent = ref('')
 const formError = ref('')
 const approvalStatus = ref<string | null>(null)
+const approvalReviewedBy = ref('')
 const approvalRejectionReason = ref('')
 const canApproveTemplate = ref(false)
 const uploadError = ref('')
@@ -231,6 +232,7 @@ async function loadExistingTemplate() {
     categoryId.value = res.template.categoryId?.trim() ?? ''
     htmlContent.value = res.template.htmlTemplate?.trim() ?? ''
     approvalStatus.value = res.template.approvalStatus ?? null
+    approvalReviewedBy.value = res.template.approvalReviewedBy?.trim() ?? ''
     approvalRejectionReason.value = res.template.approvalRejectionReason?.trim() ?? ''
     canApproveTemplate.value = res.template.canApprove === true
   } catch {
@@ -485,7 +487,7 @@ async function saveTemplate() {
           {{ isEdit ? 'Edit email template' : 'Create email template' }}
         </h1>
         <TenantEmailTemplateApprovalBadge
-          v-if="canUploadTemplateImage && isEdit && approvalStatus"
+          v-if="canUploadTemplateImage && isEdit"
           :status="approvalStatus"
         />
       </div>
@@ -493,11 +495,13 @@ async function saveTemplate() {
         Paste HTML or upload an .html file. The template is stored exactly as provided.
       </p>
       <p
-        v-if="canUploadTemplateImage && isEdit && approvalStatus === 'rejected' && approvalRejectionReason"
+        v-if="canUploadTemplateImage && isEdit && approvalStatus === 'rejected'"
         class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
         role="status"
       >
-        Rejected: {{ approvalRejectionReason }}
+        <span v-if="approvalReviewedBy">Rejected by {{ approvalReviewedBy }}.</span>
+        <span v-else>Rejected.</span>
+        <span v-if="approvalRejectionReason"> {{ approvalRejectionReason }}</span>
       </p>
       <p
         v-else-if="canUploadTemplateImage && isEdit && approvalStatus === 'pending_approval'"
@@ -505,6 +509,13 @@ async function saveTemplate() {
         role="status"
       >
         Waiting for Operations Manager or Marketing approval before this template can be sent.
+      </p>
+      <p
+        v-else-if="canUploadTemplateImage && isEdit && approvalStatus === 'approved' && approvalReviewedBy"
+        class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
+        role="status"
+      >
+        Approved by {{ approvalReviewedBy }}
       </p>
       <div
         v-if="canUploadTemplateImage && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"

@@ -29,6 +29,7 @@ const {
   paginatedTemplates,
   paginationMeta,
   formatUpdated,
+  formatApprovalMeta,
   makeCampaignHref,
   editTemplateHref,
   applyCategoryFilter,
@@ -218,7 +219,7 @@ onMounted(onMountedLoad)
                 {{ template.name }}
               </h2>
               <TenantEmailTemplateApprovalBadge
-                v-if="approvalUiEnabled && template.approvalStatus"
+                v-if="approvalUiEnabled"
                 :status="template.approvalStatus"
                 class="shrink-0"
               />
@@ -244,6 +245,13 @@ onMounted(onMountedLoad)
             </button>
             <p class="mt-2 text-xs text-slate-400">
               Updated {{ formatUpdated(template.updatedAt) }}
+            </p>
+            <p
+              v-if="approvalUiEnabled"
+              class="mt-1 truncate text-xs text-slate-500"
+              :title="formatApprovalMeta(template)"
+            >
+              {{ formatApprovalMeta(template) }}
             </p>
             <div class="mt-4 flex flex-col gap-2">
               <div
