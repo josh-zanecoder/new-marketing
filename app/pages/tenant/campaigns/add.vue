@@ -653,6 +653,30 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
         {{ saveError }}
       </div>
       <div
+        v-if="templateApprovalBlocksSend"
+        class="flex flex-wrap items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
+        role="status"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-amber-950">Template needs approval</p>
+          <p class="mt-1 text-amber-900/90">
+            This template must be approved by Operations Manager or Marketing before you can send.
+            <NuxtLink
+              v-if="linkedEmailTemplateCanApprove"
+              to="/tenant/email-templates/approvals"
+              class="font-semibold text-amber-950 underline underline-offset-2"
+            >
+              Open approvals
+            </NuxtLink>
+          </p>
+        </div>
+        <TenantEmailTemplateApprovalBadge
+          v-if="allowTenantLoRecipientLists && linkedEmailTemplateApprovalStatus"
+          :status="linkedEmailTemplateApprovalStatus"
+          class="shrink-0"
+        />
+      </div>
+      <div
         v-if="sendError && !sendingCampaignId"
         class="flex flex-wrap items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
         role="status"
@@ -687,7 +711,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
           v-if="campaignFormComplete"
           type="button"
           class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-emerald-200/90 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm shadow-emerald-900/[0.06] ring-1 ring-emerald-100/80 transition-colors hover:bg-emerald-100/90 disabled:opacity-50 sm:order-4 sm:w-auto sm:px-6 sm:text-[15px]"
-          :disabled="wizardSendBusy"
+          :disabled="wizardSendBusy || templateApprovalBlocksSend"
           @click.prevent="handleSendFromWizard"
         >
           {{
@@ -702,7 +726,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
           v-if="campaignFormComplete"
           type="button"
           class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:opacity-50 sm:order-3 sm:w-auto sm:px-6 sm:text-[15px]"
-          :disabled="wizardSendBusy"
+          :disabled="wizardSendBusy || templateApprovalBlocksSend"
           @click.prevent="handleOpenScheduleWizard"
         >
           Schedule send
@@ -711,7 +735,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
           v-if="canSendTestEmail"
           type="button"
           class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200/90 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:order-2 sm:w-auto sm:px-6 sm:text-[15px]"
-          :disabled="wizardSendBusy || testEmailSending"
+          :disabled="wizardSendBusy || testEmailSending || templateApprovalBlocksSend"
           @click.prevent="handleOpenTestEmailModal"
         >
           <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1565,11 +1589,23 @@ interface ExistingTemplateOption {
   html: string
   /** Mirrors saved email template default subject; may be empty. */
   subject?: string
+  approvalStatus?: 'pending_approval' | 'approved' | 'rejected'
+  canApprove?: boolean
 }
 
 const existingTemplates = ref<ExistingTemplateOption[]>([])
 const emailTemplatesPending = ref(false)
 const emailTemplatesError = ref('')
+const linkedEmailTemplateApprovalStatus = ref<string | null>(null)
+const linkedEmailTemplateSendable = ref(true)
+const linkedEmailTemplateCanApprove = ref(false)
+const templateApprovalBlocksSend = computed(
+  () =>
+    allowTenantLoRecipientLists.value === true &&
+    !linkedEmailTemplateCanApprove.value &&
+    Boolean(linkedEmailTemplateApprovalStatus.value) &&
+    linkedEmailTemplateSendable.value === false
+)
 
 async function loadEmailTemplates() {
   emailTemplatesPending.value = true
@@ -1580,7 +1616,9 @@ async function loadEmailTemplates() {
       id: t.id,
       name: t.name,
       html: t.htmlTemplate,
-      subject: (t.subject ?? '').trim() || undefined
+      subject: (t.subject ?? '').trim() || undefined,
+      approvalStatus: t.approvalStatus,
+      canApprove: t.canApprove === true
     }))
   } catch {
     emailTemplatesError.value = 'Could not load email templates.'
@@ -1623,15 +1661,16 @@ function readTemplateIdFromQuery(): string {
   return typeof q === 'string' ? q.trim() : ''
 }
 
-function applyTemplateFromQuery(): void {
-  if (route.query.fromEditor === '1') return
-  const templateId = readTemplateIdFromQuery()
-  if (!templateId) return
-  const template = existingTemplates.value.find((t) => t.id === templateId)
-  if (!template) return
+function applyLoadedTemplateOption(template: ExistingTemplateOption): void {
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
   templateDesignModified.value = false
+  linkedEmailTemplateApprovalStatus.value = template.approvalStatus ?? null
+  linkedEmailTemplateCanApprove.value = template.canApprove === true
+  linkedEmailTemplateSendable.value =
+    template.canApprove === true ||
+    !template.approvalStatus ||
+    template.approvalStatus === 'approved'
   const fromTemplate = template.subject?.trim()
   if (fromTemplate) {
     form.value.subject = fromTemplate
@@ -1646,6 +1685,38 @@ function applyTemplateFromQuery(): void {
   void nextTick(() => {
     designSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
+}
+
+async function applyTemplateFromQuery(): Promise<void> {
+  if (route.query.fromEditor === '1') return
+  const templateId = readTemplateIdFromQuery()
+  if (!templateId) return
+  const fromList = existingTemplates.value.find((t) => t.id === templateId)
+  if (fromList) {
+    applyLoadedTemplateOption(fromList)
+    return
+  }
+  // Pending templates are hidden from the library list for Marketing/OM —
+  // still allow Make campaign from Template approvals via direct fetch.
+  try {
+    const res = await marketingApi.fetchEmailTemplateById(templateId)
+    const t = res.template
+    if (!t?.id) return
+    const option: ExistingTemplateOption = {
+      id: t.id,
+      name: t.name,
+      html: t.htmlTemplate,
+      subject: (t.subject ?? '').trim() || undefined,
+      approvalStatus: t.approvalStatus,
+      canApprove: t.canApprove === true
+    }
+    if (!existingTemplates.value.some((row) => row.id === option.id)) {
+      existingTemplates.value = [option, ...existingTemplates.value]
+    }
+    applyLoadedTemplateOption(option)
+  } catch {
+    /* leave wizard without preselected template */
+  }
 }
 
 async function loadFromEditorReturn() {
@@ -2021,6 +2092,9 @@ function handleUploadHtml(payload: { html: string; saveToLibrary: boolean }) {
   form.value.templateMode = 'upload'
   form.value.selectedTemplateId = ''
   form.value.saveHtmlToLibrary = false
+  linkedEmailTemplateApprovalStatus.value = null
+  linkedEmailTemplateSendable.value = true
+  linkedEmailTemplateCanApprove.value = false
   savedTemplateHtml.value = payload.html
   const campaignId = returnCampaignId.value || `temp-${Date.now()}`
   returnCampaignId.value = campaignId
@@ -2039,6 +2113,9 @@ function handleCreateFromScratch() {
   form.value.templateMode = 'scratch'
   form.value.selectedTemplateId = ''
   form.value.saveHtmlToLibrary = false
+  linkedEmailTemplateApprovalStatus.value = null
+  linkedEmailTemplateSendable.value = true
+  linkedEmailTemplateCanApprove.value = false
   const campaignId = `temp-${Date.now()}`
   if (typeof window !== 'undefined') {
     window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({
@@ -2051,21 +2128,7 @@ function handleCreateFromScratch() {
 
 function handleUseTemplate(template: ExistingTemplateOption) {
   designModalOpen.value = false
-  templateDesignModified.value = false
-  form.value.templateMode = 'existing'
-  form.value.selectedTemplateId = template.id
-  form.value.saveHtmlToLibrary = false
-  const fromTemplate = template.subject?.trim()
-  if (fromTemplate) {
-    form.value.subject = fromTemplate
-  }
-  savedTemplateHtml.value = template.html
-  const campaignId = returnCampaignId.value || `temp-${Date.now()}`
-  returnCampaignId.value = campaignId
-  if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(`campaign-template-${campaignId}`, template.html)
-    window.sessionStorage.setItem(PENDING_CAMPAIGN_KEY, JSON.stringify({ form: { ...form.value }, campaignId }))
-  }
+  applyLoadedTemplateOption(template)
 }
 
 function applyStoredOrSelectedTemplate() {

@@ -17,6 +17,15 @@ export interface EmailTemplateDoc {
   /** `ownerEmail` set = private to that owner; empty = shared with the tenant. */
   metadata?: { ownerEmail?: string }
   createdBy?: string
+  /**
+   * LO recipient-lists flag path: pending_approval | approved | rejected.
+   * Omitted/legacy → treat as approved when flag is ON.
+   */
+  approvalStatus?: 'pending_approval' | 'approved' | 'rejected'
+  approvalSubmittedAt?: Date | null
+  approvalReviewedAt?: Date | null
+  approvalReviewedBy?: string
+  approvalRejectionReason?: string
   /** Legacy field */
   html?: string
   clientId?: string

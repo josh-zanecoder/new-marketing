@@ -27,9 +27,23 @@ export const emailTemplateSchema = new mongoose.Schema({
   deletedAt: { type: Date, default: null },
   metadata: { type: emailTemplateMetadataSchema, default: () => ({}) },
   /** Tenant user id or email who created the template. */
-  createdBy: { type: String, default: '', trim: true }
+  createdBy: { type: String, default: '', trim: true },
+  /**
+   * LO recipient-lists flag path only.
+   * pending_approval | approved | rejected. Omitted on classic (flag OFF) templates.
+   */
+  approvalStatus: {
+    type: String,
+    enum: ['pending_approval', 'approved', 'rejected'],
+    default: undefined
+  },
+  approvalSubmittedAt: { type: Date, default: null },
+  approvalReviewedAt: { type: Date, default: null },
+  approvalReviewedBy: { type: String, default: '', trim: true },
+  approvalRejectionReason: { type: String, default: '', trim: true }
 }, { timestamps: true })
 
 emailTemplateSchema.index({ categoryId: 1 })
 emailTemplateSchema.index({ deletedAt: 1 })
 emailTemplateSchema.index({ 'metadata.ownerEmail': 1 })
+emailTemplateSchema.index({ approvalStatus: 1, approvalSubmittedAt: -1 })

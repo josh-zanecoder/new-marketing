@@ -8,6 +8,8 @@ const {
   pending,
   deletingId,
   loadError,
+  approvalUiEnabled,
+  showApprovalsLink,
   templates,
   searchQuery,
   sortBy,
@@ -55,6 +57,13 @@ onMounted(onMountedLoad)
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2 sm:shrink-0">
+        <NuxtLink
+          v-if="showApprovalsLink"
+          to="/tenant/email-templates/approvals"
+          class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          Approvals
+        </NuxtLink>
         <NuxtLink
           to="/tenant/email-templates/categories"
           class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
@@ -204,9 +213,16 @@ onMounted(onMountedLoad)
             </span>
           </button>
           <div class="flex flex-1 flex-col p-4 sm:p-5">
-            <h2 class="truncate text-base font-semibold text-slate-900">
-              {{ template.name }}
-            </h2>
+            <div class="flex items-start justify-between gap-2">
+              <h2 class="min-w-0 truncate text-base font-semibold text-slate-900">
+                {{ template.name }}
+              </h2>
+              <TenantEmailTemplateApprovalBadge
+                v-if="approvalUiEnabled && template.approvalStatus"
+                :status="template.approvalStatus"
+                class="shrink-0"
+              />
+            </div>
             <p
               v-if="template.subject?.trim()"
               class="mt-1 truncate text-sm text-slate-500"

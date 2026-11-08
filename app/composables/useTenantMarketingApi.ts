@@ -40,6 +40,10 @@ export interface TenantCampaignDetail {
   templateHtmlSource?: 'editor' | 'upload' | 'custom'
   /** Whether the linked template is visible in Email templates / design library. */
   saveHtmlToLibrary?: boolean
+  /** Present when LO recipient-lists flag is ON and a library template is linked. */
+  emailTemplateApprovalStatus?: 'pending_approval' | 'approved' | 'rejected'
+  emailTemplateSendable?: boolean
+  emailTemplateCanApprove?: boolean
   mergeUserSnapshot?: Record<string, unknown>
   replyTo?: { email: string; name: string }
   /** Email of the user who owns the campaign. */
@@ -80,6 +84,15 @@ export interface TenantEmailTemplateRow {
   canEdit?: boolean
   createdAt?: string | null
   updatedAt?: string | null
+  /** Present when LO recipient-lists flag is ON. */
+  approvalStatus?: 'pending_approval' | 'approved' | 'rejected'
+  approvalSubmittedAt?: string | null
+  approvalReviewedAt?: string | null
+  approvalReviewedBy?: string
+  approvalRejectionReason?: string
+  canApprove?: boolean
+  createdBy?: string
+  ownerEmail?: string
 }
 
 export interface TenantEmailTemplateCategoryRow {
@@ -359,6 +372,31 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     return $fetch<{ ok: boolean; alreadyDeleted: boolean }>(
       `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}`,
       tenantFetchInit({ method: 'DELETE', timeout: 30000 })
+    )
+  }
+
+  async function fetchPendingEmailTemplateApprovals() {
+    return $fetch<{ templates: TenantEmailTemplateRow[] }>(
+      '/api/v1/tenant/email-templates/approvals',
+      tenantFetchInit()
+    )
+  }
+
+  async function approveEmailTemplate(templateId: string) {
+    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+      `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}/approve`,
+      tenantFetchInit({ method: 'POST', timeout: 30000 })
+    )
+  }
+
+  async function rejectEmailTemplate(templateId: string, reason?: string) {
+    return $fetch<{ ok: boolean; template: TenantEmailTemplateRow }>(
+      `/api/v1/tenant/email-templates/${encodeURIComponent(templateId)}/reject`,
+      tenantFetchInit({
+        method: 'POST',
+        body: reason?.trim() ? { reason: reason.trim() } : {},
+        timeout: 30000
+      })
     )
   }
 
@@ -673,6 +711,9 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     createEmailTemplate,
     updateEmailTemplate,
     deleteEmailTemplate,
+    fetchPendingEmailTemplateApprovals,
+    approveEmailTemplate,
+    rejectEmailTemplate,
     fetchEmailTemplateCategories,
     createEmailTemplateCategory,
     updateEmailTemplateCategory,

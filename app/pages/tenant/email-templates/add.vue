@@ -58,6 +58,9 @@ const categoryId = ref('')
 const categories = ref<TenantEmailTemplateCategoryRow[]>([])
 const htmlContent = ref('')
 const formError = ref('')
+const approvalStatus = ref<string | null>(null)
+const approvalRejectionReason = ref('')
+const canApproveTemplate = ref(false)
 const uploadError = ref('')
 const uploadPending = ref(false)
 const imageUploadError = ref('')
@@ -227,6 +230,9 @@ async function loadExistingTemplate() {
     subject.value = res.template.subject?.trim() ?? ''
     categoryId.value = res.template.categoryId?.trim() ?? ''
     htmlContent.value = res.template.htmlTemplate?.trim() ?? ''
+    approvalStatus.value = res.template.approvalStatus ?? null
+    approvalRejectionReason.value = res.template.approvalRejectionReason?.trim() ?? ''
+    canApproveTemplate.value = res.template.canApprove === true
   } catch {
     formError.value = 'Could not load this template.'
   } finally {
@@ -474,12 +480,43 @@ async function saveTemplate() {
       >
         ← Back to templates
       </NuxtLink>
-      <h1 class="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
-        {{ isEdit ? 'Edit email template' : 'Create email template' }}
-      </h1>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
+          {{ isEdit ? 'Edit email template' : 'Create email template' }}
+        </h1>
+        <TenantEmailTemplateApprovalBadge
+          v-if="canUploadTemplateImage && isEdit && approvalStatus"
+          :status="approvalStatus"
+        />
+      </div>
       <p class="mt-2 text-sm text-slate-500">
         Paste HTML or upload an .html file. The template is stored exactly as provided.
       </p>
+      <p
+        v-if="canUploadTemplateImage && isEdit && approvalStatus === 'rejected' && approvalRejectionReason"
+        class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
+        role="status"
+      >
+        Rejected: {{ approvalRejectionReason }}
+      </p>
+      <p
+        v-else-if="canUploadTemplateImage && isEdit && approvalStatus === 'pending_approval'"
+        class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+        role="status"
+      >
+        Waiting for Operations Manager or Marketing approval before this template can be sent.
+      </p>
+      <div
+        v-if="canUploadTemplateImage && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"
+        class="mt-3 flex flex-wrap gap-2"
+      >
+        <NuxtLink
+          to="/tenant/email-templates/approvals"
+          class="inline-flex items-center rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
+        >
+          Review in approvals
+        </NuxtLink>
+      </div>
     </header>
 
     <div v-if="loading" class="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">

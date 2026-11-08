@@ -5,16 +5,40 @@ import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHando
 const { data: me, pending, refresh } = useMarketingMe()
 const {
   allowTenantLoRecipientLists,
+  canSelectAnyLoanOfficer,
   loadDefaultCampaignSender,
   loaded: loListsFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 
+const {
+  showBadge: showApprovalsBadge,
+  badgeLabel: approvalsBadgeLabel,
+  refreshPendingCount
+} = usePendingEmailTemplateApprovalsCount()
+
+const APPROVALS_NAV_TO = '/tenant/email-templates/approvals'
+
 const visibleSidebarNavItems = computed(() =>
   marketingSidebarNavItems.filter((item) => {
-    if (!item.requiresLoRecipientLists) return true
-    return loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+    if (item.requiresLoRecipientLists) {
+      if (!(loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true)) return false
+    }
+    if (item.requiresTemplateApprover) {
+      if (!(loListsFlagLoaded.value && canSelectAnyLoanOfficer.value)) return false
+    }
+    return true
   })
+)
+
+watch(
+  [loListsFlagLoaded, allowTenantLoRecipientLists, canSelectAnyLoanOfficer],
+  ([loaded, loOn, isApprover]) => {
+    if (!loaded) return
+    if (loOn === true && isApprover) void refreshPendingCount()
+    else void refreshPendingCount({ force: true })
+  },
+  { immediate: true }
 )
 
 const route = useRoute()
@@ -283,14 +307,43 @@ function navLinkLayoutClass(compact: boolean) {
           :key="item.to"
           :to="item.to"
           :title="sidebarCompact ? item.label : undefined"
-          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact)]"
+          :class="[navLinkClass, navLinkLayoutClass(sidebarCompact), sidebarCompact && item.to === APPROVALS_NAV_TO && showApprovalsBadge ? 'relative' : '']"
           :active-class="navLinkActiveClass"
           @click="collapseSidebarIfMobileExpanded"
         >
-          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <span
+            v-if="sidebarCompact && item.to === APPROVALS_NAV_TO"
+            class="relative inline-flex shrink-0"
+          >
+            <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="item.iconPath" />
+            </svg>
+            <span
+              v-if="showApprovalsBadge"
+              class="absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+              :aria-label="`${approvalsBadgeLabel} pending approvals`"
+            >
+              {{ approvalsBadgeLabel }}
+            </span>
+          </span>
+          <svg
+            v-else
+            :class="navIconClass"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="item.iconPath" />
           </svg>
-          <span>{{ item.label }}</span>
+          <span class="min-w-0 truncate">{{ item.label }}</span>
+          <span
+            v-if="!sidebarCompact && item.to === APPROVALS_NAV_TO && showApprovalsBadge"
+            class="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold leading-none text-white ring-2 ring-white"
+            :aria-label="`${approvalsBadgeLabel} pending approvals`"
+          >
+            {{ approvalsBadgeLabel }}
+          </span>
         </NuxtLink>
       </nav>
 

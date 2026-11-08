@@ -649,6 +649,30 @@
         {{ saveError }}
       </div>
       <div
+        v-if="templateApprovalBlocksSend"
+        class="flex flex-wrap items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
+        role="status"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-amber-950">Template needs approval</p>
+          <p class="mt-1 text-amber-900/90">
+            This template must be approved by Operations Manager or Marketing before you can send.
+            <NuxtLink
+              v-if="linkedEmailTemplateCanApprove"
+              to="/tenant/email-templates/approvals"
+              class="font-semibold text-amber-950 underline underline-offset-2"
+            >
+              Open approvals
+            </NuxtLink>
+          </p>
+        </div>
+        <TenantEmailTemplateApprovalBadge
+          v-if="allowTenantLoRecipientLists && linkedEmailTemplateApprovalStatus"
+          :status="linkedEmailTemplateApprovalStatus"
+          class="shrink-0"
+        />
+      </div>
+      <div
         v-if="sendError && !sendingCampaignId"
         class="flex flex-wrap items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
         role="status"
@@ -683,7 +707,7 @@
             v-if="canSendTestEmail"
             type="button"
             class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200/90 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
-            :disabled="wizardSendBusy || testEmailSending"
+            :disabled="wizardSendBusy || testEmailSending || templateApprovalBlocksSend"
             @click.prevent="handleOpenTestEmailModal"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -695,7 +719,7 @@
             v-if="campaignFormComplete"
             type="button"
             class="inline-flex items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
-            :disabled="wizardSendBusy"
+            :disabled="wizardSendBusy || templateApprovalBlocksSend"
             @click.prevent="handleOpenScheduleWizard"
           >
             Schedule send
@@ -704,7 +728,7 @@
             v-if="campaignFormComplete"
             type="button"
             class="inline-flex items-center justify-center rounded-xl border border-emerald-200/90 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm shadow-emerald-900/[0.06] ring-1 ring-emerald-100/80 transition-colors hover:bg-emerald-100/90 disabled:opacity-50 sm:px-6 sm:text-[15px]"
-            :disabled="wizardSendBusy"
+            :disabled="wizardSendBusy || templateApprovalBlocksSend"
             @click.prevent="handleSendFromWizard"
           >
             {{
@@ -1045,6 +1069,16 @@ const returnCampaignId = ref<string | null>(null)
 const savedTemplateHtml = ref<string | null>(null)
 const templateDesignModified = ref(false)
 const linkedEmailTemplateId = ref('')
+const linkedEmailTemplateApprovalStatus = ref<string | null>(null)
+const linkedEmailTemplateSendable = ref(true)
+const linkedEmailTemplateCanApprove = ref(false)
+const templateApprovalBlocksSend = computed(
+  () =>
+    allowTenantLoRecipientLists.value === true &&
+    !linkedEmailTemplateCanApprove.value &&
+    Boolean(linkedEmailTemplateApprovalStatus.value) &&
+    linkedEmailTemplateSendable.value === false
+)
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
 
@@ -1553,6 +1587,8 @@ interface ExistingTemplateOption {
   html: string
   /** Mirrors saved email template default subject; may be empty. */
   subject?: string
+  approvalStatus?: 'pending_approval' | 'approved' | 'rejected'
+  canApprove?: boolean
 }
 
 const existingTemplates = ref<ExistingTemplateOption[]>([])
@@ -1569,7 +1605,9 @@ async function loadEmailTemplates() {
       id: t.id,
       name: t.name,
       html: t.htmlTemplate,
-      subject: (t.subject ?? '').trim() || undefined
+      subject: (t.subject ?? '').trim() || undefined,
+      approvalStatus: t.approvalStatus,
+      canApprove: t.canApprove === true
     }))
     emailTemplatesLoaded.value = true
   } catch {
@@ -1659,6 +1697,9 @@ function applyCampaignToEditForm(c: TenantCampaignDetail) {
   loadedEditCampaignId.value = editId.value
   const fromEditor = route.query.fromEditor === '1'
   linkedEmailTemplateId.value = c.emailTemplateId ?? ''
+  linkedEmailTemplateApprovalStatus.value = c.emailTemplateApprovalStatus ?? null
+  linkedEmailTemplateSendable.value = c.emailTemplateSendable !== false
+  linkedEmailTemplateCanApprove.value = c.emailTemplateCanApprove === true
   templateDesignModified.value = fromEditor
   if (c.emailTemplateId && !fromEditor) {
     form.value.templateMode = 'existing'
@@ -2087,6 +2128,12 @@ function handleUseTemplate(template: ExistingTemplateOption) {
   designModalOpen.value = false
   templateDesignModified.value = false
   linkedEmailTemplateId.value = template.id
+  linkedEmailTemplateApprovalStatus.value = template.approvalStatus ?? null
+  linkedEmailTemplateCanApprove.value = template.canApprove === true
+  linkedEmailTemplateSendable.value =
+    template.canApprove === true ||
+    !template.approvalStatus ||
+    template.approvalStatus === 'approved'
   form.value.templateMode = 'existing'
   form.value.selectedTemplateId = template.id
   form.value.saveHtmlToLibrary = false

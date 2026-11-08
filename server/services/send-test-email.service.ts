@@ -5,6 +5,7 @@ import type { CampaignLean, CampaignModel } from '../types/tenant/campaign.model
 import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVariable.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
+import { assertCampaignEmailTemplateApprovedForSend } from '../utils/emailTemplate/assertCampaignEmailTemplateApprovedForSend'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { getRegistryConnection } from '../lib/mongoose'
 import {
@@ -177,6 +178,13 @@ export async function sendCampaignTestEmail(
       .findOne(mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, auth))
       .lean<CampaignLean | null>()
     if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
+
+    await assertCampaignEmailTemplateApprovedForSend({
+      conn,
+      campaignId,
+      auth,
+      campaign
+    })
 
     templateHtml = await resolveCampaignTemplateHtml(EmailTemplate as EmailTemplateModel, campaign)
     subject = String(campaign.subject ?? '').trim()

@@ -9,6 +9,7 @@ import {
   parseEmailTemplateCategoryFilterQuery,
   type EmailTemplateCategoryFilterValue
 } from '~~/shared/utils/emailTemplateCategory'
+import { EMAIL_TEMPLATE_APPROVAL_PENDING } from '~~/shared/emailTemplateApproval'
 
 type EmailTemplateListRow = TenantEmailTemplateRow & {
   description?: string
@@ -25,6 +26,22 @@ export function useEmailTemplatesPage() {
   const route = useRoute()
   const marketingApi = useTenantMarketingApi()
   const toast = useAppToast()
+  const {
+    allowTenantLoRecipientLists,
+    canSelectAnyLoanOfficer,
+    loadDefaultCampaignSender,
+    loaded: loListsFlagLoaded
+  } = useDefaultCampaignSender()
+  void loadDefaultCampaignSender()
+
+  /** Superadmin LO recipient-lists toggle — gates approval UI on this page. */
+  const approvalUiEnabled = computed(
+    () => loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+  )
+
+  const showApprovalsLink = computed(
+    () => approvalUiEnabled.value && canSelectAnyLoanOfficer.value === true
+  )
 
   const pending = ref(true)
   const deletingId = ref('')
@@ -73,6 +90,11 @@ export function useEmailTemplatesPage() {
 
   const filteredTemplates = computed(() => {
     let list = [...templates.value]
+    // Approvers: pending belongs on Template approvals, not the campaign-ready library.
+    // (Server also excludes these; this covers stale payload cache.)
+    if (showApprovalsLink.value) {
+      list = list.filter((t) => t.approvalStatus !== EMAIL_TEMPLATE_APPROVAL_PENDING)
+    }
     const subject = subjectFilter.value
     if (subject === 'with-subject') {
       list = list.filter((t) => Boolean(t.subject?.trim()))
@@ -272,6 +294,8 @@ export function useEmailTemplatesPage() {
     pending,
     deletingId,
     loadError,
+    approvalUiEnabled,
+    showApprovalsLink,
     templates,
     categories,
     searchQuery,
