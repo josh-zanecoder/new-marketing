@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
+import { useCampaignListFullPreview } from '~/composables/useCampaignListFullPreview'
 import { useCampaignStore } from '~/store/campaignStore'
 
 definePageMeta({ layout: 'default' })
@@ -26,6 +27,19 @@ const {
   resumeSend,
   restartSend
 } = useCampaignSendFlow()
+
+const {
+  open: fullPreviewOpen,
+  loading: fullPreviewLoading,
+  name: fullPreviewName,
+  subject: fullPreviewSubject,
+  html: fullPreviewHtml,
+  actionTitle: fullPreviewActionTitle,
+  ariaLabel: fullPreviewAriaLabel,
+  openFullPreview,
+  closeFullPreview,
+  isPreviewLoadingFor
+} = useCampaignListFullPreview()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
@@ -735,6 +749,19 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="fullPreviewLoading"
+            :title="fullPreviewActionTitle"
+            :aria-label="fullPreviewAriaLabel"
+            :aria-busy="isPreviewLoadingFor(c.id)"
+            @click.stop="openFullPreview(c)"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </button>
         </div>
       </article>
 
@@ -849,6 +876,14 @@ onUnmounted(() => {
       :failed="sendSuccessSummary?.failed ?? 0"
       :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
       @close="closeSendSuccessModal"
+    />
+
+    <TenantEmailTemplatePreviewModal
+      :open="fullPreviewOpen"
+      :name="fullPreviewName"
+      :subject="fullPreviewSubject"
+      :html="fullPreviewHtml"
+      @close="closeFullPreview"
     />
 
     <Teleport to="body">
