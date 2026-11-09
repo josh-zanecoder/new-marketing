@@ -979,17 +979,12 @@
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
                 <div class="tenant-place-autocomplete-field sm:col-span-4">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
-                  <div
-                    v-show="streetAutocompleteActive"
-                    ref="streetAutocompleteHostRef"
-                    class="tenant-place-autocomplete-host"
-                  />
                   <input
-                    v-show="!streetAutocompleteActive"
                     id="add-contact-street"
+                    ref="streetInputRef"
                     v-model="addContactForm.addressStreet"
                     type="text"
-                    autocomplete="street-address"
+                    autocomplete="off"
                     placeholder="123 Main Street"
                     :class="ADD_CONTACT_INPUT_CLASS"
                   >
@@ -1221,8 +1216,7 @@ const addContactForm = ref({
   addressCounty: ''
 })
 
-const streetAutocompleteHostRef = ref<HTMLElement | null>(null)
-const streetAutocompleteActive = ref(false)
+const streetInputRef = ref<HTMLInputElement | null>(null)
 const {
   initGoogleAddressAutocomplete,
   clearGoogleAutocompleteListener,
@@ -1299,8 +1293,7 @@ function populateContactFormFromDetail(contact: TenantContactDetail) {
 
 async function setupStreetAutocomplete() {
   await nextTick()
-  const ready = await initGoogleAddressAutocomplete(streetAutocompleteHostRef, true)
-  streetAutocompleteActive.value = ready
+  const ready = await initGoogleAddressAutocomplete(streetInputRef, true)
   if (ready) syncStreetValueFromForm()
 }
 
@@ -1435,7 +1428,6 @@ async function openEditContactModal(contactId: string) {
     addContactError.value = message
     toast.error(message)
     clearGoogleAutocompleteListener()
-    streetAutocompleteActive.value = false
     addContactOpen.value = false
   } finally {
     contactFormLoading.value = false
@@ -1446,7 +1438,6 @@ async function openEditContactModal(contactId: string) {
 function closeContactFormModal() {
   if (addContactSubmitting.value || contactFormLoading.value) return
   clearGoogleAutocompleteListener()
-  streetAutocompleteActive.value = false
   addContactOpen.value = false
   editingContactId.value = ''
   contactFormMode.value = 'add'
@@ -1492,7 +1483,6 @@ async function submitContactForm() {
       toast.success('Contact added successfully.')
     }
     clearGoogleAutocompleteListener()
-    streetAutocompleteActive.value = false
     addContactOpen.value = false
     editingContactId.value = ''
     contactFormMode.value = 'add'
@@ -2168,7 +2158,6 @@ watch(
 onBeforeUnmount(() => {
   notifyParentMarketingOverlay(false)
   clearGoogleAutocompleteListener()
-  streetAutocompleteActive.value = false
   if (contactModalEscListener) {
     window.removeEventListener('keydown', contactModalEscListener)
     contactModalEscListener = null

@@ -184,17 +184,12 @@
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
                   <div class="tenant-place-autocomplete-field sm:col-span-4">
                     <label class="block text-sm font-medium text-zinc-700" for="rl-edit-street">Street address</label>
-                    <div
-                      v-show="streetAutocompleteActive"
-                      ref="streetAutocompleteHostRef"
-                      class="tenant-place-autocomplete-host"
-                    />
                     <input
-                      v-show="!streetAutocompleteActive"
                       id="rl-edit-street"
+                      ref="streetInputRef"
                       v-model="form.addressStreet"
                       type="text"
-                      autocomplete="street-address"
+                      autocomplete="off"
                       placeholder="123 Main Street"
                       :class="INPUT_CLASS"
                     >
@@ -339,8 +334,7 @@ const submitting = ref(false)
 const error = ref('')
 const typeOptions = ref<TenantContactTypeOption[]>([])
 const form = ref(emptyForm())
-const streetAutocompleteHostRef = ref<HTMLElement | null>(null)
-const streetAutocompleteActive = ref(false)
+const streetInputRef = ref<HTMLInputElement | null>(null)
 const {
   initGoogleAddressAutocomplete,
   clearGoogleAutocompleteListener,
@@ -377,8 +371,7 @@ function emptyForm() {
 
 async function setupStreetAutocomplete() {
   await nextTick()
-  const ready = await initGoogleAddressAutocomplete(streetAutocompleteHostRef, true)
-  streetAutocompleteActive.value = ready
+  const ready = await initGoogleAddressAutocomplete(streetInputRef, true)
   if (ready) syncStreetValueFromForm()
 }
 
@@ -451,7 +444,6 @@ function onPhonePaste(event: ClipboardEvent) {
 function close() {
   if (submitting.value || loading.value) return
   clearGoogleAutocompleteListener()
-  streetAutocompleteActive.value = false
   emit('close')
 }
 
@@ -560,7 +552,6 @@ async function submit() {
       }
     })
     clearGoogleAutocompleteListener()
-    streetAutocompleteActive.value = false
     emit('close')
   } catch (e: unknown) {
     const message = extractErrorMessage(e, 'Failed to update contact')
@@ -594,14 +585,12 @@ watch(
       window.addEventListener('keydown', escListener)
     } else {
       clearGoogleAutocompleteListener()
-      streetAutocompleteActive.value = false
     }
   }
 )
 
 onBeforeUnmount(() => {
   clearGoogleAutocompleteListener()
-  streetAutocompleteActive.value = false
   if (escListener) {
     window.removeEventListener('keydown', escListener)
     escListener = null
