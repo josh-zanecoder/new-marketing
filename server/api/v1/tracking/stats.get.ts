@@ -97,31 +97,40 @@ export default defineEventHandler(async (event) => {
   // skipCache used to re-pull Brevo here (doubled Refresh cost with /tracking/sync).
   // Stats always reads Mongo; Tracking Refresh owns the Brevo full sync.
 
+  /** `aggregate` | `events` | `all` (default). Metric filters only need `events`. */
+  const partsRaw = String(q.parts ?? 'all').toLowerCase()
+  const wantAggregate = partsRaw === 'all' || partsRaw.includes('aggregate')
+  const wantEvents = partsRaw === 'all' || partsRaw.includes('events')
+
   const [reports, mongoEvents] = await Promise.all([
-    aggregateStoredBrevoSmtpStats({
-      dbName,
-      campaignId,
-      startDate: range.startDate,
-      endDate: range.endDate,
-      tzOffsetMinutes
-    }),
-    loadStoredCampaignSmtpStatsEventsPage({
-      dbName,
-      campaignId,
-      startDate: range.startDate,
-      endDate: range.endDate,
-      eventType,
-      limit: eventsLimit,
-      offset: eventsOffset
-    })
+    wantAggregate
+      ? aggregateStoredBrevoSmtpStats({
+          dbName,
+          campaignId,
+          startDate: range.startDate,
+          endDate: range.endDate,
+          tzOffsetMinutes
+        })
+      : Promise.resolve(null),
+    wantEvents
+      ? loadStoredCampaignSmtpStatsEventsPage({
+          dbName,
+          campaignId,
+          startDate: range.startDate,
+          endDate: range.endDate,
+          eventType,
+          limit: eventsLimit,
+          offset: eventsOffset
+        })
+      : Promise.resolve({ items: [], hasMore: false })
   ])
 
   return {
     stats: {
-      range: reports.range,
-      tag: reports.tag,
-      aggregated: reports.aggregated,
-      daily: reports.daily,
+      range: reports?.range ?? { startDate: range.startDate, endDate: range.endDate },
+      tag: reports?.tag ?? null,
+      aggregated: reports?.aggregated ?? null,
+      daily: reports?.daily ?? null,
       events: {
         items: mongoEvents.items,
         limit: eventsLimit,

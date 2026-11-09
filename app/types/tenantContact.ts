@@ -41,6 +41,7 @@ export interface TenantContactListRow {
     unit: string
     city: string
     state: string
+    zip: string
     county: string
   }
   /** Present when contact is a partner with retail type / subtype keys. */

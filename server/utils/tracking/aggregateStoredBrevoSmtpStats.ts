@@ -381,6 +381,8 @@ export async function aggregateStoredBrevoSmtpStats(params: {
   endDate: string
   /** Browser `Date#getTimezoneOffset()` for local day buckets. */
   tzOffsetMinutes?: number | null
+  /** When true, include all stored events for the campaign (no eventAt window). */
+  skipDateFilter?: boolean
 }): Promise<{
   range: { startDate: string; endDate: string }
   tag: string | null
@@ -391,6 +393,7 @@ export async function aggregateStoredBrevoSmtpStats(params: {
   const userEmail = params.userEmail?.trim().toLowerCase() || null
   const startDate = params.startDate.trim()
   const endDate = params.endDate.trim()
+  const skipDateFilter = params.skipDateFilter === true
   const tzOffsetMinutes =
     typeof params.tzOffsetMinutes === 'number' && Number.isFinite(params.tzOffsetMinutes)
       ? params.tzOffsetMinutes
@@ -415,9 +418,11 @@ export async function aggregateStoredBrevoSmtpStats(params: {
 
   // Same padded UTC window as the Messages table so headline metrics cannot
   // drop rows the list still shows (exact local-day grouping still uses tzOffset).
-  const bounds = parseYmdToUtcBounds(startDate, endDate, tzOffsetMinutes)
-  if (bounds) {
-    filter.eventAt = { $gte: bounds.start, $lte: bounds.end }
+  if (!skipDateFilter) {
+    const bounds = parseYmdToUtcBounds(startDate, endDate, tzOffsetMinutes)
+    if (bounds) {
+      filter.eventAt = { $gte: bounds.start, $lte: bounds.end }
+    }
   }
 
   const pipeline: PipelineStage[] = [
@@ -475,7 +480,12 @@ export async function aggregateStoredBrevoSmtpStats(params: {
   ]
 
   const rows = (await BrevoTrackingEvent.aggregate(pipeline).exec()) as GroupedSmtpStatRow[]
-  const rolled = rollupStoredSmtpStatsFromGroups({ startDate, endDate, rows })
+  // Inverted start/end skips pre-filling empty day buckets (lifetime compare).
+  const rolled = rollupStoredSmtpStatsFromGroups({
+    startDate: skipDateFilter ? '2099-01-01' : startDate,
+    endDate: skipDateFilter ? '1970-01-01' : endDate,
+    rows
+  })
 
   return {
     range,

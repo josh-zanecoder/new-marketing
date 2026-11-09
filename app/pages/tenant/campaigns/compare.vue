@@ -3,6 +3,7 @@ import type { BrevoSmtpAggregated } from '~/types/brevoSmtpStats'
 import {
   BREVO_SMTP_STATS_DATE_PRESET_OPTIONS,
   BREVO_SMTP_STATS_MAX_RANGE_DAYS,
+  type BrevoTrackingDatePresetId,
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
 
@@ -28,6 +29,12 @@ type CompareRow = {
 
 const compareRows = ref<CompareRow[]>([])
 
+/** All time first — Sent/opens must cover campaigns outside the last 7–30 days. */
+const COMPARE_DATE_PRESET_OPTIONS: { id: BrevoTrackingDatePresetId; label: string }[] = [
+  { id: 'all', label: 'All time' },
+  ...BREVO_SMTP_STATS_DATE_PRESET_OPTIONS
+]
+
 const {
   datePreset,
   customDateFrom,
@@ -35,6 +42,14 @@ const {
   effectiveDateRange,
   dateRangeLabel
 } = useBrevoTrackingDateRange({ maxRangeDays: BREVO_SMTP_STATS_MAX_RANGE_DAYS })
+
+datePreset.value = 'all'
+
+const isLifetimeRange = computed(() => datePreset.value === 'all')
+
+const compareDateRangeLabel = computed(() =>
+  isLifetimeRange.value ? 'All time' : dateRangeLabel.value
+)
 
 function toggleCampaign(id: string) {
   const next = new Set(selectedIds.value)
@@ -49,20 +64,27 @@ async function runCompare() {
     compareError.value = 'Pick at least two campaigns.'
     return
   }
-  const from = effectiveDateRange.value.from?.trim()
-  const to = effectiveDateRange.value.to?.trim()
-  if (!from || !to) {
-    compareError.value = 'Pick a date range.'
-    return
+
+  const params = new URLSearchParams({
+    campaignIds: selectedIds.value.join(','),
+    tzOffset: String(new Date().getTimezoneOffset())
+  })
+
+  if (isLifetimeRange.value) {
+    params.set('lifetime', '1')
+  } else {
+    const from = effectiveDateRange.value.from?.trim()
+    const to = effectiveDateRange.value.to?.trim()
+    if (!from || !to) {
+      compareError.value = 'Pick a date range.'
+      return
+    }
+    params.set('from', from)
+    params.set('to', to)
   }
+
   comparing.value = true
   try {
-    const params = new URLSearchParams({
-      campaignIds: selectedIds.value.join(','),
-      from,
-      to,
-      tzOffset: String(new Date().getTimezoneOffset())
-    })
     const res = await $fetch<{
       campaigns: CompareRow[]
     }>(`/api/v1/tracking/stats/compare?${params.toString()}`, {
@@ -121,9 +143,9 @@ function cellRate(row: CompareRow, rate: string | null): string {
         v-model:preset="datePreset"
         v-model:custom-from="customDateFrom"
         v-model:custom-to="customDateTo"
-        :label="dateRangeLabel"
-        :preset-options="BREVO_SMTP_STATS_DATE_PRESET_OPTIONS"
-        :max-range-days="BREVO_SMTP_STATS_MAX_RANGE_DAYS"
+        :label="compareDateRangeLabel"
+        :preset-options="COMPARE_DATE_PRESET_OPTIONS"
+        :max-range-days="isLifetimeRange ? undefined : BREVO_SMTP_STATS_MAX_RANGE_DAYS"
       />
 
       <div>

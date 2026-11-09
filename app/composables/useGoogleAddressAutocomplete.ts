@@ -161,7 +161,7 @@ function applyPlaceAddressToForm(
   formRef.value[keys.state] = state
   if (keys.county) formRef.value[keys.county] = county
   if (keys.unit) formRef.value[keys.unit] = unit
-  if (keys.zipCode && zipCode) formRef.value[keys.zipCode] = zipCode
+  if (keys.zipCode) formRef.value[keys.zipCode] = zipCode
 
   return street
 }
@@ -195,7 +195,14 @@ export function useGoogleAddressAutocomplete(
     city: fieldKeys.city ?? 'city',
     state: fieldKeys.state ?? 'state',
     county: fieldKeys.county,
+    unit: fieldKeys.unit,
     zipCode: fieldKeys.zipCode
+  }
+
+  function syncStreetValueFromForm(): void {
+    if (!autocompleteElement) return
+    const street = String(formRef.value[keys.street] ?? '').trim()
+    autocompleteElement.value = street
   }
 
   function clearGoogleAutocompleteListener(): void {
@@ -220,15 +227,18 @@ export function useGoogleAddressAutocomplete(
     hostRef: Ref<HTMLElement | null>,
     streetFieldVisible: boolean,
     options?: { placeholder?: string; regionCodes?: string[] }
-  ): Promise<void> {
-    if (!streetFieldVisible) return
+  ): Promise<boolean> {
+    if (!streetFieldVisible) return false
     const host = hostRef.value
-    if (!host) return
-    if (boundHost === host && autocompleteElement) return
+    if (!host) return false
+    if (boundHost === host && autocompleteElement) {
+      syncStreetValueFromForm()
+      return true
+    }
 
     try {
       const placesLibrary = await loadGooglePlacesLibrary(config)
-      if (!placesLibrary?.PlaceAutocompleteElement) return
+      if (!placesLibrary?.PlaceAutocompleteElement) return false
 
       clearGoogleAutocompleteListener()
       host.replaceChildren()
@@ -272,10 +282,17 @@ export function useGoogleAddressAutocomplete(
       host.appendChild(placeAutocomplete)
       boundHost = host
       autocompleteElement = placeAutocomplete
+      syncStreetValueFromForm()
+      return true
     } catch (err) {
       console.warn('Google Places autocomplete failed to initialize:', err)
+      return false
     }
   }
 
-  return { initGoogleAddressAutocomplete, clearGoogleAutocompleteListener }
+  return {
+    initGoogleAddressAutocomplete,
+    clearGoogleAutocompleteListener,
+    syncStreetValueFromForm
+  }
 }

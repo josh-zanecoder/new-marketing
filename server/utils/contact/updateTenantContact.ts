@@ -35,7 +35,7 @@ export async function updateTenantContact(
   }
   const phone = String(input.phone ?? '').trim()
   const company = String(input.company ?? '').trim()
-  const channel = String(input.channel ?? 'email').trim() || 'email'
+  const channel = String(input.channel ?? '').trim()
   const status = String(input.status ?? '').trim()
   const stage = String(input.stage ?? '').trim()
   const addressInput = input.address ?? {}

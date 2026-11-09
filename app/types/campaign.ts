@@ -27,6 +27,8 @@ export interface Campaign {
   id: string
   name: string
   sender: CampaignSender
+  /** `selected` = fixed LO From; missing/`contact_owner` = per-contact rewrite. */
+  senderMode?: 'contact_owner' | 'selected'
   recipientsType: CampaignRecipientsType
   recipientsListId?: string
   subject: string

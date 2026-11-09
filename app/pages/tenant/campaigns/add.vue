@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden antialiased sm:space-y-8">
+  <div class="mx-auto w-full min-w-0 max-w-6xl space-y-6 antialiased sm:space-y-8">
     <div class="w-full min-w-0 space-y-6 sm:space-y-8">
       <NuxtLink
         :to="cancelOrBackHref"
@@ -674,19 +674,32 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
           Dismiss
         </button>
       </div>
-      <div class="flex flex-col gap-2 pt-6 pb-[max(0px,env(safe-area-inset-bottom,0px))] sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:pt-10 sm:pb-0">
+      <div class="flex flex-col gap-2 pt-6 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:pt-10">
         <button
+          v-if="canSendTestEmail"
           type="button"
-          class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50 sm:order-5 sm:w-auto sm:px-8 sm:text-[15px]"
-          :disabled="saveCampaignActionDisabled"
-          @click.prevent="handleCreate"
+          class="inline-flex w-full min-w-0 items-center justify-center gap-1.5 rounded-xl border border-violet-200/90 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:order-2 sm:w-auto sm:px-6 sm:text-[15px]"
+          :disabled="wizardSendBusy || testEmailSending"
+          @click.prevent="handleOpenTestEmailModal"
         >
-          {{ isSaving ? 'Saving...' : 'Save campaign' }}
+          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          Send test email
         </button>
         <button
           v-if="campaignFormComplete"
           type="button"
-          class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-emerald-200/90 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm shadow-emerald-900/[0.06] ring-1 ring-emerald-100/80 transition-colors hover:bg-emerald-100/90 disabled:opacity-50 sm:order-4 sm:w-auto sm:px-6 sm:text-[15px]"
+          class="inline-flex w-full min-w-0 items-center justify-center rounded-xl border border-sky-200/90 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:opacity-50 sm:order-3 sm:w-auto sm:px-6 sm:text-[15px]"
+          :disabled="wizardSendBusy"
+          @click.prevent="handleOpenScheduleWizard"
+        >
+          Schedule send
+        </button>
+        <button
+          v-if="campaignFormComplete"
+          type="button"
+          class="inline-flex w-full min-w-0 items-center justify-center rounded-xl border border-emerald-200/90 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-sm shadow-emerald-900/[0.06] ring-1 ring-emerald-100/80 transition-colors hover:bg-emerald-100/90 disabled:opacity-50 sm:order-4 sm:w-auto sm:px-6 sm:text-[15px]"
           :disabled="wizardSendBusy"
           @click.prevent="handleSendFromWizard"
         >
@@ -698,34 +711,25 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
                 : 'Send'
           }}
         </button>
-        <button
-          v-if="campaignFormComplete"
-          type="button"
-          class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-sky-200/90 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-900/[0.06] ring-1 ring-sky-100/80 transition-colors hover:bg-sky-100/90 disabled:opacity-50 sm:order-3 sm:w-auto sm:px-6 sm:text-[15px]"
-          :disabled="wizardSendBusy"
-          @click.prevent="handleOpenScheduleWizard"
+        <div
+          class="sticky bottom-0 z-[5] -mx-3 mt-1 flex flex-col gap-2 border-t border-slate-200/90 bg-slate-50/95 px-3 py-3 backdrop-blur-sm pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:static sm:z-auto sm:mx-0 sm:mt-0 sm:contents sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"
         >
-          Schedule send
-        </button>
-        <button
-          v-if="canSendTestEmail"
-          type="button"
-          class="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-violet-200/90 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm shadow-violet-900/[0.04] ring-1 ring-violet-100/80 transition-colors hover:bg-violet-100/90 disabled:opacity-50 sm:order-2 sm:w-auto sm:px-6 sm:text-[15px]"
-          :disabled="wizardSendBusy || testEmailSending"
-          @click.prevent="handleOpenTestEmailModal"
-        >
-          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-          Send test email
-        </button>
-        <NuxtLink
-          :to="cancelOrBackHref"
-          class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:order-1 sm:w-auto sm:text-[15px]"
-          :class="{ 'pointer-events-none opacity-50': wizardSendBusy }"
-        >
-          Cancel
-        </NuxtLink>
+          <NuxtLink
+            :to="cancelOrBackHref"
+            class="inline-flex w-full min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 sm:order-1 sm:w-auto sm:px-5 sm:text-[15px]"
+            :class="{ 'pointer-events-none opacity-50': wizardSendBusy }"
+          >
+            Cancel
+          </NuxtLink>
+          <button
+            type="button"
+            class="inline-flex w-full min-w-0 items-center justify-center rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50 sm:order-5 sm:w-auto sm:px-8 sm:text-[15px]"
+            :disabled="saveCampaignActionDisabled"
+            @click.prevent="handleCreate"
+          >
+            {{ isSaving ? 'Saving...' : 'Save campaign' }}
+          </button>
+        </div>
       </div>
       </div>
       </template>

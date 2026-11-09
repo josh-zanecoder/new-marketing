@@ -50,6 +50,9 @@ export function redirectToMarketingEmbedAuthFallback(): void {
 
 export const MARKETING_SESSION_EXPIRED_MESSAGE = 'marketing:session-expired' as const
 
+/** Marketing → CRM host: hide/show outer embed Back chrome while a full-page modal is open. */
+export const MARKETING_OVERLAY_MESSAGE = 'marketing:overlay' as const
+
 /** Let the reconnect screen render before asking CRM to start a new handoff. */
 export const MARKETING_SESSION_EXPIRED_NOTIFY_DELAY_MS = 0
 
@@ -62,4 +65,14 @@ export function notifyParentMarketingSessionExpired(): void {
       /* ignore */
     }
   }, MARKETING_SESSION_EXPIRED_NOTIFY_DELAY_MS)
+}
+
+/** Tell CRM to hide the outer “Back” bar while Marketing shows a full-viewport modal. */
+export function notifyParentMarketingOverlay(open: boolean): void {
+  if (!import.meta.client || !isCrmEmbedSession()) return
+  try {
+    window.parent.postMessage({ type: MARKETING_OVERLAY_MESSAGE, open: Boolean(open) }, '*')
+  } catch {
+    /* ignore */
+  }
 }

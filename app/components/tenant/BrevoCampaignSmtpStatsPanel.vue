@@ -78,36 +78,99 @@ watch([effectiveDateRange, selectedEventType], () => {
   eventsPage.value = 1
 })
 
-const statsQuery = computed(() => {
+const rangeQueryBase = computed(() => {
   const q: Record<string, string> = {
     campaignId: props.campaignId.trim(),
-    eventsLimit: String(EVENTS_PAGE_SIZE),
-    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE),
     tzOffset: String(new Date().getTimezoneOffset())
   }
   const from = effectiveDateRange.value.from?.trim()
   const to = effectiveDateRange.value.to?.trim()
   if (from) q.from = from
   if (to) q.to = to
+  return q
+})
+
+const rangeCacheKey = computed(
+  () =>
+    `${props.campaignId.trim()}|${effectiveDateRange.value.from || ''}|${effectiveDateRange.value.to || ''}|${rangeQueryBase.value.tzOffset}`
+)
+
+/** Headline metrics + daily chart — independent of Messages event filter. */
+const aggregateQuery = computed(() => ({
+  ...rangeQueryBase.value,
+  parts: 'aggregate'
+}))
+
+const {
+  data: aggregateData,
+  error: aggregateError,
+  pending: aggregatePending,
+  refresh: refreshAggregate
+} = useFetch<{ stats: BrevoTransactionalStats }>(
+  '/api/v1/tracking/stats',
+  {
+    query: aggregateQuery,
+    key: computed(() => `campaign-smtp-agg-${rangeCacheKey.value}`),
+    watch: [aggregateQuery]
+  }
+)
+
+/** Messages table only — refetching this on metric click avoids re-running the aggregate. */
+const eventsQuery = computed(() => {
+  const q: Record<string, string> = {
+    ...rangeQueryBase.value,
+    parts: 'events',
+    eventsLimit: String(EVENTS_PAGE_SIZE),
+    eventsOffset: String((eventsPage.value - 1) * EVENTS_PAGE_SIZE)
+  }
   const eventType = selectedEventType.value.trim()
   if (eventType) q.event = eventType
   return q
 })
 
-const { data, error, pending, refresh } = useFetch<{ stats: BrevoTransactionalStats }>(
+const {
+  data: eventsData,
+  error: eventsError,
+  pending: eventsPending,
+  refresh: refreshEvents
+} = useFetch<{ stats: BrevoTransactionalStats }>(
   '/api/v1/tracking/stats',
   {
-    query: statsQuery,
+    query: eventsQuery,
     key: computed(
-      () => `campaign-smtp-stats-${props.campaignId.trim()}-${JSON.stringify(statsQuery.value)}`
+      () =>
+        `campaign-smtp-evt-${rangeCacheKey.value}|${selectedEventType.value}|${eventsPage.value}`
     ),
-    watch: [statsQuery]
+    watch: [eventsQuery]
   }
 )
 
-const isBusy = computed(() => pending.value || syncing.value)
+const isBusy = computed(
+  () => aggregatePending.value || eventsPending.value || syncing.value
+)
+const metricsLoading = computed(() => aggregatePending.value || syncing.value)
+const messagesLoading = computed(() => eventsPending.value || syncing.value)
 
-const stats = computed(() => data.value?.stats ?? null)
+const error = computed(() => aggregateError.value || eventsError.value)
+
+/** Metrics / chart payload — waits for aggregate so filters don’t flash empty totals. */
+const stats = computed((): BrevoTransactionalStats | null => {
+  const agg = aggregateData.value?.stats
+  if (!agg?.aggregated) return null
+  const ev = eventsData.value?.stats?.events
+  return {
+    range: agg.range,
+    tag: agg.tag ?? null,
+    aggregated: agg.aggregated,
+    daily: agg.daily ?? [],
+    events: ev ?? {
+      items: [],
+      limit: EVENTS_PAGE_SIZE,
+      offset: 0,
+      hasMore: false
+    }
+  }
+})
 
 async function refreshFromProvider(options?: { deepBackfill?: boolean }) {
   if (syncing.value) return
@@ -127,7 +190,7 @@ async function refreshFromProvider(options?: { deepBackfill?: boolean }) {
       body,
       credentials: 'include'
     })
-    await refresh()
+    await Promise.all([refreshAggregate(), refreshEvents()])
   } finally {
     syncing.value = false
   }
@@ -140,21 +203,24 @@ async function deepRefreshFromProvider() {
 const autoSyncedKeys = ref(new Set<string>())
 
 /** When Mongo has nothing for this campaign/range, pull latest from the provider once. */
-watch([pending, data, error, () => props.campaignId, effectiveDateRange], () => {
-  if (!import.meta.client) return
-  if (!props.campaignId?.trim()) return
-  if (pending.value || syncing.value) return
-  if (error.value) return
-  const requests = stats.value?.aggregated?.requests ?? 0
-  const items = stats.value?.events?.items?.length ?? 0
-  if (requests > 0 || items > 0) return
-  const key = `${props.campaignId.trim()}|${effectiveDateRange.value.from || ''}|${effectiveDateRange.value.to || ''}`
-  if (autoSyncedKeys.value.has(key)) return
-  const next = new Set(autoSyncedKeys.value)
-  next.add(key)
-  autoSyncedKeys.value = next
-  void refreshFromProvider()
-})
+watch(
+  [aggregatePending, eventsPending, aggregateData, eventsData, error, () => props.campaignId, effectiveDateRange],
+  () => {
+    if (!import.meta.client) return
+    if (!props.campaignId?.trim()) return
+    if (aggregatePending.value || eventsPending.value || syncing.value) return
+    if (error.value) return
+    const requests = aggregateData.value?.stats?.aggregated?.requests ?? 0
+    const items = eventsData.value?.stats?.events?.items?.length ?? 0
+    if (requests > 0 || items > 0) return
+    const key = `${props.campaignId.trim()}|${effectiveDateRange.value.from || ''}|${effectiveDateRange.value.to || ''}`
+    if (autoSyncedKeys.value.has(key)) return
+    const next = new Set(autoSyncedKeys.value)
+    next.add(key)
+    autoSyncedKeys.value = next
+    void refreshFromProvider()
+  }
+)
 
 const {
   statsRangeTitleLong,
@@ -205,12 +271,14 @@ function isMetricSelected(eventFilter: string): boolean {
 function toggleMetricFilter(eventFilter: string) {
   const next = eventFilter.trim()
   if (!next) return
+  // Avoid duplicate fetch while the same filter is already loading.
+  if (messagesLoading.value && isMetricSelected(next)) return
   selectedEventType.value = isMetricSelected(next) ? '' : next
 }
 
 function metricCardClass(variant: string, selected: boolean): string {
   const base =
-    'w-full min-w-0 rounded-xl px-2.5 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400'
+    'w-full min-w-0 rounded-xl px-2.5 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 disabled:cursor-wait disabled:opacity-70'
   if (selected) return `${base} ring-2 ${SELECTED_CARD_CLASS[variant] || 'ring-zinc-400/80 bg-zinc-50'}`
   return `${base} ring-1 ring-transparent hover:bg-zinc-50 hover:ring-zinc-200/90`
 }
@@ -220,8 +288,8 @@ const chartSelectedEventTypes = computed(() => {
   return t ? [t] : []
 })
 
-const eventItems = computed(() => stats.value?.events.items ?? [])
-const eventsHasMore = computed(() => stats.value?.events.hasMore === true)
+const eventItems = computed(() => eventsData.value?.stats?.events?.items ?? [])
+const eventsHasMore = computed(() => eventsData.value?.stats?.events?.hasMore === true)
 
 function goEventsPage(page: number) {
   if (page < 1 || page === eventsPage.value) return
@@ -294,7 +362,7 @@ defineExpose({
             label="Filter by event type"
             variant="tracking"
             :options="eventFilterOptions"
-            :disabled="isBusy && !stats"
+            :disabled="messagesLoading && !stats"
           />
         </div>
         <TenantBrevoTrackingDateRangePicker
@@ -318,16 +386,16 @@ defineExpose({
       class="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
       role="alert"
     >
-      <span>{{ error.message || 'Failed to load statistics from Brevo.' }}</span>
+      <span>{{ error.message || 'Failed to load campaign statistics.' }}</span>
     </div>
 
     <div
       v-if="topView === 'metrics'"
-      class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white px-5 py-5 shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-6"
-      :aria-busy="isBusy"
+      class="relative overflow-hidden rounded-2xl border border-zinc-200/90 bg-white px-5 py-5 shadow-sm shadow-zinc-950/[0.04] sm:px-6 sm:py-6"
+      :aria-busy="metricsLoading"
     >
-      <template v-if="isBusy && !stats">
-        <div class="animate-pulse space-y-6">
+      <template v-if="metricsLoading && !aggregateData?.stats?.aggregated">
+        <div class="animate-pulse space-y-6" aria-hidden="true">
           <div class="h-9 w-48 rounded bg-zinc-100" />
           <div class="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
             <div v-for="n in 8" :key="n" class="space-y-2">
@@ -336,105 +404,113 @@ defineExpose({
             </div>
           </div>
         </div>
+        <p class="sr-only">Loading metrics…</p>
       </template>
 
       <template v-else-if="stats">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <button
-            type="button"
-            class="-ml-1 rounded-xl px-1.5 py-1 text-left leading-none text-zinc-900 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
-            :class="
-              isMetricSelected(EMAILS_SENT_EVENT_FILTER)
-                ? 'ring-2 ring-sky-400/80 bg-sky-50/90'
-                : 'ring-1 ring-transparent hover:bg-zinc-50 hover:ring-zinc-200/90'
-            "
-            :aria-pressed="isMetricSelected(EMAILS_SENT_EVENT_FILTER)"
-            :aria-label="
-              isMetricSelected(EMAILS_SENT_EVENT_FILTER)
-                ? 'Clear emails sent filter'
-                : 'Filter messages to emails sent'
-            "
-            @click="toggleMetricFilter(EMAILS_SENT_EVENT_FILTER)"
-          >
-            <span class="text-3xl font-bold tabular-nums tracking-tight sm:text-[2.15rem]">
-              {{ totalEmailsSent.toLocaleString() }}
-            </span>
-            <span class="ml-1.5 text-base font-normal text-zinc-500 sm:text-lg">
-              emails sent
-            </span>
-          </button>
-          <button
-            type="button"
-            class="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:underline"
-            :aria-expanded="showMetricsHelp"
-            @click="showMetricsHelp = !showMetricsHelp"
-          >
-            {{ showMetricsHelp ? 'Hide metric explanations' : 'Explain these metrics' }}
-          </button>
-        </div>
-
         <div
-          v-if="showMetricsHelp"
-          class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 sm:px-5"
+          class="relative"
+          :class="metricsLoading ? 'pointer-events-none opacity-60' : ''"
         >
-          <p class="text-sm font-medium text-zinc-800">What these metrics mean</p>
-          <dl class="mt-3 space-y-2.5">
-            <div
-              v-for="row in BREVO_SMTP_METRIC_EXPLANATIONS"
-              :key="row.label"
-              class="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-3"
-            >
-              <dt class="text-sm font-medium text-zinc-700">{{ row.label }}</dt>
-              <dd class="text-sm text-zinc-600">{{ row.description }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div
-          class="mt-6 grid grid-cols-2 gap-x-5 gap-y-4 md:grid-cols-4 md:gap-x-8 md:gap-y-5"
-        >
-          <div
-            v-for="(cell, idx) in metricsGridCells"
-            :key="'gc-' + idx"
-            class="min-w-0"
-          >
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <button
-              v-if="cell"
               type="button"
-              :class="metricCardClass(cell.variant, isMetricSelected(cell.eventFilter))"
-              :aria-pressed="isMetricSelected(cell.eventFilter)"
-              :aria-label="
-                isMetricSelected(cell.eventFilter)
-                  ? `Clear ${cell.label} filter`
-                  : `Filter messages by ${cell.label}`
+              class="-ml-1 rounded-xl px-1.5 py-1 text-left leading-none text-zinc-900 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 disabled:cursor-wait"
+              :class="
+                isMetricSelected(EMAILS_SENT_EVENT_FILTER)
+                  ? 'ring-2 ring-sky-400/80 bg-sky-50/90'
+                  : 'ring-1 ring-transparent hover:bg-zinc-50 hover:ring-zinc-200/90'
               "
-              @click="toggleMetricFilter(cell.eventFilter)"
+              :aria-pressed="isMetricSelected(EMAILS_SENT_EVENT_FILTER)"
+              :aria-label="
+                isMetricSelected(EMAILS_SENT_EVENT_FILTER)
+                  ? 'Clear emails sent filter'
+                  : 'Filter messages to emails sent'
+              "
+              :disabled="messagesLoading && isMetricSelected(EMAILS_SENT_EVENT_FILTER)"
+              @click="toggleMetricFilter(EMAILS_SENT_EVENT_FILTER)"
             >
-              <div class="flex items-baseline justify-between gap-2 text-sm">
-                <UiHoverTip :text="brevoSmtpMetricTooltip(cell.label)" placement="bottom">
-                  <span class="text-zinc-600 underline decoration-zinc-300 decoration-dotted underline-offset-2">
-                    {{ cell.label }}
-                  </span>
-                </UiHoverTip>
-                <span
-                  v-if="cell.valueDisplay === 'count'"
-                  class="font-semibold tabular-nums text-zinc-900"
-                >
-                  {{ cell.countValue ?? 0 }}
-                </span>
-                <span v-else class="font-semibold tabular-nums text-zinc-900">
-                  {{ cell.pct.toFixed(2) }}%
-                </span>
-              </div>
-              <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100" role="presentation">
-                <div
-                  class="h-full min-w-0 rounded-full transition-[width] duration-300 ease-out"
-                  :class="FILL_CLASS[cell.variant] || 'bg-zinc-400'"
-                  :style="{ width: Math.min(100, cell.pct) + '%' }"
-                />
-              </div>
+              <span class="text-3xl font-bold tabular-nums tracking-tight sm:text-[2.15rem]">
+                {{ totalEmailsSent.toLocaleString() }}
+              </span>
+              <span class="ml-1.5 text-base font-normal text-zinc-500 sm:text-lg">
+                emails sent
+              </span>
             </button>
-            <div v-else class="min-h-[3.25rem]" aria-hidden="true" />
+            <button
+              type="button"
+              class="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:underline"
+              :aria-expanded="showMetricsHelp"
+              @click="showMetricsHelp = !showMetricsHelp"
+            >
+              {{ showMetricsHelp ? 'Hide metric explanations' : 'Explain these metrics' }}
+            </button>
+          </div>
+
+          <div
+            v-if="showMetricsHelp"
+            class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 sm:px-5"
+          >
+            <p class="text-sm font-medium text-zinc-800">What these metrics mean</p>
+            <dl class="mt-3 space-y-2.5">
+              <div
+                v-for="row in BREVO_SMTP_METRIC_EXPLANATIONS"
+                :key="row.label"
+                class="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-3"
+              >
+                <dt class="text-sm font-medium text-zinc-700">{{ row.label }}</dt>
+                <dd class="text-sm text-zinc-600">{{ row.description }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div
+            class="mt-6 grid grid-cols-2 gap-x-5 gap-y-4 md:grid-cols-4 md:gap-x-8 md:gap-y-5"
+          >
+            <div
+              v-for="(cell, idx) in metricsGridCells"
+              :key="'gc-' + idx"
+              class="min-w-0"
+            >
+              <button
+                v-if="cell"
+                type="button"
+                :class="metricCardClass(cell.variant, isMetricSelected(cell.eventFilter))"
+                :aria-pressed="isMetricSelected(cell.eventFilter)"
+                :aria-label="
+                  isMetricSelected(cell.eventFilter)
+                    ? `Clear ${cell.label} filter`
+                    : `Filter messages by ${cell.label}`
+                "
+                :disabled="messagesLoading && isMetricSelected(cell.eventFilter)"
+                @click="toggleMetricFilter(cell.eventFilter)"
+              >
+                <div class="flex items-baseline justify-between gap-2 text-sm">
+                  <UiHoverTip :text="brevoSmtpMetricTooltip(cell.label)" placement="bottom">
+                    <span class="text-zinc-600 underline decoration-zinc-300 decoration-dotted underline-offset-2">
+                      {{ cell.label }}
+                    </span>
+                  </UiHoverTip>
+                  <span
+                    v-if="cell.valueDisplay === 'count'"
+                    class="font-semibold tabular-nums text-zinc-900"
+                  >
+                    {{ cell.countValue ?? 0 }}
+                  </span>
+                  <span v-else class="font-semibold tabular-nums text-zinc-900">
+                    {{ cell.pct.toFixed(2) }}%
+                  </span>
+                </div>
+                <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100" role="presentation">
+                  <div
+                    class="h-full min-w-0 rounded-full transition-[width] duration-300 ease-out"
+                    :class="FILL_CLASS[cell.variant] || 'bg-zinc-400'"
+                    :style="{ width: Math.min(100, cell.pct) + '%' }"
+                  />
+                </div>
+              </button>
+              <div v-else class="min-h-[3.25rem]" aria-hidden="true" />
+            </div>
           </div>
         </div>
       </template>
@@ -449,12 +525,12 @@ defineExpose({
       :daily="stats?.daily ?? []"
       :date-range="effectiveDateRange"
       :selected-event-types="chartSelectedEventTypes"
-      :loading="isBusy && !stats"
+      :loading="metricsLoading && !stats"
     />
 
     <div
       class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-950/[0.04]"
-      :aria-busy="isBusy"
+      :aria-busy="messagesLoading"
     >
       <div class="border-b border-zinc-100 px-4 py-3 sm:px-5">
         <div class="flex items-start justify-between gap-3">
@@ -465,12 +541,16 @@ defineExpose({
               <span v-if="selectedEventType" class="text-zinc-600">
                 · {{ eventFilterOptionLabel(selectedEventType) }}
               </span>
+              <span v-if="messagesLoading" class="ml-1 font-medium text-primary-700">
+                · Loading…
+              </span>
             </p>
           </div>
           <button
             v-if="selectedEventType"
             type="button"
-            class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+            class="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50"
+            :disabled="messagesLoading"
             @click="selectedEventType = ''"
           >
             Clear filter
@@ -478,66 +558,91 @@ defineExpose({
         </div>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[40rem] text-left text-sm">
-          <thead>
-            <tr class="border-b border-zinc-100 text-xs uppercase tracking-wide text-zinc-500">
-              <th class="px-4 py-3 font-semibold sm:px-5">Event</th>
-              <th class="px-4 py-3 font-semibold sm:px-5">Date</th>
-              <th class="px-4 py-3 font-semibold sm:px-5">Subject</th>
-              <th class="px-4 py-3 font-semibold sm:px-5">From</th>
-              <th class="px-4 py-3 font-semibold sm:px-5">To</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(ev, idx) in eventItems"
-              :key="(ev.messageId || 'm') + (ev.date || '') + idx"
-              class="border-t border-zinc-100 hover:bg-zinc-50/80"
-            >
-              <td class="whitespace-nowrap px-4 py-3 sm:px-5">
-                <span
-                  class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
-                  :class="brevoSmtpEventBadgeClass(ev.event)"
-                >
-                  {{ formatBrevoSmtpEventLabel(ev.event) }}
-                </span>
-              </td>
-              <td class="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-700 sm:px-5">
-                {{ formatBrevoSmtpEventTableDate(ev.date) }}
-              </td>
-              <td class="max-w-[14rem] truncate px-4 py-3 text-zinc-800 sm:px-5">
-                {{ ev.subject || '—' }}
-              </td>
-              <td class="max-w-[12rem] truncate px-4 py-3 text-zinc-600 sm:px-5">
-                {{ ev.from || '—' }}
-              </td>
-              <td class="max-w-[12rem] truncate px-4 py-3 text-zinc-600 sm:px-5">
-                {{ ev.email || '—' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="relative min-h-[12rem]">
+        <div
+          v-if="messagesLoading"
+          class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/80 px-4 backdrop-blur-[1px]"
+          role="status"
+          aria-live="polite"
+        >
+          <svg
+            class="h-7 w-7 animate-spin text-primary-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+          <p class="text-sm font-medium text-zinc-700">
+            {{
+              selectedEventType
+                ? `Loading ${eventFilterOptionLabel(selectedEventType)} events…`
+                : 'Loading messages…'
+            }}
+          </p>
+        </div>
+
+        <div class="overflow-x-auto" :class="messagesLoading ? 'opacity-40' : ''">
+          <table class="w-full min-w-[40rem] text-left text-sm">
+            <thead>
+              <tr class="border-b border-zinc-100 text-xs uppercase tracking-wide text-zinc-500">
+                <th class="px-4 py-3 font-semibold sm:px-5">Event</th>
+                <th class="px-4 py-3 font-semibold sm:px-5">Date</th>
+                <th class="px-4 py-3 font-semibold sm:px-5">Subject</th>
+                <th class="px-4 py-3 font-semibold sm:px-5">From</th>
+                <th class="px-4 py-3 font-semibold sm:px-5">To</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(ev, idx) in eventItems"
+                :key="(ev.messageId || 'm') + (ev.date || '') + idx"
+                class="border-t border-zinc-100 hover:bg-zinc-50/80"
+              >
+                <td class="whitespace-nowrap px-4 py-3 sm:px-5">
+                  <span
+                    class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                    :class="brevoSmtpEventBadgeClass(ev.event)"
+                  >
+                    {{ formatBrevoSmtpEventLabel(ev.event) }}
+                  </span>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-700 sm:px-5">
+                  {{ formatBrevoSmtpEventTableDate(ev.date) }}
+                </td>
+                <td class="max-w-[14rem] truncate px-4 py-3 text-zinc-800 sm:px-5">
+                  {{ ev.subject || '—' }}
+                </td>
+                <td class="max-w-[12rem] truncate px-4 py-3 text-zinc-600 sm:px-5">
+                  {{ ev.from || '—' }}
+                </td>
+                <td class="max-w-[12rem] truncate px-4 py-3 text-zinc-600 sm:px-5">
+                  {{ ev.email || '—' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          v-if="!messagesLoading && !eventItems.length"
+          class="px-5 py-12 text-center text-sm text-zinc-500"
+        >
+          {{
+            selectedEventType
+              ? `No ${eventFilterOptionLabel(selectedEventType)} events in this range.`
+              : 'No events in this range.'
+          }}
+        </div>
       </div>
 
       <div
-        v-if="isBusy && !eventItems.length"
-        class="px-5 py-10 text-center text-sm text-zinc-500"
-      >
-        Loading events…
-      </div>
-      <div
-        v-else-if="!eventItems.length"
-        class="px-5 py-12 text-center text-sm text-zinc-500"
-      >
-        {{
-          selectedEventType
-            ? `No ${eventFilterOptionLabel(selectedEventType)} events in this range.`
-            : 'No events in this range.'
-        }}
-      </div>
-      <div
-        v-else
+        v-if="!messagesLoading && eventItems.length"
         class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3 text-sm text-zinc-600 sm:px-5"
       >
         <p>Page {{ eventsPage }}</p>
@@ -545,7 +650,7 @@ defineExpose({
           <button
             type="button"
             class="h-8 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 disabled:opacity-40"
-            :disabled="eventsPage <= 1 || isBusy"
+            :disabled="eventsPage <= 1 || messagesLoading"
             @click="goEventsPage(eventsPage - 1)"
           >
             Prev
@@ -553,7 +658,7 @@ defineExpose({
           <button
             type="button"
             class="h-8 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 disabled:opacity-40"
-            :disabled="!eventsHasMore || isBusy"
+            :disabled="!eventsHasMore || messagesLoading"
             @click="goEventsPage(eventsPage + 1)"
           >
             Next

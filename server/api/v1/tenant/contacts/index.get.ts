@@ -113,6 +113,7 @@ export default defineEventHandler(async (event) => {
       unit: c.address?.unit ?? '',
       city: c.address?.city ?? '',
       state: c.address?.state ?? '',
+      zip: c.address?.zip ?? '',
       county: c.address?.county ?? ''
     },
     is_unsubscribe: c.isUnsubscribe === true,
