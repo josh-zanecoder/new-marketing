@@ -41,6 +41,13 @@ export default defineEventHandler(async (event) => {
       ? campaignRaw.trim()
       : normalizeCampaignIdQuery(event)
 
+  const deepRaw = body?.deepBackfill ?? q.deepBackfill
+  const deepBackfill =
+    deepRaw === true ||
+    deepRaw === 1 ||
+    deepRaw === '1' ||
+    deepRaw === 'true'
+
   const emailConfig = await resolveTenantEmailSendConfig(dbName)
   if (emailConfig.provider === TENANT_EMAIL_PROVIDER_ZC_MAIL) {
     let config
@@ -54,7 +61,8 @@ export default defineEventHandler(async (event) => {
       config,
       fromYmd,
       toYmd,
-      campaignId
+      campaignId,
+      deepBackfill: deepBackfill && Boolean(campaignId)
     })
     if (result.error) {
       throwBrevoTrackingFetchError(result.error)

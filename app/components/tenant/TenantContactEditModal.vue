@@ -52,7 +52,7 @@
             </p>
           </div>
           <template v-else>
-            <div class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-4 sm:px-6 sm:py-5">
+            <div class="tenant-add-contact-form min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-4 sm:px-6 sm:py-5">
               <div class="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4">
                 <div>
                   <label class="block text-sm font-medium text-zinc-700" for="rl-edit-first-name">
@@ -131,7 +131,7 @@
                     v-model="form.channel"
                     type="text"
                     autocomplete="off"
-                    placeholder="e.g. email"
+                    placeholder="email"
                     :class="INPUT_CLASS"
                   >
                 </div>
@@ -182,13 +182,14 @@
                   Address
                 </legend>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
-                  <div class="sm:col-span-4">
+                  <div class="tenant-place-autocomplete-field sm:col-span-4">
                     <label class="block text-sm font-medium text-zinc-700" for="rl-edit-street">Street address</label>
                     <input
                       id="rl-edit-street"
+                      ref="streetInputRef"
                       v-model="form.addressStreet"
                       type="text"
-                      autocomplete="street-address"
+                      autocomplete="off"
                       placeholder="123 Main Street"
                       :class="INPUT_CLASS"
                     >
@@ -205,7 +206,7 @@
                     >
                   </div>
                 </div>
-                <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
+                <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-4 sm:gap-4">
                   <div>
                     <label class="block text-sm font-medium text-zinc-700" for="rl-edit-city">City</label>
                     <input
@@ -225,6 +226,17 @@
                       type="text"
                       autocomplete="address-level1"
                       placeholder="NY"
+                      :class="INPUT_CLASS"
+                    >
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-zinc-700" for="rl-edit-zip">ZIP code</label>
+                    <input
+                      id="rl-edit-zip"
+                      v-model="form.addressZip"
+                      type="text"
+                      autocomplete="postal-code"
+                      placeholder="10001"
                       :class="INPUT_CLASS"
                     >
                   </div>
@@ -305,6 +317,7 @@ const emit = defineEmits<{
       unit: string
       city: string
       state: string
+      zip: string
       county: string
     }
   }]
@@ -321,6 +334,19 @@ const submitting = ref(false)
 const error = ref('')
 const typeOptions = ref<TenantContactTypeOption[]>([])
 const form = ref(emptyForm())
+const streetInputRef = ref<HTMLInputElement | null>(null)
+const {
+  initGoogleAddressAutocomplete,
+  clearGoogleAutocompleteListener,
+  syncStreetValueFromForm
+} = useGoogleAddressAutocomplete(form, {
+  street: 'addressStreet',
+  unit: 'addressUnit',
+  city: 'addressCity',
+  state: 'addressState',
+  zipCode: 'addressZip',
+  county: 'addressCounty'
+})
 let escListener: ((e: KeyboardEvent) => void) | null = null
 
 function emptyForm() {
@@ -338,8 +364,15 @@ function emptyForm() {
     addressUnit: '',
     addressCity: '',
     addressState: '',
+    addressZip: '',
     addressCounty: ''
   }
+}
+
+async function setupStreetAutocomplete() {
+  await nextTick()
+  const ready = await initGoogleAddressAutocomplete(streetInputRef, true)
+  if (ready) syncStreetValueFromForm()
 }
 
 function serverAuthHeaders(): { headers?: HeadersInit } {
@@ -379,8 +412,10 @@ function populateFromDetail(contact: TenantContactDetail) {
     addressUnit: contact.address?.unit ?? '',
     addressCity: contact.address?.city ?? '',
     addressState: contact.address?.state ?? '',
+    addressZip: contact.address?.zip ?? '',
     addressCounty: contact.address?.county ?? ''
   }
+  syncStreetValueFromForm()
 }
 
 function onPhoneKeydown(event: KeyboardEvent) {
@@ -408,6 +443,7 @@ function onPhonePaste(event: ClipboardEvent) {
 
 function close() {
   if (submitting.value || loading.value) return
+  clearGoogleAutocompleteListener()
   emit('close')
 }
 
@@ -436,6 +472,7 @@ async function load() {
     toast.error(error.value)
   } finally {
     loading.value = false
+    if (props.open && !error.value) void setupStreetAutocomplete()
   }
 }
 
@@ -482,13 +519,14 @@ async function submit() {
         unit: form.value.addressUnit.trim(),
         city: form.value.addressCity.trim(),
         state: form.value.addressState.trim(),
+        zip: form.value.addressZip.trim(),
         county: normalizeContactCounty(form.value.addressCounty)
       }
     }
     if (phone) body.phone = phone
     if (company) body.company = company
     if (contactType) body.contactType = contactType
-    if (channel) body.channel = channel
+    body.channel = channel
     if (status) body.status = status
     if (stage) body.stage = stage
 
@@ -509,9 +547,11 @@ async function submit() {
         unit: form.value.addressUnit.trim(),
         city: form.value.addressCity.trim(),
         state: form.value.addressState.trim(),
+        zip: form.value.addressZip.trim(),
         county: normalizeContactCounty(form.value.addressCounty)
       }
     })
+    clearGoogleAutocompleteListener()
     emit('close')
   } catch (e: unknown) {
     const message = extractErrorMessage(e, 'Failed to update contact')
@@ -543,11 +583,14 @@ watch(
         if (e.key === 'Escape' && !submitting.value && !loading.value) close()
       }
       window.addEventListener('keydown', escListener)
+    } else {
+      clearGoogleAutocompleteListener()
     }
   }
 )
 
 onBeforeUnmount(() => {
+  clearGoogleAutocompleteListener()
   if (escListener) {
     window.removeEventListener('keydown', escListener)
     escListener = null

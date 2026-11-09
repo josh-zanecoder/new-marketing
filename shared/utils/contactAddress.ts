@@ -4,6 +4,7 @@ export type ContactAddressFields = {
   unit?: string
   city?: string
   state?: string
+  zip?: string
   county?: string
 }
 
@@ -20,6 +21,7 @@ export function normalizeContactAddressInput(
     unit: String(input?.unit ?? '').trim(),
     city: String(input?.city ?? '').trim(),
     state: String(input?.state ?? '').trim(),
+    zip: String(input?.zip ?? '').trim(),
     county: normalizeContactCounty(String(input?.county ?? ''))
   }
 }
@@ -34,9 +36,10 @@ export function normalizeContactCounty(value?: string): string {
     .trim()
 }
 
-/** Display line for tables and summaries (street, city, state). */
+/** Display line for tables and summaries (street, city, state, zip). */
 export function formatContactAddress(addr?: ContactAddressFields | null): string {
   if (!addr) return ''
   const streetLine = joinContactStreetParts(addr.street, addr.unit)
-  return [streetLine, addr.city, addr.state, normalizeContactCounty(addr.county)].filter(Boolean).join(', ')
+  const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(', ')
+  return [streetLine, cityStateZip, normalizeContactCounty(addr.county)].filter(Boolean).join(', ')
 }

@@ -2,10 +2,13 @@ import type { AnyBulkWriteOperation } from 'mongoose'
 import {
   ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY,
   ZC_MAIL_ARCHIVE_DETAIL_MAX,
+  ZC_MAIL_ARCHIVE_DETAIL_MAX_DEEP,
   ZC_MAIL_ARCHIVE_LIST_PAGE_CONCURRENCY,
   ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_CONCURRENCY,
   ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX,
+  ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX_DEEP,
   ZC_MAIL_ARCHIVE_STATS_MAX_PAGES,
+  ZC_MAIL_ARCHIVE_STATS_MAX_PAGES_DEEP,
   ZC_MAIL_ARCHIVE_STATS_PAGE_LIMIT,
   ZC_MAIL_ARCHIVE_TENANT_WIDE_MAX_PAGES
 } from '@server/constants/zcMailWebhook'
@@ -53,13 +56,15 @@ function syncKey(params: {
   campaignId?: string | null
   fromYmd?: string | null
   toYmd?: string | null
+  deepBackfill?: boolean
 }): string {
   return [
     'zcmail',
     params.dbName.trim(),
     params.campaignId?.trim() || '',
     params.fromYmd?.trim() || '',
-    params.toYmd?.trim() || ''
+    params.toYmd?.trim() || '',
+    params.deepBackfill ? 'deep' : 'normal'
   ].join('|')
 }
 
@@ -254,14 +259,18 @@ async function loadArchivesByMessageIdQueries(params: {
   fromYmd?: string | null
   toYmd?: string | null
   messageIds: Set<string>
+  /** Override default `ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX` (deep refresh). */
+  maxLookups?: number
 }): Promise<ZcMailArchiveListItem[]> {
   const allIds = uniqueStrippedMessageIds(params.messageIds)
   if (allIds.length === 0) return []
-  const ids = allIds.slice(0, ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX)
+  const maxLookups = Math.max(1, params.maxLookups ?? ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX)
+  const ids = allIds.slice(0, maxLookups)
   if (allIds.length > ids.length) {
     console.warn('[zcMail tracking] capping message-id q lookups', {
       total: allIds.length,
-      capped: ids.length
+      capped: ids.length,
+      maxLookups
     })
   }
 
@@ -435,6 +444,11 @@ export async function syncTenantZcMailTrackingEvents(params: {
   fromYmd?: string | null
   toYmd?: string | null
   campaignId?: string | null
+  /**
+   * Campaign-only: raise detail / message-id / tenant-scan caps so large sends
+   * can gap-fill opens & delivery when normal Refresh under-counted.
+   */
+  deepBackfill?: boolean
   archiveClient?: ZcMailArchiveTrackingClient
 }): Promise<SyncTenantBrevoTrackingEventsResult> {
   const dbName = params.dbName.trim()
@@ -442,16 +456,18 @@ export async function syncTenantZcMailTrackingEvents(params: {
     return { fetched: 0, upserted: 0, modified: 0, timingsMs: { total: 0 }, error: 'Missing tenant database' }
   }
 
+  const deepBackfill = Boolean(params.deepBackfill && params.campaignId?.trim())
   const key = syncKey({
     dbName,
     campaignId: params.campaignId,
     fromYmd: params.fromYmd,
-    toYmd: params.toYmd
+    toYmd: params.toYmd,
+    deepBackfill
   })
   const existing = inflightSyncs.get(key)
   if (existing) return existing
 
-  const promise = runZcMailArchiveSync(params).finally(() => {
+  const promise = runZcMailArchiveSync({ ...params, deepBackfill }).finally(() => {
     inflightSyncs.delete(key)
   })
   inflightSyncs.set(key, promise)
@@ -464,11 +480,20 @@ async function runZcMailArchiveSync(params: {
   fromYmd?: string | null
   toYmd?: string | null
   campaignId?: string | null
+  deepBackfill?: boolean
   archiveClient?: ZcMailArchiveTrackingClient
 }): Promise<SyncTenantBrevoTrackingEventsResult> {
   const started = Date.now()
   const dbName = params.dbName.trim()
   const campaignId = params.campaignId?.trim() || null
+  const deepBackfill = Boolean(params.deepBackfill && campaignId)
+  const messageIdQMax = deepBackfill
+    ? ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX_DEEP
+    : ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX
+  const detailMax = deepBackfill ? ZC_MAIL_ARCHIVE_DETAIL_MAX_DEEP : ZC_MAIL_ARCHIVE_DETAIL_MAX
+  const campaignListMaxPages = deepBackfill
+    ? ZC_MAIL_ARCHIVE_STATS_MAX_PAGES_DEEP
+    : ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
   const client = params.archiveClient ?? { list: listZcMailArchive, getById: getZcMailArchiveById }
 
   const t0 = Date.now()
@@ -537,12 +562,13 @@ async function runZcMailArchiveSync(params: {
       } else if (
         matchedItems.length > 0 &&
         missingIds.length > 0 &&
-        missingIds.length <= ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX
+        missingIds.length <= messageIdQMax
       ) {
         console.warn('[zcMail tracking] campaign archive list incomplete; q-backfill missing ids', {
           campaignId,
           matched: matchedItems.length,
-          missing: missingIds.length
+          missing: missingIds.length,
+          deepBackfill
         })
         const backfill = await loadArchivesByMessageIdQueries({
           client,
@@ -551,21 +577,23 @@ async function runZcMailArchiveSync(params: {
           tenantName: params.config.zcMailTenant,
           fromYmd: params.fromYmd,
           toYmd: params.toYmd,
-          messageIds: new Set(missingIds)
+          messageIds: new Set(missingIds),
+          maxLookups: messageIdQMax
         })
         listed = uniqueArchiveItems([...matchedItems, ...backfill])
         usedMessageIdBackfill = true
       } else if (
         matchedItems.length === 0 &&
         uniqueRecipientIds.length > 0 &&
-        uniqueRecipientIds.length <= ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX
+        uniqueRecipientIds.length <= messageIdQMax
       ) {
         console.warn(
           '[zcMail tracking] campaign archive filter empty/wrong; using message-id q',
           {
             campaignId,
             listed: archives.items.length,
-            campaignRecipientMessageIds: uniqueRecipientIds.length
+            campaignRecipientMessageIds: uniqueRecipientIds.length,
+            deepBackfill
           }
         )
         listed = await loadArchivesByMessageIdQueries({
@@ -575,13 +603,14 @@ async function runZcMailArchiveSync(params: {
           tenantName: params.config.zcMailTenant,
           fromYmd: params.fromYmd,
           toYmd: params.toYmd,
-          messageIds: campaignMessageIds
+          messageIds: campaignMessageIds,
+          maxLookups: messageIdQMax
         })
         usedMessageIdBackfill = true
         usedTenantListFallback = true
       } else if (
         uniqueRecipientIds.length > 0 &&
-        (matchedItems.length === 0 || missingIds.length > ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX)
+        (matchedItems.length === 0 || missingIds.length > messageIdQMax)
       ) {
         console.warn(
           '[zcMail tracking] campaign archive list incomplete for large campaign; scanning tenant list',
@@ -590,12 +619,14 @@ async function runZcMailArchiveSync(params: {
             listed: archives.items.length,
             matched: matchedItems.length,
             missing: missingIds.length,
-            campaignRecipientMessageIds: uniqueRecipientIds.length
+            campaignRecipientMessageIds: uniqueRecipientIds.length,
+            deepBackfill,
+            maxPages: campaignListMaxPages
           }
         )
         // Large campaigns: page the tenant list in parallel and keep matches —
         // never unbounded per-id `q` (that is what caused 15+ minute Refreshes).
-        // Also used when the campaign filter returned a partial set with >400 gaps
+        // Also used when the campaign filter returned a partial set with >qMax gaps
         // (old path kept the incomplete list and under-counted opens/bounces).
         const scanned = await loadArchivesInRange({
           client,
@@ -606,7 +637,7 @@ async function runZcMailArchiveSync(params: {
           toYmd: params.toYmd,
           matchMessageIds: campaignMessageIds,
           keepMatchedOnly: true,
-          maxPages: ZC_MAIL_ARCHIVE_STATS_MAX_PAGES
+          maxPages: campaignListMaxPages
         })
         listed = uniqueArchiveItems([...matchedItems, ...scanned])
         usedMessageIdBackfill = true
@@ -700,19 +731,34 @@ async function runZcMailArchiveSync(params: {
 
   const needsDetail: ZcMailArchiveListItem[] = []
   const listOnly: ZcMailArchiveListItem[] = []
+  let detailSkippedCapped = 0
   // Tenant-wide Refresh: list status only. Detail GETs for opens/clicks are for
   // campaign-scoped Refresh (and webhooks already cover live engagement).
   const allowDetailFetches = Boolean(campaignId)
-  for (const item of candidates) {
+  // Prefer rows that still look like list-only "sent" — those need SES detail
+  // most for delivery + opens when webhooks were incomplete.
+  const detailCandidates = allowDetailFetches
+    ? [...candidates].sort((a, b) => {
+        const rank = (item: ZcMailArchiveListItem) => {
+          const status = String(item.status || '').trim().toLowerCase()
+          if (status === 'sent' || status === 'queued' || !status) return 0
+          if (status === 'delivered') return 1
+          return 2
+        }
+        return rank(a) - rank(b)
+      })
+    : candidates
+  for (const item of detailCandidates) {
     const ids = zcMailArchiveLookupIds(item)
     const enriched = ids.some((id) => alreadyEnriched.has(id))
     if (!allowDetailFetches || enriched) {
       listOnly.push(item)
       continue
     }
-    if (needsDetail.length < ZC_MAIL_ARCHIVE_DETAIL_MAX) {
+    if (needsDetail.length < detailMax) {
       needsDetail.push(item)
     } else {
+      detailSkippedCapped += 1
       listOnly.push(item)
     }
   }
@@ -896,6 +942,10 @@ async function runZcMailArchiveSync(params: {
 
   const debug = {
     campaignId,
+    deepBackfill,
+    detailMax,
+    detailFetched: needsDetail.length,
+    detailSkippedCapped,
     fromYmd: params.fromYmd?.trim() || null,
     toYmd: params.toYmd?.trim() || null,
     zcMailTenant: params.config.zcMailTenant,

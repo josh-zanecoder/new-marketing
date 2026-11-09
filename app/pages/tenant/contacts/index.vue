@@ -157,9 +157,47 @@
 
     <div
       v-else-if="data"
-      class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
+      ref="contactsListCardRef"
+      class="flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]"
     >
-      <ul class="divide-y divide-slate-100 lg:hidden">
+      <div
+        v-if="filteredContacts.length"
+        class="order-1 sticky top-0 z-[2] flex flex-col gap-2.5 border-b border-slate-100 bg-slate-50/95 px-3 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4 lg:order-2 lg:static lg:border-b-0 lg:border-t lg:bg-slate-50/60 lg:backdrop-blur-none lg:pb-4"
+      >
+        <p class="min-w-0 text-center text-xs tabular-nums text-slate-500 sm:text-left sm:text-sm">
+          <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
+          <span class="text-slate-300"> / </span>
+          <span>{{ paginationMeta.total.toLocaleString() }}</span>
+        </p>
+        <nav
+          class="flex w-full shrink-0 items-center justify-between gap-1.5 sm:w-auto sm:justify-end sm:gap-1.5"
+          aria-label="Contacts pagination"
+        >
+          <button
+            type="button"
+            class="inline-flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:flex-none sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            :disabled="currentPage === 1"
+            @click="goToContactsPage(currentPage - 1)"
+          >
+            <span class="sm:hidden">Prev</span>
+            <span class="hidden sm:inline">Previous</span>
+          </button>
+          <span class="whitespace-nowrap px-1.5 text-center text-xs font-medium tabular-nums text-slate-500 sm:min-w-[6.5rem] sm:px-1 sm:text-[0.8125rem]">
+            <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
+            <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
+          </span>
+          <button
+            type="button"
+            class="inline-flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:flex-none sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
+            :disabled="currentPage === totalPages"
+            @click="goToContactsPage(currentPage + 1)"
+          >
+            Next
+          </button>
+        </nav>
+      </div>
+
+      <ul class="order-2 divide-y divide-slate-100 lg:order-1 lg:hidden">
         <li v-for="row in paginatedContacts" :key="`mobile-${row.id}`" class="p-4">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
@@ -224,8 +262,8 @@
                 :class="!row.is_unsubscribe ? 'bg-emerald-600' : 'bg-slate-300'"
                 :aria-checked="!row.is_unsubscribe"
                 :aria-label="row.is_unsubscribe ? 'Subscribe contact' : 'Unsubscribe contact'"
-                :disabled="subscriptionSavingId === row.id"
-                @click="setContactSubscription(row, row.is_unsubscribe)"
+                :disabled="subscriptionSavingId === row.id || !!subscriptionConfirm"
+                @click="requestContactSubscriptionChange(row)"
               >
                 <span class="sr-only">{{ row.is_unsubscribe ? 'Subscribed off' : 'Subscribed on' }}</span>
                 <span
@@ -244,55 +282,56 @@
         </li>
       </ul>
 
-      <div class="hidden overflow-x-auto lg:block">
-        <table class="min-w-full text-left text-[0.9375rem] leading-snug">
+      <div class="order-2 hidden min-w-0 lg:order-1 lg:block">
+        <table class="w-full table-fixed text-left text-sm leading-snug">
           <thead class="sticky top-0 z-[1] border-b border-slate-100 bg-slate-50/95 backdrop-blur-sm">
             <tr>
               <th
                 scope="col"
-                class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pl-6 sm:pr-4"
+                class="w-[18%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pl-5"
               >
                 Name
               </th>
               <th
                 scope="col"
-                class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:px-4"
+                class="w-[24%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
               >
                 Email
               </th>
               <th
                 scope="col"
-                class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:px-4"
+                class="w-[16%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
               >
                 Types
               </th>
               <th
                 scope="col"
-                class="whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:px-4"
+                class="w-[7rem] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
               >
-                Subscription
+                <span class="sr-only xl:not-sr-only">Subscription</span>
+                <span class="xl:hidden" aria-hidden="true">Sub</span>
               </th>
               <th
                 scope="col"
-                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell lg:px-4"
+                class="hidden w-[14%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell"
               >
                 Company
               </th>
               <th
                 scope="col"
-                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell xl:px-4"
+                class="hidden w-[8%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 2xl:table-cell"
               >
                 Priority
               </th>
               <th
                 scope="col"
-                class="hidden whitespace-nowrap px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell xl:px-4"
+                class="hidden w-[12%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 2xl:table-cell"
               >
                 Broker role
               </th>
               <th
                 scope="col"
-                class="whitespace-nowrap px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pr-6 sm:pl-4"
+                class="w-[8.5rem] px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pr-5"
               >
                 Actions
               </th>
@@ -304,36 +343,41 @@
               :key="row.id"
               class="bg-white transition-colors duration-150 ease-out hover:bg-slate-50/90"
             >
-              <td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-900 sm:pl-6 sm:pr-4">
+              <td
+                class="truncate px-3 py-3 font-semibold text-slate-900 sm:pl-5"
+                :title="row.name || undefined"
+              >
                 {{ row.name || '—' }}
               </td>
               <td
-                class="max-w-[200px] truncate px-4 py-4 text-slate-600 sm:max-w-xs sm:px-4"
+                class="truncate px-3 py-3 text-slate-600"
                 :title="row.email || undefined"
               >
                 {{ row.email || '—' }}
               </td>
-              <td class="max-w-[14rem] px-4 py-4 sm:px-4">
-                <div v-if="row.contactType?.length" class="flex flex-wrap gap-1.5">
+              <td class="px-3 py-3">
+                <div v-if="row.contactType?.length" class="flex flex-wrap gap-1">
                   <span
                     v-for="(label, idx) in row.contactTypeLabels"
                     :key="`${row.id}-${row.contactType![idx]}`"
-                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
+                    class="inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
                     :class="typeKeyBadgeClass(row.contactType![idx] ?? '')"
+                    :title="label"
                   >
                     {{ label }}
                   </span>
                 </div>
                 <span
                   v-else
-                  class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
+                  class="inline-flex max-w-full items-center truncate rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset"
                   :class="typeKeyBadgeClass(row.contactType?.[0] ?? '')"
+                  :title="row.primaryTypeLabel"
                 >
                   {{ row.primaryTypeLabel }}
                 </span>
               </td>
-              <td class="whitespace-nowrap px-4 py-4 sm:px-4">
-                <div class="flex items-center gap-2">
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
                   <button
                     type="button"
                     role="switch"
@@ -341,8 +385,8 @@
                     :class="!row.is_unsubscribe ? 'bg-emerald-600' : 'bg-slate-300'"
                     :aria-checked="!row.is_unsubscribe"
                     :aria-label="row.is_unsubscribe ? 'Subscribe contact' : 'Unsubscribe contact'"
-                    :disabled="subscriptionSavingId === row.id"
-                    @click="setContactSubscription(row, row.is_unsubscribe)"
+                    :disabled="subscriptionSavingId === row.id || !!subscriptionConfirm"
+                    @click="requestContactSubscriptionChange(row)"
                   >
                     <span class="sr-only">{{ row.is_unsubscribe ? 'Subscribed off' : 'Subscribed on' }}</span>
                     <span
@@ -351,7 +395,7 @@
                     />
                   </button>
                   <span
-                    class="hidden text-[0.8125rem] font-medium tabular-nums xl:inline"
+                    class="hidden truncate text-xs font-medium tabular-nums 2xl:inline"
                     :class="row.is_unsubscribe ? 'text-amber-800' : 'text-emerald-800'"
                   >
                     {{ subscriptionSavingId === row.id ? 'Saving…' : row.is_unsubscribe ? 'Unsubscribed' : 'Subscribed' }}
@@ -359,32 +403,35 @@
                 </div>
               </td>
               <td
-                class="hidden max-w-[180px] truncate px-4 py-4 text-slate-600 lg:table-cell lg:px-4"
+                class="hidden truncate px-3 py-3 text-slate-600 xl:table-cell"
                 :title="row.company || undefined"
               >
                 {{ row.company || '—' }}
               </td>
-              <td class="hidden whitespace-nowrap px-4 py-4 text-slate-600 xl:table-cell xl:px-4">
+              <td
+                class="hidden truncate px-3 py-3 text-slate-600 2xl:table-cell"
+                :title="row.priority || undefined"
+              >
                 {{ row.priority || '—' }}
               </td>
               <td
-                class="hidden max-w-[180px] truncate px-4 py-4 text-slate-600 xl:table-cell xl:px-4"
+                class="hidden truncate px-3 py-3 text-slate-600 2xl:table-cell"
                 :title="row.brokerRole || undefined"
               >
                 {{ row.brokerRole || '—' }}
               </td>
-              <td class="whitespace-nowrap px-4 py-4 text-right sm:pr-6 sm:pl-4">
-                <div class="inline-flex items-center justify-end gap-2">
+              <td class="px-3 py-3 text-right sm:pr-5">
+                <div class="inline-flex items-center justify-end gap-1.5">
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                     @click="openEditContactModal(row.id)"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
                     @click="openContactDetail(row.id)"
                   >
                     View
@@ -396,42 +443,6 @@
         </table>
       </div>
 
-      <div
-        v-if="filteredContacts.length"
-        class="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4"
-      >
-        <p class="min-w-0 text-xs tabular-nums text-slate-500 sm:text-sm">
-          <span class="font-semibold text-slate-800">{{ paginationMeta.from }}–{{ paginationMeta.to }}</span>
-          <span class="text-slate-300"> / </span>
-          <span>{{ paginationMeta.total.toLocaleString() }}</span>
-        </p>
-        <nav
-          class="flex shrink-0 items-center gap-1 sm:gap-1.5"
-          aria-label="Contacts pagination"
-        >
-          <button
-            type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-            :disabled="currentPage === 1"
-            @click="currentPage -= 1"
-          >
-            <span class="sm:hidden">Prev</span>
-            <span class="hidden sm:inline">Previous</span>
-          </button>
-          <span class="whitespace-nowrap px-1 text-center text-xs font-medium tabular-nums text-slate-500 sm:min-w-[6.5rem] sm:text-[0.8125rem]">
-            <span class="sm:hidden">{{ currentPage }}/{{ totalPages }}</span>
-            <span class="hidden sm:inline">Page {{ currentPage }} / {{ totalPages }}</span>
-          </span>
-          <button
-            type="button"
-            class="inline-flex h-9 min-w-[4.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none sm:h-auto sm:min-w-[5.5rem] sm:rounded-xl sm:px-3.5 sm:py-2.5 sm:text-[0.8125rem]"
-            :disabled="currentPage === totalPages"
-            @click="currentPage += 1"
-          >
-            Next
-          </button>
-        </nav>
-      </div>
     </div>
 
     <Teleport to="body">
@@ -917,7 +928,7 @@
                   v-model="addContactForm.channel"
                   type="text"
                   autocomplete="off"
-                  placeholder="e.g. email"
+                  placeholder="email"
                   :class="ADD_CONTACT_INPUT_CLASS"
                 >
               </div>
@@ -966,13 +977,14 @@
                 Address
               </legend>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
-                <div class="sm:col-span-4">
+                <div class="tenant-place-autocomplete-field sm:col-span-4">
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-street">Street address</label>
                   <input
                     id="add-contact-street"
+                    ref="streetInputRef"
                     v-model="addContactForm.addressStreet"
                     type="text"
-                    autocomplete="street-address"
+                    autocomplete="off"
                     placeholder="123 Main Street"
                     :class="ADD_CONTACT_INPUT_CLASS"
                   >
@@ -989,7 +1001,7 @@
                   >
                 </div>
               </div>
-              <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
+              <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-4 sm:gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700" for="add-contact-city">City</label>
                   <input
@@ -1009,6 +1021,17 @@
                     type="text"
                     autocomplete="address-level1"
                     placeholder="NY"
+                    :class="ADD_CONTACT_INPUT_CLASS"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700" for="add-contact-zip">ZIP code</label>
+                  <input
+                    id="add-contact-zip"
+                    v-model="addContactForm.addressZip"
+                    type="text"
+                    autocomplete="postal-code"
+                    placeholder="10001"
                     :class="ADD_CONTACT_INPUT_CLASS"
                   >
                 </div>
@@ -1061,6 +1084,17 @@
         </div>
       </div>
     </Teleport>
+
+    <ClientConfirmationModal
+      :open="!!subscriptionConfirm"
+      :title="subscriptionConfirmTitle"
+      :message="subscriptionConfirmMessage"
+      :confirm-text="subscriptionConfirmActionText"
+      :variant="subscriptionConfirm?.subscribed ? 'primary' : 'danger'"
+      :confirm-loading="!!subscriptionSavingId"
+      @confirm="confirmContactSubscriptionChange"
+      @cancel="cancelContactSubscriptionChange"
+    />
   </div>
 </template>
 
@@ -1069,6 +1103,7 @@ import { brokerRoleLabels } from '~~/shared/utils/recipientFilterContactField'
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneInput, formatUsPhoneNumber, isUsPhoneInputKeyAllowed } from '~~/shared/utils/usNumberFormatter'
+import { notifyParentMarketingOverlay } from '~/composables/useMarketingEmbed'
 import type {
   TenantContactDetail,
   TenantContactListRow,
@@ -1177,9 +1212,23 @@ const addContactForm = ref({
   addressUnit: '',
   addressCity: '',
   addressState: '',
+  addressZip: '',
   addressCounty: ''
 })
 
+const streetInputRef = ref<HTMLInputElement | null>(null)
+const {
+  initGoogleAddressAutocomplete,
+  clearGoogleAutocompleteListener,
+  syncStreetValueFromForm
+} = useGoogleAddressAutocomplete(addContactForm, {
+  street: 'addressStreet',
+  unit: 'addressUnit',
+  city: 'addressCity',
+  state: 'addressState',
+  zipCode: 'addressZip',
+  county: 'addressCounty'
+})
 
 const ADD_CONTACT_INPUT_CLASS =
   'mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20'
@@ -1216,6 +1265,7 @@ function emptyContactForm() {
     addressUnit: '',
     addressCity: '',
     addressState: '',
+    addressZip: '',
     addressCounty: ''
   }
 }
@@ -1235,8 +1285,16 @@ function populateContactFormFromDetail(contact: TenantContactDetail) {
     addressUnit: contact.address?.unit ?? '',
     addressCity: contact.address?.city ?? '',
     addressState: contact.address?.state ?? '',
+    addressZip: contact.address?.zip ?? '',
     addressCounty: contact.address?.county ?? ''
   }
+  syncStreetValueFromForm()
+}
+
+async function setupStreetAutocomplete() {
+  await nextTick()
+  const ready = await initGoogleAddressAutocomplete(streetInputRef, true)
+  if (ready) syncStreetValueFromForm()
 }
 
 function onContactPhoneKeydown(event: KeyboardEvent) {
@@ -1282,6 +1340,7 @@ function buildContactFormBody(email: string) {
       unit?: string
       city?: string
       state?: string
+      zip?: string
       county?: string
     }
   } = {
@@ -1298,7 +1357,7 @@ function buildContactFormBody(email: string) {
   if (phone) body.phone = phone
   if (company) body.company = company
   if (contactType) body.contactType = contactType
-  if (channel) body.channel = channel
+  body.channel = channel
   if (status) body.status = status
   if (stage) body.stage = stage
   body.address = {
@@ -1306,6 +1365,7 @@ function buildContactFormBody(email: string) {
     unit: addContactForm.value.addressUnit.trim(),
     city: addContactForm.value.addressCity.trim(),
     state: addContactForm.value.addressState.trim(),
+    zip: addContactForm.value.addressZip.trim(),
     county: normalizeContactCounty(addContactForm.value.addressCounty)
   }
   return body
@@ -1332,6 +1392,7 @@ function openAddContactModal() {
     contactType: defaultAddContactType()
   }
   addContactOpen.value = true
+  void setupStreetAutocomplete()
 }
 
 async function openEditContactModal(contactId: string) {
@@ -1366,14 +1427,17 @@ async function openEditContactModal(contactId: string) {
     const message = extractContactFormErrorMessage(e, 'Failed to load contact')
     addContactError.value = message
     toast.error(message)
+    clearGoogleAutocompleteListener()
     addContactOpen.value = false
   } finally {
     contactFormLoading.value = false
+    if (addContactOpen.value) void setupStreetAutocomplete()
   }
 }
 
 function closeContactFormModal() {
   if (addContactSubmitting.value || contactFormLoading.value) return
+  clearGoogleAutocompleteListener()
   addContactOpen.value = false
   editingContactId.value = ''
   contactFormMode.value = 'add'
@@ -1418,6 +1482,7 @@ async function submitContactForm() {
       await marketingApi.createContact(body)
       toast.success('Contact added successfully.')
     }
+    clearGoogleAutocompleteListener()
     addContactOpen.value = false
     editingContactId.value = ''
     contactFormMode.value = 'add'
@@ -1475,6 +1540,30 @@ const ownerFilterOptions = computed(() => {
 const currentPage = ref(1)
 const subscriptionSavingId = ref('')
 const subscriptionActionError = ref('')
+const subscriptionConfirm = ref<{
+  row: TenantContactListRow
+  subscribed: boolean
+} | null>(null)
+
+const subscriptionConfirmTitle = computed(() =>
+  subscriptionConfirm.value?.subscribed ? 'Subscribe contact?' : 'Unsubscribe contact?'
+)
+
+const subscriptionConfirmActionText = computed(() =>
+  subscriptionConfirm.value?.subscribed ? 'Subscribe' : 'Unsubscribe'
+)
+
+const subscriptionConfirmMessage = computed(() => {
+  const pending = subscriptionConfirm.value
+  if (!pending) return ''
+  const name = [pending.row.firstName, pending.row.lastName].filter(Boolean).join(' ').trim()
+  const who = name || pending.row.email || 'this contact'
+  if (pending.subscribed) {
+    return `Subscribe ${who}? They will be able to receive marketing emails again.`
+  }
+  return `Unsubscribe ${who}? They will no longer receive marketing emails.`
+})
+
 const viewContactOpen = ref(false)
 const viewContactLoading = ref(false)
 const viewContactError = ref('')
@@ -1638,6 +1727,18 @@ watch(totalPages, (pages) => {
   if (currentPage.value > pages) currentPage.value = pages
 })
 
+const contactsListCardRef = ref<HTMLElement | null>(null)
+
+function goToContactsPage(page: number) {
+  const next = Math.min(Math.max(1, page), totalPages.value)
+  if (next === currentPage.value) return
+  currentPage.value = next
+  if (!import.meta.client) return
+  void nextTick(() => {
+    contactsListCardRef.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  })
+}
+
 function formatDate(iso: string): string {
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -1737,6 +1838,7 @@ const contactDetailAddressFormatted = computed(() => {
     unit: c.address.unit,
     city: c.address.city,
     state: c.address.state,
+    zip: c.address.zip,
     county: normalizeContactCounty(c.address.county)
   })
 })
@@ -1808,28 +1910,56 @@ function closeContactDetail() {
   contactEmailActivityError.value = ''
 }
 
-watch([addContactOpen, viewContactOpen], ([addOpen, viewOpen]) => {
-  if (!import.meta.client) return
+watch(
+  [addContactOpen, viewContactOpen],
+  ([addOpen, viewOpen]) => {
+    notifyParentMarketingOverlay(Boolean(addOpen || viewOpen))
 
-  document.body.style.overflow = addOpen || viewOpen ? 'hidden' : ''
+    if (!import.meta.client) return
 
-  if (contactModalEscListener) {
-    window.removeEventListener('keydown', contactModalEscListener)
-    contactModalEscListener = null
-  }
+    document.body.style.overflow = addOpen || viewOpen ? 'hidden' : ''
 
-  if (addOpen || viewOpen) {
-    contactModalEscListener = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (addContactOpen.value && !addContactSubmitting.value && !contactFormLoading.value) {
-        closeContactFormModal()
-      } else if (viewContactOpen.value) {
-        closeContactDetail()
-      }
+    if (contactModalEscListener) {
+      window.removeEventListener('keydown', contactModalEscListener)
+      contactModalEscListener = null
     }
-    window.addEventListener('keydown', contactModalEscListener)
+
+    if (addOpen || viewOpen) {
+      contactModalEscListener = (e: KeyboardEvent) => {
+        if (e.key !== 'Escape') return
+        if (addContactOpen.value && !addContactSubmitting.value && !contactFormLoading.value) {
+          closeContactFormModal()
+        } else if (viewContactOpen.value) {
+          closeContactDetail()
+        }
+      }
+      window.addEventListener('keydown', contactModalEscListener)
+    }
+  },
+  { immediate: true }
+)
+
+function requestContactSubscriptionChange(row: TenantContactListRow) {
+  if (subscriptionSavingId.value || subscriptionConfirm.value) return
+  subscriptionActionError.value = ''
+  subscriptionConfirm.value = {
+    row,
+    // Current is_unsubscribe=true means they are unsubscribed → confirm will subscribe.
+    subscribed: row.is_unsubscribe === true
   }
-})
+}
+
+function cancelContactSubscriptionChange() {
+  if (subscriptionSavingId.value) return
+  subscriptionConfirm.value = null
+}
+
+async function confirmContactSubscriptionChange() {
+  const pending = subscriptionConfirm.value
+  if (!pending || subscriptionSavingId.value) return
+  await setContactSubscription(pending.row, pending.subscribed)
+  subscriptionConfirm.value = null
+}
 
 async function setContactSubscription(row: TenantContactListRow, subscribed: boolean) {
   if (subscriptionSavingId.value) return
@@ -1907,6 +2037,7 @@ function patchContactRowFromForm(
       unit: body.address?.unit ?? existing.address.unit,
       city: body.address?.city ?? existing.address.city,
       state: body.address?.state ?? existing.address.state,
+      zip: body.address?.zip ?? existing.address.zip,
       county: body.address?.county ?? existing.address.county
     },
     updatedAt: new Date().toISOString()
@@ -1919,7 +2050,15 @@ function normalizeContactsPayload(res: TenantContactsListPayload): TenantContact
     contactType: Array.isArray(row.contactType) ? row.contactType : [],
     contactTypeLabels: Array.isArray(row.contactTypeLabels) ? row.contactTypeLabels : [],
     primaryTypeLabel: row.primaryTypeLabel ?? '—',
-    is_unsubscribe: row.is_unsubscribe === true
+    is_unsubscribe: row.is_unsubscribe === true,
+    address: {
+      street: row.address?.street ?? '',
+      unit: row.address?.unit ?? '',
+      city: row.address?.city ?? '',
+      state: row.address?.state ?? '',
+      zip: row.address?.zip ?? '',
+      county: row.address?.county ?? ''
+    }
   }))
   return {
     contacts,
@@ -2017,6 +2156,8 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  notifyParentMarketingOverlay(false)
+  clearGoogleAutocompleteListener()
   if (contactModalEscListener) {
     window.removeEventListener('keydown', contactModalEscListener)
     contactModalEscListener = null

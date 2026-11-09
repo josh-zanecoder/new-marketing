@@ -1,12 +1,17 @@
 import { CloudTasksClient } from '@google-cloud/tasks'
 import type { CampaignQueueJobData } from './emailQueue'
-import { campaignBatchJobId, scheduledCampaignJobId } from './emailQueue'
+import { campaignBatchJobId } from './emailQueue'
 import {
   getCampaignCloudTasksConfig,
   resolveCampaignCloudTasksAuth
 } from '../config/campaignCloudTasks'
 import { shouldSkipCampaignBatchEnqueue } from '../utils/campaignSend/campaignSendEnqueueGuard'
 import { CAMPAIGN_SCHEDULE_TASK_PATH } from '../utils/campaignSend/constants'
+import {
+  campaignScheduleCloudTaskMatchesCampaign,
+  legacyCampaignScheduleCloudTaskId,
+  newCampaignScheduleCloudTaskId
+} from '../utils/campaignSend/campaignScheduleCloudTaskId'
 
 const G = globalThis as typeof globalThis & {
   __campaignCloudTasksClient?: CloudTasksClient | null
@@ -66,10 +71,12 @@ export function campaignBatchTaskId(
   return `cs-${bullId}`.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 500)
 }
 
+/** @deprecated Prefer {@link newCampaignScheduleCloudTaskId}; kept for legacy deletes. */
 export function campaignScheduleTaskId(dbName: string, campaignId: string): string {
-  const bullId = scheduledCampaignJobId(dbName, campaignId)
-  return `cs-${bullId}`.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 500)
+  return legacyCampaignScheduleCloudTaskId(dbName, campaignId)
 }
+
+export { campaignScheduleCloudTaskMatchesCampaign, newCampaignScheduleCloudTaskId }
 
 /** Match Cloud Task id to a campaign (optional sendRunId narrows to current run). */
 export function campaignBatchCloudTaskMatchesCampaign(
@@ -90,16 +97,6 @@ export function campaignBatchCloudTaskMatchesCampaign(
   return true
 }
 
-export function campaignScheduleCloudTaskMatchesCampaign(
-  taskId: string,
-  campaignId: string,
-  dbName: string
-): boolean {
-  if (!taskId.startsWith('cs-schedule')) return false
-  const dbSeg = dbName.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return taskId.includes(campaignId) && taskId.includes(dbSeg)
-}
-
 /** True when the Cloud Tasks queue still has batch tasks for this campaign. */
 export async function hasCampaignBatchCloudTasks(
   campaignId: string,
@@ -116,26 +113,25 @@ export async function hasScheduledCampaignCloudTask(
 ): Promise<boolean> {
   const conn = getClient()
   if (!conn) return false
-  const taskId = campaignScheduleTaskId(dbName, campaignId)
-  const name = `${conn.queuePath}/tasks/${taskId}`
+  // Prefer list match — schedule tasks use unique suffixes after cancel/reschedule fix.
+  try {
+    const tasksPrefix = `${conn.queuePath}/tasks/`
+    const iterable = conn.client.listTasksAsync({ parent: conn.queuePath })
+    for await (const task of iterable) {
+      const tName = task.name || ''
+      if (!tName.startsWith(tasksPrefix)) continue
+      const id = tName.slice(tasksPrefix.length)
+      if (campaignScheduleCloudTaskMatchesCampaign(id, campaignId, dbName)) return true
+    }
+  } catch {
+    /* fall through to legacy deterministic id */
+  }
+  const legacyId = legacyCampaignScheduleCloudTaskId(dbName, campaignId)
+  const name = `${conn.queuePath}/tasks/${legacyId}`
   try {
     await conn.client.getTask({ name })
     return true
-  } catch (e: unknown) {
-    const code = (e as { code?: number })?.code
-    if (code === 5) return false
-    try {
-      const tasksPrefix = `${conn.queuePath}/tasks/`
-      const iterable = conn.client.listTasksAsync({ parent: conn.queuePath })
-      for await (const task of iterable) {
-        const tName = task.name || ''
-        if (!tName.startsWith(tasksPrefix)) continue
-        const id = tName.slice(tasksPrefix.length)
-        if (campaignScheduleCloudTaskMatchesCampaign(id, campaignId, dbName)) return true
-      }
-    } catch {
-      /* ignore */
-    }
+  } catch {
     return false
   }
 }
@@ -229,11 +225,23 @@ export async function enqueueCampaignBatchCloudTask(
       principal: resolved.principal ?? '(Cloud Run / ADC service account)',
       hint:
         msg.includes('PERMISSION_DENIED') || msg.includes('cloudtasks.tasks.create')
-          ? 'Grant roles/cloudtasks.enqueuer on the queue (or project) to the principal above. Do not use FIREBASE_CLIENT_EMAIL for Cloud Tasks.'
+          ? 'Grant roles/cloudtasks.admin (or create+delete+list) on the queue/project to the Cloud Run SA. Do not use FIREBASE_CLIENT_EMAIL for Cloud Tasks.'
           : undefined
     })
     throw e
   }
+}
+
+function isAlreadyExistsError(err: unknown): boolean {
+  const code = (err as { code?: number })?.code
+  const msg = err instanceof Error ? err.message : String(err)
+  return code === 6 || msg.includes('ALREADY_EXISTS')
+}
+
+function isNotFoundError(err: unknown): boolean {
+  const code = (err as { code?: number })?.code
+  const msg = err instanceof Error ? err.message : String(err)
+  return code === 5 || msg.includes('NOT_FOUND')
 }
 
 /** Delayed Cloud Task that starts a Scheduled campaign (replaces BullMQ delay jobs). */
@@ -250,8 +258,6 @@ export async function enqueueScheduledCampaignCloudTask(params: {
 
   const { campaignId, dbName } = params
   const delayMs = Math.max(0, Number(params.delayMs || 0))
-  const taskId = campaignScheduleTaskId(dbName, campaignId)
-  const taskName = `${conn.queuePath}/tasks/${taskId}`
   const body = {
     kind: 'startScheduled' as const,
     campaignId,
@@ -261,7 +267,8 @@ export async function enqueueScheduledCampaignCloudTask(params: {
   const scheduleTime =
     delayMs > 0 ? { seconds: Math.floor((Date.now() + delayMs) / 1000) } : undefined
 
-  try {
+  const createWithId = async (taskId: string) => {
+    const taskName = `${conn.queuePath}/tasks/${taskId}`
     await conn.client.createTask({
       parent: conn.queuePath,
       task: {
@@ -278,6 +285,13 @@ export async function enqueueScheduledCampaignCloudTask(params: {
         }
       }
     })
+  }
+
+  // Unique id per enqueue — Cloud Tasks tombstones deleted names for hours, so a
+  // fixed cs-schedule-{db}-{campaignId} cannot be reused after cancel.
+  let taskId = newCampaignScheduleCloudTaskId(dbName, campaignId)
+  try {
+    await createWithId(taskId)
     logCt('enqueue.schedule', {
       campaignId,
       dbName,
@@ -287,14 +301,38 @@ export async function enqueueScheduledCampaignCloudTask(params: {
     })
     return { taskId }
   } catch (e: unknown) {
-    const code = (e as { code?: number })?.code
     const msg = e instanceof Error ? e.message : String(e)
-    if (code === 6 || msg.includes('ALREADY_EXISTS')) {
-      logCt('enqueue.schedule.duplicate', { campaignId, dbName, taskId })
-      return { taskId, duplicate: true }
+    if (!isAlreadyExistsError(e)) {
+      logCt('enqueue.schedule.failed', { campaignId, dbName, taskId, error: msg })
+      throw e
     }
-    logCt('enqueue.schedule.failed', { campaignId, dbName, taskId, error: msg })
-    throw e
+
+    // Extremely unlikely with UUID suffix; mint another id instead of fighting tombstones.
+    logCt('enqueue.schedule.duplicate', { campaignId, dbName, taskId })
+    taskId = newCampaignScheduleCloudTaskId(dbName, campaignId)
+    try {
+      await createWithId(taskId)
+      logCt('enqueue.schedule.retried', {
+        campaignId,
+        dbName,
+        taskId,
+        delayMs,
+        queue: cfg.queueName
+      })
+      return { taskId }
+    } catch (retryErr: unknown) {
+      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+      logCt('enqueue.schedule.retry.failed', {
+        campaignId,
+        dbName,
+        taskId,
+        error: retryMsg
+      })
+      throw new Error(
+        `Cannot schedule campaign: failed to create Cloud Tasks job (${retryMsg})`,
+        { cause: retryErr }
+      )
+    }
   }
 }
 
@@ -306,18 +344,20 @@ export async function removeScheduledCampaignCloudTasks(
   if (!conn) return 0
 
   let removed = 0
-  const primaryId = campaignScheduleTaskId(dbName, campaignId)
-  const primaryName = `${conn.queuePath}/tasks/${primaryId}`
+  const legacyId = legacyCampaignScheduleCloudTaskId(dbName, campaignId)
+  const legacyName = `${conn.queuePath}/tasks/${legacyId}`
   try {
-    await conn.client.deleteTask({ name: primaryName })
+    await conn.client.deleteTask({ name: legacyName })
     removed += 1
   } catch (e: unknown) {
-    const code = (e as { code?: number })?.code
-    if (code !== 5) {
-      logCt('delete.schedule.skip', {
-        taskName: primaryName,
-        error: e instanceof Error ? e.message : String(e)
-      })
+    if (!isNotFoundError(e)) {
+      const error = e instanceof Error ? e.message : String(e)
+      logCt('delete.schedule.failed', { taskName: legacyName, error })
+      throw new Error(
+        `Cannot cancel scheduled send: failed to delete Cloud Tasks job (${error}). ` +
+          'Grant cloudtasks.tasks.delete to the Cloud Run service account.',
+        { cause: e }
+      )
     }
   }
 
@@ -329,7 +369,7 @@ export async function removeScheduledCampaignCloudTasks(
       if (!name.startsWith(tasksPrefix)) continue
       const taskId = name.slice(tasksPrefix.length)
       if (!campaignScheduleCloudTaskMatchesCampaign(taskId, campaignId, dbName)) continue
-      if (taskId === primaryId) continue
+      if (taskId === legacyId) continue
       try {
         await conn.client.deleteTask({ name: task.name })
         removed += 1
@@ -337,8 +377,13 @@ export async function removeScheduledCampaignCloudTasks(
         /* ignore */
       }
     }
-  } catch {
-    /* ignore list failures */
+  } catch (e: unknown) {
+    // List cleans unique-suffix + leftover ids; legacy delete already succeeded/not-found.
+    logCt('delete.schedule.list.skip', {
+      campaignId,
+      dbName,
+      error: e instanceof Error ? e.message : String(e)
+    })
   }
 
   if (removed > 0) {

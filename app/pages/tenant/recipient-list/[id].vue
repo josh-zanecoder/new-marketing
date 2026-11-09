@@ -1047,6 +1047,7 @@ const viewMemberAddress = computed(() => {
     unit: c.address.unit,
     city: c.address.city,
     state: c.address.state,
+    zip: c.address.zip,
     county: normalizeContactCounty(c.address.county)
   })
 })
@@ -1131,6 +1132,7 @@ function formatAddress(addr: Record<string, unknown>): string {
     unit: typeof addr.unit === 'string' ? addr.unit : undefined,
     city: typeof addr.city === 'string' ? addr.city : undefined,
     state: typeof addr.state === 'string' ? addr.state : undefined,
+    zip: typeof addr.zip === 'string' ? addr.zip : undefined,
     county: typeof addr.county === 'string' ? addr.county : undefined
   })
   return formatted || '—'
@@ -1215,6 +1217,7 @@ function onMemberSaved(updated: {
     unit: string
     city: string
     state: string
+    zip: string
     county: string
   }
 }) {

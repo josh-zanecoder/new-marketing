@@ -42,7 +42,7 @@ export default defineNuxtConfig({
       firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
       firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
       firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
-      /** Google Places Autocomplete (New); enable Places API (New) + Maps JavaScript API on the key. */
+      /** Classic Places Autocomplete. Maps JavaScript API + Places library. */
       googleMapsApiKey:
         process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || ''
     },

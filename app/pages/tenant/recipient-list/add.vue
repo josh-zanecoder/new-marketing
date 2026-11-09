@@ -702,7 +702,6 @@ const {
   canGoBorrowerNext: loCanGoBorrowerNext,
   goBorrowerPrev: loGoBorrowerPrev,
   goBorrowerNext: loGoBorrowerNext,
-  borrowerTotal: loBorrowerTotal,
   borrowersLoading: loBorrowersLoading,
   borrowersLoadingMore: loBorrowersLoadingMore,
   borrowersLoadProgress: loBorrowersLoadProgress,

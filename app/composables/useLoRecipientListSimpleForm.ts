@@ -157,7 +157,7 @@ export function useLoRecipientListSimpleForm(options: {
 
   function resetBorrowerChecks(rows: LoBorrowerPreviewRow[], defaultUncheckedIds?: Set<string>) {
     for (const key of Object.keys(borrowerChecked)) {
-      delete borrowerChecked[key]
+      borrowerChecked[key] = false
     }
     for (const row of rows) {
       borrowerChecked[row.id] = defaultUncheckedIds ? !defaultUncheckedIds.has(row.id) : true

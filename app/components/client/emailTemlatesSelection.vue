@@ -206,7 +206,7 @@ onUnmounted(() => {
             :class="
               uploadEditorOpen
                 ? 'h-[100dvh] w-full max-h-[100dvh]'
-                : 'max-h-[min(92dvh,900px)] w-full max-w-7xl rounded-t-2xl border border-slate-200/90 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/[0.04] sm:rounded-2xl'
+                : 'h-[min(92dvh,900px)] max-h-[min(92dvh,900px)] w-full max-w-7xl rounded-t-2xl border border-slate-200/90 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/[0.04] sm:h-auto sm:max-h-[min(92dvh,900px)] sm:rounded-2xl'
             "
             @click.stop
           >
@@ -367,7 +367,7 @@ onUnmounted(() => {
                 </button>
               </header>
 
-              <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pb-[max(2rem,env(safe-area-inset-bottom,0px))]">
                 <!-- Get started -->
                 <section class="border-b border-slate-100 px-4 py-5 sm:px-6 sm:py-6">
                   <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -461,7 +461,7 @@ onUnmounted(() => {
                 </section>
 
                 <!-- Saved templates -->
-                <section class="px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 sm:pb-6">
+                <section class="px-4 py-5 sm:px-6 sm:py-6">
                   <div class="flex items-baseline justify-between gap-3">
                     <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Saved templates
@@ -523,6 +523,11 @@ onUnmounted(() => {
                       </div>
                     </article>
                   </div>
+                  <!-- Extra mobile scroll room so the last Use template control clears the home indicator. -->
+                  <div
+                    class="h-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:hidden"
+                    aria-hidden="true"
+                  />
                 </section>
               </div>
             </template>

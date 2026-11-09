@@ -60,6 +60,10 @@ function onRefreshCampaignStats() {
   void campaignStatsPanelRef.value?.refresh?.()
 }
 
+function onDeepRefreshCampaignStats() {
+  void campaignStatsPanelRef.value?.deepRefresh?.()
+}
+
 function onRefreshCampaignLogs() {
   void campaignTrackingPanelRef.value?.refresh?.()
 }
@@ -994,12 +998,25 @@ function setCampaignViewTab(tab: CampaignViewTab) {
         >
           <div class="flex items-center justify-between gap-3">
             <h2 class="text-sm font-semibold text-zinc-900">Statistics</h2>
-            <TenantRefreshIconButton
-              label="Refresh campaign statistics"
-              :pending="campaignStatsPending"
-              @click="onRefreshCampaignStats"
-            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60"
+                :disabled="campaignStatsPending"
+                title="Gap-fill opens and delivery for large campaigns (slower)"
+                @click="onDeepRefreshCampaignStats"
+              >
+                Deep refresh
+              </button>
+              <TenantRefreshIconButton
+                label="Refresh campaign statistics"
+                :pending="campaignStatsPending"
+                @click="onRefreshCampaignStats"
+              />
+            </div>
           </div>
+
+          <TenantTrackingWebhookHealthBanner class="mb-3" :campaign-id="id" />
 
           <TenantBrevoCampaignSmtpStatsPanel
             ref="campaignStatsPanelRef"

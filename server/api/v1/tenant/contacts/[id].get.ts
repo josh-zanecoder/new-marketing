@@ -92,6 +92,7 @@ export default defineEventHandler(async (event) => {
         unit: doc.address?.unit ?? '',
         city: doc.address?.city ?? '',
         state: doc.address?.state ?? '',
+        zip: doc.address?.zip ?? '',
         county: doc.address?.county ?? ''
       },
       metadata,

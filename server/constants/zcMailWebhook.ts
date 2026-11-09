@@ -34,6 +34,18 @@ export const ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX = 400
  */
 export const ZC_MAIL_ARCHIVE_DETAIL_MAX = 2500
 
+/**
+ * Campaign “Deep refresh” — cover ~15k-recipient sends when normal Refresh
+ * hit DETAIL_MAX / message-id q caps and opens/delivery look under-counted.
+ */
+export const ZC_MAIL_ARCHIVE_DETAIL_MAX_DEEP = 15_000
+
+/** Deep refresh: allow larger per-id `q` gap-fill before falling back to tenant scan. */
+export const ZC_MAIL_ARCHIVE_MESSAGE_ID_Q_MAX_DEEP = 5_000
+
+/** Deep refresh: more tenant-list pages when campaign/tag filter is incomplete. */
+export const ZC_MAIL_ARCHIVE_STATS_MAX_PAGES_DEEP = 100
+
 /** Parallel detail GETs per Refresh. Keep this low to protect zc-mail and MongoDB. */
 export const ZC_MAIL_ARCHIVE_DETAIL_CONCURRENCY = 5
 

@@ -306,4 +306,41 @@ describe('syncTenantZcMailTrackingEvents performance', () => {
     expect(result.debug?.matched).toBeGreaterThan(0)
     expect(result.fetched).toBeGreaterThan(0)
   })
+
+  it('deepBackfill raises detailMax in debug for campaign sync', async () => {
+    const list = vi.fn(async () => ({
+      items: [
+        archiveItem({ id: 'arc-1', messageId: 'msg-1', sesMessageId: 'msg-1' }),
+        archiveItem({ id: 'arc-2', messageId: 'msg-2', sesMessageId: 'msg-2' }),
+        archiveItem({ id: 'arc-3', messageId: 'msg-3', sesMessageId: 'msg-3' })
+      ]
+    }))
+    const getById = vi.fn(async (item: { archiveId: string }) => ({
+      ...archiveItem({ id: item.archiveId }),
+      events: [{ event: 'Open', timestamp: '2026-03-15T12:00:00.000Z' }]
+    }))
+
+    const normal = await syncTenantZcMailTrackingEvents({
+      dbName: 'tenant_db',
+      campaignId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      fromYmd: '2026-09-01',
+      toYmd: '2026-09-30',
+      config: { ...zcMailConfig },
+      archiveClient: { list, getById }
+    })
+    const deep = await syncTenantZcMailTrackingEvents({
+      dbName: 'tenant_db',
+      campaignId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      fromYmd: '2026-09-01',
+      toYmd: '2026-09-30',
+      deepBackfill: true,
+      config: { ...zcMailConfig },
+      archiveClient: { list, getById }
+    })
+
+    expect(normal.debug?.deepBackfill).toBe(false)
+    expect(normal.debug?.detailMax).toBe(2500)
+    expect(deep.debug?.deepBackfill).toBe(true)
+    expect(deep.debug?.detailMax).toBe(15_000)
+  })
 })

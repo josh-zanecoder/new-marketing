@@ -9,6 +9,7 @@ const addressSchema = new mongoose.Schema(
     unit: { type: String, default: '' },
     city: { type: String, default: '' },
     state: { type: String, default: '' },
+    zip: { type: String, default: '' },
     county: { type: String, default: '' }
   },
   { _id: false }
@@ -41,7 +42,7 @@ export const contactSchema = new mongoose.Schema(
     phone: { type: String, default: '', trim: true },
     address: { type: addressSchema, default: () => ({}) },
     company: { type: String, default: '', trim: true },
-    channel: { type: String, default: 'email', trim: true },
+    channel: { type: String, default: '', trim: true },
     status: { type: String, default: '', trim: true },
     stage: { type: String, default: '', trim: true },
     contactProfile: { type: contactProfileSchema, default: undefined },

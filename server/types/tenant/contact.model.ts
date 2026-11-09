@@ -9,6 +9,7 @@ export interface ContactAddress {
   unit?: string
   city?: string
   state?: string
+  zip?: string
   county?: string
 }
 

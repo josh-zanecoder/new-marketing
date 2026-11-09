@@ -17,6 +17,7 @@ export interface ContactAddressInput {
   unit?: string
   city?: string
   state?: string
+  zip?: string
   county?: string
 }
 
@@ -28,6 +29,7 @@ export function parseContactAddressBody(address: unknown): ContactAddressInput |
     unit: typeof a.unit === 'string' ? a.unit : '',
     city: typeof a.city === 'string' ? a.city : '',
     state: typeof a.state === 'string' ? a.state : '',
+    zip: typeof a.zip === 'string' ? a.zip : '',
     county: typeof a.county === 'string' ? a.county : ''
   }
 }
@@ -72,7 +74,7 @@ export async function createTenantContact(
   }
   const phone = String(input.phone ?? '').trim()
   const company = String(input.company ?? '').trim()
-  const channel = String(input.channel ?? 'email').trim() || 'email'
+  const channel = String(input.channel ?? '').trim()
   const status = String(input.status ?? '').trim()
   const stage = String(input.stage ?? '').trim()
   const addressInput = input.address ?? {}

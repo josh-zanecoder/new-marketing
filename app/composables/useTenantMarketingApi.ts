@@ -272,6 +272,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
       unit?: string
       city?: string
       state?: string
+      zip?: string
       county?: string
     }
   }) {
@@ -298,6 +299,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
         unit?: string
         city?: string
         state?: string
+        zip?: string
         county?: string
       }
     }

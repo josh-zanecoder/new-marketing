@@ -79,12 +79,20 @@ export default defineEventHandler(async (event) => {
     })
     await enqueueScheduledCampaignStart(campaignId, dbName, delayMs)
   } catch (e: unknown) {
-    await removeScheduledCampaignJob(dbName, campaignId)
-    await (Campaign as CampaignModel).updateOne(
-      mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth),
-      { $set: { status: 'Draft' }, $unset: { scheduledAt: 1 } }
-    )
     console.error('[ScheduleCampaign] Failed to enqueue:', e)
+    try {
+      await removeScheduledCampaignJob(dbName, campaignId)
+    } catch (cleanupErr: unknown) {
+      console.error('[ScheduleCampaign] Cleanup after enqueue failure failed:', cleanupErr)
+    }
+    try {
+      await (Campaign as CampaignModel).updateOne(
+        mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth),
+        { $set: { status: 'Draft' }, $unset: { scheduledAt: 1 } }
+      )
+    } catch (revertErr: unknown) {
+      console.error('[ScheduleCampaign] Revert to Draft after enqueue failure failed:', revertErr)
+    }
     throw createError({ statusCode: 503, message: 'Failed to schedule send. Try again.' })
   }
 

@@ -700,7 +700,6 @@ const {
   canGoBorrowerNext: loCanGoBorrowerNext,
   goBorrowerPrev: loGoBorrowerPrev,
   goBorrowerNext: loGoBorrowerNext,
-  borrowerTotal: loBorrowerTotal,
   borrowersLoading: loBorrowersLoading,
   borrowersLoadingMore: loBorrowersLoadingMore,
   borrowersLoadProgress: loBorrowersLoadProgress,
@@ -768,7 +767,7 @@ const pagePending = computed(() => {
   if (!flagLoaded.value) return true
   if (allowTenantLoRecipientLists.value) {
     if (loLoadPending.value) return true
-    if (Boolean(loForm.associatedLoanOfficerEmail.trim())) return false
+    if (loForm.associatedLoanOfficerEmail.trim()) return false
   }
   return loadPending.value
 })
