@@ -450,14 +450,16 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
   }
 
   async function scheduleCampaignSend(campaignId: string, scheduledAt: string) {
-    return $fetch<{ ok: boolean; campaignId: string; scheduledAt: string }>(
-      '/api/v1/tenant/send-campaign/schedule',
-      tenantFetchInit({
-        method: 'POST',
-        body: { campaignId, scheduledAt },
-        timeout: 30000
-      })
-    )
+    return $fetch<{
+      ok: boolean
+      campaignId: string
+      scheduledAt: string
+      rescheduled?: boolean
+    }>('/api/v1/tenant/send-campaign/schedule', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId, scheduledAt },
+      timeout: 30000
+    }))
   }
 
   async function unscheduleCampaignSend(campaignId: string) {
