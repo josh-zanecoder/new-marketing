@@ -17,6 +17,8 @@ describe('wiring: upload → template → send test (hosted images)', () => {
     )
     expect(picker).toContain('uploadTenantHostedImage')
     expect(picker).toContain("emit('select'")
+    expect(picker).toContain('isHostedImagePickerUploadDisabled')
+    expect(picker).toContain(':disabled="uploadDisabled"')
   })
 
   it('template editor inserts picker URL into HTML and saves htmlTemplate', () => {

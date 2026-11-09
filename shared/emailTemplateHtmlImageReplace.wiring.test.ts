@@ -27,6 +27,9 @@ describe('email template HTML image replace (Images flag path)', () => {
     expect(picker).toContain('uploadTenantHostedImage')
     expect(picker).toContain('Upload from device')
     expect(picker).toContain('compressCustomMarketingImageFile')
+    expect(picker).toContain('isHostedImagePickerUploadDisabled')
+    expect(picker).toContain(':disabled="uploadDisabled"')
+    expect(picker).not.toContain('pending.value || uploadPending.value')
   })
 
   it('upload API remains Images-flag gated', () => {
