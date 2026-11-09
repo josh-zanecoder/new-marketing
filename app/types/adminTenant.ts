@@ -25,6 +25,11 @@ export interface AdminTenantRow {
    * Default false = existing recipient-list behavior only.
    */
   allowTenantLoRecipientLists: boolean
+  /**
+   * When true, retail/tenant marketing may use the hosted Images library.
+   * Default false hides Images and template image insert/replace.
+   */
+  allowTenantImages: boolean
   /** Default campaign From name; null uses global fallback. */
   defaultCampaignSenderName: string | null
   /** True when a custom Brevo API key is stored for this tenant. */

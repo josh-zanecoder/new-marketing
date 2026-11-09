@@ -12,6 +12,7 @@ import { resolveCampaignSenderDefaultsFromDoc } from '@server/utils/campaign/res
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
 import { marketingAudienceAccessPayload } from '@server/utils/auth/marketingAudienceFromAuth'
@@ -99,6 +100,8 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantEditSender: parseAllowTenantEditSender(registryDoc?.allowTenantEditSender),
     /** When false/omitted, recipient lists keep classic UI/behavior. */
     allowTenantLoRecipientLists,
+    /** When false/omitted, Images library and template image insert stay hidden. */
+    allowTenantImages: parseAllowTenantImages(registryDoc?.allowTenantImages),
     /**
      * When LO-list flag ON: LO/LOA → self_only; OM/Marketing → tenant_wide.
      * When OFF: classic handoff (tenant_wide or owner_scope).

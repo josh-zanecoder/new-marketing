@@ -5,7 +5,7 @@ import { uploadCustomMarketingImageDataUrlToGcs } from '@server/services/customM
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
 import { parseCustomMarketingImageDataUrl } from '~~/shared/customMarketingHostedImages'
-import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 
 /** GCS subfolder under custom-marketing/{tenant}/ for HTML email template images. */
 export const EMAIL_TEMPLATE_GCS_IMAGE_FOLDER = 'email-templates'
@@ -13,7 +13,7 @@ export const EMAIL_TEMPLATE_GCS_IMAGE_FOLDER = 'email-templates'
 /**
  * Host an image for HTML email templates (public HTTPS URL for img src).
  * Reuses Custom Marketing GCS upload; stores under `…/email-templates/…`.
- * Gated by superadmin `allowTenantLoRecipientLists`.
+ * Gated by superadmin `allowTenantImages`.
  */
 export default defineEventHandler(async (event) => {
   await getTenantConnectionFromEvent(event)
@@ -27,9 +27,9 @@ export default defineEventHandler(async (event) => {
   const registry = await getRegistryConnection()
   const regDoc = await registry.collection('clients').findOne(
     { dbName },
-    { projection: { allowTenantLoRecipientLists: 1 } }
+    { projection: { allowTenantImages: 1 } }
   )
-  if (!parseAllowTenantLoRecipientLists(regDoc?.allowTenantLoRecipientLists)) {
+  if (!parseAllowTenantImages(regDoc?.allowTenantImages)) {
     throw createError({
       statusCode: 403,
       message: 'Image upload is disabled for this tenant'

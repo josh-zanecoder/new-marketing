@@ -4,16 +4,16 @@ import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHando
 
 const { data: me, pending, refresh } = useMarketingMe()
 const {
-  allowTenantLoRecipientLists,
+  allowTenantImages,
   loadDefaultCampaignSender,
-  loaded: loListsFlagLoaded
+  loaded: imagesFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 
 const visibleSidebarNavItems = computed(() =>
   marketingSidebarNavItems.filter((item) => {
-    if (!item.requiresLoRecipientLists) return true
-    return loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+    if (!item.requiresTenantImages) return true
+    return imagesFlagLoaded.value && allowTenantImages.value === true
   })
 )
 

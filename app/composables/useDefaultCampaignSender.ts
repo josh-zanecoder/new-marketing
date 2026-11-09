@@ -27,6 +27,7 @@ export type TenantMeCampaignSender = {
   defaultCampaignSenderEmail?: string
   allowTenantEditSender?: boolean
   allowTenantLoRecipientLists?: boolean
+  allowTenantImages?: boolean
   audienceAccess?: MarketingAudienceAccess
   canSelectAnyLoanOfficer?: boolean
   sessionUser?: TenantMeSessionUser
@@ -51,6 +52,8 @@ export function useDefaultCampaignSender() {
   const allowTenantEditSender = ref(false)
   /** Superadmin gate; false preserves classic recipient-list UI. */
   const allowTenantLoRecipientLists = ref(false)
+  /** Superadmin gate; false hides the Images library and template image tools. */
+  const allowTenantImages = ref(false)
   const sessionUser = ref<TenantMeSessionUser | null>(null)
   const audienceAccess = ref<MarketingAudienceAccess>('owner_scope')
   const loaded = ref(false)
@@ -104,6 +107,7 @@ export function useDefaultCampaignSender() {
       const allow = me?.allowTenantEditSender === true
       allowTenantEditSender.value = allow
       allowTenantLoRecipientLists.value = me?.allowTenantLoRecipientLists === true
+      allowTenantImages.value = me?.allowTenantImages === true
       sessionUser.value =
         me?.sessionUser && typeof me.sessionUser === 'object' ? me.sessionUser : null
 
@@ -133,6 +137,7 @@ export function useDefaultCampaignSender() {
     } catch {
       allowTenantEditSender.value = false
       allowTenantLoRecipientLists.value = false
+      allowTenantImages.value = false
       sessionUser.value = null
       audienceAccess.value = 'owner_scope'
       defaultSenderName.value = DEFAULT_CAMPAIGN_SENDER_NAME
@@ -147,6 +152,7 @@ export function useDefaultCampaignSender() {
     defaultSenderEmail,
     allowTenantEditSender,
     allowTenantLoRecipientLists,
+    allowTenantImages,
     sessionUser,
     audienceAccess,
     canSelectAnyLoanOfficer,

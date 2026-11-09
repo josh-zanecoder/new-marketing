@@ -16,14 +16,14 @@ const route = useRoute()
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const {
-  allowTenantLoRecipientLists,
+  allowTenantImages,
   loadDefaultCampaignSender,
-  loaded: loListsFlagLoaded
+  loaded: imagesFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
-/** Superadmin LO recipient-list toggle gates template image insert/replace from Images library. */
+/** Superadmin Images toggle gates template image insert/replace from the Images library. */
 const canUploadTemplateImage = computed(
-  () => loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+  () => imagesFlagLoaded.value && allowTenantImages.value === true
 )
 const {
 

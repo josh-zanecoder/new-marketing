@@ -1,7 +1,7 @@
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { uploadCustomMarketingImageDataUrlToGcs } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
-import { requireTenantLoRecipientLists } from '@server/utils/requireTenantLoRecipientLists'
+import { requireTenantImages } from '@server/utils/requireTenantImages'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
 import {
   CUSTOM_MARKETING_GCS_LIBRARY_FOLDER,
@@ -11,11 +11,11 @@ import {
 /**
  * Upload an image into the tenant media library (`…/library/…`).
  * Returns a public HTTPS URL suitable for email `<img src>`.
- * Gated by superadmin `allowTenantLoRecipientLists`.
+ * Gated by superadmin `allowTenantImages`.
  */
 export default defineEventHandler(async (event) => {
   await getTenantConnectionFromEvent(event)
-  const { auth } = await requireTenantLoRecipientLists(
+  const { auth } = await requireTenantImages(
     event,
     'Image library is disabled for this tenant'
   )

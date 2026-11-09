@@ -77,6 +77,25 @@ describe('toTenantAdminRow', () => {
     expect(row?.allowTenantLoRecipientLists).toBe(true)
   })
 
+  it('defaults allowTenantImages to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantImages).toBe(false)
+  })
+
+  it('reads allowTenantImages true from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantImages: true
+    })
+    expect(row?.allowTenantImages).toBe(true)
+  })
+
   it('reads contact_owner From address mode from the registry doc', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

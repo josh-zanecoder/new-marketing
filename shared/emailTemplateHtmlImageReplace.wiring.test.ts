@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(__dirname, '..')
 
-describe('email template HTML image replace (LO flag path)', () => {
+describe('email template HTML image replace (Images flag path)', () => {
   it('add/edit page inserts/replaces from Images library behind canUploadTemplateImage', () => {
     const page = readFileSync(resolve(root, 'app/pages/tenant/email-templates/add.vue'), 'utf8')
     expect(page).toContain('canUploadTemplateImage')
-    expect(page).toContain('allowTenantLoRecipientLists')
+    expect(page).toContain('allowTenantImages')
     expect(page).toContain('showTemplateImageReplace')
     expect(page).toContain('listEmailTemplateHtmlImages')
     expect(page).toContain('replaceEmailTemplateHtmlImageSrc')
@@ -29,11 +29,11 @@ describe('email template HTML image replace (LO flag path)', () => {
     expect(picker).toContain('compressCustomMarketingImageFile')
   })
 
-  it('upload API remains LO-flag gated', () => {
+  it('upload API remains Images-flag gated', () => {
     const api = readFileSync(
       resolve(root, 'server/api/v1/tenant/email-templates/images.post.ts'),
       'utf8'
     )
-    expect(api).toContain('allowTenantLoRecipientLists')
+    expect(api).toContain('allowTenantImages')
   })
 })
