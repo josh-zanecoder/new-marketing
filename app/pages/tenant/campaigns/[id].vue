@@ -7,6 +7,11 @@ import type TenantBrevoCampaignSmtpStatsPanel from '~/components/tenant/BrevoCam
 import type TenantBrevoTrackingEventsPanel from '~/components/tenant/BrevoTrackingEventsPanel.vue'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 import { campaignSenderDisplayName } from '~~/shared/campaignSenderDisplayName'
+import {
+  CAMPAIGN_SCHEDULE_ERROR_INVALID,
+  validateCampaignScheduleWhen
+} from '~~/shared/campaignScheduleTime'
+import { defaultScheduleDatetimeLocal, toDatetimeLocalValue } from '~~/shared/datetimeLocal'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
@@ -19,6 +24,7 @@ const {
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
+  canRescheduleScheduled,
   canStopSend,
   canResumeSend,
   canRestartSend,
@@ -388,42 +394,76 @@ onBeforeUnmount(() => {
   }
 })
 
-function toDatetimeLocalValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+type ScheduleModalMode = 'schedule' | 'reschedule'
 
 const scheduleModalOpen = ref(false)
+const scheduleModalMode = ref<ScheduleModalMode>('schedule')
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
 
 useMarketingScrollLock(scheduleModalOpen)
 
+const scheduleModalTitle = computed(() =>
+  scheduleModalMode.value === 'reschedule' ? 'Reschedule send' : 'Schedule send'
+)
+const scheduleModalDescription = computed(() =>
+  scheduleModalMode.value === 'reschedule'
+    ? 'Choose a new date and time for this campaign (your local time).'
+    : 'Choose when this campaign should start sending (your local time).'
+)
+const scheduleModalConfirmLabel = computed(() =>
+  scheduleBusy.value
+    ? 'Saving…'
+    : scheduleModalMode.value === 'reschedule'
+      ? 'Save schedule'
+      : 'Schedule'
+)
+
 function openScheduleModal() {
+  scheduleModalMode.value = 'schedule'
   scheduleError.value = ''
-  const d = new Date(Date.now() + 65 * 60 * 1000)
-  scheduleLocal.value = toDatetimeLocalValue(d)
+  scheduleLocal.value = defaultScheduleDatetimeLocal()
+  scheduleModalOpen.value = true
+}
+
+function openRescheduleModal() {
+  const c = campaignForSend.value
+  if (!c || !canRescheduleScheduled(c)) return
+  scheduleModalMode.value = 'reschedule'
+  scheduleError.value = ''
+  const existing = c.scheduledAt ? new Date(c.scheduledAt) : null
+  scheduleLocal.value =
+    existing && !Number.isNaN(existing.getTime())
+      ? toDatetimeLocalValue(existing)
+      : defaultScheduleDatetimeLocal()
   scheduleModalOpen.value = true
 }
 
 function closeScheduleModal() {
+  if (scheduleBusy.value) return
   scheduleModalOpen.value = false
   scheduleError.value = ''
 }
 
 async function confirmSchedule() {
   const c = campaignForSend.value
-  if (!c || !canScheduleDraft(c)) return
+  if (!c) return
+  const isReschedule = scheduleModalMode.value === 'reschedule'
+  if (isReschedule ? !canRescheduleScheduled(c) : !canScheduleDraft(c)) return
   scheduleError.value = ''
   const parsed = new Date(scheduleLocal.value)
-  if (Number.isNaN(parsed.getTime())) {
-    scheduleError.value = 'Pick a valid date and time.'
+  const validated = validateCampaignScheduleWhen(parsed)
+  if (!validated.ok) {
+    scheduleError.value =
+      validated.message === CAMPAIGN_SCHEDULE_ERROR_INVALID
+        ? CAMPAIGN_SCHEDULE_ERROR_INVALID
+        : validated.message
     return
   }
   scheduleBusy.value = true
   try {
-    const scheduledIso = parsed.toISOString()
+    const scheduledIso = validated.when.toISOString()
     const res = await marketingApi.scheduleCampaignSend(c.id, scheduledIso)
     scheduleModalOpen.value = false
     const now = new Date().toISOString()
@@ -448,13 +488,14 @@ async function confirmSchedule() {
     await refresh()
     await campaignStore.fetchCampaigns({ force: true })
   } catch (e: unknown) {
+    const fallback = isReschedule ? 'Could not reschedule send.' : 'Could not schedule send.'
     const msg =
       e && typeof e === 'object' && 'data' in e
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
-          : 'Could not schedule send.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+          : fallback
+    scheduleError.value = typeof msg === 'string' ? msg : fallback
     scheduleModalOpen.value = true
   } finally {
     scheduleBusy.value = false
@@ -712,6 +753,19 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               @click="openRestartConfirm"
             >
               Send again
+            </button>
+            <button
+              v-if="campaignForSend && canRescheduleScheduled(campaignForSend)"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 hover:text-primary-800 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
+              :disabled="!!sendingCampaignId || scheduleBusy"
+              title="Change the scheduled send date and time"
+              @click="openRescheduleModal"
+            >
+              <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Reschedule
             </button>
             <button
               v-if="campaignForSend && canSendScheduled(campaignForSend)"
@@ -1106,10 +1160,10 @@ function setCampaignViewTab(tab: CampaignViewTab) {
           class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6"
         >
           <h2 id="schedule-send-title" class="text-lg font-semibold text-slate-900">
-            Schedule send
+            {{ scheduleModalTitle }}
           </h2>
           <p class="mt-1 text-sm text-slate-500">
-            Choose when this campaign should start sending (your local time).
+            {{ scheduleModalDescription }}
           </p>
           <label class="mt-4 block text-sm font-medium text-slate-700" for="schedule-datetime">
             Date &amp; time
@@ -1142,7 +1196,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               :disabled="scheduleBusy"
               @click="confirmSchedule"
             >
-              {{ scheduleBusy ? 'Saving…' : 'Schedule' }}
+              {{ scheduleModalConfirmLabel }}
             </button>
           </div>
         </div>

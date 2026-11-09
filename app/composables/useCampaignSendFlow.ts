@@ -31,6 +31,11 @@ export function canSendNow(c: Campaign): boolean {
 /** Same rules as send-now; only draft campaigns can be scheduled. */
 export const canScheduleDraft = canSendDraft
 
+/** Scheduled campaigns can change send time without canceling. */
+export function canRescheduleScheduled(c: Campaign): boolean {
+  return c.status === 'Scheduled' && !!c.scheduledAt
+}
+
 export function canPauseSend(c: Campaign): boolean {
   return c.status === 'Sending'
 }
@@ -154,6 +159,7 @@ export function useCampaignSendFlow() {
     canSendScheduled,
     canSendNow,
     canScheduleDraft,
+    canRescheduleScheduled,
     canPauseSend,
     canStopSend,
     canResumeSend,

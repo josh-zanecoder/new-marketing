@@ -9,7 +9,7 @@ Campaign bulk send uses the same ideas as `mortdash-crm` ratesheet sends: chunke
 | Concern | Stack | Plugin / entry |
 | ------- | ----- | -------------- |
 | **Send now (batch chunks)** | Mongo recipients + **Cloud Tasks** → `POST /api/internal/campaign-sends/batch` (or BullMQ locally) | `server/queue/campaignCloudTasksQueue.ts` / `server/queue/emailQueue.ts` |
-| **Schedule** | Mongo `Scheduled` + delayed start (Cloud Tasks or BullMQ). Task ids are unique per enqueue so cancel→schedule-again works — see `docs/campaign-schedule-cancel-reschedule.md` | `server/queue/campaignCloudTasksQueue.ts`; `server/utils/campaignSend/campaignScheduleCloudTaskId.ts` |
+| **Schedule / reschedule** | Mongo `Scheduled` + delayed start (Cloud Tasks or BullMQ); reschedule replaces the job (`docs/campaign-reschedule.md`). Task ids are unique per enqueue so cancel→schedule-again works (`docs/campaign-schedule-cancel-reschedule.md`) | `server/api/v1/tenant/send-campaign/schedule.post.ts`; `server/queue/campaignCloudTasksQueue.ts`; `server/utils/campaignSend/campaignScheduleCloudTaskId.ts`; `server/plugins/scheduled-campaign-reconcile.ts` |
 | **CRM sync / contacts** | **Kafka** inbound consumer | `server/kafka/plugins/kafka-inbound-consumer.ts` |
 
 Send and schedule **do not** consume Kafka topics and **do not** require `KAFKA_BROKERS`. After a campaign finishes, an **optional** `campaign.send.completed` event may be published for CRM (`notifyCampaignSendCompleted`); set `CAMPAIGN_SEND_KAFKA_NOTIFY=false` to disable.
