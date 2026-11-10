@@ -7,8 +7,8 @@ export type SendableCampaignAudience = {
 }
 
 /**
- * A copied campaign list row used to report 0 recipients for list audiences
- * even when the selected people were present. Either the count or the rows is enough.
+ * True when the draft has a sendable audience. Prefer recipientsCount or rows —
+ * list-index rows used to report 0 for list audiences even when people were selected.
  */
 export function hasSendableCampaignRecipients(c: SendableCampaignAudience): boolean {
   if (c.recipientsType !== 'manual' && c.recipientsType !== 'list') return false
