@@ -3,6 +3,12 @@ import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
 import { useCampaignListFullPreview } from '~/composables/useCampaignListFullPreview'
 import { useCampaignStore } from '~/store/campaignStore'
+import {
+  CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE,
+  CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
+  CAMPAIGN_UNSCHEDULE_SUCCESS,
+  campaignUnscheduleConfirmMessage
+} from '~~/shared/campaignUnscheduleCopy'
 
 definePageMeta({ layout: 'default' })
 
@@ -14,6 +20,7 @@ const {
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
+  canCancelScheduledSend,
   canStopSend,
   canResumeSend,
   canRestartSend,
@@ -58,9 +65,11 @@ const statusFilterSelectOptions = [
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
 const campaignToSchedule = ref<Campaign | null>(null)
+const campaignToUnschedule = ref<Campaign | null>(null)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
+const unscheduleFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 const sendControlBusy = ref(false)
 const stopAllConfirmOpen = ref(false)
 const resumeConfirmCampaign = ref<Campaign | null>(null)
@@ -77,6 +86,12 @@ const deleteModalMessage = computed(() =>
 const duplicateModalMessage = computed(() =>
   campaignToDuplicate.value
     ? `Create a copy of "${campaignToDuplicate.value.name || 'Untitled'}"? The duplicate will be created as a draft.`
+    : ''
+)
+
+const unscheduleModalMessage = computed(() =>
+  campaignToUnschedule.value
+    ? campaignUnscheduleConfirmMessage(campaignToUnschedule.value.name || '')
     : ''
 )
 
@@ -332,7 +347,7 @@ async function confirmScheduleFromList() {
   try {
     await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
     campaignToSchedule.value = null
-    await store.fetchCampaigns()
+    await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
@@ -346,12 +361,50 @@ async function confirmScheduleFromList() {
   }
 }
 
-async function handleUnschedule(c: Campaign) {
-  if (c.status !== 'Scheduled') return
+function openUnscheduleModal(c: Campaign) {
+  if (!canCancelScheduledSend(c) || scheduleBusy.value) return
+  unscheduleFeedback.value = null
+  campaignToUnschedule.value = c
+}
+
+function cancelUnscheduleModal() {
+  if (scheduleBusy.value) return
+  campaignToUnschedule.value = null
+}
+
+async function confirmUnschedule() {
+  const c = campaignToUnschedule.value
+  if (!c || scheduleBusy.value) return
   scheduleBusy.value = true
+  unscheduleFeedback.value = null
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
-    await store.fetchCampaigns()
+    const now = new Date().toISOString()
+    store.upsertCampaignInList({
+      ...c,
+      status: 'Draft',
+      scheduledAt: undefined,
+      updatedAt: now
+    })
+    store.patchCampaignDetailCache(c.id, {
+      status: 'Draft',
+      scheduledAt: undefined,
+      updatedAt: now
+    })
+    campaignToUnschedule.value = null
+    unscheduleFeedback.value = { type: 'success', message: CAMPAIGN_UNSCHEDULE_SUCCESS }
+    await store.fetchCampaigns({ force: true })
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
+    unscheduleFeedback.value = {
+      type: 'error',
+      message: typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
+    }
   } finally {
     scheduleBusy.value = false
   }
@@ -473,6 +526,33 @@ onUnmounted(() => {
         />
       </div>
     </header>
+
+    <div
+      v-if="unscheduleFeedback"
+      class="flex flex-col gap-3 rounded-2xl px-4 py-4 text-sm shadow-sm sm:flex-row sm:items-start sm:gap-3.5 sm:px-5"
+      :class="
+        unscheduleFeedback.type === 'success'
+          ? 'border border-emerald-200/90 bg-emerald-50/90 text-emerald-950'
+          : 'border border-amber-200/90 bg-amber-50/90 text-amber-950'
+      "
+      role="status"
+    >
+      <div class="flex min-w-0 flex-1 items-start gap-3">
+        <span class="min-w-0 flex-1 leading-relaxed">{{ unscheduleFeedback.message }}</span>
+      </div>
+      <button
+        type="button"
+        class="shrink-0 self-start rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors sm:self-center"
+        :class="
+          unscheduleFeedback.type === 'success'
+            ? 'text-emerald-900 hover:bg-emerald-100/90'
+            : 'text-amber-900 hover:bg-amber-100/90'
+        "
+        @click="unscheduleFeedback = null"
+      >
+        Dismiss
+      </button>
+    </div>
 
     <div
       v-if="sendError && !sendingCampaignId"
@@ -717,12 +797,12 @@ onUnmounted(() => {
             </svg>
           </button>
           <button
-            v-if="c.status === 'Scheduled'"
+            v-if="canCancelScheduledSend(c)"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="scheduleBusy"
             title="Cancel scheduled send"
-            @click.stop="handleUnschedule(c)"
+            @click.stop="openUnscheduleModal(c)"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -824,6 +904,17 @@ onUnmounted(() => {
       :confirm-loading="duplicateConfirmLoading"
       @confirm="confirmDuplicate"
       @cancel="cancelDuplicateModal"
+    />
+
+    <ClientConfirmationModal
+      :open="!!campaignToUnschedule"
+      :title="CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE"
+      :message="unscheduleModalMessage"
+      confirm-text="Cancel send"
+      variant="danger"
+      :confirm-loading="scheduleBusy"
+      @confirm="confirmUnschedule"
+      @cancel="cancelUnscheduleModal"
     />
 
     <ClientConfirmationModal

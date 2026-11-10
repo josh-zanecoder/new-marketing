@@ -25,6 +25,7 @@ const {
   canSendNow,
   canScheduleDraft,
   canRescheduleScheduled,
+  canCancelScheduledSend,
   canStopSend,
   canResumeSend,
   canRestartSend,
@@ -504,8 +505,9 @@ async function confirmSchedule() {
 
 async function handleUnschedule() {
   const c = campaign.value
-  if (!c || c.status !== 'Scheduled') return
+  if (!c || !canCancelScheduledSend(c)) return
   scheduleBusy.value = true
+  scheduleError.value = ''
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
     const now = new Date().toISOString()
@@ -528,6 +530,14 @@ async function handleUnschedule() {
     if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
     await refresh()
     await campaignStore.fetchCampaigns({ force: true })
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : 'Could not cancel the scheduled send. Try again.'
+    scheduleError.value = typeof msg === 'string' ? msg : 'Could not cancel the scheduled send. Try again.'
   } finally {
     scheduleBusy.value = false
   }
@@ -652,6 +662,21 @@ function setCampaignViewTab(tab: CampaignViewTab) {
       </div>
 
       <div v-else-if="campaign" class="mt-8 space-y-8 sm:space-y-10">
+        <div
+          v-if="scheduleError && !scheduleModalOpen"
+          class="flex items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
+          role="alert"
+        >
+          <span class="min-w-0 flex-1 leading-relaxed">{{ scheduleError }}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100/90"
+            @click="scheduleError = ''"
+          >
+            Dismiss
+          </button>
+        </div>
+
         <div
           v-if="sendError && !sendingCampaignId"
           class="flex items-start gap-3.5 rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm"
@@ -804,7 +829,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               Schedule send
             </button>
             <button
-              v-if="isScheduledCampaign"
+              v-if="campaignForSend && canCancelScheduledSend(campaignForSend)"
               type="button"
               class="inline-flex items-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition-colors hover:bg-amber-100/90 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[15px]"
               :disabled="scheduleBusy"
