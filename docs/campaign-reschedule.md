@@ -1,19 +1,20 @@
 # Campaign reschedule (Scheduled only)
 
-Scheduled campaigns on **Campaign details** expose a **Reschedule** action so users can change send date/time without canceling back to Draft or recreating the campaign.
+Scheduled campaigns expose a **Reschedule** action on **Campaign details** and in the **campaign editor** so users can change send date/time without canceling back to Draft or recreating the campaign.
 
 ## UX
 
 | Item | Behavior |
 | ---- | -------- |
-| Visibility | **Reschedule** appears only when `status === 'Scheduled'` and `scheduledAt` is set |
-| Placement | Left of **Send now** on the campaign detail header actions |
+| Visibility | **Reschedule** when `status === 'Scheduled'` and `scheduledAt` is set; otherwise **Schedule send** |
+| Placement | Detail header (left of **Send now**); edit wizard footer (same slot as Schedule send) |
 | Modal | Same datetime picker as Schedule send; title **Reschedule send**; confirm **Save schedule** |
 | Prefill | Current `scheduledAt` (local datetime-local value) |
 | Client validation | Rejects invalid / past / less-than-one-minute-ahead times |
 | After save | Detail overview, countdown chip, and campaign list refresh to the new `scheduledAt` |
+| Edit wizard | Saving content/recipients then calling the same schedule API; does not create a second schedule |
 
-**Cancel** still unschedule → Draft. **Edit** can change content; Reschedule only changes send time.
+**Cancel** still unschedule → Draft. **Edit** can change content; Reschedule updates send time (and may persist other wizard edits first).
 
 ## API
 
@@ -39,15 +40,19 @@ Response includes `rescheduled: true` when the campaign was already Scheduled.
 | Schedule / reschedule route | `server/api/v1/tenant/send-campaign/schedule.post.ts` |
 | Queue replace | `enqueueScheduledCampaignStart` in `server/queue/emailQueue.ts` |
 | FE capability | `canRescheduleScheduled` in `app/composables/useCampaignSendFlow.ts` |
+| Edit wizard action | `resolveCampaignEditScheduleAction` + `campaignScheduleWizardCopy` |
 | Detail actions + modal | `app/pages/tenant/campaigns/[id].vue` |
+| Edit wizard footer + modal | `app/pages/tenant/campaigns/edit/[id].vue` |
 | Client API | `scheduleCampaignSend` in `app/composables/useTenantMarketingApi.ts` |
 
 ## Tests
 
 ```bash
-npm run test -- shared/__tests__/campaignScheduleTime.test.ts
+npm run test -- shared/__tests__/campaignScheduleTime.test.ts shared/campaignEditScheduleAction.test.ts shared/campaignScheduleWizardCopy.test.ts
 ```
 
 | File | Covers |
 | ---- | ------ |
 | `shared/__tests__/campaignScheduleTime.test.ts` | Status allowlist, past/too-soon rejection, valid lead time, ISO parse |
+| `shared/campaignEditScheduleAction.test.ts` | Draft → schedule vs Scheduled → reschedule; edit wizard wiring |
+| `shared/campaignScheduleWizardCopy.test.ts` | Distinct Schedule / Reschedule labels |
