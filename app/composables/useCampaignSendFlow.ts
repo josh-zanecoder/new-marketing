@@ -1,5 +1,6 @@
 import { storeToRefs } from 'pinia'
 import { hasSendableCampaignRecipients } from '~~/shared/hasSendableCampaignRecipients'
+import { canUnscheduleCampaign } from '~~/shared/campaignUnscheduleEligibility'
 import type { Campaign, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -26,6 +27,11 @@ export const canScheduleDraft = canSendDraft
 /** Scheduled campaigns can change send time without canceling. */
 export function canRescheduleScheduled(c: Campaign): boolean {
   return c.status === 'Scheduled' && !!c.scheduledAt
+}
+
+/** Cancel scheduled send from list/detail (Scheduled, or Draft with leftover scheduledAt). */
+export function canCancelScheduledSend(c: Campaign): boolean {
+  return canUnscheduleCampaign(c)
 }
 
 export function canPauseSend(c: Campaign): boolean {
@@ -152,6 +158,7 @@ export function useCampaignSendFlow() {
     canSendNow,
     canScheduleDraft,
     canRescheduleScheduled,
+    canCancelScheduledSend,
     canPauseSend,
     canStopSend,
     canResumeSend,
