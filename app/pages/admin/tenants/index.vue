@@ -447,6 +447,8 @@ async function fetchTenants() {
         allowTenantLoRecipientLists?: boolean
         allowTenantImages?: boolean
         allowTenantInsertImage?: boolean
+        allowTenantGrapesBuilder?: boolean
+        allowTenantTemplateBuilder?: boolean
         brevoApiKeyConfigured?: boolean
         brevoApiKeyPrefix?: string | null
         brevoWebhookSecretConfigured?: boolean
@@ -479,6 +481,8 @@ async function fetchTenants() {
       allowTenantLoRecipientLists: t.allowTenantLoRecipientLists === true,
       allowTenantImages: t.allowTenantImages === true,
       allowTenantInsertImage: t.allowTenantInsertImage === true,
+      allowTenantGrapesBuilder: t.allowTenantGrapesBuilder === true,
+      allowTenantTemplateBuilder: t.allowTenantTemplateBuilder === true,
       brevoApiKeyConfigured: Boolean(t.brevoApiKeyConfigured),
       brevoApiKeyPrefix: t.brevoApiKeyPrefix ?? null,
       brevoWebhookSecretConfigured: Boolean(t.brevoWebhookSecretConfigured),

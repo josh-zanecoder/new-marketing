@@ -4,10 +4,17 @@ import {
   emailTemplateThumbnailSrcdoc
 } from '~/utils/emailTemplateThumbnailSrcdoc'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   html: string
   title?: string
-}>()
+  layoutWidth?: number
+}>(), {
+  title: '',
+  layoutWidth: EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH
+})
+
+const layoutWidth = computed(() => Math.max(320, Math.round(props.layoutWidth)))
+const thumbnailSrcdoc = computed(() => emailTemplateThumbnailSrcdoc(props.html, layoutWidth.value))
 
 const THUMB_PADDING = 12
 const FALLBACK_CONTENT_HEIGHT = 720
@@ -45,7 +52,7 @@ function updateScale() {
   if (!containerWidth) return
 
   const innerWidth = Math.max(containerWidth - THUMB_PADDING * 2, 1)
-  scale.value = Math.min(innerWidth / EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH, 1)
+  scale.value = Math.min(innerWidth / layoutWidth.value, 1)
 }
 
 function scheduleMeasure() {
@@ -97,7 +104,7 @@ onBeforeUnmount(() => {
 })
 
 const frameStyle = computed(() => ({
-  width: `${EMAIL_TEMPLATE_THUMB_LAYOUT_WIDTH}px`,
+  width: `${layoutWidth.value}px`,
   height: `${contentHeight.value}px`,
   left: '50%',
   top: `${THUMB_PADDING}px`,
@@ -115,8 +122,8 @@ const frameStyle = computed(() => ({
       v-if="html?.trim()"
       ref="iframeRef"
       :key="html"
-      :srcdoc="emailTemplateThumbnailSrcdoc(html)"
-      :title="title ?? 'Email template preview'"
+      :srcdoc="thumbnailSrcdoc"
+      :title="title || 'Email template preview'"
       class="email-template-thumbnail__frame pointer-events-none absolute max-w-none border-0"
       :style="frameStyle"
       sandbox="allow-same-origin"

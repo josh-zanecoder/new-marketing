@@ -17,12 +17,14 @@ const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const {
   allowTenantInsertImage,
+  allowTenantTemplateBuilder,
   loaded: tenantFlagsLoaded,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
 const canInsertTemplateImage = computed(
   () => tenantFlagsLoaded.value && allowTenantInsertImage.value
 )
+const editorMode = ref<'template' | 'html'>('template')
 const {
 
   open: unsubscribeFooterModalOpen,
@@ -44,12 +46,16 @@ const editTemplateId = computed(() => {
   return typeof raw === 'string' ? raw.trim() : ''
 })
 const isEdit = computed(() => Boolean(editTemplateId.value && /^[a-f0-9]{24}$/i.test(editTemplateId.value)))
+const canUseTemplateBuilder = computed(
+  () => isEdit.value && tenantFlagsLoaded.value && allowTenantTemplateBuilder.value
+)
 
 const name = ref('')
 const subject = ref('')
 const categoryId = ref('')
 const categories = ref<TenantEmailTemplateCategoryRow[]>([])
 const htmlContent = ref('')
+const loadedHtml = ref('')
 const formError = ref('')
 const uploadError = ref('')
 const uploadPending = ref(false)
@@ -75,7 +81,9 @@ function emailTemplateImageSnippet(url: string): string {
 }
 
 const templateHtmlImages = computed(() => listEmailTemplateHtmlImages(htmlContent.value))
-const showTemplateImageReplace = computed(() => templateHtmlImages.value.length > 0)
+const showTemplateImageReplace = computed(
+  () => canInsertTemplateImage.value && templateHtmlImages.value.length > 0
+)
 const anyImageBusy = computed(() => uploadPending.value || imageUploadPending.value)
 
 const categoryAssignOptions = computed(() =>
@@ -215,6 +223,7 @@ async function loadExistingTemplate() {
     subject.value = res.template.subject?.trim() ?? ''
     categoryId.value = res.template.categoryId?.trim() ?? ''
     htmlContent.value = res.template.htmlTemplate?.trim() ?? ''
+    loadedHtml.value = htmlContent.value
   } catch {
     formError.value = 'Could not load this template.'
   } finally {
@@ -449,10 +458,12 @@ async function saveTemplate() {
 
     <form
       v-else
-      class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_17.5rem] xl:items-start"
+      class="grid gap-5 xl:items-start"
+      :class="canUseTemplateBuilder && editorMode === 'template' ? '' : 'xl:grid-cols-[minmax(0,1fr)_17.5rem]'"
       @submit.prevent="saveTemplate"
     >
       <aside
+        v-if="!canUseTemplateBuilder || editorMode === 'html'"
         class="min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-sm xl:col-start-2 xl:row-start-1 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto"
         aria-label="Dynamic variables"
       >
@@ -571,7 +582,37 @@ async function saveTemplate() {
         </div>
       </div>
 
-      <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+      <div v-if="canUseTemplateBuilder" class="flex w-fit items-center gap-1 rounded-xl bg-slate-100 p-1">
+        <button
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+          :class="editorMode === 'template' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+          @click="editorMode = 'template'"
+        >
+          Template
+        </button>
+        <button
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+          :class="editorMode === 'html' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+          @click="editorMode = 'html'"
+        >
+          HTML
+        </button>
+      </div>
+
+      <TenantEmailTemplateImageBuilder
+        v-if="canUseTemplateBuilder && editorMode === 'template'"
+        v-model="htmlContent"
+        class="h-[calc(100vh-280px)] min-h-[560px] overflow-hidden rounded-2xl border border-slate-200"
+        :source-html="loadedHtml"
+        :can-upload-image="true"
+      />
+
+      <div
+        v-else
+        class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm"
+      >
         <div
           class="border-b border-slate-100 px-4 py-4 sm:px-6"
           :class="uploadDragOver ? 'bg-primary-50/50' : 'bg-slate-50/80'"

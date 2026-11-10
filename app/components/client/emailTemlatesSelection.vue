@@ -524,7 +524,7 @@ onUnmounted(() => {
                       </div>
                       <div class="min-w-0 flex-1">
                         <div class="font-semibold text-slate-900">Create from scratch</div>
-                        <p class="mt-0.5 text-sm text-slate-500">Open the GrapesJS email editor</p>
+                        <p class="mt-0.5 text-sm text-slate-500">Open the email editor</p>
                       </div>
                       <svg class="hidden h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

@@ -77,6 +77,9 @@ export const CUSTOM_MARKETING_GCS_NO_LIST_FOLDER = 'no-list'
 /** Dedicated gallery uploads: `custom-marketing/{tenant}/library/…`. */
 export const CUSTOM_MARKETING_GCS_LIBRARY_FOLDER = 'library'
 
+/** Email template inserts: `custom-marketing/{tenant}/email-templates/…`. */
+export const CUSTOM_MARKETING_GCS_EMAIL_TEMPLATE_FOLDER = 'email-templates'
+
 export function buildCustomMarketingGcsObjectPath(input: {
   tenantName: string
   recipientListId?: string

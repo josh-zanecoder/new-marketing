@@ -14,6 +14,8 @@ import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
+import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
+import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
 import { marketingAudienceAccessPayload } from '@server/utils/auth/marketingAudienceFromAuth'
@@ -105,6 +107,10 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantImages: parseAllowTenantImages(registryDoc?.allowTenantImages),
     /** When false/omitted, email template Insert image stays hidden. */
     allowTenantInsertImage: parseAllowTenantInsertImage(registryDoc?.allowTenantInsertImage),
+    /** When false/omitted, the GrapesJS email editor stays hidden. */
+    allowTenantGrapesBuilder: parseAllowTenantGrapesBuilder(registryDoc?.allowTenantGrapesBuilder),
+    /** When false/omitted, the template image builder stays hidden. */
+    allowTenantTemplateBuilder: parseAllowTenantTemplateBuilder(registryDoc?.allowTenantTemplateBuilder),
     /**
      * When LO-list flag ON: LO/LOA → self_only; OM/Marketing → tenant_wide.
      * When OFF: classic handoff (tenant_wide or owner_scope).

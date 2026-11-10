@@ -105,6 +105,28 @@ describe('toTenantAdminRow', () => {
     expect(row?.allowTenantInsertImage).toBe(false)
   })
 
+  it('defaults email builder flags to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantGrapesBuilder).toBe(false)
+    expect(row?.allowTenantTemplateBuilder).toBe(false)
+  })
+
+  it('reads email builder flags from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantGrapesBuilder: true,
+      allowTenantTemplateBuilder: true
+    })
+    expect(row?.allowTenantGrapesBuilder).toBe(true)
+    expect(row?.allowTenantTemplateBuilder).toBe(true)
+  })
+
   it('reads allowTenantInsertImage true from the registry doc', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

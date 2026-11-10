@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const root = resolve(__dirname, '..')
 
 describe('email template HTML image insert and replace', () => {
-  it('add/edit page inserts and replaces an image on an existing template', () => {
+  it('the HTML editor keeps insert and replace behind Insert image', () => {
     const page = readFileSync(resolve(root, 'app/pages/tenant/email-templates/add.vue'), 'utf8')
     expect(page).toContain('uploadEmailTemplateImage')
     expect(page).toContain('showTemplateImageReplace')
@@ -19,17 +19,31 @@ describe('email template HTML image insert and replace', () => {
     expect(page).toContain('Replace')
     expect(page).toContain('allowTenantInsertImage')
     expect(page).toContain('canInsertTemplateImage')
+    expect(page).toContain(':can-upload-image="true"')
     expect(page).not.toContain('allowTenantImages')
     expect(page).not.toContain('canUploadTemplateImage')
   })
 
-  it('template image upload requires the Insert image permission', () => {
+  it('the template editor does not use the Insert image permission', () => {
+    const editor = readFileSync(resolve(root, 'app/pages/tenant/email-editor/index.vue'), 'utf8')
+    expect(editor).toContain(':can-upload-image="true"')
+    expect(editor).not.toContain('allowTenantInsertImage')
+  })
+
+  it('template image upload allows the template editor without Insert image', () => {
     const api = readFileSync(
       resolve(root, 'server/api/v1/tenant/email-templates/images.post.ts'),
       'utf8'
     )
+    const gate = readFileSync(
+      resolve(root, 'server/utils/requireTenantInsertImage.ts'),
+      'utf8'
+    )
     expect(api).toContain('EMAIL_TEMPLATE_GCS_IMAGE_FOLDER')
-    expect(api).toContain('requireTenantInsertImage')
+    expect(api).toContain('requireTenantEmailTemplateImageHost')
+    expect(api).not.toContain('await requireTenantInsertImage')
     expect(api).not.toContain('allowTenantImages')
+    expect(gate).toContain('allowTenantTemplateBuilder')
+    expect(gate).toContain('allowTenantInsertImage')
   })
 })

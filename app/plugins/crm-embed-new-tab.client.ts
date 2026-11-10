@@ -33,7 +33,7 @@ function writeStoredCrmMarketingBase(value: string): void {
  * CRM iframe: rewrite internal links so “open in new tab” stays in CRM (Back stays visible).
  * Top-level tab with the CRM embed cookie: bounce to CRM `/marketing?path=…`.
  */
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
   if (!import.meta.client) return
 
   const { data: me } = useMarketingMe()
@@ -92,57 +92,60 @@ export default defineNuxtPlugin(() => {
     return next || readStoredCrmMarketingBase() || String(crmTabBaseCookie.value ?? '').trim()
   }
 
-  function applyAnchor(a: HTMLAnchorElement): void {
-    const stored = a.dataset.marketingPath?.trim() || ''
-    const href = a.getAttribute('href') || ''
-    const fromHref = marketingTenantPathFromHref(href, window.location.origin)
-    const path = fromHref || stored
+  function anchorFromEvent(event: Event): HTMLAnchorElement | null {
+    const target = event.target
+    if (!(target instanceof Element)) return null
+    const anchor = target.closest('a')
+    return anchor instanceof HTMLAnchorElement ? anchor : null
+  }
+
+  function pathFromAnchor(anchor: HTMLAnchorElement): string {
+    const fromHref = marketingTenantPathFromHref(anchor.getAttribute('href') || '', window.location.origin)
+    if (fromHref) return fromHref
+    return safeMarketingTenantPath(anchor.dataset.marketingPath || '')
+  }
+
+  /** Point one link at CRM only for the gesture that is about to open a new tab. */
+  function armNewTab(anchor: HTMLAnchorElement): void {
+    const path = pathFromAnchor(anchor)
     if (!path) return
     const base = crmBase()
     if (!base) return
     const crmHref = buildCrmMarketingTabUrl(base, path)
     if (!crmHref) return
-    a.dataset.marketingPath = path
-    if (a.dataset.marketingCrmHref === crmHref) return
-    a.dataset.marketingCrmHref = crmHref
-    a.setAttribute('href', crmHref)
+    anchor.dataset.marketingPath = path
+    anchor.dataset.marketingCrmHref = crmHref
+    if (anchor.getAttribute('href') !== crmHref) anchor.setAttribute('href', crmHref)
   }
 
-  function scan(): void {
-    document.querySelectorAll('a[href]').forEach((el) => {
-      applyAnchor(el as HTMLAnchorElement)
-    })
+  function isNewTabGesture(event: MouseEvent | PointerEvent): boolean {
+    return event.button === 1 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+  }
+
+  function onPointerDown(event: PointerEvent): void {
+    if (!isNewTabGesture(event)) return
+    const anchor = anchorFromEvent(event)
+    if (anchor) armNewTab(anchor)
+  }
+
+  function onContextMenu(event: MouseEvent): void {
+    const anchor = anchorFromEvent(event)
+    if (anchor) armNewTab(anchor)
   }
 
   function onClick(event: MouseEvent): void {
-    const target = event.target
-    if (!(target instanceof Element)) return
-    const a = target.closest('a')
-    if (!(a instanceof HTMLAnchorElement)) return
-    const path = a.dataset.marketingPath?.trim()
+    const anchor = anchorFromEvent(event)
+    if (!anchor || event.defaultPrevented || isNewTabGesture(event) || event.button !== 0) return
+    const path = pathFromAnchor(anchor)
     if (!path) return
-    if (event.defaultPrevented) return
-    if (event.button === 1 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-      return
-    }
-    if (event.button !== 0) return
     event.preventDefault()
     event.stopImmediatePropagation()
     void navigateTo(path)
   }
 
-  document.addEventListener('click', onClick, true)
-  const observer = new MutationObserver(scan)
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['href']
+  nuxtApp.hook('app:mounted', () => {
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('contextmenu', onContextMenu, true)
+    document.addEventListener('click', onClick, true)
   })
-  watch(me, scan, { immediate: true })
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', scan, { once: true })
-  } else {
-    scan()
-  }
 })

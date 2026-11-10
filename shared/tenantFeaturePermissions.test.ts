@@ -7,7 +7,15 @@ import {
 describe('tenant feature permissions', () => {
   it('groups each flag under its own resource', () => {
     const groups = groupTenantFeaturePermissions()
-    expect(groups.map((group) => group.key)).toEqual(['campaigns', 'recipient-lists', 'images'])
+    expect(groups.map((group) => group.key)).toEqual([
+      'campaigns',
+      'recipient-lists',
+      'images',
+      'email-builder'
+    ])
+    expect(
+      groups.find((group) => group.key === 'email-builder')?.permissions.map((permission) => permission.key)
+    ).toEqual(['allowTenantGrapesBuilder', 'allowTenantTemplateBuilder'])
     expect(groups.find((group) => group.key === 'images')?.permissions.map((permission) => permission.key)).toEqual([
       'allowTenantImages',
       'allowTenantInsertImage'
@@ -24,7 +32,9 @@ describe('tenant feature permissions', () => {
       allowTenantEditSender: true,
       allowTenantLoRecipientLists: false,
       allowTenantImages: false,
-      allowTenantInsertImage: false
+      allowTenantInsertImage: false,
+      allowTenantGrapesBuilder: false,
+      allowTenantTemplateBuilder: false
     })
   })
 })

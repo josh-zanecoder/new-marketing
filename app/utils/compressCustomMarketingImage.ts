@@ -30,12 +30,17 @@ function dataUrlPayloadBytes(dataUrl: string): number {
  * Resize + JPEG-compress a photo before GCS upload.
  * Keeps uploads small; email HTML uses the hosted HTTPS URL (not base64).
  */
-export async function compressCustomMarketingImageFile(file: File): Promise<string> {
+export async function compressCustomMarketingImageFile(
+  file: File,
+  options?: { maxSourceBytes?: number }
+): Promise<string> {
+  const maxSourceBytes = options?.maxSourceBytes ?? CUSTOM_MARKETING_MAX_IMAGE_BYTES
   if (!isAllowedCustomMarketingImageMime(file.type)) {
     throw new Error('Use PNG, JPEG, GIF, or WebP images.')
   }
-  if (file.size > CUSTOM_MARKETING_MAX_IMAGE_BYTES) {
-    throw new Error('Image must be 2MB or smaller before compression.')
+  if (file.size > maxSourceBytes) {
+    const maxMb = Math.max(1, Math.round(maxSourceBytes / (1024 * 1024)))
+    throw new Error(`Image must be ${maxMb}MB or smaller before compression.`)
   }
   if (typeof document === 'undefined') {
     throw new Error('Image compression is only available in the browser.')

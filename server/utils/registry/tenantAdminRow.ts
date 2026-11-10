@@ -12,6 +12,8 @@ import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
+import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
+import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -52,6 +54,14 @@ export function parseRegistryAllowTenantImages(doc: RegistryTenantDoc): boolean 
 
 export function parseRegistryAllowTenantInsertImage(doc: RegistryTenantDoc): boolean {
   return parseAllowTenantInsertImage(doc.allowTenantInsertImage)
+}
+
+export function parseRegistryAllowTenantGrapesBuilder(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantGrapesBuilder(doc.allowTenantGrapesBuilder)
+}
+
+export function parseRegistryAllowTenantTemplateBuilder(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantTemplateBuilder(doc.allowTenantTemplateBuilder)
 }
 
 export function normalizeCampaignSenderEmailInput(
@@ -339,6 +349,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantLoRecipientLists = parseRegistryAllowTenantLoRecipientLists(doc)
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
   const allowTenantInsertImage = parseRegistryAllowTenantInsertImage(doc)
+  const allowTenantGrapesBuilder = parseRegistryAllowTenantGrapesBuilder(doc)
+  const allowTenantTemplateBuilder = parseRegistryAllowTenantTemplateBuilder(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
   const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
     parseRegistryBrevoWebhookSecret(doc)
@@ -361,6 +373,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     allowTenantLoRecipientLists,
     allowTenantImages,
     allowTenantInsertImage,
+    allowTenantGrapesBuilder,
+    allowTenantTemplateBuilder,
     brevoApiKeyConfigured,
     brevoApiKeyPrefix,
     brevoWebhookSecretConfigured,

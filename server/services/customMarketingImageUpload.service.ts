@@ -233,10 +233,15 @@ const IMAGE_CONTENT_TYPE_RE = /^image\/(png|jpe?g|gif|webp)$/i
  */
 export async function listCustomMarketingTenantImages(
   tenantName: string,
-  opts?: { maxResults?: number }
+  opts?: { maxResults?: number; folder?: string }
 ): Promise<TenantHostedImageListItem[]> {
   const tenant = sanitizeCustomMarketingGcsPathSegment(tenantName, 'tenant')
-  const prefix = `custom-marketing/${tenant}/`
+  const folder = opts?.folder
+    ? sanitizeCustomMarketingGcsPathSegment(opts.folder, '')
+    : ''
+  const prefix = folder
+    ? `custom-marketing/${tenant}/${folder}/`
+    : `custom-marketing/${tenant}/`
   const maxResults = Math.min(500, Math.max(1, opts?.maxResults ?? 300))
   const bucket = getGcsBucket()
 

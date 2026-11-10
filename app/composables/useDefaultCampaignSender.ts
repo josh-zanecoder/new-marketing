@@ -29,6 +29,8 @@ export type TenantMeCampaignSender = {
   allowTenantLoRecipientLists?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
+  allowTenantGrapesBuilder?: boolean
+  allowTenantTemplateBuilder?: boolean
   audienceAccess?: MarketingAudienceAccess
   canSelectAnyLoanOfficer?: boolean
   sessionUser?: TenantMeSessionUser
@@ -57,6 +59,10 @@ export function useDefaultCampaignSender() {
   const allowTenantImages = ref(false)
   /** Superadmin gate; false hides email template Insert image and Replace. */
   const allowTenantInsertImage = ref(false)
+  /** Superadmin gate; false hides the GrapesJS email editor. */
+  const allowTenantGrapesBuilder = ref(false)
+  /** Superadmin gate; false hides the template image builder. */
+  const allowTenantTemplateBuilder = ref(false)
   const sessionUser = ref<TenantMeSessionUser | null>(null)
   const audienceAccess = ref<MarketingAudienceAccess>('owner_scope')
   const loaded = ref(false)
@@ -112,6 +118,8 @@ export function useDefaultCampaignSender() {
       allowTenantLoRecipientLists.value = me?.allowTenantLoRecipientLists === true
       allowTenantImages.value = me?.allowTenantImages === true
       allowTenantInsertImage.value = me?.allowTenantInsertImage === true
+      allowTenantGrapesBuilder.value = me?.allowTenantGrapesBuilder === true
+      allowTenantTemplateBuilder.value = me?.allowTenantTemplateBuilder === true
       sessionUser.value =
         me?.sessionUser && typeof me.sessionUser === 'object' ? me.sessionUser : null
 
@@ -143,6 +151,8 @@ export function useDefaultCampaignSender() {
       allowTenantLoRecipientLists.value = false
       allowTenantImages.value = false
       allowTenantInsertImage.value = false
+      allowTenantGrapesBuilder.value = false
+      allowTenantTemplateBuilder.value = false
       sessionUser.value = null
       audienceAccess.value = 'owner_scope'
       defaultSenderName.value = DEFAULT_CAMPAIGN_SENDER_NAME
@@ -159,6 +169,8 @@ export function useDefaultCampaignSender() {
     allowTenantLoRecipientLists,
     allowTenantImages,
     allowTenantInsertImage,
+    allowTenantGrapesBuilder,
+    allowTenantTemplateBuilder,
     sessionUser,
     audienceAccess,
     canSelectAnyLoanOfficer,

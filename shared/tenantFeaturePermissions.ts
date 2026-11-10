@@ -6,7 +6,9 @@ export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantEditSender',
   'allowTenantLoRecipientLists',
   'allowTenantImages',
-  'allowTenantInsertImage'
+  'allowTenantInsertImage',
+  'allowTenantGrapesBuilder',
+  'allowTenantTemplateBuilder'
 ] as const
 
 export type TenantFeaturePermissionKey = (typeof TENANT_FEATURE_PERMISSION_KEYS)[number]
@@ -61,6 +63,24 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     group: 'images',
     groupLabel: 'Images',
     patchPath: 'allow-tenant-insert-image'
+  },
+  {
+    key: 'allowTenantGrapesBuilder',
+    code: 'email-builder:grapes',
+    label: 'Grapes editor',
+    description: 'Tenant can open the GrapesJS email editor.',
+    group: 'email-builder',
+    groupLabel: 'Email builder',
+    patchPath: 'allow-tenant-grapes-builder'
+  },
+  {
+    key: 'allowTenantTemplateBuilder',
+    code: 'email-builder:template',
+    label: 'Template builder',
+    description: 'Tenant can edit campaign emails and saved templates in the visual template builder.',
+    group: 'email-builder',
+    groupLabel: 'Email builder',
+    patchPath: 'allow-tenant-template-builder'
   }
 ]
 
@@ -75,7 +95,9 @@ export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionStat
     allowTenantEditSender: false,
     allowTenantLoRecipientLists: false,
     allowTenantImages: false,
-    allowTenantInsertImage: false
+    allowTenantInsertImage: false,
+    allowTenantGrapesBuilder: false,
+    allowTenantTemplateBuilder: false
   }
 }
 

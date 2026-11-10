@@ -1357,6 +1357,8 @@ interface TenantDetail {
   allowTenantLoRecipientLists?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
+  allowTenantGrapesBuilder?: boolean
+  allowTenantTemplateBuilder?: boolean
   campaignFromAddressMode?: 'default' | 'contact_owner'
   brevoApiKeyConfigured?: boolean
   brevoApiKeyPrefix?: string | null
