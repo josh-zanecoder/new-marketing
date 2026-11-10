@@ -841,6 +841,10 @@ import { CAMPAIGN_EMAIL_EDITOR_ENABLED } from '~/constants/campaignFeatureFlags'
 import { resolveEditableCampaignSenderMode } from '~~/shared/resolveEditableCampaignSenderMode'
 import { normalizeCampaignSenderDisplayName } from '~~/shared/contactOwnerSender'
 import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
+import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
 
 const campaignStore = useCampaignStore()
 const {
@@ -856,6 +860,7 @@ const {
 } = useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
   useCampaignSendFlow()
@@ -2167,6 +2172,7 @@ async function confirmScheduleFromWizard() {
       if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
       clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
       void campaignStore.fetchCampaigns({ force: true })
+      toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
       await navigateTo(`/tenant/campaigns/${id}`)
     } catch (e: unknown) {
       const msg =
@@ -2174,8 +2180,10 @@ async function confirmScheduleFromWizard() {
           ? (e as { data?: { message?: string } }).data?.message
           : e instanceof Error
             ? e.message
-            : 'Could not schedule send.'
-      scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+            : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+      const message = typeof msg === 'string' ? msg : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+      scheduleError.value = message
+      toast.error(message)
     }
   } catch (e: unknown) {
     setSaveErrorFromCatch(e)

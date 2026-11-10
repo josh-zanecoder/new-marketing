@@ -4,6 +4,14 @@ import { storeToRefs } from 'pinia'
 import { useCampaignListFullPreview } from '~/composables/useCampaignListFullPreview'
 import { useCampaignStore } from '~/store/campaignStore'
 import {
+  CAMPAIGN_DELETE_ERROR_FALLBACK,
+  CAMPAIGN_DELETE_SUCCESS
+} from '~~/shared/campaignDeleteCopy'
+import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
+import {
   CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE,
   CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
   CAMPAIGN_UNSCHEDULE_SUCCESS,
@@ -14,6 +22,7 @@ definePageMeta({ layout: 'default' })
 
 const store = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
 const {
   canSendDraft,
@@ -69,7 +78,6 @@ const campaignToUnschedule = ref<Campaign | null>(null)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
-const unscheduleFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 const sendControlBusy = ref(false)
 const stopAllConfirmOpen = ref(false)
 const resumeConfirmCampaign = ref<Campaign | null>(null)
@@ -284,8 +292,21 @@ async function confirmDelete() {
   if (!c || deleteConfirmLoading.value) return
   deleteConfirmLoading.value = true
   try {
-    await store.deleteCampaign(c)
+    const ok = await store.deleteCampaign(c)
+    if (!ok) {
+      toast.error(CAMPAIGN_DELETE_ERROR_FALLBACK)
+      return
+    }
     campaignToDelete.value = null
+    toast.success(CAMPAIGN_DELETE_SUCCESS)
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : CAMPAIGN_DELETE_ERROR_FALLBACK
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_DELETE_ERROR_FALLBACK)
   } finally {
     deleteConfirmLoading.value = false
   }
@@ -345,8 +366,22 @@ async function confirmScheduleFromList() {
   }
   scheduleBusy.value = true
   try {
-    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    const scheduledIso = parsed.toISOString()
+    await marketingApi.scheduleCampaignSend(c.id, scheduledIso)
+    const now = new Date().toISOString()
+    store.upsertCampaignInList({
+      ...c,
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
+    store.patchCampaignDetailCache(c.id, {
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
     campaignToSchedule.value = null
+    toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
     await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
@@ -354,8 +389,10 @@ async function confirmScheduleFromList() {
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
-          : 'Could not schedule send.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+          : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    const message = typeof msg === 'string' ? msg : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    scheduleError.value = message
+    toast.error(message)
   } finally {
     scheduleBusy.value = false
   }
@@ -363,7 +400,6 @@ async function confirmScheduleFromList() {
 
 function openUnscheduleModal(c: Campaign) {
   if (!canCancelScheduledSend(c) || scheduleBusy.value) return
-  unscheduleFeedback.value = null
   campaignToUnschedule.value = c
 }
 
@@ -376,7 +412,6 @@ async function confirmUnschedule() {
   const c = campaignToUnschedule.value
   if (!c || scheduleBusy.value) return
   scheduleBusy.value = true
-  unscheduleFeedback.value = null
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
     const now = new Date().toISOString()
@@ -392,7 +427,7 @@ async function confirmUnschedule() {
       updatedAt: now
     })
     campaignToUnschedule.value = null
-    unscheduleFeedback.value = { type: 'success', message: CAMPAIGN_UNSCHEDULE_SUCCESS }
+    toast.success(CAMPAIGN_UNSCHEDULE_SUCCESS)
     await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
@@ -401,10 +436,7 @@ async function confirmUnschedule() {
         : e instanceof Error
           ? e.message
           : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
-    unscheduleFeedback.value = {
-      type: 'error',
-      message: typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
-    }
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK)
   } finally {
     scheduleBusy.value = false
   }
@@ -526,33 +558,6 @@ onUnmounted(() => {
         />
       </div>
     </header>
-
-    <div
-      v-if="unscheduleFeedback"
-      class="flex flex-col gap-3 rounded-2xl px-4 py-4 text-sm shadow-sm sm:flex-row sm:items-start sm:gap-3.5 sm:px-5"
-      :class="
-        unscheduleFeedback.type === 'success'
-          ? 'border border-emerald-200/90 bg-emerald-50/90 text-emerald-950'
-          : 'border border-amber-200/90 bg-amber-50/90 text-amber-950'
-      "
-      role="status"
-    >
-      <div class="flex min-w-0 flex-1 items-start gap-3">
-        <span class="min-w-0 flex-1 leading-relaxed">{{ unscheduleFeedback.message }}</span>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 self-start rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors sm:self-center"
-        :class="
-          unscheduleFeedback.type === 'success'
-            ? 'text-emerald-900 hover:bg-emerald-100/90'
-            : 'text-amber-900 hover:bg-amber-100/90'
-        "
-        @click="unscheduleFeedback = null"
-      >
-        Dismiss
-      </button>
-    </div>
 
     <div
       v-if="sendError && !sendingCampaignId"
