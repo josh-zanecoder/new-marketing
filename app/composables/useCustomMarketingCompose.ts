@@ -13,6 +13,10 @@ import {
   defaultScheduleDatetimeLocal,
   parseDatetimeLocalToIso
 } from '~~/shared/datetimeLocal'
+import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
 import { resolveCrmAuthenticatedSender } from '~~/shared/crmAuthenticatedSender'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
@@ -388,9 +392,12 @@ export function useCustomMarketingCompose() {
           updatedAt: now
         })
         void campaignStore.fetchCampaigns({ force: true })
+        toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
         await navigateTo(`/tenant/campaigns/${id}`)
       } catch (e) {
-        scheduleError.value = catchApiMessage(e, 'Could not schedule send.')
+        const message = catchApiMessage(e, CAMPAIGN_SCHEDULE_FAIL_SCHEDULE)
+        scheduleError.value = message
+        toast.error(message)
       }
     } catch (e) {
       saveError.value = catchApiMessage(e, 'Failed to save custom marketing for scheduling')

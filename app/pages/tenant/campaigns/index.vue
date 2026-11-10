@@ -8,6 +8,10 @@ import {
   CAMPAIGN_DELETE_SUCCESS
 } from '~~/shared/campaignDeleteCopy'
 import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
+import {
   CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE,
   CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
   CAMPAIGN_UNSCHEDULE_SUCCESS,
@@ -362,8 +366,22 @@ async function confirmScheduleFromList() {
   }
   scheduleBusy.value = true
   try {
-    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    const scheduledIso = parsed.toISOString()
+    await marketingApi.scheduleCampaignSend(c.id, scheduledIso)
+    const now = new Date().toISOString()
+    store.upsertCampaignInList({
+      ...c,
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
+    store.patchCampaignDetailCache(c.id, {
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
     campaignToSchedule.value = null
+    toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
     await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
@@ -371,8 +389,10 @@ async function confirmScheduleFromList() {
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
-          : 'Could not schedule send.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+          : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    const message = typeof msg === 'string' ? msg : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    scheduleError.value = message
+    toast.error(message)
   } finally {
     scheduleBusy.value = false
   }

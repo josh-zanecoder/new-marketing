@@ -847,7 +847,8 @@ import {
   CAMPAIGN_SCHEDULE_MODAL_DESC_RESCHEDULE,
   CAMPAIGN_SCHEDULE_MODAL_DESC_SCHEDULE,
   CAMPAIGN_SCHEDULE_MODAL_TITLE_RESCHEDULE,
-  CAMPAIGN_SCHEDULE_MODAL_TITLE_SCHEDULE
+  CAMPAIGN_SCHEDULE_MODAL_TITLE_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
 } from '~~/shared/campaignScheduleWizardCopy'
 import {
   CAMPAIGN_SCHEDULE_ERROR_INVALID,
@@ -868,6 +869,7 @@ const {
 } = useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const {
   canScheduleDraft,
@@ -2299,6 +2301,7 @@ async function confirmScheduleFromWizard() {
       if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
       clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
       void campaignStore.fetchCampaigns({ force: true })
+      toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
       await navigateTo(`/tenant/campaigns/${id}`)
     } catch (e: unknown) {
       const msg =
@@ -2307,7 +2310,9 @@ async function confirmScheduleFromWizard() {
           : e instanceof Error
             ? e.message
             : scheduleFail
-      scheduleError.value = typeof msg === 'string' ? msg : scheduleFail
+      const message = typeof msg === 'string' ? msg : scheduleFail
+      scheduleError.value = message
+      toast.error(message)
     }
   } catch (e: unknown) {
     setSaveErrorFromCatch(e)

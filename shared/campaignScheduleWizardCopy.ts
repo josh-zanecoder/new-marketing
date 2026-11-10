@@ -15,5 +15,7 @@ export const CAMPAIGN_SCHEDULE_CONFIRM_SCHEDULE = 'Schedule'
 export const CAMPAIGN_SCHEDULE_CONFIRM_RESCHEDULE = 'Save schedule'
 export const CAMPAIGN_SCHEDULE_CONFIRM_BUSY = 'Saving…'
 
+export const CAMPAIGN_SCHEDULE_SUCCESS = 'Campaign scheduled successfully.'
+
 export const CAMPAIGN_SCHEDULE_FAIL_SCHEDULE = 'Could not schedule send.'
 export const CAMPAIGN_SCHEDULE_FAIL_RESCHEDULE = 'Could not reschedule send.'

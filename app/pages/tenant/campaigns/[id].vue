@@ -12,6 +12,11 @@ import {
   validateCampaignScheduleWhen
 } from '~~/shared/campaignScheduleTime'
 import {
+  CAMPAIGN_SCHEDULE_FAIL_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
+import {
   CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
   CAMPAIGN_UNSCHEDULE_SUCCESS
 } from '~~/shared/campaignUnscheduleCopy'
@@ -491,17 +496,22 @@ async function confirmSchedule() {
     })
     const cached = campaignStore.getCampaignDetailCache(c.id)
     if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
+    toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
     await refresh()
     await campaignStore.fetchCampaigns({ force: true })
   } catch (e: unknown) {
-    const fallback = isReschedule ? 'Could not reschedule send.' : 'Could not schedule send.'
+    const fallback = isReschedule
+      ? CAMPAIGN_SCHEDULE_FAIL_RESCHEDULE
+      : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
     const msg =
       e && typeof e === 'object' && 'data' in e
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
           : fallback
-    scheduleError.value = typeof msg === 'string' ? msg : fallback
+    const message = typeof msg === 'string' ? msg : fallback
+    scheduleError.value = message
+    toast.error(message)
     scheduleModalOpen.value = true
   } finally {
     scheduleBusy.value = false
