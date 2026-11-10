@@ -17,7 +17,16 @@ describe('isClosedMongoTopologyError', () => {
     expect(isClosedMongoTopologyError(new Error('duplicate key'))).toBe(false)
     expect(isTransientMongoError(new Error('duplicate key'))).toBe(false)
   })
+
+  it('treats Mongo wait-queue timeouts as transient', () => {
+    const err = new Error(
+      'Timed out while checking out a connection from connection pool'
+    )
+    err.name = 'MongoWaitQueueTimeoutError'
+    expect(isTransientMongoError(err)).toBe(true)
+  })
 })
+
 
 describe('resolveMaxPoolSize', () => {
   it('defaults to 5 when unset or invalid', () => {
