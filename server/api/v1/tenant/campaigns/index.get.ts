@@ -3,6 +3,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { campaignIndexRecipientsCount } from '~~/shared/campaignIndexRecipientsCount'
 
 /**
  * Lean campaign index — no recipient email arrays.
@@ -36,8 +37,10 @@ export default defineEventHandler(async (event) => {
   return {
     campaigns: campaigns.map((c) => {
       const id = String(c._id)
-      const recipientsCount =
-        c.recipientsType === 'manual' ? (manualCountByCampaign.get(id) ?? 0) : 0
+      const recipientsCount = campaignIndexRecipientsCount(
+        c.recipientsType,
+        manualCountByCampaign.get(id) ?? 0
+      )
       return {
         id,
         name: c.name,

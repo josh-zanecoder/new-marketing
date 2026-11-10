@@ -1245,12 +1245,9 @@ function onSendSuccessModalClose() {
 }
 
 function buildCampaignForSend(savedId: string): Campaign {
-  const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
-  if (fromStore) return fromStore
-  const manualRecipients = form.value.recipientsManual
-    .filter(isManualContactIdString)
-    .map((id) => manualRecipientLabels.value[id]?.email?.trim())
-    .filter((e): e is string => !!e && e.includes('@'))
+  // Always use the wizard selection — list-index rows report recipientsCount: 0 for
+  // list audiences, which falsely blocked Schedule on duplicated campaigns.
+  const selectedIds = form.value.recipientsManual.filter(isManualContactIdString)
   return {
     id: savedId,
     name: form.value.name.trim(),
@@ -1258,7 +1255,11 @@ function buildCampaignForSend(savedId: string): Campaign {
     senderMode: resolvedSenderModeForSave(),
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
-    recipients: manualRecipients.map((email) => ({ email })),
+    recipients: selectedIds.map((id) => ({
+      email: manualRecipientLabels.value[id]?.email?.trim() ?? '',
+      contactId: id
+    })),
+    recipientsCount: selectedIds.length,
     subject: form.value.subject,
     status: 'Draft',
     createdAt: '',

@@ -2,6 +2,7 @@ import type { Connection } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
+import { campaignIndexRecipientsCount } from '~~/shared/campaignIndexRecipientsCount'
 
 export type TenantCampaignIndexRow = {
   id: string
@@ -14,7 +15,7 @@ export type TenantCampaignIndexRow = {
   scheduledAt?: string
   /** Always empty on list — load detail for emails. */
   recipients: { email: string; contactId?: string }[]
-  /** Manual recipient row count (for send gating). List-type uses recipientsListId. */
+  /** ManualRecipient row count for manual and list audiences (list stores a subset). */
   recipientsCount: number
   createdAt: string
   updatedAt: string
@@ -61,8 +62,10 @@ export async function listTenantCampaignsForIndex(
 
   return campaigns.map((c) => {
     const id = String(c._id)
-    const recipientsCount =
-      c.recipientsType === 'manual' ? (manualCountByCampaign.get(id) ?? 0) : 0
+    const recipientsCount = campaignIndexRecipientsCount(
+      c.recipientsType,
+      manualCountByCampaign.get(id) ?? 0
+    )
     const snap = c.mergeUserSnapshot
     const creator = snap
       ? {

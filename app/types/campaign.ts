@@ -37,8 +37,8 @@ export interface Campaign {
   scheduledAt?: string
   recipients: CampaignRecipient[]
   /**
-   * Present on list responses: manual recipient row count (emails not loaded).
-   * Detail responses may omit this and use `recipients.length` instead.
+   * Present on list responses: ManualRecipient row count for manual and list
+   * audiences (emails not loaded). Detail may omit this and use `recipients.length`.
    */
   recipientsCount?: number
   createdAt: string

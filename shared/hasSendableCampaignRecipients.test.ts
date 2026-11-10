@@ -86,4 +86,10 @@ describe('schedule wizard uses the selected recipients, not the campaign list ro
       expect(fn).toContain('contactId: id')
     }
   })
+
+  it('send/schedule gates use the shared audience helper', () => {
+    const source = readFileSync('app/composables/useCampaignSendFlow.ts', 'utf8')
+    expect(source).toContain("from '~~/shared/hasSendableCampaignRecipients'")
+    expect(source).toContain('hasSendableCampaignRecipients(c)')
+  })
 })
