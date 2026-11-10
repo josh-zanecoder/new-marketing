@@ -6,9 +6,10 @@ import {
 } from './campaignUnscheduleCopy'
 
 describe('campaignUnscheduleCopy', () => {
-  it('keeps success and error copy distinct', () => {
-    expect(CAMPAIGN_UNSCHEDULE_SUCCESS.length).toBeGreaterThan(10)
+  it('uses the product success notification copy', () => {
+    expect(CAMPAIGN_UNSCHEDULE_SUCCESS).toBe('Campaign schedule canceled successfully.')
     expect(CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK.length).toBeGreaterThan(10)
+    expect(CAMPAIGN_UNSCHEDULE_SUCCESS).not.toBe(CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK)
   })
 
   it('includes the campaign name in the confirm message', () => {

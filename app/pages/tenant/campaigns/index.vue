@@ -14,6 +14,7 @@ definePageMeta({ layout: 'default' })
 
 const store = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
 const {
   canSendDraft,
@@ -69,7 +70,6 @@ const campaignToUnschedule = ref<Campaign | null>(null)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
-const unscheduleFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 const sendControlBusy = ref(false)
 const stopAllConfirmOpen = ref(false)
 const resumeConfirmCampaign = ref<Campaign | null>(null)
@@ -363,7 +363,6 @@ async function confirmScheduleFromList() {
 
 function openUnscheduleModal(c: Campaign) {
   if (!canCancelScheduledSend(c) || scheduleBusy.value) return
-  unscheduleFeedback.value = null
   campaignToUnschedule.value = c
 }
 
@@ -376,7 +375,6 @@ async function confirmUnschedule() {
   const c = campaignToUnschedule.value
   if (!c || scheduleBusy.value) return
   scheduleBusy.value = true
-  unscheduleFeedback.value = null
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
     const now = new Date().toISOString()
@@ -392,7 +390,7 @@ async function confirmUnschedule() {
       updatedAt: now
     })
     campaignToUnschedule.value = null
-    unscheduleFeedback.value = { type: 'success', message: CAMPAIGN_UNSCHEDULE_SUCCESS }
+    toast.success(CAMPAIGN_UNSCHEDULE_SUCCESS)
     await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
@@ -401,10 +399,7 @@ async function confirmUnschedule() {
         : e instanceof Error
           ? e.message
           : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
-    unscheduleFeedback.value = {
-      type: 'error',
-      message: typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
-    }
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK)
   } finally {
     scheduleBusy.value = false
   }
@@ -526,33 +521,6 @@ onUnmounted(() => {
         />
       </div>
     </header>
-
-    <div
-      v-if="unscheduleFeedback"
-      class="flex flex-col gap-3 rounded-2xl px-4 py-4 text-sm shadow-sm sm:flex-row sm:items-start sm:gap-3.5 sm:px-5"
-      :class="
-        unscheduleFeedback.type === 'success'
-          ? 'border border-emerald-200/90 bg-emerald-50/90 text-emerald-950'
-          : 'border border-amber-200/90 bg-amber-50/90 text-amber-950'
-      "
-      role="status"
-    >
-      <div class="flex min-w-0 flex-1 items-start gap-3">
-        <span class="min-w-0 flex-1 leading-relaxed">{{ unscheduleFeedback.message }}</span>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 self-start rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors sm:self-center"
-        :class="
-          unscheduleFeedback.type === 'success'
-            ? 'text-emerald-900 hover:bg-emerald-100/90'
-            : 'text-amber-900 hover:bg-amber-100/90'
-        "
-        @click="unscheduleFeedback = null"
-      >
-        Dismiss
-      </button>
-    </div>
 
     <div
       v-if="sendError && !sendingCampaignId"

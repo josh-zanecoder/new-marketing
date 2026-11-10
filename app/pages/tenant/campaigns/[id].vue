@@ -11,12 +11,17 @@ import {
   CAMPAIGN_SCHEDULE_ERROR_INVALID,
   validateCampaignScheduleWhen
 } from '~~/shared/campaignScheduleTime'
+import {
+  CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
+  CAMPAIGN_UNSCHEDULE_SUCCESS
+} from '~~/shared/campaignUnscheduleCopy'
 import { defaultScheduleDatetimeLocal, toDatetimeLocalValue } from '~~/shared/datetimeLocal'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
 const { sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { sessionUser, loadDefaultCampaignSender } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 const {
@@ -528,6 +533,7 @@ async function handleUnschedule() {
     })
     const cached = campaignStore.getCampaignDetailCache(c.id)
     if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
+    toast.success(CAMPAIGN_UNSCHEDULE_SUCCESS)
     await refresh()
     await campaignStore.fetchCampaigns({ force: true })
   } catch (e: unknown) {
@@ -536,8 +542,10 @@ async function handleUnschedule() {
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
-          : 'Could not cancel the scheduled send. Try again.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not cancel the scheduled send. Try again.'
+          : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
+    const message = typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
+    scheduleError.value = message
+    toast.error(message)
   } finally {
     scheduleBusy.value = false
   }

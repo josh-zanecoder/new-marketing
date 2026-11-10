@@ -1,5 +1,4 @@
-export const CAMPAIGN_UNSCHEDULE_SUCCESS =
-  'Scheduled send cancelled. The campaign is back to draft and will not send at the previous time.'
+export const CAMPAIGN_UNSCHEDULE_SUCCESS = 'Campaign schedule canceled successfully.'
 
 export const CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK =
   'Could not cancel the scheduled send. Try again.'
