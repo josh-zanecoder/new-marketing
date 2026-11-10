@@ -4,6 +4,10 @@ import { storeToRefs } from 'pinia'
 import { useCampaignListFullPreview } from '~/composables/useCampaignListFullPreview'
 import { useCampaignStore } from '~/store/campaignStore'
 import {
+  CAMPAIGN_DELETE_ERROR_FALLBACK,
+  CAMPAIGN_DELETE_SUCCESS
+} from '~~/shared/campaignDeleteCopy'
+import {
   CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE,
   CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
   CAMPAIGN_UNSCHEDULE_SUCCESS,
@@ -284,8 +288,21 @@ async function confirmDelete() {
   if (!c || deleteConfirmLoading.value) return
   deleteConfirmLoading.value = true
   try {
-    await store.deleteCampaign(c)
+    const ok = await store.deleteCampaign(c)
+    if (!ok) {
+      toast.error(CAMPAIGN_DELETE_ERROR_FALLBACK)
+      return
+    }
     campaignToDelete.value = null
+    toast.success(CAMPAIGN_DELETE_SUCCESS)
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : CAMPAIGN_DELETE_ERROR_FALLBACK
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_DELETE_ERROR_FALLBACK)
   } finally {
     deleteConfirmLoading.value = false
   }
