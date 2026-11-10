@@ -4,39 +4,32 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(__dirname, '..')
 
-describe('email template HTML image replace (Images flag path)', () => {
-  it('add/edit page inserts/replaces from Images library behind canUploadTemplateImage', () => {
+describe('email template HTML image insert and replace', () => {
+  it('add/edit page inserts and replaces an image on an existing template', () => {
     const page = readFileSync(resolve(root, 'app/pages/tenant/email-templates/add.vue'), 'utf8')
-    expect(page).toContain('canUploadTemplateImage')
-    expect(page).toContain('allowTenantImages')
+    expect(page).toContain('uploadEmailTemplateImage')
     expect(page).toContain('showTemplateImageReplace')
     expect(page).toContain('listEmailTemplateHtmlImages')
     expect(page).toContain('replaceEmailTemplateHtmlImageSrc')
     expect(page).toContain('openReplaceImagePicker')
     expect(page).toContain('openInsertImagePicker')
-    expect(page).toContain('TenantHostedImagePickerModal')
+    expect(page).toContain('onTemplateImageFile')
     expect(page).toContain('Insert image')
     expect(page).toContain('Images in this template')
     expect(page).toContain('Replace')
-    expect(page).not.toContain('uploadEmailTemplateImage')
-
-    const picker = readFileSync(
-      resolve(root, 'app/components/tenant/HostedImagePickerModal.vue'),
-      'utf8'
-    )
-    expect(picker).toContain('uploadTenantHostedImage')
-    expect(picker).toContain('Upload from device')
-    expect(picker).toContain('compressCustomMarketingImageFile')
-    expect(picker).toContain('isHostedImagePickerUploadDisabled')
-    expect(picker).toContain(':disabled="uploadDisabled"')
-    expect(picker).not.toContain('pending.value || uploadPending.value')
+    expect(page).toContain('allowTenantInsertImage')
+    expect(page).toContain('canInsertTemplateImage')
+    expect(page).not.toContain('allowTenantImages')
+    expect(page).not.toContain('canUploadTemplateImage')
   })
 
-  it('upload API remains Images-flag gated', () => {
+  it('template image upload requires the Insert image permission', () => {
     const api = readFileSync(
       resolve(root, 'server/api/v1/tenant/email-templates/images.post.ts'),
       'utf8'
     )
-    expect(api).toContain('allowTenantImages')
+    expect(api).toContain('EMAIL_TEMPLATE_GCS_IMAGE_FOLDER')
+    expect(api).toContain('requireTenantInsertImage')
+    expect(api).not.toContain('allowTenantImages')
   })
 })

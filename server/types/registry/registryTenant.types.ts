@@ -36,11 +36,15 @@ export interface RegistryTenantDoc {
    */
   allowTenantLoRecipientLists?: unknown
   /**
-   * When true, retail/tenant marketing may use the hosted Images library
-   * and insert or replace those images in email templates.
+   * When true, retail/tenant marketing may use the hosted Images library.
    * Missing/false → Images stay hidden.
    */
   allowTenantImages?: unknown
+  /**
+   * When true, retail/tenant marketing may insert or replace images in email templates.
+   * Missing/false → Insert image stays hidden. Independent of the Images library.
+   */
+  allowTenantInsertImage?: unknown
   /** Optional per-tenant Brevo transactional API key; empty/missing → env `BREVO_API_KEY`. */
   brevoApiKey?: unknown
   /**
@@ -99,9 +103,14 @@ export interface TenantAdminRow {
   allowTenantLoRecipientLists: boolean
   /**
    * When true, retail/tenant marketing may use the hosted Images library.
-   * Default false hides Images and template image insert/replace.
+   * Default false hides the Images page.
    */
   allowTenantImages: boolean
+  /**
+   * When true, retail/tenant marketing may insert or replace images in email templates.
+   * Default false hides Insert image.
+   */
+  allowTenantInsertImage: boolean
   /** True when a custom Brevo API key is stored for this tenant. */
   brevoApiKeyConfigured: boolean
   /** Masked prefix of the custom Brevo key (never the full secret). */

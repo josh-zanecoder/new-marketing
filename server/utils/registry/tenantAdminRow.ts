@@ -11,6 +11,7 @@ import {
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
+import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -47,6 +48,10 @@ export function parseRegistryAllowTenantLoRecipientLists(doc: RegistryTenantDoc)
 
 export function parseRegistryAllowTenantImages(doc: RegistryTenantDoc): boolean {
   return parseAllowTenantImages(doc.allowTenantImages)
+}
+
+export function parseRegistryAllowTenantInsertImage(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantInsertImage(doc.allowTenantInsertImage)
 }
 
 export function normalizeCampaignSenderEmailInput(
@@ -333,6 +338,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantEditSender = parseRegistryAllowTenantEditSender(doc)
   const allowTenantLoRecipientLists = parseRegistryAllowTenantLoRecipientLists(doc)
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
+  const allowTenantInsertImage = parseRegistryAllowTenantInsertImage(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
   const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
     parseRegistryBrevoWebhookSecret(doc)
@@ -354,6 +360,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     allowTenantEditSender,
     allowTenantLoRecipientLists,
     allowTenantImages,
+    allowTenantInsertImage,
     brevoApiKeyConfigured,
     brevoApiKeyPrefix,
     brevoWebhookSecretConfigured,

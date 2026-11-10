@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Storage, type Bucket } from '@google-cloud/storage'
+import { Storage, type Bucket, type GetFilesResponse } from '@google-cloud/storage'
 import {
   buildCustomMarketingGcsObjectPath,
   buildPublicGcsObjectUrl,
@@ -44,11 +44,13 @@ function readGcsEnv(): GcsEnv {
     (config.gcsBucket as string) ||
       process.env.GCS_BUCKET ||
       process.env.MARKETING_GCS_BUCKET ||
+      process.env.GCP_BUCKET_NAME ||
       ''
   ).trim()
   const projectId = String(
     (config.gcsProjectId as string) ||
       process.env.GCS_PROJECT_ID ||
+      process.env.GCP_PROJECT_ID ||
       process.env.CLOUD_TASKS_PROJECT_ID ||
       (config.firebaseProjectId as string) ||
       process.env.FIREBASE_PROJECT_ID ||
@@ -57,6 +59,7 @@ function readGcsEnv(): GcsEnv {
   const clientEmail = String(
     (config.gcsClientEmail as string) ||
       process.env.GCS_CLIENT_EMAIL ||
+      process.env.GCP_CLIENT_EMAIL ||
       (config.firebaseClientEmail as string) ||
       process.env.FIREBASE_CLIENT_EMAIL ||
       ''
@@ -65,6 +68,7 @@ function readGcsEnv(): GcsEnv {
     String(
       (config.gcsPrivateKey as string) ||
         process.env.GCS_PRIVATE_KEY ||
+        process.env.GCP_PRIVATE_KEY ||
         (config.firebasePrivateKey as string) ||
         process.env.FIREBASE_PRIVATE_KEY ||
         ''
@@ -236,7 +240,7 @@ export async function listCustomMarketingTenantImages(
   const maxResults = Math.min(500, Math.max(1, opts?.maxResults ?? 300))
   const bucket = getGcsBucket()
 
-  let files: Awaited<ReturnType<Bucket['getFiles']>>[0]
+  let files: GetFilesResponse[0]
   try {
     ;[files] = await bucket.getFiles({
       prefix,

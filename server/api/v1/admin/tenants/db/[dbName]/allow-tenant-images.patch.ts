@@ -5,8 +5,7 @@ import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 
 /**
- * Superadmin-only: toggle whether this tenant may use the hosted Images library
- * and insert or replace those images in email templates.
+ * Superadmin-only: toggle whether this tenant may use the hosted Images library.
  */
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
