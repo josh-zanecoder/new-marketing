@@ -2,6 +2,8 @@
 import type { UploadedEmailDesignPayload } from '~~/shared/uploadedEmailDesign'
 import { normalizeUploadedEmailHtml, readUploadedHtmlFile } from '~~/shared/utils/uploadedEmailHtml'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
+import { emailHtmlImageTag, parseInsertableImageUrl } from '~~/shared/utils/emailTemplateHtmlImages'
+import { compressCustomMarketingImageFile } from '~/utils/compressCustomMarketingImage'
 
 export interface EmailTemplateItem {
   id: string
@@ -32,11 +34,26 @@ const emit = defineEmits<{
   'upload-html': [UploadedEmailDesignPayload]
 }>()
 
+const marketingApi = useTenantMarketingApi()
+const {
+  allowTenantInsertImage,
+  loaded: tenantFlagsLoaded,
+  loadDefaultCampaignSender
+} = useDefaultCampaignSender()
+const canInsertImage = computed(
+  () => tenantFlagsLoaded.value && allowTenantInsertImage.value
+)
+
 const saveHtmlToLibrary = ref(false)
 const uploadPasteHtml = ref('')
 const uploadError = ref('')
 const uploadPending = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const htmlTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const imageFileInputRef = ref<HTMLInputElement | null>(null)
+const imageUrl = ref('')
+const imageUploadError = ref('')
+const imageUploadPending = ref(false)
 const uploadDragOver = ref(false)
 const uploadEditorOpen = ref(false)
 
@@ -72,7 +89,71 @@ function resetUploadForm() {
   uploadDragOver.value = false
   uploadEditorOpen.value = false
   saveHtmlToLibrary.value = false
+  imageUrl.value = ''
+  imageUploadError.value = ''
+  imageUploadPending.value = false
   if (fileInputRef.value) fileInputRef.value.value = ''
+  if (imageFileInputRef.value) imageFileInputRef.value.value = ''
+}
+
+function insertHtmlAtCursor(snippet: string) {
+  const el = htmlTextareaRef.value
+  const current = uploadPasteHtml.value
+  if (!el) {
+    uploadPasteHtml.value = current + snippet
+    return
+  }
+  const start = el.selectionStart ?? current.length
+  const end = el.selectionEnd ?? start
+  uploadPasteHtml.value = current.slice(0, start) + snippet + current.slice(end)
+  nextTick(() => {
+    el.focus()
+    const pos = start + snippet.length
+    el.setSelectionRange(pos, pos)
+  })
+}
+
+function openInsertImagePicker() {
+  if (!canInsertImage.value || imageUploadPending.value || uploadPending.value) return
+  imageUploadError.value = ''
+  imageFileInputRef.value?.click()
+}
+
+async function onCampaignImageFile(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!canInsertImage.value || !file || imageUploadPending.value) return
+
+  imageUploadPending.value = true
+  imageUploadError.value = ''
+  try {
+    const dataUrl = await compressCustomMarketingImageFile(file)
+    const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
+    const url = typeof uploaded?.url === 'string' ? uploaded.url.trim() : ''
+    if (!url) throw new Error('Upload succeeded but no image link was returned.')
+    insertHtmlAtCursor(emailHtmlImageTag(url))
+  } catch (e: unknown) {
+    const message =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? '')
+        : ''
+    imageUploadError.value = message || (e instanceof Error ? e.message : 'Could not upload image')
+  } finally {
+    imageUploadPending.value = false
+  }
+}
+
+function insertImageFromUrl() {
+  if (!canInsertImage.value || imageUploadPending.value) return
+  const url = parseInsertableImageUrl(imageUrl.value)
+  if (!url) {
+    imageUploadError.value = 'Enter an image link that starts with http:// or https://.'
+    return
+  }
+  imageUploadError.value = ''
+  insertHtmlAtCursor(emailHtmlImageTag(url))
+  imageUrl.value = ''
 }
 
 function openUploadEditor() {
@@ -158,6 +239,7 @@ watch(
 )
 
 onMounted(() => {
+  void loadDefaultCampaignSender()
   if (import.meta.client) {
     window.addEventListener('keydown', onKeydown)
   }
@@ -267,7 +349,7 @@ onUnmounted(() => {
                     <button
                       type="button"
                       class="flex-1 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:rounded-lg sm:py-2"
-                      :disabled="uploadPending || !uploadPasteHtml.trim()"
+                      :disabled="uploadPending || imageUploadPending || !uploadPasteHtml.trim()"
                       @click="onUploadFromPaste"
                     >
                       Use HTML
@@ -279,18 +361,60 @@ onUnmounted(() => {
               <div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                 <!-- Code panel -->
                 <section class="flex min-h-0 flex-1 flex-col border-b border-slate-200 lg:w-1/2 lg:border-b-0 lg:border-r">
-                  <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
+                  <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
                     <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">HTML code</span>
-                    <button
-                      type="button"
-                      class="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"
-                      @click="uploadPasteHtml = ''; uploadError = ''"
-                    >
-                      Clear
-                    </button>
+                    <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+                      <template v-if="canInsertImage">
+                        <input
+                          ref="imageFileInputRef"
+                          type="file"
+                          accept="image/png,image/jpeg,image/gif,image/webp"
+                          class="sr-only"
+                          :disabled="imageUploadPending || uploadPending"
+                          @change="onCampaignImageFile"
+                        >
+                        <button
+                          type="button"
+                          class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                          :disabled="imageUploadPending || uploadPending"
+                          @click="openInsertImagePicker"
+                        >
+                          {{ imageUploadPending ? 'Uploading image…' : 'Insert image' }}
+                        </button>
+                        <input
+                          v-model="imageUrl"
+                          type="url"
+                          inputmode="url"
+                          placeholder="https://image-url"
+                          aria-label="Image URL"
+                          class="min-w-[10rem] flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20 sm:max-w-xs"
+                          :disabled="imageUploadPending || uploadPending"
+                          @keydown.enter.prevent="insertImageFromUrl"
+                        >
+                        <button
+                          type="button"
+                          class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                          :disabled="imageUploadPending || uploadPending || !imageUrl.trim()"
+                          @click="insertImageFromUrl"
+                        >
+                          Insert URL
+                        </button>
+                      </template>
+                      <button
+                        type="button"
+                        class="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"
+                        @click="uploadPasteHtml = ''; uploadError = ''"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
+                  <p v-if="imageUploadError" class="shrink-0 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700" role="alert">
+                    {{ imageUploadError }}
+                  </p>
                   <textarea
                     id="upload-paste-html"
+                    ref="htmlTextareaRef"
                     v-model="uploadPasteHtml"
                     class="min-h-[min(36dvh,320px)] flex-1 resize-none border-0 bg-slate-950 px-3 py-3 font-mono text-[12px] leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500/40 sm:px-4 sm:py-4 sm:text-[13px] lg:min-h-0"
                     placeholder="<!DOCTYPE html>&#10;<html>&#10;  …&#10;</html>"

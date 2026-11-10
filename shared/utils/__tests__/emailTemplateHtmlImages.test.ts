@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  emailHtmlImageTag,
   emailTemplateHtmlImageLabel,
   listEmailTemplateHtmlImages,
+  parseInsertableImageUrl,
   replaceEmailTemplateHtmlImageSrc
 } from '../emailTemplateHtmlImages'
 
@@ -45,5 +47,13 @@ describe('emailTemplateHtmlImages', () => {
     expect(emailTemplateHtmlImageLabel('https://cdn.example/path/hero.webp', 2)).toContain(
       'hero.webp'
     )
+  })
+
+  it('builds an img tag and accepts only http(s) urls', () => {
+    const tag = emailHtmlImageTag('https://cdn.example/a.png?x=1&y=2')
+    expect(tag).toContain('src="https://cdn.example/a.png?x=1&amp;y=2"')
+    expect(parseInsertableImageUrl(' https://cdn.example/a.png ')).toBe('https://cdn.example/a.png')
+    expect(parseInsertableImageUrl('javascript:alert(1)')).toBeNull()
+    expect(parseInsertableImageUrl('not a url')).toBeNull()
   })
 })

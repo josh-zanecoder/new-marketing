@@ -63,6 +63,26 @@ export function replaceEmailTemplateHtmlImageSrc(
   return html.slice(0, target.tagStart) + nextTag + html.slice(target.tagEnd)
 }
 
+/** `<img>` markup inserted into pasted campaign or template HTML. */
+export function emailHtmlImageTag(url: string): string {
+  const src = String(url ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  return `<img src="${src}" alt="" width="600" style="display:block;max-width:100%;height:auto;border:0;" />`
+}
+
+/** Accept only http(s) image links. Returns null when the value is not a usable URL. */
+export function parseInsertableImageUrl(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  return url.toString()
+}
+
 /** Short label for UI chips (avoids dumping entire base64 into the label). */
 export function emailTemplateHtmlImageLabel(src: string, index: number): string {
   const n = index + 1
