@@ -38,6 +38,14 @@
         <button
           type="button"
           class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'permissions' }"
+          @click="tab = 'permissions'"
+        >
+          Permissions
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
           :class="{ 'tab-btn--active': tab === 'filters' }"
           @click="tab = 'filters'"
         >
@@ -80,6 +88,13 @@
       <TenantTabsOverviewTab
         v-show="tab === 'overview'"
         :tenant="tenant"
+      />
+
+      <AdminTenantPermissionsPanel
+        v-show="tab === 'permissions'"
+        :db-name="tenant.dbName"
+        :value="tenantPermissionValue"
+        @saved="applyTenantPermissions"
       />
 
       <TenantTabsRecipientFiltersTab v-show="tab === 'filters'">
@@ -1276,6 +1291,10 @@ import {
 import { fetchErrorMessage } from '~/utils/fetchErrorMessage'
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { MOBILE_RECORD_FIELD_CHAR_LIMIT } from '~/utils/truncateTabCellText'
+import {
+  tenantFeaturePermissionStateFrom,
+  type TenantFeaturePermissionState
+} from '~~/shared/tenantFeaturePermissions'
 
 definePageMeta({ layout: 'admin' })
 
@@ -1286,14 +1305,34 @@ const dbName = computed(() =>
   decodeURIComponent(String(route.params.dbName || ''))
 )
 
-const tab = ref<
-  | 'overview'
-  | 'filters'
-  | 'dynamicVariables'
-  | 'deletedTemplates'
-  | 'bulkUnsubscribe'
-  | 'bulkTemplates'
->('overview')
+const TENANT_DETAIL_TABS = [
+  'overview',
+  'permissions',
+  'filters',
+  'dynamicVariables',
+  'deletedTemplates',
+  'bulkUnsubscribe',
+  'bulkTemplates'
+] as const
+
+type TenantDetailTab = (typeof TENANT_DETAIL_TABS)[number]
+
+function tabFromQuery(value: unknown): TenantDetailTab {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (typeof raw === 'string' && (TENANT_DETAIL_TABS as readonly string[]).includes(raw)) {
+    return raw as TenantDetailTab
+  }
+  return 'overview'
+}
+
+const tab = ref<TenantDetailTab>(tabFromQuery(route.query.tab))
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    tab.value = tabFromQuery(value)
+  }
+)
 
 interface ContactTypeRow {
   id: string
@@ -1314,6 +1353,12 @@ interface TenantDetail {
   kafkaOutboundTopic: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
+  allowTenantEditSender?: boolean
+  allowTenantLoRecipientLists?: boolean
+  allowTenantImages?: boolean
+  allowTenantInsertImage?: boolean
+  allowTenantGrapesBuilder?: boolean
+  allowTenantTemplateBuilder?: boolean
   campaignFromAddressMode?: 'default' | 'contact_owner'
   brevoApiKeyConfigured?: boolean
   brevoApiKeyPrefix?: string | null
@@ -1357,6 +1402,15 @@ interface DynamicVariableRow {
 
 const tenant = ref<TenantDetail | null>(null)
 const tenantPending = ref(true)
+
+const tenantPermissionValue = computed(() =>
+  tenantFeaturePermissionStateFrom(tenant.value)
+)
+
+function applyTenantPermissions(next: TenantFeaturePermissionState) {
+  if (!tenant.value) return
+  tenant.value = { ...tenant.value, ...next }
+}
 
 const filters = ref<FilterRow[]>([])
 const filtersPending = ref(false)

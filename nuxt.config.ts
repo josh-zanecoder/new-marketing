@@ -28,12 +28,18 @@ export default defineNuxtConfig({
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
     /** GCS bucket for Custom Marketing email images (public HTTPS URLs for Gmail). */
-    gcsBucket: process.env.GCS_BUCKET || process.env.MARKETING_GCS_BUCKET || '',
+    gcsBucket: process.env.GCS_BUCKET || process.env.MARKETING_GCS_BUCKET || process.env.GCP_BUCKET_NAME || '',
     gcsProjectId:
-      process.env.GCS_PROJECT_ID || process.env.CLOUD_TASKS_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || '',
-    gcsClientEmail: process.env.GCS_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || '',
+      process.env.GCS_PROJECT_ID ||
+      process.env.GCP_PROJECT_ID ||
+      process.env.CLOUD_TASKS_PROJECT_ID ||
+      process.env.FIREBASE_PROJECT_ID ||
+      '',
+    gcsClientEmail:
+      process.env.GCS_CLIENT_EMAIL || process.env.GCP_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL || '',
     /** PEM private key, or set `GCS_PRIVATE_KEY_BASE64` instead. */
-    gcsPrivateKey: process.env.GCS_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || '',
+    gcsPrivateKey:
+      process.env.GCS_PRIVATE_KEY || process.env.GCP_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || '',
     gcsPrivateKeyBase64: process.env.GCS_PRIVATE_KEY_BASE64 || '',
     public: {
       marketingBaseUrl:

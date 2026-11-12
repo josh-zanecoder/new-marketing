@@ -501,14 +501,16 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
   }
 
   async function scheduleCampaignSend(campaignId: string, scheduledAt: string) {
-    return $fetch<{ ok: boolean; campaignId: string; scheduledAt: string }>(
-      '/api/v1/tenant/send-campaign/schedule',
-      tenantFetchInit({
-        method: 'POST',
-        body: { campaignId, scheduledAt },
-        timeout: 30000
-      })
-    )
+    return $fetch<{
+      ok: boolean
+      campaignId: string
+      scheduledAt: string
+      rescheduled?: boolean
+    }>('/api/v1/tenant/send-campaign/schedule', tenantFetchInit({
+      method: 'POST',
+      body: { campaignId, scheduledAt },
+      timeout: 30000
+    }))
   }
 
   async function unscheduleCampaignSend(campaignId: string) {
@@ -645,6 +647,23 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     )
   }
 
+  /** Images already uploaded for email templates (Insert image permission). */
+  async function fetchEmailTemplateImages() {
+    return $fetch<{
+      ok: boolean
+      items: Array<{
+        id: string
+        url: string
+        objectPath: string
+        fileName: string
+        contentType: string
+        size: number
+        createdAt: string
+      }>
+      total: number
+    }>('/api/v1/tenant/email-templates/images', tenantFetchInit({ timeout: 60000 }))
+  }
+
   /** Host an image for HTML email templates; returns public HTTPS URL for img src. */
   async function uploadEmailTemplateImage(body: { dataUrl: string }) {
     return $fetch<{ ok: boolean; url: string; objectPath: string }>(
@@ -737,6 +756,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     abortCampaignRecipients,
     sendTestEmail,
     uploadCustomMarketingImage,
+    fetchEmailTemplateImages,
     uploadEmailTemplateImage,
     fetchTenantHostedImages,
     uploadTenantHostedImage,

@@ -4,6 +4,10 @@ import {
   groupTenantHostedImagesByDay,
   type TenantHostedImage
 } from '~~/shared/tenantHostedImages'
+import {
+  isHostedImagePickerUploadDisabled,
+  shouldShowHostedImagePickerListSkeleton
+} from '~~/shared/utils/hostedImagePickerUploadGate'
 
 const props = defineProps<{
   open: boolean
@@ -30,7 +34,13 @@ const dayGroups = computed(() => groupTenantHostedImagesByDay(items.value))
 const selectedItem = computed(
   () => items.value.find((i) => i.id === selectedId.value) ?? null
 )
-const busy = computed(() => pending.value || uploadPending.value)
+/** Upload stays enabled while the gallery list loads; only block mid-upload. */
+const uploadDisabled = computed(() =>
+  isHostedImagePickerUploadDisabled(uploadPending.value)
+)
+const showListSkeleton = computed(() =>
+  shouldShowHostedImagePickerListSkeleton(pending.value, items.value.length)
+)
 
 async function loadImages(opts?: { selectId?: string | null }) {
   pending.value = true
@@ -77,7 +87,7 @@ function onConfirm() {
 }
 
 function onUploadClick() {
-  if (busy.value) return
+  if (uploadDisabled.value) return
   loadError.value = ''
   fileInputRef.value?.click()
 }
@@ -160,13 +170,13 @@ async function onFileChange(ev: Event) {
               type="file"
               accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
               class="sr-only"
-              :disabled="busy"
+              :disabled="uploadDisabled"
               @change="onFileChange"
             >
             <button
               type="button"
               class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="busy"
+              :disabled="uploadDisabled"
               @click="onUploadClick"
             >
               <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -199,7 +209,7 @@ async function onFileChange(ev: Event) {
           </p>
 
           <div
-            v-if="pending && !items.length"
+            v-if="showListSkeleton"
             class="space-y-4"
             aria-busy="true"
             aria-label="Loading images"
@@ -225,7 +235,7 @@ async function onFileChange(ev: Event) {
             <button
               type="button"
               class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-              :disabled="busy"
+              :disabled="uploadDisabled"
               @click="onUploadClick"
             >
               {{ uploadPending ? 'Uploading…' : 'Upload from device' }}

@@ -513,7 +513,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
                   Change design
                 </button>
                 <button
-                  v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
+                  v-if="emailBuilderAllowed && designEditorCampaignId && form.templateMode !== 'upload'"
                   type="button"
                   class="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:w-auto"
                   @click="openEditorWithCurrentDesign"
@@ -525,7 +525,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
                 <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
                 </p>
-                <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
+                <p v-else-if="emailBuilderAllowed && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Save the campaign once to get a stable link for the editor.
                 </p>
               </template>
@@ -542,7 +542,7 @@ class="font-semibold text-primary-600 cursor-pointer" :disabled="contactsCatalog
           :pending="emailTemplatesPending"
           :error="emailTemplatesError"
           :merge-tag-hints="designMergeTagHints"
-          :email-editor-enabled="CAMPAIGN_EMAIL_EDITOR_ENABLED"
+          :email-editor-enabled="emailBuilderAllowed"
           @create-from-scratch="handleCreateFromScratch"
           @select-template="handleUseTemplate"
           @upload-html="handleUploadHtml"
@@ -869,6 +869,10 @@ import {
   resolveTypedCampaignSenderName
 } from '~~/shared/resolveTypedCampaignSenderName'
 import { campaignSaveMissingFieldsMessage } from '~~/shared/campaignSaveRequiredFields'
+import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
 
 const campaignStore = useCampaignStore()
 const {
@@ -879,12 +883,22 @@ const {
   sessionUser,
   allowTenantEditSender,
   allowTenantLoRecipientLists,
+  allowTenantGrapesBuilder,
+  allowTenantTemplateBuilder,
+  loaded: tenantFlagsLoaded,
   canSelectAnyLoanOfficer,
   isSelfOnlyAudience,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
+const emailBuilderAllowed = computed(
+  () =>
+    CAMPAIGN_EMAIL_EDITOR_ENABLED &&
+    tenantFlagsLoaded.value &&
+    (allowTenantGrapesBuilder.value || allowTenantTemplateBuilder.value)
+)
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
 const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
   useCampaignSendFlow()
@@ -1294,12 +1308,9 @@ function onSendSuccessModalClose() {
 }
 
 function buildCampaignForSend(savedId: string): Campaign {
-  const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
-  if (fromStore) return fromStore
-  const manualRecipients = form.value.recipientsManual
-    .filter(isManualContactIdString)
-    .map((id) => manualRecipientLabels.value[id]?.email?.trim())
-    .filter((e): e is string => !!e && e.includes('@'))
+  // Always use the wizard selection — list-index rows report recipientsCount: 0 for
+  // list audiences, which falsely blocked Schedule on duplicated campaigns.
+  const selectedIds = form.value.recipientsManual.filter(isManualContactIdString)
   return {
     id: savedId,
     name: form.value.name.trim(),
@@ -1307,7 +1318,11 @@ function buildCampaignForSend(savedId: string): Campaign {
     senderMode: resolvedSenderModeForSave(),
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
-    recipients: manualRecipients.map((email) => ({ email })),
+    recipients: selectedIds.map((id) => ({
+      email: manualRecipientLabels.value[id]?.email?.trim() ?? '',
+      contactId: id
+    })),
+    recipientsCount: selectedIds.length,
     subject: form.value.subject,
     status: 'Draft',
     createdAt: '',
@@ -2310,6 +2325,7 @@ async function confirmScheduleFromWizard() {
       if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
       clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
       void campaignStore.fetchCampaigns({ force: true })
+      toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
       await navigateTo(`/tenant/campaigns/${id}`)
     } catch (e: unknown) {
       const msg =
@@ -2317,8 +2333,10 @@ async function confirmScheduleFromWizard() {
           ? (e as { data?: { message?: string } }).data?.message
           : e instanceof Error
             ? e.message
-            : 'Could not schedule send.'
-      scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+            : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+      const message = typeof msg === 'string' ? msg : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+      scheduleError.value = message
+      toast.error(message)
     }
   } catch (e: unknown) {
     setSaveErrorFromCatch(e)

@@ -1,32 +1,35 @@
-import { getRegistryConnection } from '../../../lib/mongoose'
-import { hashTenantApiKey } from '../../../tenant/api-key'
-import { findRegistryTenantByApiKey } from '../../../tenant/registry-auth'
-import { parseMarketingHandoffToken } from '../../../utils/auth/marketingHandoffJwt'
-import { signMarketingTenantBrowserSession } from '../../../utils/auth/marketingTenantBrowserSession'
+import { getRegistryConnection } from "../../../lib/mongoose";
+import { hashTenantApiKey } from "../../../tenant/api-key";
+import { findRegistryTenantByApiKey } from "../../../tenant/registry-auth";
+import { parseMarketingHandoffToken } from "../../../utils/auth/marketingHandoffJwt";
+import { signMarketingTenantBrowserSession } from "../../../utils/auth/marketingTenantBrowserSession";
 import {
   MARKETING_CRM_EMBED_COOKIE,
   MARKETING_TENANT_BRIDGE_COOKIE,
   MARKETING_TENANT_SESSION_COOKIE,
-  TENANT_AUTH_COOKIE_MAX_AGE
-} from '../../../constants/tenantAuth.constants'
-import { marketingTenantHandoffCookieBase } from '~~/shared/marketingTenantHandoffCookies'
+  TENANT_AUTH_COOKIE_MAX_AGE,
+} from "../../../constants/tenantAuth.constants";
+import { marketingTenantHandoffCookieBase } from "~~/shared/marketingTenantHandoffCookies";
 
 interface Body {
-  token?: string
+  token?: string;
 }
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<Body>(event)
-  const token = body?.token?.trim()
+  const body = await readBody<Body>(event);
+  const token = body?.token?.trim();
   if (!token) {
-    throw createError({ statusCode: 400, message: 'Missing token' })
+    throw createError({ statusCode: 400, message: "Missing token" });
   }
 
-  let parsed: ReturnType<typeof parseMarketingHandoffToken>
+  let parsed: ReturnType<typeof parseMarketingHandoffToken>;
   try {
-    parsed = parseMarketingHandoffToken(token)
+    parsed = parseMarketingHandoffToken(token);
   } catch {
-    throw createError({ statusCode: 401, message: 'Invalid or expired handoff token' })
+    throw createError({
+      statusCode: 401,
+      message: "Invalid or expired handoff token",
+    });
   }
 
   const {
@@ -37,29 +40,29 @@ export default defineEventHandler(async (event) => {
     lastName: handoffLastName,
     phone: handoffPhone,
     role: handoffRole,
+    permissions,
     crmAppUrl: handoffCrmAppUrl,
     allowedOwnerEmails,
-    tenantWideContacts
-  } = parsed
-  if (!apiKey.startsWith('nmk_')) {
-    throw createError({ statusCode: 400, message: 'Invalid tenant key material' })
+    tenantWideContacts,
+  } = parsed;
+  if (!apiKey.startsWith("nmk_")) {
+    throw createError({
+      statusCode: 400,
+      message: "Invalid tenant key material",
+    });
   }
 
-  const registryConn = await getRegistryConnection()
-  const row = await findRegistryTenantByApiKey(registryConn, apiKey)
+  const registryConn = await getRegistryConnection();
+  const row = await findRegistryTenantByApiKey(registryConn, apiKey);
   if (!row) {
-    throw createError({ statusCode: 401, message: 'Unknown API key' })
+    throw createError({ statusCode: 401, message: "Unknown API key" });
   }
 
-  if (
-    marketingTenantId &&
-    row.tenantId &&
-    row.tenantId !== marketingTenantId
-  ) {
-    throw createError({ statusCode: 401, message: 'Handoff tenant mismatch' })
+  if (marketingTenantId && row.tenantId && row.tenantId !== marketingTenantId) {
+    throw createError({ statusCode: 401, message: "Handoff tenant mismatch" });
   }
 
-  const clientKeyHash = hashTenantApiKey(apiKey)
+  const clientKeyHash = hashTenantApiKey(apiKey);
   const sessionJwt = signMarketingTenantBrowserSession({
     dbName: row.dbName,
     tenantId: row.tenantId ?? null,
@@ -70,18 +73,33 @@ export default defineEventHandler(async (event) => {
     ...(handoffLastName ? { handoffLastName } : {}),
     ...(handoffPhone ? { handoffPhone } : {}),
     ...(handoffRole ? { handoffRole } : {}),
+    ...(permissions !== undefined ? { permissions } : {}),
     ...(handoffCrmAppUrl ? { handoffCrmAppUrl } : {}),
     ...(tenantWideContacts === true ? { tenantWideContacts: true } : {}),
-    ...(allowedOwnerEmails?.length ? { contactOwnerEmails: allowedOwnerEmails } : {})
-  })
+    ...(allowedOwnerEmails?.length
+      ? { contactOwnerEmails: allowedOwnerEmails }
+      : {}),
+  });
 
-  const base = marketingTenantHandoffCookieBase()
+  const base = marketingTenantHandoffCookieBase();
 
-  deleteCookie(event, 'marketing_token', { path: '/' })
+  deleteCookie(event, "marketing_token", { path: "/" });
+  deleteCookie(event, MARKETING_TENANT_SESSION_COOKIE, base);
+  deleteCookie(event, MARKETING_TENANT_BRIDGE_COOKIE, base);
+  deleteCookie(event, MARKETING_CRM_EMBED_COOKIE, base);
 
-  setCookie(event, MARKETING_TENANT_SESSION_COOKIE, sessionJwt, { ...base, httpOnly: true })
-  setCookie(event, MARKETING_TENANT_BRIDGE_COOKIE, '1', { ...base, httpOnly: false })
-  setCookie(event, MARKETING_CRM_EMBED_COOKIE, '1', { ...base, httpOnly: false })
+  setCookie(event, MARKETING_TENANT_SESSION_COOKIE, sessionJwt, {
+    ...base,
+    httpOnly: true,
+  });
+  setCookie(event, MARKETING_TENANT_BRIDGE_COOKIE, "1", {
+    ...base,
+    httpOnly: false,
+  });
+  setCookie(event, MARKETING_CRM_EMBED_COOKIE, "1", {
+    ...base,
+    httpOnly: false,
+  });
 
-  return { ok: true as const, tenantName: row.tenantName }
-})
+  return { ok: true as const, tenantName: row.tenantName };
+});

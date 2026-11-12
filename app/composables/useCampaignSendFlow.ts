@@ -1,18 +1,11 @@
 import { storeToRefs } from 'pinia'
+import { hasSendableCampaignRecipients } from '~~/shared/hasSendableCampaignRecipients'
+import { canUnscheduleCampaign } from '~~/shared/campaignUnscheduleEligibility'
 import type { Campaign, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 
 function hasSendableRecipients(c: Campaign): boolean {
-  if (c.recipientsType === 'manual') {
-    return (c.recipientsCount ?? c.recipients?.length ?? 0) > 0
-  }
-  if (c.recipientsType === 'list') {
-    // List campaigns may store a campaign-specific subset; require at least one resolved recipient when known.
-    const count = c.recipientsCount ?? c.recipients?.length
-    if (typeof count === 'number') return count > 0
-    return !!c.recipientsListId?.trim()
-  }
-  return false
+  return hasSendableCampaignRecipients(c)
 }
 
 export function canSendDraft(c: Campaign): boolean {
@@ -30,6 +23,16 @@ export function canSendNow(c: Campaign): boolean {
 
 /** Same rules as send-now; only draft campaigns can be scheduled. */
 export const canScheduleDraft = canSendDraft
+
+/** Scheduled campaigns can change send time without canceling. */
+export function canRescheduleScheduled(c: Campaign): boolean {
+  return c.status === 'Scheduled' && !!c.scheduledAt
+}
+
+/** Cancel scheduled send from list/detail (Scheduled, or Draft with leftover scheduledAt). */
+export function canCancelScheduledSend(c: Campaign): boolean {
+  return canUnscheduleCampaign(c)
+}
 
 export function canPauseSend(c: Campaign): boolean {
   return c.status === 'Sending'
@@ -154,6 +157,8 @@ export function useCampaignSendFlow() {
     canSendScheduled,
     canSendNow,
     canScheduleDraft,
+    canRescheduleScheduled,
+    canCancelScheduledSend,
     canPauseSend,
     canStopSend,
     canResumeSend,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
 import { deserializeEmailEditorHtml, serializeEmailEditorFragment, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
+import { emailImageBuilderExportHtml } from '~~/shared/utils/emailTemplateHtmlImages'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
 definePageMeta({
@@ -43,11 +44,31 @@ const DEFAULT_EMAIL_TEMPLATE = `
     </table>
   </td></tr>
 </table>
-<style>.email-wrapper{width:100%;min-height:100vh;}.cta-btn:hover{background:#3d3834 !important;}</style>
+<style>.email-wrapper{width:100%;}.cta-btn:hover{background:#3d3834 !important;}</style>
 `
 
 const marketingApi = useTenantMarketingApi()
 const route = useRoute()
+const {
+  allowTenantGrapesBuilder,
+  allowTenantTemplateBuilder,
+  loaded: imagePermissionLoaded,
+  loadDefaultCampaignSender
+} = useDefaultCampaignSender()
+const builderMode = ref<'template' | 'grapes'>('template')
+const visualHtml = ref('')
+const canUseTemplate = computed(() => imagePermissionLoaded.value && allowTenantTemplateBuilder.value)
+const canUseGrapes = computed(() => imagePermissionLoaded.value && allowTenantGrapesBuilder.value)
+const canUseEmailBuilder = computed(() => canUseTemplate.value || canUseGrapes.value)
+
+watch([imagePermissionLoaded, canUseTemplate, canUseGrapes], () => {
+  if (!imagePermissionLoaded.value) return
+  if (builderMode.value === 'grapes' && !canUseGrapes.value) builderMode.value = 'template'
+  if (builderMode.value === 'template' && !canUseTemplate.value && canUseGrapes.value) {
+    initialHtml.value = visualHtml.value
+    builderMode.value = 'grapes'
+  }
+})
 const editorContainerRef = ref<HTMLDivElement | null>(null)
 const editorRef = ref<Editor | null>(null)
 const initialHtml = ref<string | null>(null)
@@ -57,6 +78,107 @@ const editorInitInFlight = ref(false)
 let editorInitToken = 0
 let blockSyncTimer: ReturnType<typeof setTimeout> | null = null
 let editorCleanupFns: Array<() => void> = []
+
+function resolvePluginFn(
+  mod: unknown
+): ((editor: Editor, opts?: Record<string, unknown>) => void) | null {
+  let current = mod
+  for (let i = 0; i < 4; i += 1) {
+    if (typeof current === 'function') {
+      return current as (editor: Editor, opts?: Record<string, unknown>) => void
+    }
+    if (!current || typeof current !== 'object' || !('default' in current)) return null
+    current = (current as { default: unknown }).default
+  }
+  return null
+}
+
+function resolveGrapesApi(mod: unknown): { init: (config: object) => Editor } | null {
+  let current = mod
+  for (let i = 0; i < 4; i += 1) {
+    if (
+      current &&
+      typeof current === 'object' &&
+      typeof (current as { init?: unknown }).init === 'function'
+    ) {
+      return current as { init: (config: object) => Editor }
+    }
+    if (!current || typeof current !== 'object' || !('default' in current)) return null
+    current = (current as { default: unknown }).default
+  }
+  return null
+}
+
+const EDITOR_IMAGE_SOURCE_MAX_BYTES = 8 * 1024 * 1024
+
+/**
+ * Grapes writes the canvas with document.write, which Chrome treats as a sandboxed
+ * about:srcdoc frame and then blocks every script, including the image drop.
+ * Vue DevTools also injects into every iframe and repeats that error.
+ */
+function openCanvasFrame(frame: HTMLIFrameElement | null | undefined) {
+  if (!frame) return
+  frame.setAttribute('data-vue-devtools-ignore', '')
+  if (frame.dataset.emailCanvasReady === '1') return
+  frame.dataset.emailCanvasReady = '1'
+  const flags = new Set((frame.getAttribute('sandbox') || '').split(/\s+/).filter(Boolean))
+  flags.add('allow-same-origin')
+  flags.add('allow-scripts')
+  flags.add('allow-forms')
+  flags.add('allow-modals')
+  flags.add('allow-popups')
+  flags.add('allow-downloads')
+  frame.setAttribute('sandbox', [...flags].join(' '))
+  if (!frame.getAttribute('src')) frame.src = 'about:blank'
+}
+
+function stopImageLoadLoop(editor: Editor) {
+  editor.DomComponents.addType('image', {
+    extend: 'image',
+    view: {
+      onLoad(this: {
+        model: { get: (key: string) => unknown; set: (key: string, value: unknown, opts?: object) => void }
+        em?: { Canvas?: { refresh?: (opts: object) => void } }
+      }) {
+        if (this.model.get('emailImageLaidOut')) return
+        this.model.set('emailImageLaidOut', 1, { silent: true })
+        this.em?.Canvas?.refresh?.({ spots: true })
+      }
+    }
+  })
+}
+
+async function uploadCanvasImage(
+  editor: Editor,
+  event: Event,
+  done?: (result: { data: Array<{ src: string; name?: string }> }) => void
+) {
+  const dragEvent = event as DragEvent
+  const input = event.target instanceof HTMLInputElement ? event.target : null
+  const file = dragEvent.dataTransfer?.files?.[0] || input?.files?.[0]
+  if (input) input.value = ''
+  if (!file) return
+  try {
+    const dataUrl = await compressCustomMarketingImageFile(file, {
+      maxSourceBytes: EDITOR_IMAGE_SOURCE_MAX_BYTES
+    })
+    const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
+    const url = uploaded.url
+    if (!url) throw new Error('Image upload did not return a URL.')
+    editor.AssetManager.add({ src: url, name: file.name })
+    const selected = editor.getSelected()
+    if (selected?.get('type') === 'image') {
+      selected.addAttributes({ src: url, alt: file.name })
+      selected.addStyle({ width: '100%', height: 'auto', 'max-width': '100%' })
+    }
+    done?.({ data: [{ src: url, name: file.name }] })
+    editor.AssetManager.close()
+  } catch (err) {
+    const data = err && typeof err === 'object' && 'data' in err ? (err as { data?: { message?: string; statusMessage?: string } }).data : undefined
+    const message = data?.statusMessage || data?.message || (err instanceof Error ? err.message : '') || 'Could not add that image.'
+    window.alert(message)
+  }
+}
 
 function logEditorCrash(stage: string, details?: unknown) {
   console.error('[EmailEditor][Crash]', {
@@ -141,8 +263,38 @@ function initStandaloneMetaFromQuery() {
   if (subjectFromQuery && !standaloneSubject.value) standaloneSubject.value = subjectFromQuery
 }
 
+function currentExportHtml(): string | null {
+  if (builderMode.value === 'template') return emailImageBuilderExportHtml(visualHtml.value)
+  if (!editorRef.value) return null
+  return getEditorExportHtml(editorRef.value)
+}
+
+function onLoadedTemplate(template: { name: string; subject: string }) {
+  if (!isStandalone.value) return
+  if (template.name) standaloneName.value = template.name
+  if (template.subject) standaloneSubject.value = template.subject
+}
+
+function showTemplateBuilder() {
+  if (editorRef.value) {
+    try {
+      visualHtml.value = getEditorExportHtml(editorRef.value)
+    } catch {
+      /* keep the template already on screen */
+    }
+  }
+  builderMode.value = 'template'
+}
+
+function showGrapesBuilder() {
+  initialHtml.value = visualHtml.value
+  builderMode.value = 'grapes'
+}
+
 async function saveStandaloneAndExit() {
-  if (!editorRef.value || standaloneSaving.value) return
+  if (imagePermissionLoaded.value && !canUseEmailBuilder.value) return
+  const fullHtml = currentExportHtml()
+  if (!fullHtml || standaloneSaving.value) return
   standaloneSaveError.value = ''
   initStandaloneMetaFromQuery()
 
@@ -155,7 +307,6 @@ async function saveStandaloneAndExit() {
 
   standaloneSaving.value = true
   try {
-    const fullHtml = getEditorExportHtml(editorRef.value)
     const tid = standaloneTemplateId.value
     if (tid && /^[a-f0-9]{24}$/i.test(tid)) {
       await marketingApi.updateEmailTemplate(tid, {
@@ -440,6 +591,7 @@ function closeMergePreview() {
 
 onMounted(() => {
   isMounted.value = true
+  void loadDefaultCampaignSender()
   resolveTenantId().then(loadDynamicVariables)
 })
 
@@ -491,12 +643,19 @@ watch([isMounted, htmlFromUrl, builderId, campaignId, standaloneTemplateId, isSt
     resolved = fetched
   }
 
+  if (token !== htmlResolveToken) return
   initialHtml.value = resolved
+  if (isStandalone.value || !visualHtml.value) visualHtml.value = resolved || DEFAULT_EMAIL_TEMPLATE
   htmlReady.value = true
 }, { immediate: true })
 
-watch([isMounted, htmlReady], async () => {
+watch([isMounted, htmlReady, builderMode, canUseGrapes], async () => {
   if (!isMounted.value || !htmlReady.value) return
+  if (builderMode.value !== 'grapes' || !canUseGrapes.value) {
+    editorInitToken += 1
+    destroyEditorInstance()
+    return
+  }
   if (editorRef.value || editorInitInFlight.value) return
 
   editorInitInFlight.value = true
@@ -515,11 +674,15 @@ watch([isMounted, htmlReady], async () => {
     ])
     if (token !== editorInitToken) return
 
-    const grapesjs = grapesjsModule.default
-    const presetNewsletter = presetModule.default
+    const grapesjs = resolveGrapesApi(grapesjsModule)
+    const presetNewsletter = resolvePluginFn(presetModule)
+    if (!grapesjs || !presetNewsletter) {
+      throw new Error('Email editor failed to load')
+    }
 
     if (!editorContainerRef.value) return
 
+    let editorForUpload: Editor | null = null
     const editor = grapesjs.init({
       height: '100%',
       width: 'auto',
@@ -527,8 +690,22 @@ watch([isMounted, htmlReady], async () => {
       container: editorContainerRef.value,
       fromElement: false,
       noticeOnUnload: false,
+      canvas: {
+        frameContent: ''
+      },
+      assetManager: {
+        embedAsBase64: false,
+        autoAdd: true,
+        uploadFile: (event, done) => {
+          if (!editorForUpload) return
+          return uploadCanvasImage(editorForUpload, event, done)
+        }
+      },
       plugins: [
-        (editorInstance: Editor) =>
+        (editorInstance: Editor) => {
+          editorInstance.on('frame:render', (frameView: { el?: HTMLIFrameElement }) => {
+            openCanvasFrame(frameView?.el)
+          })
           presetNewsletter(editorInstance, {
             modalLabelImport: 'Paste all your code here below and click import',
             modalLabelExport: 'Copy the code and use it wherever you want',
@@ -548,8 +725,11 @@ watch([isMounted, htmlReady], async () => {
             useCustomTheme: true,
             textCleanCanvas: 'Are you sure you want to clear the canvas?'
           })
+        }
       ]
     })
+    editorForUpload = editor
+    stopImageLoadLoop(editor)
     editorCleanupFns.push(() => {
       try {
         editor.stopCommand?.('*')
@@ -695,13 +875,14 @@ onBeforeUnmount(() => {
 })
 
 function handleSaveAndExit() {
+  if (imagePermissionLoaded.value && !canUseEmailBuilder.value) return
   if (isStandalone.value) {
     void saveStandaloneAndExit()
     return
   }
-  if (!editorRef.value) return
+  const fullHtml = currentExportHtml()
+  if (!fullHtml) return
   try {
-    const fullHtml = getEditorExportHtml(editorRef.value)
     let targetId = campaignId.value
     if (typeof window !== 'undefined') {
       if (campaignId.value) {
@@ -737,6 +918,24 @@ function handleSaveAndExit() {
       <div
         class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-slate-800 px-4 py-2.5"
       >
+        <div v-if="canUseTemplate && canUseGrapes" class="flex items-center gap-1 rounded-lg bg-slate-900 p-1">
+          <button
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm font-medium"
+            :class="builderMode === 'template' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'"
+            @click="showTemplateBuilder"
+          >
+            Template
+          </button>
+          <button
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm font-medium"
+            :class="builderMode === 'grapes' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'"
+            @click="showGrapesBuilder"
+          >
+            Grapes
+          </button>
+        </div>
         <div class="min-w-0">
           <NuxtLink
             v-if="isStandalone"
@@ -765,7 +964,7 @@ function handleSaveAndExit() {
           <button
             type="button"
             class="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="standaloneSaving"
+            :disabled="standaloneSaving || (imagePermissionLoaded && !canUseEmailBuilder)"
             @click="handleSaveAndExit"
           >
             {{ isStandalone ? (standaloneSaving ? 'Saving…' : 'Save template') : 'Save and exit' }}
@@ -805,6 +1004,21 @@ function handleSaveAndExit() {
         </div>
       </Teleport>
       <div
+        v-if="imagePermissionLoaded && !canUseEmailBuilder"
+        class="flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-600"
+      >
+        Email builders are turned off for this tenant.
+      </div>
+      <TenantEmailTemplateImageBuilder
+        v-else-if="builderMode === 'template' && canUseTemplate"
+        v-model="visualHtml"
+        class="min-h-0 flex-1"
+        :source-html="initialHtml || ''"
+        :can-upload-image="true"
+        @loaded-template="onLoadedTemplate"
+      />
+      <div
+        v-else-if="canUseGrapes"
         ref="editorContainerRef"
         class="min-h-0 flex-1 overflow-auto"
         style="height: calc(100vh - 52px)"

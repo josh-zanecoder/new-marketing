@@ -16,6 +16,7 @@ import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVari
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { assertCampaignEmailTemplateApprovedForSend } from '../utils/emailTemplate/assertCampaignEmailTemplateApprovedForSend'
+import { emailClientSafeImageHtml } from '~~/shared/utils/emailTemplateHtmlImages'
 import {
   inspectCampaignUnsubscribeSecondCheck,
   persistCampaignTemplateHtmlAfterUnsubscribeCheck
@@ -813,6 +814,8 @@ export async function processBatch(
       sender: { name: string; email: string }
       failed?: string
     }
+
+    templateHtml = emailClientSafeImageHtml(templateHtml)
 
     const prepared: Prepared[] = pending.map((r) => {
       const emailKey = normalizeMarketingEmail(r.email)

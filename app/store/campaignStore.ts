@@ -83,6 +83,14 @@ export const useCampaignStore = defineStore('campaigns', () => {
   }
 
   function listRowFromDetail(d: TenantCampaignDetail): Campaign {
+    const recipients = (d.recipients ?? []).map((r) => ({
+      email: r.email,
+      contactId: r.contactId,
+      name: r.name,
+      status: r.status,
+      sentAt: r.sentAt,
+      error: r.error
+    }))
     return {
       id: d.id,
       name: d.name,
@@ -91,14 +99,8 @@ export const useCampaignStore = defineStore('campaigns', () => {
       recipientsListId: d.recipientsListId,
       subject: d.subject,
       status: d.status,
-      recipients: (d.recipients ?? []).map((r) => ({
-        email: r.email,
-        contactId: r.contactId,
-        name: r.name,
-        status: r.status,
-        sentAt: r.sentAt,
-        error: r.error
-      })),
+      recipients,
+      recipientsCount: recipients.length,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
       scheduledAt: d.scheduledAt

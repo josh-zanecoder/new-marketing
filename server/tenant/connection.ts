@@ -12,9 +12,22 @@ const TENANT_DB_NAME = /^[a-z0-9][a-z0-9_]{0,62}$/i
 
 const MAX_REGISTRY_TENANT_ID_LEN = 128
 
+export type EnsureTenantConnectionOptions = {
+  /**
+   * When true (default), ping Mongo before returning.
+   * Reconcile passes false to avoid burning pool slots while walking many tenants.
+   */
+  verifyWithPing?: boolean
+}
+
 /** `useDb()` can return before the child connection is query-ready (Mongoose 8, cold start). */
-async function ensureTenantConnectionReady(conn: Connection): Promise<Connection> {
+async function ensureTenantConnectionReady(
+  conn: Connection,
+  options?: EnsureTenantConnectionOptions
+): Promise<Connection> {
+  const verifyWithPing = options?.verifyWithPing !== false
   if (conn.readyState === 1 && conn.db) {
+    if (!verifyWithPing) return conn
     try {
       await conn.db.admin().command({ ping: 1 })
       return conn
@@ -80,11 +93,12 @@ export async function getTenantConnectionFromEvent(
  * Pass only `dbName` values that originated from trusted server state (e.g. job payload from enqueue), never raw user input.
  */
 export async function getTenantConnectionByDbName(
-  dbName: string
+  dbName: string,
+  options?: EnsureTenantConnectionOptions
 ): Promise<Connection> {
   const normalized = normalizeAndAssertTenantDbName(dbName)
   const registry = await getRegistryConnection()
-  return ensureTenantConnectionReady(registry.useDb(normalized))
+  return ensureTenantConnectionReady(registry.useDb(normalized), options)
 }
 
 /**

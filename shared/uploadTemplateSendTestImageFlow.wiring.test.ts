@@ -17,13 +17,17 @@ describe('wiring: upload → template → send test (hosted images)', () => {
     )
     expect(picker).toContain('uploadTenantHostedImage')
     expect(picker).toContain("emit('select'")
+    expect(picker).toContain('isHostedImagePickerUploadDisabled')
+    expect(picker).toContain(':disabled="uploadDisabled"')
   })
 
-  it('template editor inserts picker URL into HTML and saves htmlTemplate', () => {
+  it('template editor inserts uploaded image URL into HTML and saves htmlTemplate', () => {
     const page = readFileSync(resolve(root, 'app/pages/tenant/email-templates/add.vue'), 'utf8')
-    expect(page).toContain('onHostedImagePicked')
+    expect(page).toContain('uploadEmailTemplateImage')
+    expect(page).toContain('applyUploadedTemplateImage')
     expect(page).toContain('emailTemplateImageSnippet')
     expect(page).toContain('createEmailTemplate')
+    expect(page).toContain('updateEmailTemplate')
     expect(page).toContain('htmlTemplate: html')
     expect(page).toContain('ensureEmailTemplateUnsubscribe')
   })

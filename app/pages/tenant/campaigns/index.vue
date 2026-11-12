@@ -1,18 +1,35 @@
 <script setup lang="ts">
 import type { Campaign } from '~/types/campaign'
 import { storeToRefs } from 'pinia'
+import { useCampaignListFullPreview } from '~/composables/useCampaignListFullPreview'
 import { useCampaignStore } from '~/store/campaignStore'
+import {
+  CAMPAIGN_DELETE_ERROR_FALLBACK,
+  CAMPAIGN_DELETE_SUCCESS
+} from '~~/shared/campaignDeleteCopy'
+import {
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
+import {
+  CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE,
+  CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
+  CAMPAIGN_UNSCHEDULE_SUCCESS,
+  campaignUnscheduleConfirmMessage
+} from '~~/shared/campaignUnscheduleCopy'
 
 definePageMeta({ layout: 'default' })
 
 const store = useCampaignStore()
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError } = storeToRefs(store)
 const {
   canSendDraft,
   canSendScheduled,
   canSendNow,
   canScheduleDraft,
+  canCancelScheduledSend,
   canStopSend,
   canResumeSend,
   canRestartSend,
@@ -26,6 +43,19 @@ const {
   resumeSend,
   restartSend
 } = useCampaignSendFlow()
+
+const {
+  open: fullPreviewOpen,
+  loading: fullPreviewLoading,
+  name: fullPreviewName,
+  subject: fullPreviewSubject,
+  html: fullPreviewHtml,
+  actionTitle: fullPreviewActionTitle,
+  ariaLabel: fullPreviewAriaLabel,
+  openFullPreview,
+  closeFullPreview,
+  isPreviewLoadingFor
+} = useCampaignListFullPreview()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('all')
@@ -44,6 +74,7 @@ const statusFilterSelectOptions = [
 const campaignToDelete = ref<Campaign | null>(null)
 const campaignToDuplicate = ref<Campaign | null>(null)
 const campaignToSchedule = ref<Campaign | null>(null)
+const campaignToUnschedule = ref<Campaign | null>(null)
 const scheduleLocal = ref('')
 const scheduleError = ref('')
 const scheduleBusy = ref(false)
@@ -63,6 +94,12 @@ const deleteModalMessage = computed(() =>
 const duplicateModalMessage = computed(() =>
   campaignToDuplicate.value
     ? `Create a copy of "${campaignToDuplicate.value.name || 'Untitled'}"? The duplicate will be created as a draft.`
+    : ''
+)
+
+const unscheduleModalMessage = computed(() =>
+  campaignToUnschedule.value
+    ? campaignUnscheduleConfirmMessage(campaignToUnschedule.value.name || '')
     : ''
 )
 
@@ -255,8 +292,21 @@ async function confirmDelete() {
   if (!c || deleteConfirmLoading.value) return
   deleteConfirmLoading.value = true
   try {
-    await store.deleteCampaign(c)
+    const ok = await store.deleteCampaign(c)
+    if (!ok) {
+      toast.error(CAMPAIGN_DELETE_ERROR_FALLBACK)
+      return
+    }
     campaignToDelete.value = null
+    toast.success(CAMPAIGN_DELETE_SUCCESS)
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : CAMPAIGN_DELETE_ERROR_FALLBACK
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_DELETE_ERROR_FALLBACK)
   } finally {
     deleteConfirmLoading.value = false
   }
@@ -316,28 +366,77 @@ async function confirmScheduleFromList() {
   }
   scheduleBusy.value = true
   try {
-    await marketingApi.scheduleCampaignSend(c.id, parsed.toISOString())
+    const scheduledIso = parsed.toISOString()
+    await marketingApi.scheduleCampaignSend(c.id, scheduledIso)
+    const now = new Date().toISOString()
+    store.upsertCampaignInList({
+      ...c,
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
+    store.patchCampaignDetailCache(c.id, {
+      status: 'Scheduled',
+      scheduledAt: scheduledIso,
+      updatedAt: now
+    })
     campaignToSchedule.value = null
-    await store.fetchCampaigns()
+    toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
+    await store.fetchCampaigns({ force: true })
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
         ? (e as { data?: { message?: string } }).data?.message
         : e instanceof Error
           ? e.message
-          : 'Could not schedule send.'
-    scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+          : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    const message = typeof msg === 'string' ? msg : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
+    scheduleError.value = message
+    toast.error(message)
   } finally {
     scheduleBusy.value = false
   }
 }
 
-async function handleUnschedule(c: Campaign) {
-  if (c.status !== 'Scheduled') return
+function openUnscheduleModal(c: Campaign) {
+  if (!canCancelScheduledSend(c) || scheduleBusy.value) return
+  campaignToUnschedule.value = c
+}
+
+function cancelUnscheduleModal() {
+  if (scheduleBusy.value) return
+  campaignToUnschedule.value = null
+}
+
+async function confirmUnschedule() {
+  const c = campaignToUnschedule.value
+  if (!c || scheduleBusy.value) return
   scheduleBusy.value = true
   try {
     await marketingApi.unscheduleCampaignSend(c.id)
-    await store.fetchCampaigns()
+    const now = new Date().toISOString()
+    store.upsertCampaignInList({
+      ...c,
+      status: 'Draft',
+      scheduledAt: undefined,
+      updatedAt: now
+    })
+    store.patchCampaignDetailCache(c.id, {
+      status: 'Draft',
+      scheduledAt: undefined,
+      updatedAt: now
+    })
+    campaignToUnschedule.value = null
+    toast.success(CAMPAIGN_UNSCHEDULE_SUCCESS)
+    await store.fetchCampaigns({ force: true })
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string } }).data?.message
+        : e instanceof Error
+          ? e.message
+          : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK
+    toast.error(typeof msg === 'string' ? msg : CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK)
   } finally {
     scheduleBusy.value = false
   }
@@ -703,12 +802,12 @@ onUnmounted(() => {
             </svg>
           </button>
           <button
-            v-if="c.status === 'Scheduled'"
+            v-if="canCancelScheduledSend(c)"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="scheduleBusy"
             title="Cancel scheduled send"
-            @click.stop="handleUnschedule(c)"
+            @click.stop="openUnscheduleModal(c)"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -733,6 +832,19 @@ onUnmounted(() => {
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-700 focus-visible:outline focus-visible:ring-2 focus-visible:ring-primary-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="fullPreviewLoading"
+            :title="fullPreviewActionTitle"
+            :aria-label="fullPreviewAriaLabel"
+            :aria-busy="isPreviewLoadingFor(c.id)"
+            @click.stop="openFullPreview(c)"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
           </button>
         </div>
@@ -800,6 +912,17 @@ onUnmounted(() => {
     />
 
     <ClientConfirmationModal
+      :open="!!campaignToUnschedule"
+      :title="CAMPAIGN_UNSCHEDULE_CONFIRM_TITLE"
+      :message="unscheduleModalMessage"
+      confirm-text="Cancel send"
+      variant="danger"
+      :confirm-loading="scheduleBusy"
+      @confirm="confirmUnschedule"
+      @cancel="cancelUnscheduleModal"
+    />
+
+    <ClientConfirmationModal
       :open="stopAllConfirmOpen"
       title="Stop all active sends"
       message="Stop every campaign that is currently sending? Unsent emails will be kept so you can resume pending recipients or send again later."
@@ -849,6 +972,14 @@ onUnmounted(() => {
       :failed="sendSuccessSummary?.failed ?? 0"
       :campaign-status="sendSuccessSummary?.campaignStatus ?? ''"
       @close="closeSendSuccessModal"
+    />
+
+    <TenantEmailTemplatePreviewModal
+      :open="fullPreviewOpen"
+      :name="fullPreviewName"
+      :subject="fullPreviewSubject"
+      :html="fullPreviewHtml"
+      @close="closeFullPreview"
     />
 
     <Teleport to="body">

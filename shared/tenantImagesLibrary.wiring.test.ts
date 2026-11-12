@@ -4,20 +4,20 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(__dirname, '..')
 
-describe('tenant Images library (LO flag path)', () => {
-  it('sidebar Images item requires LO recipient lists flag', () => {
+describe('tenant Images library (Images flag path)', () => {
+  it('sidebar Images item requires the Images flag', () => {
     const nav = readFileSync(resolve(root, 'app/constants/marketingSidebarNav.ts'), 'utf8')
-    expect(nav).toContain("to: '/tenant/images'")
-    expect(nav).toContain("label: 'Images'")
-    expect(nav).toContain('requiresLoRecipientLists: true')
+    expect(nav).toContain('to: "/tenant/images"')
+    expect(nav).toContain('label: "Images"')
+    expect(nav).toContain('requiresTenantImages: true')
 
     const layout = readFileSync(resolve(root, 'app/layouts/default.vue'), 'utf8')
     expect(layout).toContain('visibleSidebarNavItems')
-    expect(layout).toContain('allowTenantLoRecipientLists')
-    expect(layout).toContain('requiresLoRecipientLists')
+    expect(layout).toContain('allowTenantImages')
+    expect(layout).toContain('requiresTenantImages')
   })
 
-  it('list + upload + delete APIs are LO-flag gated and use library folder on upload', () => {
+  it('list + upload + delete APIs are Images-flag gated and use library folder on upload', () => {
     const getApi = readFileSync(
       resolve(root, 'server/api/v1/tenant/images/index.get.ts'),
       'utf8'
@@ -30,16 +30,16 @@ describe('tenant Images library (LO flag path)', () => {
       resolve(root, 'server/api/v1/tenant/images/index.delete.ts'),
       'utf8'
     )
-    expect(getApi).toContain('requireTenantLoRecipientLists')
-    expect(postApi).toContain('requireTenantLoRecipientLists')
+    expect(getApi).toContain('requireTenantImages')
+    expect(postApi).toContain('requireTenantImages')
     expect(postApi).toContain('CUSTOM_MARKETING_GCS_LIBRARY_FOLDER')
-    expect(deleteApi).toContain('requireTenantLoRecipientLists')
+    expect(deleteApi).toContain('requireTenantImages')
     expect(deleteApi).toContain('deleteCustomMarketingTenantImages')
   })
 
   it('Images page wires gallery + copy link + upload + select/bulk delete', () => {
     const page = readFileSync(resolve(root, 'app/pages/tenant/images/index.vue'), 'utf8')
-    expect(page).toContain('allowTenantLoRecipientLists')
+    expect(page).toContain('allowTenantImages')
     expect(page).toContain('fetchTenantHostedImages')
     expect(page).toContain('uploadTenantHostedImage')
     expect(page).toContain('deleteTenantHostedImages')

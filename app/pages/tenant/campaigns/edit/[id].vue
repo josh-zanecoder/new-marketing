@@ -509,7 +509,7 @@
                   Change design
                 </button>
                 <button
-                  v-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && designEditorCampaignId && form.templateMode !== 'upload'"
+                  v-if="emailBuilderAllowed && designEditorCampaignId && form.templateMode !== 'upload'"
                   type="button"
                   class="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-primary-600/25 transition-colors hover:bg-primary-700 sm:w-auto"
                   @click="openEditorWithCurrentDesign"
@@ -521,7 +521,7 @@
                 <p v-if="form.templateMode === 'upload'" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Uploaded HTML is stored as-is. Preview shows merge tags filled from your recipients. To change layout, upload a new file.
                 </p>
-                <p v-else-if="CAMPAIGN_EMAIL_EDITOR_ENABLED && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
+                <p v-else-if="emailBuilderAllowed && !designEditorCampaignId" class="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 sm:px-5">
                   Save the campaign once to get a stable link for the editor.
                 </p>
               </template>
@@ -538,7 +538,7 @@
           :pending="emailTemplatesPending"
           :error="emailTemplatesError"
           :merge-tag-hints="designMergeTagHints"
-          :email-editor-enabled="CAMPAIGN_EMAIL_EDITOR_ENABLED"
+          :email-editor-enabled="emailBuilderAllowed"
           @create-from-scratch="handleCreateFromScratch"
           @select-template="handleUseTemplate"
           @upload-html="handleUploadHtml"
@@ -714,7 +714,7 @@
           :disabled="wizardSendBusy || templateApprovalBlocksSend"
           @click.prevent="handleOpenScheduleWizard"
         >
-          Schedule send
+          {{ scheduleWizardFooterLabel }}
         </button>
         <button
           v-if="campaignFormComplete"
@@ -790,10 +790,10 @@
           class="relative w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04] sm:rounded-2xl sm:p-6"
         >
           <h2 id="wizard-schedule-title" class="text-lg font-semibold text-slate-900">
-            Schedule send
+            {{ scheduleWizardModalTitle }}
           </h2>
           <p class="mt-1 text-sm text-slate-500">
-            Campaign will be saved, then set to send at the time below (your local time).
+            {{ scheduleWizardModalDescription }}
           </p>
           <label class="mt-4 block text-sm font-medium text-slate-700" for="wizard-schedule-datetime">
             Date &amp; time
@@ -822,7 +822,7 @@
               :disabled="wizardSendBusy"
               @click="confirmScheduleFromWizard"
             >
-              {{ wizardSendBusy ? 'Saving…' : 'Schedule' }}
+              {{ scheduleWizardConfirmLabel }}
             </button>
           </div>
         </div>
@@ -863,6 +863,25 @@ import {
   resolveTypedCampaignSenderName
 } from '~~/shared/resolveTypedCampaignSenderName'
 import { campaignSaveMissingFieldsMessage } from '~~/shared/campaignSaveRequiredFields'
+import { resolveCampaignEditScheduleAction } from '~~/shared/campaignEditScheduleAction'
+import {
+  CAMPAIGN_SCHEDULE_ACTION_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_ACTION_SCHEDULE,
+  CAMPAIGN_SCHEDULE_CONFIRM_BUSY,
+  CAMPAIGN_SCHEDULE_CONFIRM_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_CONFIRM_SCHEDULE,
+  CAMPAIGN_SCHEDULE_FAIL_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
+  CAMPAIGN_SCHEDULE_MODAL_DESC_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_MODAL_DESC_SCHEDULE,
+  CAMPAIGN_SCHEDULE_MODAL_TITLE_RESCHEDULE,
+  CAMPAIGN_SCHEDULE_MODAL_TITLE_SCHEDULE,
+  CAMPAIGN_SCHEDULE_SUCCESS
+} from '~~/shared/campaignScheduleWizardCopy'
+import {
+  CAMPAIGN_SCHEDULE_ERROR_INVALID,
+  validateCampaignScheduleWhen
+} from '~~/shared/campaignScheduleTime'
 
 const campaignStore = useCampaignStore()
 const {
@@ -873,15 +892,30 @@ const {
   sessionUser,
   allowTenantEditSender,
   allowTenantLoRecipientLists,
+  allowTenantGrapesBuilder,
+  allowTenantTemplateBuilder,
+  loaded: tenantFlagsLoaded,
   canSelectAnyLoanOfficer,
   isSelfOnlyAudience,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
 const defaultSenderReady = loadDefaultCampaignSender()
+const emailBuilderAllowed = computed(
+  () =>
+    CAMPAIGN_EMAIL_EDITOR_ENABLED &&
+    tenantFlagsLoaded.value &&
+    (allowTenantGrapesBuilder.value || allowTenantTemplateBuilder.value)
+)
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const { campaigns, sendingCampaignId, sendError, sendStatus } = storeToRefs(campaignStore)
-const { canScheduleDraft, sendProgress, startSendStatusPolling, closeSendModal } =
-  useCampaignSendFlow()
+const {
+  canScheduleDraft,
+  canRescheduleScheduled,
+  sendProgress,
+  startSendStatusPolling,
+  closeSendModal
+} = useCampaignSendFlow()
 const {
   open: testEmailModalOpen,
   recipient: testEmailRecipient,
@@ -1255,15 +1289,8 @@ function toDatetimeLocalValue(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function openScheduleModalFromWizard() {
-  scheduleError.value = ''
-  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
-  scheduleModalOpen.value = true
-}
-
-function closeScheduleModalFromWizard() {
-  scheduleModalOpen.value = false
-  scheduleError.value = ''
+function defaultScheduleDatetimeLocal() {
+  return toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
 }
 
 const campaignNameForSendModal = computed(() => {
@@ -1302,12 +1329,10 @@ function onSendSuccessModalClose() {
 }
 
 function buildCampaignForSend(savedId: string): Campaign {
-  const fromStore = campaignStore.campaigns.find((x) => x.id === savedId)
-  if (fromStore) return fromStore
-  const manualRecipients = form.value.recipientsManual
-    .filter(isManualContactIdString)
-    .map((id) => manualRecipientLabels.value[id]?.email?.trim())
-    .filter((e): e is string => !!e && e.includes('@'))
+  // Always use the wizard selection — list-index rows report recipientsCount: 0 for
+  // list audiences, which falsely blocked Schedule on duplicated campaigns.
+  const selectedIds = form.value.recipientsManual.filter(isManualContactIdString)
+  const status = editCampaignStatus.value === 'Scheduled' ? 'Scheduled' : 'Draft'
   return {
     id: savedId,
     name: form.value.name.trim(),
@@ -1315,9 +1340,14 @@ function buildCampaignForSend(savedId: string): Campaign {
     senderMode: resolvedSenderModeForSave(),
     recipientsType: form.value.recipientsMode,
     recipientsListId: form.value.recipientsListId || undefined,
-    recipients: manualRecipients.map((email) => ({ email })),
+    recipients: selectedIds.map((id) => ({
+      email: manualRecipientLabels.value[id]?.email?.trim() ?? '',
+      contactId: id
+    })),
+    recipientsCount: selectedIds.length,
     subject: form.value.subject,
-    status: 'Draft',
+    status,
+    scheduledAt: editCampaignScheduledAt.value || undefined,
     createdAt: '',
     updatedAt: ''
   }
@@ -1653,14 +1683,64 @@ const cancelOrBackHref = computed(() =>
 const cancelOrBackLabel = computed(() => (editId.value ? 'Back to campaign' : 'Back to campaigns'))
 /** Preserved from server for cache rows after save (edit). */
 const editCampaignStatus = ref('Draft')
+const editCampaignScheduledAt = ref('')
 const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
 /** Skeleton until campaign data and recipient lists are ready. */
 const editLoadPending = ref(true)
 const loadedEditCampaignId = ref('')
 const showWizardSkeleton = computed(() => editLoadPending.value)
 
+const scheduleWizardAction = computed(() =>
+  resolveCampaignEditScheduleAction(editCampaignStatus.value, editCampaignScheduledAt.value)
+)
+const isEditRescheduleMode = computed(() => scheduleWizardAction.value === 'reschedule')
+const scheduleWizardFooterLabel = computed(() =>
+  isEditRescheduleMode.value
+    ? CAMPAIGN_SCHEDULE_ACTION_RESCHEDULE
+    : CAMPAIGN_SCHEDULE_ACTION_SCHEDULE
+)
+const scheduleWizardModalTitle = computed(() =>
+  isEditRescheduleMode.value
+    ? CAMPAIGN_SCHEDULE_MODAL_TITLE_RESCHEDULE
+    : CAMPAIGN_SCHEDULE_MODAL_TITLE_SCHEDULE
+)
+const scheduleWizardModalDescription = computed(() =>
+  isEditRescheduleMode.value
+    ? CAMPAIGN_SCHEDULE_MODAL_DESC_RESCHEDULE
+    : CAMPAIGN_SCHEDULE_MODAL_DESC_SCHEDULE
+)
+const scheduleWizardConfirmLabel = computed(() => {
+  if (wizardSendBusy.value) return CAMPAIGN_SCHEDULE_CONFIRM_BUSY
+  return isEditRescheduleMode.value
+    ? CAMPAIGN_SCHEDULE_CONFIRM_RESCHEDULE
+    : CAMPAIGN_SCHEDULE_CONFIRM_SCHEDULE
+})
+
+function openScheduleModalFromWizard() {
+  scheduleError.value = ''
+  if (isEditRescheduleMode.value) {
+    const existing = editCampaignScheduledAt.value
+      ? new Date(editCampaignScheduledAt.value)
+      : null
+    scheduleLocal.value =
+      existing && !Number.isNaN(existing.getTime())
+        ? toDatetimeLocalValue(existing)
+        : defaultScheduleDatetimeLocal()
+  } else {
+    scheduleLocal.value = defaultScheduleDatetimeLocal()
+  }
+  scheduleModalOpen.value = true
+}
+
+function closeScheduleModalFromWizard() {
+  if (wizardSendBusy.value) return
+  scheduleModalOpen.value = false
+  scheduleError.value = ''
+}
+
 function applyCampaignToEditForm(c: TenantCampaignDetail) {
   editCampaignStatus.value = String(c.status || 'Draft')
+  editCampaignScheduledAt.value = String(c.scheduledAt ?? '').trim()
   editCampaignMeta.value = { createdAt: c.createdAt || '', updatedAt: c.updatedAt || '' }
   const ids: string[] = []
   const labels: Record<string, { email: string; name: string }> = {}
@@ -1770,6 +1850,12 @@ async function loadFromEditorReturn() {
     try {
       const res = await marketingApi.fetchCampaignById(campaignId)
       const c = res.campaign
+      editCampaignStatus.value = String(c.status || 'Draft')
+      editCampaignScheduledAt.value = String(c.scheduledAt ?? '').trim()
+      editCampaignMeta.value = {
+        createdAt: c.createdAt || '',
+        updatedAt: c.updatedAt || ''
+      }
       const ids: string[] = []
       const labels: Record<string, { email: string; name: string }> = {}
       for (const r of c.recipients ?? []) {
@@ -2204,6 +2290,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     subject: form.value.subject,
     previewText: form.value.previewText,
     status: editCampaignStatus.value,
+    scheduledAt: editCampaignScheduledAt.value || undefined,
     recipients,
     templateHtml: savedTemplateHtml.value ?? '',
     templateHtmlSource: campaignTemplateHtmlSourceFromMode(form.value.templateMode),
@@ -2279,7 +2366,9 @@ function handleOpenScheduleWizard() {
   }
   applyStoredOrSelectedTemplate()
   if (!campaignDesignIsReady()) {
-    saveError.value = 'Complete the email design before scheduling.'
+    saveError.value = isEditRescheduleMode.value
+      ? 'Complete the email design before rescheduling.'
+      : 'Complete the email design before scheduling.'
     return
   }
   if (!recipientsReadyForSchedule()) {
@@ -2297,16 +2386,22 @@ async function confirmScheduleFromWizard() {
     saveError.value = 'Campaign name is required'
     return
   }
-  const parsed = new Date(scheduleLocal.value)
-  if (Number.isNaN(parsed.getTime())) {
-    scheduleError.value = 'Pick a valid date and time.'
+  const validated = validateCampaignScheduleWhen(new Date(scheduleLocal.value))
+  if (!validated.ok) {
+    scheduleError.value =
+      validated.message === CAMPAIGN_SCHEDULE_ERROR_INVALID
+        ? CAMPAIGN_SCHEDULE_ERROR_INVALID
+        : validated.message
     return
   }
   applyStoredOrSelectedTemplate()
   if (!campaignDesignIsReady()) {
-    saveError.value = 'Complete the email design before scheduling.'
+    saveError.value = isEditRescheduleMode.value
+      ? 'Complete the email design before rescheduling.'
+      : 'Complete the email design before scheduling.'
     return
   }
+  const reschedule = isEditRescheduleMode.value
   isSaving.value = true
   scheduleSubmitting.value = true
   try {
@@ -2314,24 +2409,36 @@ async function confirmScheduleFromWizard() {
     clearCampaignSessionStorage()
     primeCampaignCacheAfterSave(id)
     const campaign = buildCampaignForSend(id)
-    if (!canScheduleDraft(campaign)) {
+    if (reschedule) {
+      if (!canRescheduleScheduled(campaign)) {
+        saveError.value = 'This campaign cannot be rescheduled.'
+        return
+      }
+    } else if (!canScheduleDraft(campaign)) {
       saveError.value = 'Add recipients before scheduling.'
       return
     }
+    const scheduleFail = reschedule
+      ? CAMPAIGN_SCHEDULE_FAIL_RESCHEDULE
+      : CAMPAIGN_SCHEDULE_FAIL_SCHEDULE
     try {
-      const scheduledIso = parsed.toISOString()
-      await marketingApi.scheduleCampaignSend(id, scheduledIso)
+      const scheduledIso = validated.when.toISOString()
+      const res = await marketingApi.scheduleCampaignSend(id, scheduledIso)
       scheduleModalOpen.value = false
       const now = new Date().toISOString()
+      const nextScheduledAt = res.scheduledAt ?? scheduledIso
+      editCampaignStatus.value = 'Scheduled'
+      editCampaignScheduledAt.value = nextScheduledAt
       campaignStore.patchCampaignDetailCache(id, {
         status: 'Scheduled',
-        scheduledAt: scheduledIso,
+        scheduledAt: nextScheduledAt,
         updatedAt: now
       })
       const cached = campaignStore.getCampaignDetailCache(id)
       if (cached) campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(cached))
       clearNuxtPayloadCache(TENANT_CAMPAIGNS_LIST_CACHE_KEY)
       void campaignStore.fetchCampaigns({ force: true })
+      toast.success(CAMPAIGN_SCHEDULE_SUCCESS)
       await navigateTo(`/tenant/campaigns/${id}`)
     } catch (e: unknown) {
       const msg =
@@ -2339,8 +2446,10 @@ async function confirmScheduleFromWizard() {
           ? (e as { data?: { message?: string } }).data?.message
           : e instanceof Error
             ? e.message
-            : 'Could not schedule send.'
-      scheduleError.value = typeof msg === 'string' ? msg : 'Could not schedule send.'
+            : scheduleFail
+      const message = typeof msg === 'string' ? msg : scheduleFail
+      scheduleError.value = message
+      toast.error(message)
     }
   } catch (e: unknown) {
     setSaveErrorFromCatch(e)

@@ -1,4 +1,5 @@
 import { ZC_MAIL_WEBHOOK_SIGNATURE_HEADER } from '@server/constants/zcMailWebhook'
+import { isTransientMongoError, getRegistryConnection } from '@server/lib/mongoose'
 import { applyBrevoTrackingWebhook } from '@server/utils/tracking/applyBrevoTrackingWebhook'
 import {
   parseZcMailEmailStatusWebhookPayload,
@@ -9,7 +10,6 @@ import {
   resolveDbNameFromBrevoTags,
   resolveTenantIdFromBrevoTags
 } from '@server/utils/tracking/parseBrevoTransactionalWebhookPayload'
-import { getRegistryConnection } from '@server/lib/mongoose'
 import { findRegistryTenantByTenantId } from '@server/tenant/registry-auth'
 import { verifyZcMailWebhookRequestAuth } from '@server/utils/zcmail/zcMailWebhookRequestAuth'
 
@@ -24,8 +24,8 @@ import { verifyZcMailWebhookRequestAuth } from '@server/utils/zcmail/zcMailWebho
  * for local only.
  */
 export default defineEventHandler(async (event) => {
-  const rawBodyBuf = (await readRawBody(event)) ?? ''
-  const rawBody = typeof rawBodyBuf === 'string' ? rawBodyBuf : rawBodyBuf.toString('utf8')
+  // Default encoding is utf8 → string | undefined (not Buffer).
+  const rawBody = (await readRawBody(event)) ?? ''
 
   let body: unknown
   try {
@@ -42,72 +42,88 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  let dbName = resolveDbNameFromBrevoTags(parsed.tags)
-  if (!dbName) {
-    const tenantId = resolveTenantIdFromBrevoTags(parsed.tags)
-    if (tenantId) {
-      const registry = await getRegistryConnection()
-      const row = await findRegistryTenantByTenantId(registry, tenantId)
-      dbName = row?.dbName?.trim() || null
+  try {
+    let dbName = resolveDbNameFromBrevoTags(parsed.tags)
+    if (!dbName) {
+      const tenantId = resolveTenantIdFromBrevoTags(parsed.tags)
+      if (tenantId) {
+        const registry = await getRegistryConnection()
+        const row = await findRegistryTenantByTenantId(registry, tenantId)
+        dbName = row?.dbName?.trim() || null
+      }
     }
-  }
-  if (!dbName) {
-    dbName = await findDbNameByMessageId(parsed.messageId)
-  }
-
-  const auth = await verifyZcMailWebhookRequestAuth({
-    rawBody,
-    signatureHeader: getHeader(event, ZC_MAIL_WEBHOOK_SIGNATURE_HEADER) || '',
-    dbName
-  })
-  if (!auth.ok) {
-    throw createError({ statusCode: auth.statusCode, statusMessage: auth.message })
-  }
-
-  if (!dbName) {
-    console.warn('[zcMail-webhook] no tenant for message id', {
-      messageId: parsed.messageId,
-      event: parsed.event
-    })
-    setResponseStatus(event, 202)
-    return { accepted: true, updated: 0 }
-  }
-
-  const brevoBody = zcMailWebhookToBrevoBody(parsed)
-  const tags = [...(brevoBody.tags || [])]
-  if (!resolveDbNameFromBrevoTags(parsed.tags)) {
-    tags.push(`db:${dbName}`)
-  }
-  const hasUserTag = tags.some((t) => String(t).toLowerCase().startsWith('user:'))
-  if (!hasUserTag) {
-    try {
-      const routing = await findEmailMessageRoutingMap([parsed.messageId])
-      const hit =
-        routing.get(parsed.messageId) ||
-        routing.get(parsed.messageId.replace(/^<|>$/g, '')) ||
-        null
-      if (hit?.userEmail) tags.push(`user:${hit.userEmail}`)
-    } catch {
-      // optional enrichment
+    if (!dbName) {
+      dbName = await findDbNameByMessageId(parsed.messageId)
     }
-  }
-  brevoBody.tags = tags
 
-  const result = await applyBrevoTrackingWebhook(brevoBody)
-  if (!result.ok) {
-    throw createError({
-      statusCode: result.statusCode,
-      statusMessage: result.message
+    const auth = await verifyZcMailWebhookRequestAuth({
+      rawBody,
+      signatureHeader: getHeader(event, ZC_MAIL_WEBHOOK_SIGNATURE_HEADER) || '',
+      dbName
     })
-  }
+    if (!auth.ok) {
+      throw createError({ statusCode: auth.statusCode, statusMessage: auth.message })
+    }
 
-  setResponseStatus(event, 200)
-  return {
-    success: true,
-    accepted: true,
-    dbName: result.dbName,
-    upserted: result.upserted,
-    messageId: result.messageId,
-    event: result.event
+    if (!dbName) {
+      console.warn('[zcMail-webhook] no tenant for message id', {
+        messageId: parsed.messageId,
+        event: parsed.event
+      })
+      setResponseStatus(event, 202)
+      return { accepted: true, updated: 0 }
+    }
+
+    const brevoBody = zcMailWebhookToBrevoBody(parsed)
+    const tags = [...parsed.tags]
+    if (!resolveDbNameFromBrevoTags(parsed.tags)) {
+      tags.push(`db:${dbName}`)
+    }
+    const hasUserTag = tags.some((t) => String(t).toLowerCase().startsWith('user:'))
+    if (!hasUserTag) {
+      try {
+        const routing = await findEmailMessageRoutingMap([parsed.messageId])
+        const hit =
+          routing.get(parsed.messageId) ||
+          routing.get(parsed.messageId.replace(/^<|>$/g, '')) ||
+          null
+        if (hit?.userEmail) tags.push(`user:${hit.userEmail}`)
+      } catch {
+        // optional enrichment
+      }
+    }
+    brevoBody.tags = tags
+
+    const result = await applyBrevoTrackingWebhook(brevoBody)
+    if (!result.ok) {
+      throw createError({
+        statusCode: result.statusCode,
+        statusMessage: result.message
+      })
+    }
+
+    setResponseStatus(event, 200)
+    return {
+      success: true,
+      accepted: true,
+      dbName: result.dbName,
+      upserted: result.upserted,
+      messageId: result.messageId,
+      event: result.event
+    }
+  } catch (err: unknown) {
+    if (isTransientMongoError(err)) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[zcMail-webhook] transient Mongo failure', {
+        messageId: parsed.messageId,
+        event: parsed.event,
+        error: message
+      })
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'Database temporarily unavailable. Retry later.'
+      })
+    }
+    throw err
   }
 })

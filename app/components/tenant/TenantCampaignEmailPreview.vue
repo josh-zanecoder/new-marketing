@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { campaignEmailPreviewSrcdoc } from '~/utils/campaignEmailPreviewSrcdoc'
+import { CAMPAIGN_EMAIL_PREVIEW_LAYOUT_WIDTH } from '~/utils/emailTemplateThumbnailSrcdoc'
 
 const props = withDefaults(
   defineProps<{
@@ -150,6 +151,7 @@ onBeforeUnmount(() => {
         <TenantEmailTemplateThumbnail
           :html="thumbnailSource"
           :title="title"
+          :layout-width="CAMPAIGN_EMAIL_PREVIEW_LAYOUT_WIDTH"
           class="absolute inset-0"
         />
         <div
@@ -216,7 +218,7 @@ onBeforeUnmount(() => {
             ref="modalIframeRef"
             :key="html"
             :srcdoc="srcdoc"
-            class="mx-auto block w-full max-w-[600px] border-0"
+            class="mx-auto block w-full border-0"
             sandbox="allow-same-origin"
             scrolling="no"
             title="Email preview (full size)"

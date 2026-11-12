@@ -6,6 +6,7 @@ import type { EmailDynamicVariableModel } from '../types/tenant/emailDynamicVari
 import type { EmailTemplateDoc, EmailTemplateModel } from '../types/tenant/emailTemplate.model'
 import { materializeEmailTemplateHtmlIfNeeded } from '../utils/emailTemplate/materializeEmailTemplateHtmlIfNeeded'
 import { assertCampaignEmailTemplateApprovedForSend } from '../utils/emailTemplate/assertCampaignEmailTemplateApprovedForSend'
+import { emailClientSafeImageHtml } from '~~/shared/utils/emailTemplateHtmlImages'
 import { isValidMarketingEmail, normalizeMarketingEmail } from '../helpers/marketingEmail'
 import { getRegistryConnection } from '../lib/mongoose'
 import {
@@ -333,7 +334,7 @@ export async function sendCampaignTestEmail(
   const subjectRendered = mergeMustacheTemplate(testSubjectLine(subject), mergeRoot)
   const previewRendered = mergeMustacheTemplate(previewTextSource, mergeRoot)
   const htmlRendered = applyEmailPreviewText(
-    mergeMustacheTemplate(templateHtml, mergeRoot),
+    mergeMustacheTemplate(emailClientSafeImageHtml(templateHtml), mergeRoot),
     previewRendered
   )
 

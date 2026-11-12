@@ -21,10 +21,13 @@ export function isTransientMongoError(err: unknown): boolean {
     err.name === 'MongoNetworkError' ||
     err.name === 'MongoNotConnectedError' ||
     err.name === 'MongooseServerSelectionError' ||
+    err.name === 'MongoWaitQueueTimeoutError' ||
+    err.name === 'WaitQueueTimeoutError' ||
     msg.includes('replicasetnoprimary') ||
     msg.includes('server selection') ||
     msg.includes('could not connect to any servers') ||
     msg.includes('client must be connected') ||
+    msg.includes('checking out a connection from connection pool') ||
     msg.includes('epipe') ||
     msg.includes('econnreset') ||
     msg.includes('connection') ||

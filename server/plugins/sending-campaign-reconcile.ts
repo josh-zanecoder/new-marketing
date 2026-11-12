@@ -1,3 +1,5 @@
+import { resolveCampaignReconcileIntervalMs } from '../constants/campaignReconcile'
+
 /**
  * Sending campaign safety net (Mongo + BullMQ only — not Kafka).
  * Campaigns left in `Sending` when BullMQ jobs fail, Redis evicts jobs,
@@ -6,9 +8,8 @@
 export default defineNitroPlugin(() => {
   if (process.env.SENDING_RECONCILE_DISABLED === 'true') return
 
-  const intervalMs = Math.max(
-    25_000,
-    Number(process.env.SENDING_RECONCILE_INTERVAL_MS) || 60_000
+  const intervalMs = resolveCampaignReconcileIntervalMs(
+    process.env.SENDING_RECONCILE_INTERVAL_MS
   )
 
   let busy = false

@@ -12,14 +12,14 @@ const toast = useAppToast()
 const router = useRouter()
 const { copyText } = useClipboardCopy()
 const {
-  allowTenantLoRecipientLists,
+  allowTenantImages,
   loadDefaultCampaignSender,
-  loaded: loFlagLoaded
+  loaded: imagesFlagLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 
 const canUseImageLibrary = computed(
-  () => loFlagLoaded.value && allowTenantLoRecipientLists.value === true
+  () => imagesFlagLoaded.value && allowTenantImages.value === true
 )
 
 const pending = ref(true)
@@ -60,7 +60,7 @@ const deleteConfirmMessage = computed(() => {
 const busy = computed(() => pending.value || uploadPending.value || deletePending.value)
 
 watch(canUseImageLibrary, (ok) => {
-  if (loFlagLoaded.value && !ok) {
+  if (imagesFlagLoaded.value && !ok) {
     void router.replace('/tenant/dashboard')
   }
 })
@@ -259,10 +259,10 @@ async function confirmDelete() {
 }
 
 onMounted(async () => {
-  if (!loFlagLoaded.value) {
+  if (!imagesFlagLoaded.value) {
     await loadDefaultCampaignSender()
   }
-  if (loFlagLoaded.value && !allowTenantLoRecipientLists.value) {
+  if (imagesFlagLoaded.value && !allowTenantImages.value) {
     await router.replace('/tenant/dashboard')
     return
   }

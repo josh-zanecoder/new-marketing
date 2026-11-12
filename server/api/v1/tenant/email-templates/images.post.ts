@@ -1,40 +1,25 @@
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
-import { getRegistryConnection } from '@server/lib/mongoose'
+import { requireTenantEmailTemplateImageHost } from '@server/utils/requireTenantInsertImage'
 import { uploadCustomMarketingImageDataUrlToGcs } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
-import { parseCustomMarketingImageDataUrl } from '~~/shared/customMarketingHostedImages'
-import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import {
+  CUSTOM_MARKETING_GCS_EMAIL_TEMPLATE_FOLDER,
+  parseCustomMarketingImageDataUrl
+} from '~~/shared/customMarketingHostedImages'
 
 /** GCS subfolder under custom-marketing/{tenant}/ for HTML email template images. */
-export const EMAIL_TEMPLATE_GCS_IMAGE_FOLDER = 'email-templates'
+export const EMAIL_TEMPLATE_GCS_IMAGE_FOLDER = CUSTOM_MARKETING_GCS_EMAIL_TEMPLATE_FOLDER
 
 /**
  * Host an image for HTML email templates (public HTTPS URL for img src).
  * Reuses Custom Marketing GCS upload; stores under `…/email-templates/…`.
- * Gated by superadmin `allowTenantLoRecipientLists`.
+ * Allowed for the HTML editor Insert image permission or the template editor.
+ * Works on new and existing templates.
  */
 export default defineEventHandler(async (event) => {
   await getTenantConnectionFromEvent(event)
-
-  const auth = event.context.auth
-  if (!isRegisteredTenantAuthContext(auth)) {
-    throw createError({ statusCode: 403, message: 'Missing or invalid tenant context' })
-  }
-
-  const dbName = typeof auth.dbName === 'string' ? auth.dbName : ''
-  const registry = await getRegistryConnection()
-  const regDoc = await registry.collection('clients').findOne(
-    { dbName },
-    { projection: { allowTenantLoRecipientLists: 1 } }
-  )
-  if (!parseAllowTenantLoRecipientLists(regDoc?.allowTenantLoRecipientLists)) {
-    throw createError({
-      statusCode: 403,
-      message: 'Image upload is disabled for this tenant'
-    })
-  }
+  const { auth } = await requireTenantEmailTemplateImageHost(event)
 
   const body = (await readBody(event).catch(() => null)) as { dataUrl?: string } | null
   const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl.trim() : ''
