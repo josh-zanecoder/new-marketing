@@ -131,7 +131,10 @@ describe('toTenantAdminRow', () => {
       createdAt: '2026-01-01T00:00:00.000Z'
     })
     expect(row?.allowTenantGrapesBuilder).toBe(false)
+    expect(row?.allowTenantBeefreeBuilder).toBe(false)
     expect(row?.allowTenantTemplateBuilder).toBe(false)
+    expect(row?.allowTenantEditText).toBe(false)
+    expect(row?.allowTenantResizeImage).toBe(false)
   })
 
   it('reads email builder flags from the registry doc', () => {
@@ -140,10 +143,16 @@ describe('toTenantAdminRow', () => {
       dbName: 'acme_db',
       createdAt: '2026-01-01T00:00:00.000Z',
       allowTenantGrapesBuilder: true,
-      allowTenantTemplateBuilder: true
+      allowTenantBeefreeBuilder: true,
+      allowTenantTemplateBuilder: true,
+      allowTenantEditText: true,
+      allowTenantResizeImage: true
     })
     expect(row?.allowTenantGrapesBuilder).toBe(true)
+    expect(row?.allowTenantBeefreeBuilder).toBe(true)
     expect(row?.allowTenantTemplateBuilder).toBe(true)
+    expect(row?.allowTenantEditText).toBe(true)
+    expect(row?.allowTenantResizeImage).toBe(true)
   })
 
   it('reads allowTenantInsertImage true from the registry doc', () => {

@@ -476,7 +476,7 @@ onUnmounted(() => {
                     Email design
                   </h2>
                   <p class="mt-1 max-w-lg text-sm leading-relaxed text-slate-500">
-                    Build in the editor, upload raw HTML, or pick a saved template.
+                    Edit the email here, upload HTML, or pick a saved template.
                   </p>
                 </div>
                 <button
@@ -523,8 +523,8 @@ onUnmounted(() => {
                         </svg>
                       </div>
                       <div class="min-w-0 flex-1">
-                        <div class="font-semibold text-slate-900">Create from scratch</div>
-                        <p class="mt-0.5 text-sm text-slate-500">Open the email editor</p>
+                        <div class="font-semibold text-slate-900">Edit the email</div>
+                        <p class="mt-0.5 text-sm text-slate-500">Change the words, photos, and layout</p>
                       </div>
                       <svg class="hidden h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

@@ -1748,6 +1748,16 @@ async function loadFromEditorReturn() {
   if (typeof window !== 'undefined') {
     const template = window.sessionStorage.getItem(`campaign-template-${campaignId}`)
     if (template) savedTemplateHtml.value = template
+    try {
+      const raw = window.sessionStorage.getItem(PENDING_CAMPAIGN_KEY)
+      const storedId = raw ? (JSON.parse(raw) as { form?: { selectedTemplateId?: string } }).form?.selectedTemplateId : ''
+      if (typeof storedId === 'string' && /^[a-f0-9]{24}$/i.test(storedId)) {
+        form.value.selectedTemplateId = storedId
+        form.value.templateMode = 'existing'
+      }
+    } catch {
+      /* ignore invalid stored JSON */
+    }
   }
   const isRealCampaignId = /^[a-f0-9]{24}$/i.test(campaignId)
   if (isRealCampaignId) {
@@ -1951,7 +1961,10 @@ function openEditorWithCurrentDesign() {
       campaignId
     }))
   }
-  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local`)
+  const templateQuery = /^[a-f0-9]{24}$/i.test(form.value.selectedTemplateId)
+    ? `&templateId=${encodeURIComponent(form.value.selectedTemplateId)}`
+    : ''
+  navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local${templateQuery}`)
 }
 
 const recipientsDescription = computed(() => {
@@ -1984,7 +1997,7 @@ const designSourceSummary = computed(() => {
   if (form.value.templateMode === 'upload') {
     return 'Uploaded HTML design (saved without GrapesJS editing).'
   }
-  if (form.value.templateMode === 'scratch') return 'Built from scratch in the email editor.'
+  if (form.value.templateMode === 'scratch') return 'Edited in the email editor.'
   const t = existingTemplates.value.find((x) => x.id === form.value.selectedTemplateId)
   if (t) return `Based on saved template “${t.name}”.`
   return 'Your campaign email is ready to refine or send.'
@@ -2002,9 +2015,9 @@ const designStepSubtitle = computed(() => {
       : 'Preview ready — change design or edit in the editor.'
   }
   if (form.value.templateMode === 'upload') return 'Upload HTML file'
-  if (form.value.templateMode === 'scratch') return 'Create from scratch'
+  if (form.value.templateMode === 'scratch') return 'Edit the email'
   if (form.value.templateMode === 'existing') return 'Pick a template'
-  return 'Create your email content'
+  return 'Edit your email'
 })
 
 const campaignFormComplete = computed(

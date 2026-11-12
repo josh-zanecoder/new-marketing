@@ -31,7 +31,10 @@ export type TenantMeCampaignSender = {
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
   allowTenantGrapesBuilder?: boolean
+  allowTenantBeefreeBuilder?: boolean
   allowTenantTemplateBuilder?: boolean
+  allowTenantEditText?: boolean
+  allowTenantResizeImage?: boolean
   audienceAccess?: MarketingAudienceAccess
   canSelectAnyLoanOfficer?: boolean
   sessionUser?: TenantMeSessionUser
@@ -64,8 +67,14 @@ export function useDefaultCampaignSender() {
   const allowTenantInsertImage = ref(false)
   /** Superadmin gate; false hides the GrapesJS email editor. */
   const allowTenantGrapesBuilder = ref(false)
+  /** Superadmin gate; false hides the Beefree email builder. */
+  const allowTenantBeefreeBuilder = ref(false)
   /** Superadmin gate; false hides the template image builder. */
   const allowTenantTemplateBuilder = ref(false)
+  /** Superadmin gate; false keeps template words read-only. */
+  const allowTenantEditText = ref(false)
+  /** Superadmin gate; false hides photo resize handles. */
+  const allowTenantResizeImage = ref(false)
   const sessionUser = ref<TenantMeSessionUser | null>(null)
   const audienceAccess = ref<MarketingAudienceAccess>('owner_scope')
   const loaded = ref(false)
@@ -123,7 +132,10 @@ export function useDefaultCampaignSender() {
       allowTenantImages.value = me?.allowTenantImages === true
       allowTenantInsertImage.value = me?.allowTenantInsertImage === true
       allowTenantGrapesBuilder.value = me?.allowTenantGrapesBuilder === true
+      allowTenantBeefreeBuilder.value = me?.allowTenantBeefreeBuilder === true
       allowTenantTemplateBuilder.value = me?.allowTenantTemplateBuilder === true
+      allowTenantEditText.value = me?.allowTenantEditText === true
+      allowTenantResizeImage.value = me?.allowTenantResizeImage === true
       sessionUser.value =
         me?.sessionUser && typeof me.sessionUser === 'object' ? me.sessionUser : null
 
@@ -159,7 +171,10 @@ export function useDefaultCampaignSender() {
       allowTenantImages.value = false
       allowTenantInsertImage.value = false
       allowTenantGrapesBuilder.value = false
+      allowTenantBeefreeBuilder.value = false
       allowTenantTemplateBuilder.value = false
+      allowTenantEditText.value = false
+      allowTenantResizeImage.value = false
       sessionUser.value = null
       audienceAccess.value = 'owner_scope'
       defaultSenderName.value = DEFAULT_CAMPAIGN_SENDER_NAME
@@ -178,7 +193,10 @@ export function useDefaultCampaignSender() {
     allowTenantImages,
     allowTenantInsertImage,
     allowTenantGrapesBuilder,
+    allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,
+    allowTenantEditText,
+    allowTenantResizeImage,
     sessionUser,
     audienceAccess,
     canSelectAnyLoanOfficer,

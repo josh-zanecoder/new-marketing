@@ -13,7 +13,6 @@ import {
   hostUploadedEmailTemplateImages
 } from '~~/shared/utils/hostUploadedEmailTemplateImages'
 import { emailTemplateHtmlNeedsImageHosting } from '~~/shared/utils/emailTemplateHostableImages'
-import type { TenantHostedImage } from '~~/shared/tenantHostedImages'
 import { compressCustomMarketingImageFile } from '~/utils/compressCustomMarketingImage'
 
 definePageMeta({ layout: 'default' })
@@ -26,6 +25,8 @@ const {
   allowTenantTemplateBuilder,
   allowTenantLoRecipientLists,
   allowTenantTemplateApproval,
+  allowTenantEditText,
+  allowTenantResizeImage,
   loaded: tenantFlagsLoaded,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
@@ -41,6 +42,7 @@ const approvalUiEnabled = computed(
   () => tenantFlagsLoaded.value && allowTenantTemplateApproval.value === true
 )
 const editorMode = ref<'template' | 'html'>('template')
+const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
 const {
 
   open: unsubscribeFooterModalOpen,
@@ -64,6 +66,9 @@ const editTemplateId = computed(() => {
 const isEdit = computed(() => Boolean(editTemplateId.value && /^[a-f0-9]{24}$/i.test(editTemplateId.value)))
 const canUseTemplateBuilder = computed(
   () => isEdit.value && tenantFlagsLoaded.value && allowTenantTemplateBuilder.value
+)
+const templateEditorOpen = computed(
+  () => canUseTemplateBuilder.value && editorMode.value === 'template'
 )
 
 const name = ref('')
@@ -465,13 +470,28 @@ async function saveTemplate() {
     return
   }
 
+  if (isEdit.value) {
+    saveChoiceError.value = ''
+    saveChoiceOpen.value = true
+    return
+  }
+
+  await persistTemplate('create', trimmedName, trimmedSubject, html)
+}
+
+const saveChoiceOpen = ref(false)
+const saveChoiceError = ref('')
+
+async function persistTemplate(mode: 'create' | 'replace', templateName: string, templateSubject: string, html: string) {
   saving.value = true
+  saveChoiceError.value = ''
+  formError.value = ''
   try {
     const resolvedCategoryId = categoryId.value.trim() || null
-    if (isEdit.value) {
+    if (mode === 'replace' && isEdit.value) {
       const updated = await marketingApi.updateEmailTemplate(editTemplateId.value, {
-        name: trimmedName,
-        subject: trimmedSubject,
+        name: templateName,
+        subject: templateSubject,
         htmlTemplate: html,
         htmlSource: 'upload',
         saveToLibrary: true,
@@ -487,8 +507,8 @@ async function saveTemplate() {
       }
     } else {
       const created = await marketingApi.createEmailTemplate({
-        name: trimmedName,
-        subject: trimmedSubject,
+        name: templateName,
+        subject: templateSubject,
         htmlTemplate: html,
         htmlSource: 'upload',
         saveToLibrary: true,
@@ -503,39 +523,95 @@ async function saveTemplate() {
         )
       }
     }
+    saveChoiceOpen.value = false
     clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     await navigateTo('/tenant/email-templates')
   } catch {
-    formError.value = 'Failed to save template. Please try again.'
+    const message = 'Failed to save template. Please try again.'
+    if (saveChoiceOpen.value) saveChoiceError.value = message
+    else formError.value = message
   } finally {
     saving.value = false
   }
 }
+
+function replaceOriginalTemplate() {
+  void persistTemplate('replace', name.value.trim(), subject.value.trim(), htmlContent.value)
+}
+
+function saveTemplateCopy(copyName: string) {
+  void persistTemplate('create', copyName, subject.value.trim(), htmlContent.value)
+}
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-7xl space-y-6">
-    <header>
-      <NuxtLink
-        to="/tenant/email-templates"
-        class="text-sm font-medium text-primary-600 hover:text-primary-700"
-      >
-        ← Back to templates
-      </NuxtLink>
-      <div class="mt-3 flex flex-wrap items-center gap-2">
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
-          {{ isEdit ? 'Edit email template' : 'Create email template' }}
-        </h1>
-        <TenantEmailTemplateApprovalBadge
-          v-if="approvalUiEnabled && isEdit"
-          :status="approvalStatus"
-        />
+  <div
+    :class="templateEditorOpen
+      ? ['fixed inset-y-0 right-0 z-30 flex flex-col overflow-hidden bg-slate-100', sidebarCompact ? 'left-16' : 'left-0 lg:left-72']
+      : 'mx-auto w-full max-w-7xl space-y-6'"
+  >
+    <header
+      class="flex shrink-0 flex-col"
+      :class="templateEditorOpen ? 'border-b border-slate-200 bg-white px-3 py-2' : ''"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <NuxtLink
+            to="/tenant/email-templates"
+            class="text-sm font-medium text-primary-600 hover:text-primary-700"
+          >
+            ← Back to templates
+          </NuxtLink>
+          <div v-if="!templateEditorOpen" class="mt-3 flex flex-wrap items-center gap-2">
+            <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
+              {{ isEdit ? 'Edit email template' : 'Create email template' }}
+            </h1>
+            <TenantEmailTemplateApprovalBadge
+              v-if="approvalUiEnabled && isEdit"
+              :status="approvalStatus"
+            />
+          </div>
+          <p v-if="!templateEditorOpen" class="mt-2 text-sm text-slate-500">
+            Paste HTML or upload an .html file. The template is stored exactly as provided.
+          </p>
+        </div>
+        <div v-if="templateEditorOpen" class="flex shrink-0 items-center gap-2">
+          <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+              :class="editorMode === 'template' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              @click="editorMode = 'template'"
+            >
+              Template
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+              :class="editorMode === 'html' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              @click="editorMode = 'html'"
+            >
+              HTML
+            </button>
+          </div>
+          <NuxtLink
+            to="/tenant/email-templates"
+            class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            Cancel
+          </NuxtLink>
+          <button
+            type="submit"
+            form="email-template-form"
+            class="inline-flex items-center justify-center rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary-600/20 hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="saving || anyImageBusy || !htmlContent.trim()"
+          >
+            {{ saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Save template') }}
+          </button>
+        </div>
       </div>
-      <p class="mt-2 text-sm text-slate-500">
-        Paste HTML or upload an .html file. The template is stored exactly as provided.
-      </p>
       <p
-        v-if="approvalUiEnabled && isEdit && approvalStatus === 'rejected'"
+        v-if="!templateEditorOpen && approvalUiEnabled && isEdit && approvalStatus === 'rejected'"
         class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
         role="status"
       >
@@ -544,21 +620,21 @@ async function saveTemplate() {
         <span v-if="approvalRejectionReason"> {{ approvalRejectionReason }}</span>
       </p>
       <p
-        v-else-if="approvalUiEnabled && isEdit && approvalStatus === 'pending_approval'"
+        v-else-if="!templateEditorOpen && approvalUiEnabled && isEdit && approvalStatus === 'pending_approval'"
         class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
         role="status"
       >
         Waiting for Operations Manager or Marketing approval before this template can be sent.
       </p>
       <p
-        v-else-if="approvalUiEnabled && isEdit && approvalStatus === 'approved' && approvalReviewedBy"
+        v-else-if="!templateEditorOpen && approvalUiEnabled && isEdit && approvalStatus === 'approved' && approvalReviewedBy"
         class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
         role="status"
       >
         Approved by {{ approvalReviewedBy }}
       </p>
       <div
-        v-if="approvalUiEnabled && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"
+        v-if="!templateEditorOpen && approvalUiEnabled && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"
         class="mt-3 flex flex-wrap gap-2"
       >
         <NuxtLink
@@ -576,8 +652,8 @@ async function saveTemplate() {
 
     <form
       v-else
-      class="grid gap-5 xl:items-start"
-      :class="canUseTemplateBuilder && editorMode === 'template' ? '' : 'xl:grid-cols-[minmax(0,1fr)_17.5rem]'"
+      id="email-template-form"
+      :class="templateEditorOpen ? 'flex min-h-0 flex-1 flex-col' : 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_17.5rem] xl:items-start'"
       @submit.prevent="saveTemplate"
     >
       <aside
@@ -653,21 +729,28 @@ async function saveTemplate() {
         </div>
       </aside>
 
-      <div class="min-w-0 space-y-5 xl:col-start-1 xl:row-start-1">
-      <div class="grid gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:grid-cols-2 sm:p-6">
+      <div
+        class="min-w-0 xl:col-start-1 xl:row-start-1"
+        :class="templateEditorOpen ? 'flex min-h-0 flex-1 flex-col' : 'space-y-5'"
+      >
+      <div
+        class="grid shrink-0 gap-3 bg-white"
+        :class="templateEditorOpen ? 'grid-cols-1 gap-2 border-b border-slate-200 px-3 py-2 lg:grid-cols-3' : 'gap-4 rounded-2xl border border-slate-200/80 p-5 shadow-sm sm:grid-cols-2 sm:p-6'"
+      >
         <div>
-          <label class="block text-sm font-medium text-slate-700" for="template-name">Template name</label>
+          <label class="block font-medium text-slate-700" :class="templateEditorOpen ? 'text-xs' : 'text-sm'" for="template-name">Template name</label>
           <input
             id="template-name"
             v-model="name"
             type="text"
             required
             placeholder="e.g. Monthly newsletter"
-            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+            class="mt-1 w-full rounded-xl border border-slate-200/90 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+            :class="templateEditorOpen ? 'py-1.5' : 'mt-1.5 py-2.5'"
           >
         </div>
         <div>
-          <label class="block text-sm font-medium text-slate-700" for="template-subject">Default subject</label>
+          <label class="block font-medium text-slate-700" :class="templateEditorOpen ? 'text-xs' : 'text-sm'" for="template-subject">Default subject</label>
           <input
             id="template-subject"
             ref="subjectInputRef"
@@ -675,13 +758,14 @@ async function saveTemplate() {
             type="text"
             required
             placeholder="e.g. Your monthly update"
-            class="mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+            class="w-full rounded-xl border border-slate-200/90 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-primary-300 focus:outline-none focus:ring-[3px] focus:ring-primary-500/20"
+            :class="templateEditorOpen ? 'mt-1 py-1.5' : 'mt-1.5 py-2.5'"
             @focus="lastFocusedField = 'subject'"
           >
         </div>
-        <div class="sm:col-span-2">
+        <div :class="templateEditorOpen ? '' : 'sm:col-span-2'">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <label class="block text-sm font-medium text-slate-700" for="template-category">Category</label>
+            <label class="block font-medium text-slate-700" :class="templateEditorOpen ? 'text-xs' : 'text-sm'" for="template-category">Category</label>
             <NuxtLink
               to="/tenant/email-templates/categories"
               class="text-xs font-semibold text-primary-600 hover:text-primary-700"
@@ -700,7 +784,7 @@ async function saveTemplate() {
         </div>
       </div>
 
-      <div v-if="canUseTemplateBuilder" class="flex w-fit items-center gap-1 rounded-xl bg-slate-100 p-1">
+      <div v-if="canUseTemplateBuilder && !templateEditorOpen" class="flex w-fit shrink-0 items-center gap-1 rounded-xl bg-slate-100 p-1">
         <button
           type="button"
           class="rounded-lg px-3 py-1.5 text-sm font-semibold"
@@ -720,11 +804,13 @@ async function saveTemplate() {
       </div>
 
       <TenantEmailTemplateImageBuilder
-        v-if="canUseTemplateBuilder && editorMode === 'template'"
+        v-if="templateEditorOpen"
         v-model="htmlContent"
-        class="h-[calc(100vh-280px)] min-h-[560px] overflow-hidden rounded-2xl border border-slate-200"
+        class="min-h-0 flex-1 overflow-hidden"
         :source-html="loadedHtml"
         :can-upload-image="true"
+        :can-edit-text="allowTenantEditText"
+        :can-resize-image="allowTenantResizeImage"
       />
 
       <div
@@ -905,11 +991,11 @@ async function saveTemplate() {
         </div>
       </div>
 
-      <p v-if="formError" class="text-sm text-red-600" role="alert">
+      <p v-if="formError" class="px-4 py-2 text-sm text-red-600" role="alert">
         {{ formError }}
       </p>
 
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <div v-if="!templateEditorOpen" class="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <NuxtLink
           to="/tenant/email-templates"
           class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
@@ -927,6 +1013,15 @@ async function saveTemplate() {
       </div>
     </form>
 
+    <TenantEmailTemplateSaveChoiceModal
+      :open="saveChoiceOpen"
+      :template-name="name.trim()"
+      :saving="saving"
+      :error="saveChoiceError"
+      @close="saveChoiceOpen = false"
+      @replace="replaceOriginalTemplate"
+      @copy="saveTemplateCopy"
+    />
     <TenantUnsubscribeFooterAppendedModal
       :open="unsubscribeFooterModalOpen"
       :title="unsubscribeFooterModalTitle"

@@ -14,7 +14,10 @@ import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateA
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
+import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
+import { parseAllowTenantEditText } from '~~/shared/allowTenantEditText'
+import { parseAllowTenantResizeImage } from '~~/shared/allowTenantResizeImage'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -65,8 +68,20 @@ export function parseRegistryAllowTenantGrapesBuilder(doc: RegistryTenantDoc): b
   return parseAllowTenantGrapesBuilder(doc.allowTenantGrapesBuilder)
 }
 
+export function parseRegistryAllowTenantBeefreeBuilder(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantBeefreeBuilder(doc.allowTenantBeefreeBuilder)
+}
+
 export function parseRegistryAllowTenantTemplateBuilder(doc: RegistryTenantDoc): boolean {
   return parseAllowTenantTemplateBuilder(doc.allowTenantTemplateBuilder)
+}
+
+export function parseRegistryAllowTenantEditText(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantEditText(doc.allowTenantEditText)
+}
+
+export function parseRegistryAllowTenantResizeImage(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantResizeImage(doc.allowTenantResizeImage)
 }
 
 export function normalizeCampaignSenderEmailInput(
@@ -356,7 +371,10 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
   const allowTenantInsertImage = parseRegistryAllowTenantInsertImage(doc)
   const allowTenantGrapesBuilder = parseRegistryAllowTenantGrapesBuilder(doc)
+  const allowTenantBeefreeBuilder = parseRegistryAllowTenantBeefreeBuilder(doc)
   const allowTenantTemplateBuilder = parseRegistryAllowTenantTemplateBuilder(doc)
+  const allowTenantEditText = parseRegistryAllowTenantEditText(doc)
+  const allowTenantResizeImage = parseRegistryAllowTenantResizeImage(doc)
   const { brevoApiKeyConfigured, brevoApiKeyPrefix } = parseRegistryBrevoApiKey(doc)
   const { brevoWebhookSecretConfigured, brevoWebhookSecretPrefix } =
     parseRegistryBrevoWebhookSecret(doc)
@@ -381,7 +399,10 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     allowTenantImages,
     allowTenantInsertImage,
     allowTenantGrapesBuilder,
+    allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,
+    allowTenantEditText,
+    allowTenantResizeImage,
     brevoApiKeyConfigured,
     brevoApiKeyPrefix,
     brevoWebhookSecretConfigured,

@@ -41,6 +41,9 @@ export default defineNuxtConfig({
     gcsPrivateKey:
       process.env.GCS_PRIVATE_KEY || process.env.GCP_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY || '',
     gcsPrivateKeyBase64: process.env.GCS_PRIVATE_KEY_BASE64 || '',
+    /** Beefree SDK login. Server-only. Never expose the secret on `public`. */
+    beefreeClientId: process.env.BEEFREE_CLIENT_ID || '',
+    beefreeClientSecret: process.env.BEEFREE_CLIENT_SECRET || '',
     public: {
       marketingBaseUrl:
         process.env.NUXT_PUBLIC_MARKETING_BASE_URL || process.env.MARKETING_PUBLIC_BASE_URL || '',
@@ -120,7 +123,8 @@ export default defineNuxtConfig({
         'firebase/app',
         'firebase/auth',
         'echarts/core',
-        'vue-echarts'
+        'vue-echarts',
+        '@beefree.io/sdk'
       ]
     }
   },

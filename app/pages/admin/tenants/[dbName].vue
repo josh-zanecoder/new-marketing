@@ -1359,7 +1359,10 @@ interface TenantDetail {
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
   allowTenantGrapesBuilder?: boolean
+  allowTenantBeefreeBuilder?: boolean
   allowTenantTemplateBuilder?: boolean
+  allowTenantEditText?: boolean
+  allowTenantResizeImage?: boolean
   campaignFromAddressMode?: 'default' | 'contact_owner'
   brevoApiKeyConfigured?: boolean
   brevoApiKeyPrefix?: string | null

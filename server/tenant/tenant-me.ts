@@ -16,7 +16,10 @@ import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateA
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
+import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
+import { parseAllowTenantEditText } from '~~/shared/allowTenantEditText'
+import { parseAllowTenantResizeImage } from '~~/shared/allowTenantResizeImage'
 import { tenantUserFieldsFromAuth } from '@server/utils/emailMerge/tenantUserFromAuth'
 import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
 import { marketingAudienceAccessPayload } from '@server/utils/auth/marketingAudienceFromAuth'
@@ -114,8 +117,14 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantInsertImage: parseAllowTenantInsertImage(registryDoc?.allowTenantInsertImage),
     /** When false/omitted, the GrapesJS email editor stays hidden. */
     allowTenantGrapesBuilder: parseAllowTenantGrapesBuilder(registryDoc?.allowTenantGrapesBuilder),
+    /** When false/omitted, the Beefree email builder stays hidden. */
+    allowTenantBeefreeBuilder: parseAllowTenantBeefreeBuilder(registryDoc?.allowTenantBeefreeBuilder),
     /** When false/omitted, the template image builder stays hidden. */
     allowTenantTemplateBuilder: parseAllowTenantTemplateBuilder(registryDoc?.allowTenantTemplateBuilder),
+    /** When false/omitted, words in the template builder stay read-only. */
+    allowTenantEditText: parseAllowTenantEditText(registryDoc?.allowTenantEditText),
+    /** When false/omitted, photo resize handles stay hidden. */
+    allowTenantResizeImage: parseAllowTenantResizeImage(registryDoc?.allowTenantResizeImage),
     /**
      * When LO-list flag ON: LO/LOA → self_only; OM/Marketing → tenant_wide.
      * When OFF: classic handoff (tenant_wide or owner_scope).

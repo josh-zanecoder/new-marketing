@@ -52,6 +52,8 @@ const route = useRoute()
 const {
   allowTenantGrapesBuilder,
   allowTenantTemplateBuilder,
+  allowTenantEditText,
+  allowTenantResizeImage,
   loaded: imagePermissionLoaded,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
@@ -223,6 +225,10 @@ const standaloneName = ref('')
 const standaloneSubject = ref('')
 const standaloneSaving = ref(false)
 const standaloneSaveError = ref('')
+const sourceTemplateCategoryId = ref<string | null>(null)
+const saveChoiceOpen = ref(false)
+const saveChoiceError = ref('')
+const pendingSaveHtml = ref('')
 
 function pickTenantId(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return ''
@@ -249,6 +255,7 @@ async function loadStandaloneTemplateHtml(): Promise<string | null> {
     const res = await marketingApi.fetchEmailTemplateById(tid)
     standaloneName.value = res.template.name?.trim() ?? ''
     standaloneSubject.value = res.template.subject?.trim() ?? ''
+    sourceTemplateCategoryId.value = res.template.categoryId ?? null
     return res.template.htmlTemplate?.trim() || null
   } catch {
     return null
@@ -291,6 +298,105 @@ function showGrapesBuilder() {
   builderMode.value = 'grapes'
 }
 
+function isExistingTemplateId(id: string) {
+  return /^[a-f0-9]{24}$/i.test(id)
+}
+
+function openSaveChoice(html: string) {
+  pendingSaveHtml.value = html
+  saveChoiceError.value = ''
+  saveChoiceOpen.value = true
+}
+
+function pointCampaignAtTemplate(templateId: string) {
+  try {
+    const raw = window.sessionStorage.getItem('mortdash-pending-campaign')
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { form?: Record<string, unknown> }
+    const form = parsed.form && typeof parsed.form === 'object' ? parsed.form : {}
+    form.selectedTemplateId = templateId
+    form.templateMode = 'existing'
+    parsed.form = form
+    window.sessionStorage.setItem('mortdash-pending-campaign', JSON.stringify(parsed))
+  } catch {
+    /* session storage unavailable */
+  }
+}
+
+function exitCampaignEditor(fullHtml: string, copiedTemplateId?: string) {
+  try {
+    let targetId = campaignId.value
+    if (typeof window !== 'undefined') {
+      if (campaignId.value) {
+        window.sessionStorage.setItem(`campaign-template-${campaignId.value}`, fullHtml)
+      } else if (builderId.value) {
+        targetId = `temp-${Date.now()}`
+        window.sessionStorage.setItem(`campaign-template-${targetId}`, fullHtml)
+        window.sessionStorage.setItem('mortdash-pending-campaign', JSON.stringify({
+          form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [], templateMode: 'scratch', selectedTemplateId: '' },
+          campaignId: targetId
+        }))
+      }
+      if (copiedTemplateId) pointCampaignAtTemplate(copiedTemplateId)
+    }
+    const isRealId = targetId && isExistingTemplateId(targetId)
+    const url = targetId
+      ? isRealId
+        ? `/tenant/campaigns/edit/${targetId}?campaignId=${targetId}&fromEditor=1`
+        : `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1`
+      : '/tenant/campaigns'
+    navigateTo(url)
+  } catch {
+    /* save / navigation failed */
+  }
+}
+
+async function finishTemplateLibrarySave(mode: 'replace' | 'copy', copyName?: string) {
+  const fullHtml = pendingSaveHtml.value || currentExportHtml()
+  const templateId = standaloneTemplateId.value
+  if (!fullHtml || !isExistingTemplateId(templateId)) return
+  const subject = standaloneSubject.value.trim() || 'Email'
+  standaloneSaving.value = true
+  saveChoiceError.value = ''
+  try {
+    let copiedId = ''
+    if (mode === 'replace') {
+      await marketingApi.updateEmailTemplate(templateId, {
+        ...(isStandalone.value
+          ? { name: standaloneName.value.trim(), subject }
+          : {}),
+        htmlTemplate: fullHtml,
+        htmlSource: 'editor',
+        saveToLibrary: true,
+        ...(sourceTemplateCategoryId.value ? { categoryId: sourceTemplateCategoryId.value } : {})
+      })
+    } else {
+      const created = await marketingApi.createEmailTemplate({
+        name: (copyName || '').trim() || `${standaloneName.value.trim() || 'Template'} (copy)`,
+        subject,
+        htmlTemplate: fullHtml,
+        htmlSource: 'editor',
+        saveToLibrary: true,
+        categoryId: sourceTemplateCategoryId.value
+      })
+      copiedId = created.template?.id || ''
+    }
+    saveChoiceOpen.value = false
+    clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
+    if (isStandalone.value) {
+      await navigateTo('/tenant/email-templates')
+      return
+    }
+    exitCampaignEditor(fullHtml, copiedId || undefined)
+  } catch {
+    saveChoiceError.value = mode === 'replace'
+      ? 'Could not replace the original. Please try again.'
+      : 'Could not save the copy. Please try again.'
+  } finally {
+    standaloneSaving.value = false
+  }
+}
+
 async function saveStandaloneAndExit() {
   if (imagePermissionLoaded.value && !canUseEmailBuilder.value) return
   const fullHtml = currentExportHtml()
@@ -305,26 +411,20 @@ async function saveStandaloneAndExit() {
     return
   }
 
+  if (isExistingTemplateId(standaloneTemplateId.value)) {
+    openSaveChoice(fullHtml)
+    return
+  }
+
   standaloneSaving.value = true
   try {
-    const tid = standaloneTemplateId.value
-    if (tid && /^[a-f0-9]{24}$/i.test(tid)) {
-      await marketingApi.updateEmailTemplate(tid, {
-        name,
-        subject,
-        htmlTemplate: fullHtml,
-        htmlSource: 'editor',
-        saveToLibrary: true
-      })
-    } else {
-      await marketingApi.createEmailTemplate({
-        name,
-        subject,
-        htmlTemplate: fullHtml,
-        htmlSource: 'editor',
-        saveToLibrary: true
-      })
-    }
+    await marketingApi.createEmailTemplate({
+      name,
+      subject,
+      htmlTemplate: fullHtml,
+      htmlSource: 'editor',
+      saveToLibrary: true
+    })
     clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     await navigateTo('/tenant/email-templates')
   } catch {
@@ -641,6 +741,8 @@ watch([isMounted, htmlFromUrl, builderId, campaignId, standaloneTemplateId, isSt
     const fetched = await loadStandaloneTemplateHtml()
     if (token !== htmlResolveToken) return
     resolved = fetched
+  } else if (isExistingTemplateId(standaloneTemplateId.value) && !standaloneName.value) {
+    void loadStandaloneTemplateHtml()
   }
 
   if (token !== htmlResolveToken) return
@@ -882,30 +984,11 @@ function handleSaveAndExit() {
   }
   const fullHtml = currentExportHtml()
   if (!fullHtml) return
-  try {
-    let targetId = campaignId.value
-    if (typeof window !== 'undefined') {
-      if (campaignId.value) {
-        window.sessionStorage.setItem(`campaign-template-${campaignId.value}`, fullHtml)
-      } else if (builderId.value) {
-        targetId = `temp-${Date.now()}`
-        window.sessionStorage.setItem(`campaign-template-${targetId}`, fullHtml)
-        window.sessionStorage.setItem('mortdash-pending-campaign', JSON.stringify({
-          form: { name: '', senderName: '', senderEmail: '', subject: '', recipientsMode: 'list', recipientsListId: '', recipientsManual: [], templateMode: 'scratch', selectedTemplateId: '' },
-          campaignId: targetId
-        }))
-      }
-    }
-    const isRealId = targetId && /^[a-f0-9]{24}$/i.test(targetId)
-    const url = targetId
-      ? isRealId
-        ? `/tenant/campaigns/edit/${targetId}?campaignId=${targetId}&fromEditor=1`
-        : `/tenant/campaigns/add?campaignId=${targetId}&fromEditor=1`
-      : '/tenant/campaigns'
-    navigateTo(url)
-  } catch {
-    /* save / navigation failed */
+  if (isExistingTemplateId(standaloneTemplateId.value)) {
+    openSaveChoice(fullHtml)
+    return
   }
+  exitCampaignEditor(fullHtml)
 }
 </script>
 
@@ -1015,6 +1098,8 @@ function handleSaveAndExit() {
         class="min-h-0 flex-1"
         :source-html="initialHtml || ''"
         :can-upload-image="true"
+        :can-edit-text="allowTenantEditText"
+        :can-resize-image="allowTenantResizeImage"
         @loaded-template="onLoadedTemplate"
       />
       <div
@@ -1022,6 +1107,15 @@ function handleSaveAndExit() {
         ref="editorContainerRef"
         class="min-h-0 flex-1 overflow-auto"
         style="height: calc(100vh - 52px)"
+      />
+      <TenantEmailTemplateSaveChoiceModal
+        :open="saveChoiceOpen"
+        :template-name="standaloneName.trim() || 'This template'"
+        :saving="standaloneSaving"
+        :error="saveChoiceError"
+        @close="saveChoiceOpen = false"
+        @replace="finishTemplateLibrarySave('replace')"
+        @copy="finishTemplateLibrarySave('copy', $event)"
       />
     </div>
     <template #fallback>

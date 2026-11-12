@@ -17,10 +17,11 @@ const items: MarketingSidebarNavItem[] = [
 
 describe("filterMarketingSidebarNavItems", () => {
   it("maps every Marketing sidebar page to a distinct permission", () => {
-    // Images / Template approvals are gated by registry flags, not CRM page permissions.
+    // Images, Beefree, and Template approvals are gated by registry flags, not CRM page permissions.
     const permissionBound = marketingSidebarNavItems.filter(
       (item) =>
         !item.requiresTenantImages &&
+        !item.requiresTenantBeefree &&
         !item.requiresTenantTemplateApproval &&
         !item.requiresTemplateApprover &&
         !item.requiresLoRecipientLists,

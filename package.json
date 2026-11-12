@@ -21,6 +21,7 @@
     "backfill:email-template-ownership": "tsx scripts/backfill-email-template-ownership.ts"
   },
   "dependencies": {
+    "@beefree.io/sdk": "^11.8.0",
     "@getbrevo/brevo": "^5.0.1",
     "@google-cloud/storage": "^7.21.0",
     "@google-cloud/tasks": "^5.5.2",

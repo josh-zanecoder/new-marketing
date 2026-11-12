@@ -42,8 +42,14 @@ export interface AdminTenantRow {
   allowTenantInsertImage: boolean
   /** When true, the tenant may open the GrapesJS email editor. Default false. */
   allowTenantGrapesBuilder: boolean
+  /** When true, the tenant may open the Beefree email builder. Default false. */
+  allowTenantBeefreeBuilder: boolean
   /** When true, the tenant may open the template image builder. Default false. */
   allowTenantTemplateBuilder: boolean
+  /** When true, the tenant may change words in the visual template builder. Default false. */
+  allowTenantEditText: boolean
+  /** When true, the tenant may resize photos in the visual template builder. Default false. */
+  allowTenantResizeImage: boolean
   /** Default campaign From name; null uses global fallback. */
   defaultCampaignSenderName: string | null
   /** True when a custom Brevo API key is stored for this tenant. */

@@ -9,7 +9,10 @@ export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantImages',
   'allowTenantInsertImage',
   'allowTenantGrapesBuilder',
-  'allowTenantTemplateBuilder'
+  'allowTenantBeefreeBuilder',
+  'allowTenantTemplateBuilder',
+  'allowTenantEditText',
+  'allowTenantResizeImage'
 ] as const
 
 export type TenantFeaturePermissionKey = (typeof TENANT_FEATURE_PERMISSION_KEYS)[number]
@@ -85,6 +88,15 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     patchPath: 'allow-tenant-grapes-builder'
   },
   {
+    key: 'allowTenantBeefreeBuilder',
+    code: 'email-builder:beefree',
+    label: 'Beefree editor',
+    description: 'Tenant can open the Beefree email builder.',
+    group: 'email-builder',
+    groupLabel: 'Email builder',
+    patchPath: 'allow-tenant-beefree-builder'
+  },
+  {
     key: 'allowTenantTemplateBuilder',
     code: 'email-builder:template',
     label: 'Template builder',
@@ -92,6 +104,24 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     group: 'email-builder',
     groupLabel: 'Email builder',
     patchPath: 'allow-tenant-template-builder'
+  },
+  {
+    key: 'allowTenantEditText',
+    code: 'email-builder:edit-text',
+    label: 'Edit text',
+    description: 'Tenant can change the words in the visual template builder.',
+    group: 'email-builder',
+    groupLabel: 'Email builder',
+    patchPath: 'allow-tenant-edit-text'
+  },
+  {
+    key: 'allowTenantResizeImage',
+    code: 'email-builder:resize',
+    label: 'Resize photos',
+    description: 'Tenant can resize photos in the visual template builder.',
+    group: 'email-builder',
+    groupLabel: 'Email builder',
+    patchPath: 'allow-tenant-resize-image'
   }
 ]
 
@@ -109,7 +139,10 @@ export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionStat
     allowTenantImages: false,
     allowTenantInsertImage: false,
     allowTenantGrapesBuilder: false,
-    allowTenantTemplateBuilder: false
+    allowTenantBeefreeBuilder: false,
+    allowTenantTemplateBuilder: false,
+    allowTenantEditText: false,
+    allowTenantResizeImage: false
   }
 }
 
