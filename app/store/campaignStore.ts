@@ -2,8 +2,10 @@ import { defineStore } from 'pinia'
 import type { TenantCampaignDetail } from '~/composables/useTenantMarketingApi'
 import type { Campaign, SendStatus } from '~/types/campaign'
 import {
+  CAMPAIGN_SEND_POLL_ERROR_MESSAGE,
   CAMPAIGN_SEND_POLL_INITIAL_MS,
   CAMPAIGN_SEND_POLL_INTERVAL_MS,
+  CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS,
   CAMPAIGN_SEND_POLL_MAX_MS
 } from '~/constants/campaignSendPolling'
 
@@ -613,7 +615,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
 
   /**
    * Poll send progress until `done`. Uses send POST counts for the modal until the first poll;
-   * only one timer runs app-wide.
+   * only one timer runs app-wide. Transient status API failures retry instead of stopping forever.
    */
   function startSendStatusPolling(
     campaignId: string,
@@ -623,6 +625,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
     sendPollCampaignId.value = campaignId
     const generation = sendPollGeneration
     let nextDelayMs = CAMPAIGN_SEND_POLL_INITIAL_MS
+    let consecutiveErrors = 0
 
     const schedule = () => {
       sendPollTimeout = setTimeout(() => {
@@ -637,6 +640,10 @@ export const useCampaignStore = defineStore('campaigns', () => {
       try {
         const res = await fetchSendCampaignStatus(campaignId)
         if (generation !== sendPollGeneration) return
+        consecutiveErrors = 0
+        if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+          sendError.value = null
+        }
         sendStatus.value = { ...res, campaignId }
 
         if (res.done) {
@@ -644,9 +651,9 @@ export const useCampaignStore = defineStore('campaigns', () => {
           if (sendingCampaignId.value === campaignId) {
             sendingCampaignId.value = null
           }
-          sendStatus.value = null
           await fetchCampaigns({ force: true })
           await onComplete(res)
+          sendStatus.value = null
           return
         }
 
@@ -658,12 +665,22 @@ export const useCampaignStore = defineStore('campaigns', () => {
           nextDelayMs = CAMPAIGN_SEND_POLL_INTERVAL_MS
         }
         schedule()
-      } catch {
-        if (sendingCampaignId.value === campaignId) {
-          clearSendModal()
-        } else {
-          stopSendStatusPolling()
+      } catch (e: unknown) {
+        consecutiveErrors += 1
+        console.error('[campaignStore] send status poll failed', {
+          campaignId,
+          consecutiveErrors,
+          error: fetchErrorMessage(e, 'status poll failed')
+        })
+        if (consecutiveErrors >= CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS) {
+          sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
         }
+        // Keep polling — a single blip must not leave the Details page stuck forever.
+        nextDelayMs = Math.min(
+          Math.round(Math.max(nextDelayMs, CAMPAIGN_SEND_POLL_INTERVAL_MS) * 1.5),
+          CAMPAIGN_SEND_POLL_MAX_MS
+        )
+        schedule()
       }
     }
 
@@ -688,9 +705,18 @@ export const useCampaignStore = defineStore('campaigns', () => {
         return
       }
       sendStatus.value = status
+      if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+        sendError.value = null
+      }
       startSendStatusPolling(campaignId, onComplete)
-    } catch {
-      // Status API unavailable; detail page still shows Sending badge from campaign fetch.
+    } catch (e: unknown) {
+      console.error('[campaignStore] resume send status failed', {
+        campaignId,
+        error: fetchErrorMessage(e, 'resume status failed')
+      })
+      sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
+      // Still start polling so a transient failure does not leave "loading delivery stats" forever.
+      startSendStatusPolling(campaignId, onComplete)
     }
   }
 

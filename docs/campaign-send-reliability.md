@@ -39,6 +39,18 @@ On Cloud Run with Cloud Tasks enabled, **batch chunks** target `marketing-send-w
 - Batch API error → all rows in chunk marked `failed` (retryable).
 - Stale `sending` (default **2h**, `CAMPAIGN_SEND_STALE_SENDING_MS`) → `failed` so reconcile/retry can continue.
 - **Sending reconcile** (web) clears stuck sends and re-enqueues when work remains but no active job/tasks.
+- Stale in-flight `sending` (~3m, `CAMPAIGN_SEND_RECONCILE_ACK_SENDING_MS`): rows **with** `brevoMessageId` → `sent` (lost DB ack); rows **without** → `pending` (worker died before provider ack) so the next batch can retry.
+
+## Details UI / delivery stats
+
+While status is `Sending`, the campaign Details page:
+
+1. Resumes `/send-campaign/status/:id` polling (retries on transient errors; surfaces copy after repeated failures).
+2. Falls back to recipient ledger counts when the status poll has not hydrated yet (avoids a permanent “loading delivery stats…” banner when rows are already `sending`).
+3. Counts **Sending** separately from Pending in the recipients summary.
+4. Refreshes the detail payload every ~5s so badges/status update without a manual reload.
+
+Custom Marketing send navigates to Details and lets that page own polling (does not start a second poll loop that can race).
 
 ## Env (Cloud Tasks)
 

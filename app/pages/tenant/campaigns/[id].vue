@@ -41,6 +41,8 @@ const {
   canRestartSend,
   sendProgress,
   buildCampaignSendProgress,
+  buildCampaignSendProgressFromRecipients,
+  countCampaignRecipientDeliveryStatuses,
   startSendStatusPolling,
   resumeSendStatusPolling,
   stopSendPolling,
@@ -158,6 +160,28 @@ async function onSendPollingComplete(res: { sent: number; failed: number; campai
   }
 }
 
+/** Refresh detail ledger while Sending so recipient badges/counts catch up without a manual reload. */
+let detailSendRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+function stopDetailSendRefresh() {
+  if (detailSendRefreshTimer) {
+    clearInterval(detailSendRefreshTimer)
+    detailSendRefreshTimer = null
+  }
+}
+
+function startDetailSendRefresh() {
+  if (!import.meta.client) return
+  stopDetailSendRefresh()
+  detailSendRefreshTimer = setInterval(() => {
+    if (campaign.value?.status !== 'Sending') {
+      stopDetailSendRefresh()
+      return
+    }
+    void refresh()
+  }, 5000)
+}
+
 const {
   open: testEmailModalOpen,
   recipient: testEmailRecipient,
@@ -258,7 +282,12 @@ async function loadPausedProgress() {
 watch(
   () => campaign.value?.status,
   (status) => {
-    if (status === 'Sending') tryResumeSendPolling()
+    if (status === 'Sending') {
+      tryResumeSendPolling()
+      startDetailSendRefresh()
+    } else {
+      stopDetailSendRefresh()
+    }
     if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
   }
 )
@@ -266,11 +295,30 @@ watch(
 onMounted(() => {
   tryResumeSendPolling()
   void loadPausedProgress()
+  if (campaign.value?.status === 'Sending') startDetailSendRefresh()
+})
+
+onBeforeUnmount(() => {
+  stopDetailSendRefresh()
 })
 
 const sendProgressModalOpen = computed(() => sendingCampaignId.value === id)
 
-const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id))
+const recipientDeliveryCounts = computed(() =>
+  countCampaignRecipientDeliveryStatuses(campaign.value?.recipients)
+)
+
+const detailSendProgress = computed(() => {
+  const fromPoll = buildCampaignSendProgress(sendStatus.value, id)
+  if (fromPoll) return fromPoll
+  const c = campaign.value
+  if (!c) return null
+  return buildCampaignSendProgressFromRecipients({
+    campaignId: id,
+    campaignStatus: c.status,
+    recipients: c.recipients
+  })
+})
 
 /** Inline live progress when modal is dismissed (send-now or scheduled background send). */
 const showDetailSendProgress = computed(() => {
@@ -309,8 +357,16 @@ async function onSendModalControl(detail: {
 function tryResumeSendPolling() {
   if (!import.meta.client) return
   if (campaign.value?.status !== 'Sending') return
-  if (isSendPolling(id)) return
-  if (sendingCampaignId.value === id) return
+  // Already polling with live status — nothing to resume.
+  if (isSendPolling(id) && sendStatus.value?.campaignId === id) return
+  // Modal open with hydrated counts — poll loop owns updates.
+  if (
+    sendingCampaignId.value === id &&
+    sendStatus.value?.campaignId === id &&
+    isSendPolling(id)
+  ) {
+    return
+  }
   void resumeSendStatusPolling(id, onSendPollingComplete)
 }
 
@@ -768,6 +824,13 @@ function setCampaignViewTab(tab: CampaignViewTab) {
               </svg>
               Sending in progress — loading delivery stats…
             </div>
+            <p
+              v-if="sendError && campaign.status === 'Sending' && !sendProgressModalOpen"
+              class="mt-2 text-sm font-medium text-amber-800"
+              role="alert"
+            >
+              {{ sendError }}
+            </p>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
@@ -1016,9 +1079,13 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                     v-if="campaign.recipients.some(r => r.status)"
                     class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"
                   >
-                    <span class="text-amber-700">Pending: {{ campaign.recipients.filter(r => r.status === 'pending').length }}</span>
-                    <span class="text-emerald-700">Sent: {{ campaign.recipients.filter(r => r.status === 'sent').length }}</span>
-                    <span class="text-red-700">Failed: {{ campaign.recipients.filter(r => r.status === 'failed').length }}</span>
+                    <span class="text-amber-700">Pending: {{ recipientDeliveryCounts.pending }}</span>
+                    <span
+                      v-if="recipientDeliveryCounts.sending > 0"
+                      class="text-sky-700"
+                    >Sending: {{ recipientDeliveryCounts.sending }}</span>
+                    <span class="text-emerald-700">Sent: {{ recipientDeliveryCounts.sent }}</span>
+                    <span class="text-red-700">Failed: {{ recipientDeliveryCounts.failed }}</span>
                   </div>
                 </div>
                 <ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto xl:max-h-[min(52vh,28rem)]">
@@ -1042,6 +1109,7 @@ function setCampaignViewTab(tab: CampaignViewTab) {
                       class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 sm:px-3 sm:py-1 sm:text-sm"
                       :class="{
                         'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
+                        'bg-sky-50 text-sky-800 ring-sky-200/70': r.status === 'sending',
                         'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
                         'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed'
                       }"

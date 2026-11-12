@@ -8,7 +8,9 @@ import {
   canStopSend,
   canResumeSend,
   canRestartSend,
-  buildCampaignSendProgress
+  buildCampaignSendProgress,
+  buildCampaignSendProgressFromRecipients,
+  countCampaignRecipientDeliveryStatuses
 } from '~/composables/useCampaignSendFlow'
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
@@ -176,10 +178,36 @@ async function loadPausedProgress() {
   }
 }
 
+let detailSendRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+function stopDetailSendRefresh() {
+  if (detailSendRefreshTimer) {
+    clearInterval(detailSendRefreshTimer)
+    detailSendRefreshTimer = null
+  }
+}
+
+function startDetailSendRefresh() {
+  if (!import.meta.client) return
+  stopDetailSendRefresh()
+  detailSendRefreshTimer = setInterval(() => {
+    if (campaign.value?.status !== 'Sending') {
+      stopDetailSendRefresh()
+      return
+    }
+    void refresh()
+  }, 5000)
+}
+
 watch(
   () => campaign.value?.status,
   (status) => {
-    if (status === 'Sending') tryResumeSendPolling()
+    if (status === 'Sending') {
+      tryResumeSendPolling()
+      startDetailSendRefresh()
+    } else {
+      stopDetailSendRefresh()
+    }
     if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
   }
 )
@@ -187,11 +215,26 @@ watch(
 onMounted(() => {
   tryResumeSendPolling()
   void loadPausedProgress()
+  if (campaign.value?.status === 'Sending') startDetailSendRefresh()
+})
+
+onBeforeUnmount(() => {
+  stopDetailSendRefresh()
 })
 
 const sendProgressModalOpen = computed(() => sendingCampaignKey.value === currentSendKey.value)
 
-const detailSendProgress = computed(() => buildCampaignSendProgress(sendStatus.value, id.value))
+const detailSendProgress = computed(() => {
+  const fromPoll = buildCampaignSendProgress(sendStatus.value, id.value)
+  if (fromPoll) return fromPoll
+  const c = campaign.value
+  if (!c) return null
+  return buildCampaignSendProgressFromRecipients({
+    campaignId: id.value,
+    campaignStatus: c.status,
+    recipients: c.recipients
+  })
+})
 
 /** Inline live progress when modal is dismissed (send-now or scheduled background send). */
 const showDetailSendProgress = computed(() => {
@@ -236,8 +279,14 @@ function tryResumeSendPolling() {
   if (campaign.value?.status !== 'Sending') return
   const c = campaignForSend.value
   if (!c) return
-  if (isSendPolling(c)) return
-  if (sendingCampaignKey.value === currentSendKey.value) return
+  if (isSendPolling(c) && sendStatus.value?.campaignId === id.value) return
+  if (
+    sendingCampaignKey.value === currentSendKey.value &&
+    sendStatus.value?.campaignId === id.value &&
+    isSendPolling(c)
+  ) {
+    return
+  }
   void resumeSendStatusPolling(c, onSendPollingComplete)
 }
 
@@ -431,20 +480,9 @@ function setCampaignViewTab(tab: CampaignViewTab) {
 
 const RECIPIENT_LIST_CAP = 100
 
-const recipientDeliveryStats = computed(() => {
-  const list = campaign.value?.recipients ?? []
-  let pending = 0
-  let sent = 0
-  let failed = 0
-  let aborted = 0
-  for (const r of list) {
-    if (r.status === 'pending') pending++
-    else if (r.status === 'sent') sent++
-    else if (r.status === 'failed') failed++
-    else if (r.status === 'aborted' || r.status === 'cancelled') aborted++
-  }
-  return { pending, sent, failed, aborted, total: list.length }
-})
+const recipientDeliveryStats = computed(() =>
+  countCampaignRecipientDeliveryStatuses(campaign.value?.recipients)
+)
 
 const visibleRecipients = computed(() => {
   const list = campaign.value?.recipients ?? []
@@ -622,6 +660,13 @@ const recipientListTruncated = computed(() => {
               </svg>
               Sending in progress — loading delivery stats…
             </div>
+            <p
+              v-if="sendError && campaign.status === 'Sending' && !sendProgressModalOpen"
+              class="mt-2 text-sm font-medium text-amber-800"
+              role="alert"
+            >
+              {{ sendError }}
+            </p>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <button
@@ -805,6 +850,10 @@ const recipientListTruncated = computed(() => {
                     class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 sm:text-sm"
                   >
                     <span class="text-amber-700">Pending: {{ recipientDeliveryStats.pending }}</span>
+                    <span
+                      v-if="recipientDeliveryStats.sending > 0"
+                      class="text-sky-700"
+                    >Sending: {{ recipientDeliveryStats.sending }}</span>
                     <span class="text-emerald-700">Sent: {{ recipientDeliveryStats.sent }}</span>
                     <span class="text-red-700">Failed: {{ recipientDeliveryStats.failed }}</span>
                     <span class="text-slate-600">Aborted: {{ recipientDeliveryStats.aborted }}</span>
@@ -837,6 +886,7 @@ const recipientListTruncated = computed(() => {
                       class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ring-1 sm:px-3 sm:py-1 sm:text-sm"
                       :class="{
                         'bg-amber-50 text-amber-800 ring-amber-200/70': r.status === 'pending',
+                        'bg-sky-50 text-sky-800 ring-sky-200/70': r.status === 'sending',
                         'bg-emerald-50 text-emerald-800 ring-emerald-200/70': r.status === 'sent',
                         'bg-red-50 text-red-800 ring-red-200/70': r.status === 'failed',
                         'bg-slate-100 text-slate-700 ring-slate-200/70': r.status === 'aborted' || r.status === 'cancelled'

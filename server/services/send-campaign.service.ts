@@ -103,8 +103,10 @@ function reconcileAckSendingCutoff(): Date {
 }
 
 /**
- * Worker finished at Brevo but never updated Mongo (crash / concurrent tail jobs).
- * Mark old `sending` rows as `sent` so finalize can run without re-sending.
+ * Recover stale in-flight `sending` rows when a worker died mid-batch:
+ * - Has provider message id → treat as delivered (lost DB ack after send).
+ * - No message id → return to `pending` so reconcile/retry can re-send (avoids
+ *   campaigns stuck forever with Pending:0 / Sending badges and no completion).
  */
 export async function ackStaleInFlightSendingRecipients(
   models: TenantClientModels,
@@ -112,20 +114,48 @@ export async function ackStaleInFlightSendingRecipients(
 ): Promise<number> {
   const { CampaignRecipient } = models
   const cutoff = reconcileAckSendingCutoff()
-  const res = await (CampaignRecipient as CampaignRecipientModel).updateMany(
+  const baseFilter = {
+    campaign: campaignId,
+    status: CAMPAIGN_RECIPIENT_STATUS_SENDING,
+    updatedAt: { $lt: cutoff }
+  }
+
+  const delivered = await (CampaignRecipient as CampaignRecipientModel).updateMany(
     {
-      campaign: campaignId,
-      status: CAMPAIGN_RECIPIENT_STATUS_SENDING,
-      updatedAt: { $lt: cutoff }
+      ...baseFilter,
+      brevoMessageId: { $exists: true, $nin: [null, ''] }
     },
     {
       $set: { status: CAMPAIGN_RECIPIENT_STATUS_SENT, sentAt: new Date() },
       $unset: { error: 1 }
     }
   )
-  const n = res.modifiedCount ?? 0
+
+  const released = await (CampaignRecipient as CampaignRecipientModel).updateMany(
+    {
+      ...baseFilter,
+      $or: [
+        { brevoMessageId: { $exists: false } },
+        { brevoMessageId: null },
+        { brevoMessageId: '' }
+      ]
+    },
+    {
+      $set: { status: CAMPAIGN_RECIPIENT_STATUS_PENDING },
+      $unset: { error: 1, brevoMessageId: 1 }
+    }
+  )
+
+  const deliveredN = delivered.modifiedCount ?? 0
+  const releasedN = released.modifiedCount ?? 0
+  const n = deliveredN + releasedN
   if (n > 0) {
-    logSend('reconcileAckSending', { campaignId, count: n })
+    logSend('reconcileAckSending', {
+      campaignId,
+      count: n,
+      delivered: deliveredN,
+      releasedToPending: releasedN
+    })
   }
   return n
 }

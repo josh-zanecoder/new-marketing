@@ -482,11 +482,11 @@ export function useCustomMarketingCompose() {
       if (campaignStore.unsubscribeSecondCheckPending) {
         return
       }
-      if (sendResult.poll) {
-        campaignStore.startSendStatusPolling(campaignId, async () => {
-          await navigateTo(`/tenant/campaigns/${campaignId}`)
-        })
+      if (!sendResult.poll && campaignStore.sendError) {
+        saveError.value = campaignStore.sendError
+        return
       }
+      // Details page resumes polling from sendCampaign() state (avoid a second poll race).
       await navigateTo(`/tenant/campaigns/${campaignId}`)
     } catch (e) {
       saveError.value = catchApiMessage(e, 'Failed to send custom marketing')
