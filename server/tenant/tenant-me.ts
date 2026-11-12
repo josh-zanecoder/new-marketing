@@ -12,6 +12,7 @@ import { resolveCampaignSenderDefaultsFromDoc } from '@server/utils/campaign/res
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
@@ -103,6 +104,10 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantEditSender: parseAllowTenantEditSender(registryDoc?.allowTenantEditSender),
     /** When false/omitted, recipient lists keep classic UI/behavior. */
     allowTenantLoRecipientLists,
+    /** When false/omitted, email templates skip the approval workflow. */
+    allowTenantTemplateApproval: parseAllowTenantTemplateApproval(
+      registryDoc?.allowTenantTemplateApproval
+    ),
     /** When false/omitted, the Images library stays hidden. */
     allowTenantImages: parseAllowTenantImages(registryDoc?.allowTenantImages),
     /** When false/omitted, email template Insert image stays hidden. */

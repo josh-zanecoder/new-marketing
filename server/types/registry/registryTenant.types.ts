@@ -36,6 +36,11 @@ export interface RegistryTenantDoc {
    */
   allowTenantLoRecipientLists?: unknown
   /**
+   * When true, retail/tenant marketing requires email template approval before send.
+   * Missing/false → classic templates (no approval workflow).
+   */
+  allowTenantTemplateApproval?: unknown
+  /**
    * When true, retail/tenant marketing may use the hosted Images library.
    * Missing/false → Images stay hidden.
    */
@@ -111,6 +116,11 @@ export interface TenantAdminRow {
    * Default false preserves existing recipient-list behavior.
    */
   allowTenantLoRecipientLists: boolean
+  /**
+   * When true, retail/tenant marketing requires email template approval before send.
+   * Default false preserves classic templates (no approval workflow).
+   */
+  allowTenantTemplateApproval: boolean
   /**
    * When true, retail/tenant marketing may use the hosted Images library.
    * Default false hides the Images page.

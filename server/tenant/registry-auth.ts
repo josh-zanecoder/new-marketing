@@ -7,6 +7,7 @@ import {
 } from "~~/shared/campaignFromAddressMode";
 import { parseAllowTenantEditSender } from "~~/shared/allowTenantEditSender";
 import { parseAllowTenantLoRecipientLists } from "~~/shared/allowTenantLoRecipientLists";
+import { parseAllowTenantTemplateApproval } from "~~/shared/allowTenantTemplateApproval";
 
 export const ADMIN_ROLE = "admin" as const;
 export const TENANT_ROLE = "tenant" as const;
@@ -45,6 +46,11 @@ export type TenantApiKeyAuthContext = {
    * Missing/false → classic handoff scope only.
    */
   allowTenantLoRecipientLists?: true;
+  /**
+   * Registry feature flag. When true, email template approval workflow is enabled.
+   * Missing/false → classic templates (no approval required).
+   */
+  allowTenantTemplateApproval?: true;
 };
 
 /** Firebase session for a tenant or client user (registry row resolved). */
@@ -283,6 +289,8 @@ export async function findRegistryTenantByDbName(
   allowTenantEditSender: boolean;
   /** When true, LO-scoped recipient lists + role audience rules are enabled. */
   allowTenantLoRecipientLists: boolean;
+  /** When true, email template approval workflow is enabled. */
+  allowTenantTemplateApproval: boolean;
 } | null> {
   const key = dbName.trim();
   if (!key) return null;
@@ -301,6 +309,7 @@ export async function findRegistryTenantByDbName(
           campaignFromAddressMode?: unknown;
           allowTenantEditSender?: unknown;
           allowTenantLoRecipientLists?: unknown;
+          allowTenantTemplateApproval?: unknown;
         } | null,
     );
   if (!doc?.name || !doc?.dbName) return null;
@@ -319,6 +328,7 @@ export async function findRegistryTenantByDbName(
     campaignFromAddressMode: CampaignFromAddressMode;
     allowTenantEditSender: boolean;
     allowTenantLoRecipientLists: boolean;
+    allowTenantTemplateApproval: boolean;
   } = {
     tenantName: doc.name,
     dbName: doc.dbName,
@@ -329,6 +339,9 @@ export async function findRegistryTenantByDbName(
     allowTenantEditSender: parseAllowTenantEditSender(doc.allowTenantEditSender),
     allowTenantLoRecipientLists: parseAllowTenantLoRecipientLists(
       doc.allowTenantLoRecipientLists,
+    ),
+    allowTenantTemplateApproval: parseAllowTenantTemplateApproval(
+      doc.allowTenantTemplateApproval,
     ),
   };
   if (typeof doc.tenantId === "string" && doc.tenantId) {
@@ -348,6 +361,7 @@ export async function findRegistryTenantByApiKey(
   tenantId?: string;
   crmAppUrl?: string;
   allowTenantLoRecipientLists: boolean;
+  allowTenantTemplateApproval: boolean;
 } | null> {
   const hash = hashTenantApiKey(apiKey);
   const doc = await registryConn
@@ -361,6 +375,7 @@ export async function findRegistryTenantByApiKey(
           tenantId?: string;
           crmAppUrl?: string;
           allowTenantLoRecipientLists?: unknown;
+          allowTenantTemplateApproval?: unknown;
         } | null,
     );
   if (!doc?.name || !doc?.dbName) return null;
@@ -370,11 +385,15 @@ export async function findRegistryTenantByApiKey(
     tenantId?: string;
     crmAppUrl?: string;
     allowTenantLoRecipientLists: boolean;
+    allowTenantTemplateApproval: boolean;
   } = {
     tenantName: doc.name,
     dbName: doc.dbName,
     allowTenantLoRecipientLists: parseAllowTenantLoRecipientLists(
       doc.allowTenantLoRecipientLists,
+    ),
+    allowTenantTemplateApproval: parseAllowTenantTemplateApproval(
+      doc.allowTenantTemplateApproval,
     ),
   };
   if (typeof doc.tenantId === "string" && doc.tenantId) {

@@ -21,6 +21,7 @@ describe("filterMarketingSidebarNavItems", () => {
     const permissionBound = marketingSidebarNavItems.filter(
       (item) =>
         !item.requiresTenantImages &&
+        !item.requiresTenantTemplateApproval &&
         !item.requiresTemplateApprover &&
         !item.requiresLoRecipientLists,
     );

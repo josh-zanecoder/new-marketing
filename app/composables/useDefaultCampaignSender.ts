@@ -27,6 +27,7 @@ export type TenantMeCampaignSender = {
   defaultCampaignSenderEmail?: string
   allowTenantEditSender?: boolean
   allowTenantLoRecipientLists?: boolean
+  allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
   allowTenantGrapesBuilder?: boolean
@@ -55,6 +56,8 @@ export function useDefaultCampaignSender() {
   const allowTenantEditSender = ref(false)
   /** Superadmin gate; false preserves classic recipient-list UI. */
   const allowTenantLoRecipientLists = ref(false)
+  /** Superadmin gate; false disables email template approval workflow. */
+  const allowTenantTemplateApproval = ref(false)
   /** Superadmin gate; false hides the Images library. */
   const allowTenantImages = ref(false)
   /** Superadmin gate; false hides email template Insert image and Replace. */
@@ -116,6 +119,7 @@ export function useDefaultCampaignSender() {
       const allow = me?.allowTenantEditSender === true
       allowTenantEditSender.value = allow
       allowTenantLoRecipientLists.value = me?.allowTenantLoRecipientLists === true
+      allowTenantTemplateApproval.value = me?.allowTenantTemplateApproval === true
       allowTenantImages.value = me?.allowTenantImages === true
       allowTenantInsertImage.value = me?.allowTenantInsertImage === true
       allowTenantGrapesBuilder.value = me?.allowTenantGrapesBuilder === true
@@ -151,6 +155,7 @@ export function useDefaultCampaignSender() {
     } catch {
       allowTenantEditSender.value = false
       allowTenantLoRecipientLists.value = false
+      allowTenantTemplateApproval.value = false
       allowTenantImages.value = false
       allowTenantInsertImage.value = false
       allowTenantGrapesBuilder.value = false
@@ -169,6 +174,7 @@ export function useDefaultCampaignSender() {
     defaultSenderEmail,
     allowTenantEditSender,
     allowTenantLoRecipientLists,
+    allowTenantTemplateApproval,
     allowTenantImages,
     allowTenantInsertImage,
     allowTenantGrapesBuilder,

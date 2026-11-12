@@ -1355,6 +1355,7 @@ interface TenantDetail {
   defaultCampaignSenderName: string | null
   allowTenantEditSender?: boolean
   allowTenantLoRecipientLists?: boolean
+  allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
   allowTenantGrapesBuilder?: boolean

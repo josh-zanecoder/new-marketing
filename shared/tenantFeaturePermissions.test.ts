@@ -10,12 +10,16 @@ describe('tenant feature permissions', () => {
     expect(groups.map((group) => group.key)).toEqual([
       'campaigns',
       'recipient-lists',
+      'email-templates',
       'images',
       'email-builder'
     ])
     expect(
       groups.find((group) => group.key === 'email-builder')?.permissions.map((permission) => permission.key)
     ).toEqual(['allowTenantGrapesBuilder', 'allowTenantTemplateBuilder'])
+    expect(
+      groups.find((group) => group.key === 'email-templates')?.permissions.map((permission) => permission.key)
+    ).toEqual(['allowTenantTemplateApproval'])
     expect(groups.find((group) => group.key === 'images')?.permissions.map((permission) => permission.key)).toEqual([
       'allowTenantImages',
       'allowTenantInsertImage'
@@ -31,6 +35,7 @@ describe('tenant feature permissions', () => {
     ).toEqual({
       allowTenantEditSender: true,
       allowTenantLoRecipientLists: false,
+      allowTenantTemplateApproval: false,
       allowTenantImages: false,
       allowTenantInsertImage: false,
       allowTenantGrapesBuilder: false,

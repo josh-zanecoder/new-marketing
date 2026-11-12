@@ -77,6 +77,25 @@ describe('toTenantAdminRow', () => {
     expect(row?.allowTenantLoRecipientLists).toBe(true)
   })
 
+  it('defaults allowTenantTemplateApproval to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantTemplateApproval).toBe(false)
+  })
+
+  it('reads allowTenantTemplateApproval true from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantTemplateApproval: true
+    })
+    expect(row?.allowTenantTemplateApproval).toBe(true)
+  })
+
   it('defaults allowTenantImages to false when unset', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

@@ -4,7 +4,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import { getRegistryConnection } from '@server/lib/mongoose'
-import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import {
   isEmailTemplateSendableStatus,
   resolveEmailTemplateApprovalStatus
@@ -17,19 +17,19 @@ import {
 export const EMAIL_TEMPLATE_NOT_APPROVED_SEND_MESSAGE =
   'This template needs approval before it can be sent.'
 
-async function isLoRecipientListsFlagOn(auth: unknown, dbName: string): Promise<boolean> {
+async function isTemplateApprovalFlagOn(auth: unknown, dbName: string): Promise<boolean> {
   if (isEmailTemplateApprovalEnabled(auth)) return true
   if (!dbName) return false
   const registry = await getRegistryConnection()
   const regDoc = await registry.collection('clients').findOne(
     { dbName },
-    { projection: { allowTenantLoRecipientLists: 1 } }
+    { projection: { allowTenantTemplateApproval: 1 } }
   )
-  return parseAllowTenantLoRecipientLists(regDoc?.allowTenantLoRecipientLists)
+  return parseAllowTenantTemplateApproval(regDoc?.allowTenantTemplateApproval)
 }
 
 /**
- * When LO recipient-lists flag is ON, the campaign's linked email template must be approved.
+ * When Template approval flag is ON, the campaign's linked email template must be approved.
  * OM/Marketing (approvers) may send with a pending template.
  * Flag OFF / no linked template → no-op (classic behavior).
  */
@@ -41,14 +41,14 @@ export async function assertCampaignEmailTemplateApprovedForSend(params: {
   campaign?: Pick<CampaignLean, 'emailTemplate'> | null
 }): Promise<void> {
   const dbName = params.conn.db?.databaseName ?? ''
-  const enabled = await isLoRecipientListsFlagOn(params.auth, dbName)
+  const enabled = await isTemplateApprovalFlagOn(params.auth, dbName)
   if (!enabled) return
   // Approvers (Marketing / OM) can make campaign + send while still pending.
   // Treat flag as ON here even if session omitted it (registry already confirmed).
   if (
     canApproveEmailTemplates(
       params.auth && typeof params.auth === 'object'
-        ? { ...(params.auth as object), allowTenantLoRecipientLists: true as const }
+        ? { ...(params.auth as object), allowTenantTemplateApproval: true as const }
         : params.auth
     )
   ) {
@@ -104,12 +104,12 @@ export async function assertEmailTemplateApprovedForSend(params: {
   auth?: unknown
 }): Promise<void> {
   const dbName = params.conn.db?.databaseName ?? ''
-  const enabled = await isLoRecipientListsFlagOn(params.auth, dbName)
+  const enabled = await isTemplateApprovalFlagOn(params.auth, dbName)
   if (!enabled) return
   if (
     canApproveEmailTemplates(
       params.auth && typeof params.auth === 'object'
-        ? { ...(params.auth as object), allowTenantLoRecipientLists: true as const }
+        ? { ...(params.auth as object), allowTenantTemplateApproval: true as const }
         : params.auth
     )
   ) {

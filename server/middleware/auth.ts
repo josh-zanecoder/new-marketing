@@ -211,6 +211,9 @@ export default defineEventHandler(async (event) => {
                 ...(row.allowTenantLoRecipientLists === true
                   ? { allowTenantLoRecipientLists: true as const }
                   : {}),
+                ...(row.allowTenantTemplateApproval === true
+                  ? { allowTenantTemplateApproval: true as const }
+                  : {}),
               };
               return;
             }
@@ -260,6 +263,9 @@ export default defineEventHandler(async (event) => {
         ...(headerOwners?.length ? { contactOwnerScope: headerOwners } : {}),
         ...(row.allowTenantLoRecipientLists === true
           ? { allowTenantLoRecipientLists: true as const }
+          : {}),
+        ...(row.allowTenantTemplateApproval === true
+          ? { allowTenantTemplateApproval: true as const }
           : {}),
       };
       return;

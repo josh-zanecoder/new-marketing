@@ -19,7 +19,7 @@ const loAuth = {
   tenantUserEmail: 'lo@example.com',
   tenantUserRole: 'broker',
   contactOwnerScope: ['lo@example.com'],
-  allowTenantLoRecipientLists: true as const
+  allowTenantTemplateApproval: true as const
 }
 
 const omAuth = {
@@ -47,7 +47,7 @@ const flagOffAuth = {
 }
 
 describe('isEmailTemplateApprovalEnabled', () => {
-  it('is on only when LO recipient-lists flag is on the session', () => {
+  it('is on only when Template approval flag is on the session', () => {
     expect(isEmailTemplateApprovalEnabled(loAuth)).toBe(true)
     expect(isEmailTemplateApprovalEnabled(flagOffAuth)).toBe(false)
   })

@@ -16,12 +16,12 @@ import {
   tenantUserEmailFromAuth,
   type RegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
-import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { getRegistryConnection } from '@server/lib/mongoose'
 
-/** Approval workflow only when Superadmin LO recipient-lists flag is on the session. */
+/** Approval workflow only when Superadmin Template approval flag is on the session. */
 export function isEmailTemplateApprovalEnabled(auth: unknown): boolean {
-  return isTenantApiKeyAuthContext(auth) && auth.allowTenantLoRecipientLists === true
+  return isTenantApiKeyAuthContext(auth) && auth.allowTenantTemplateApproval === true
 }
 
 function tenantUserRoleFromAuth(auth: unknown): string {
@@ -38,7 +38,7 @@ export type EmailTemplateApprovalWriteFields = {
 }
 
 /**
- * Fields to stamp on create when LO-list flag is ON.
+ * Fields to stamp on create when Template approval flag is ON.
  * Flag OFF → empty (classic template, no approval fields).
  */
 export function emailTemplateApprovalFieldsOnCreate(auth: unknown): Partial<EmailTemplateApprovalWriteFields> {
@@ -179,7 +179,7 @@ export function emailTemplateLibraryExcludePendingFilter(
 }
 
 /**
- * OM/Marketing + LO recipient-lists flag required for approve/reject / pending queue.
+ * OM/Marketing + Template approval flag required for approve/reject / pending queue.
  * Re-reads registry when session flag was omitted.
  */
 export async function requireEmailTemplateApprover(
@@ -192,19 +192,19 @@ export async function requireEmailTemplateApprover(
   }
 
   let gatedAuth: unknown = auth
-  if (isTenantApiKeyAuthContext(auth) && auth.allowTenantLoRecipientLists !== true) {
+  if (isTenantApiKeyAuthContext(auth) && auth.allowTenantTemplateApproval !== true) {
     const registry = await getRegistryConnection()
     const regDoc = await registry.collection('clients').findOne(
       { dbName: auth.dbName },
-      { projection: { allowTenantLoRecipientLists: 1 } }
+      { projection: { allowTenantTemplateApproval: 1 } }
     )
-    if (!parseAllowTenantLoRecipientLists(regDoc?.allowTenantLoRecipientLists)) {
+    if (!parseAllowTenantTemplateApproval(regDoc?.allowTenantTemplateApproval)) {
       throw createError({
         statusCode: 403,
         message: 'Template approval is disabled for this tenant'
       })
     }
-    gatedAuth = { ...auth, allowTenantLoRecipientLists: true as const }
+    gatedAuth = { ...auth, allowTenantTemplateApproval: true as const }
   } else if (!isEmailTemplateApprovalEnabled(auth)) {
     throw createError({
       statusCode: 403,
