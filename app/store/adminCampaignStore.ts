@@ -5,8 +5,10 @@ import type { AdminCampaign } from '~/types/adminCampaign'
 import { adminCampaignKey } from '~/types/adminCampaign'
 import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
 import {
+  CAMPAIGN_SEND_POLL_ERROR_MESSAGE,
   CAMPAIGN_SEND_POLL_INITIAL_MS,
   CAMPAIGN_SEND_POLL_INTERVAL_MS,
+  CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS,
   CAMPAIGN_SEND_POLL_MAX_MS
 } from '~/constants/campaignSendPolling'
 
@@ -532,6 +534,7 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
     adminSendPollKey.value = pollKey
     const generation = adminSendPollGeneration
     let nextDelayMs = CAMPAIGN_SEND_POLL_INITIAL_MS
+    let consecutiveErrors = 0
 
     const schedule = () => {
       adminSendPollTimeout = setTimeout(() => {
@@ -546,6 +549,10 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
       try {
         const res = await fetchSendCampaignStatus(tenantDbName, campaignId)
         if (generation !== adminSendPollGeneration) return
+        consecutiveErrors = 0
+        if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+          sendError.value = null
+        }
         sendStatus.value = { ...res, campaignId }
 
         if (res.done) {
@@ -553,9 +560,9 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
           if (sendingCampaignKey.value === pollKey) {
             sendingCampaignKey.value = null
           }
-          sendStatus.value = null
           await fetchCampaigns({ force: true })
           await onComplete(res)
+          sendStatus.value = null
           return
         }
 
@@ -567,12 +574,22 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
           nextDelayMs = CAMPAIGN_SEND_POLL_INTERVAL_MS
         }
         schedule()
-      } catch {
-        if (sendingCampaignKey.value === pollKey) {
-          clearSendModal()
-        } else {
-          stopSendStatusPolling()
+      } catch (e: unknown) {
+        consecutiveErrors += 1
+        console.error('[adminCampaignStore] send status poll failed', {
+          tenantDbName,
+          campaignId,
+          consecutiveErrors,
+          error: e instanceof Error ? e.message : String(e)
+        })
+        if (consecutiveErrors >= CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS) {
+          sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
         }
+        nextDelayMs = Math.min(
+          Math.round(Math.max(nextDelayMs, CAMPAIGN_SEND_POLL_INTERVAL_MS) * 1.5),
+          CAMPAIGN_SEND_POLL_MAX_MS
+        )
+        schedule()
       }
     }
 
@@ -595,9 +612,18 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
         return
       }
       sendStatus.value = status
+      if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+        sendError.value = null
+      }
       startSendStatusPolling(tenantDbName, campaignId, onComplete)
-    } catch {
-      /* status unavailable */
+    } catch (e: unknown) {
+      console.error('[adminCampaignStore] resume send status failed', {
+        tenantDbName,
+        campaignId,
+        error: e instanceof Error ? e.message : String(e)
+      })
+      sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
+      startSendStatusPolling(tenantDbName, campaignId, onComplete)
     }
   }
 

@@ -1,7 +1,11 @@
 import { storeToRefs } from 'pinia'
 import { hasSendableCampaignRecipients } from '~~/shared/hasSendableCampaignRecipients'
 import { canUnscheduleCampaign } from '~~/shared/campaignUnscheduleEligibility'
-import type { Campaign, SendStatus } from '~/types/campaign'
+import {
+  countCampaignRecipientDeliveryStatuses,
+  sendStatusFromCampaignRecipients
+} from '~~/shared/campaignRecipientDeliveryCounts'
+import type { Campaign, CampaignRecipient, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 
 function hasSendableRecipients(c: Campaign): boolean {
@@ -87,6 +91,30 @@ export function buildCampaignSendProgress(
 }
 
 /**
+ * Fallback progress from campaign detail recipients when the status poll has not hydrated yet.
+ * Prevents a permanent "loading delivery stats" banner while recipients already show `sending`.
+ */
+export function buildCampaignSendProgressFromRecipients(input: {
+  campaignId: string
+  campaignStatus?: string | null
+  recipients?: CampaignRecipient[] | null
+}): CampaignSendProgress | null {
+  const status = String(input.campaignStatus ?? '').trim()
+  const recipients = input.recipients ?? []
+  if (status !== 'Sending' && !recipients.some((r) => r.status)) return null
+  if (!recipients.length && status !== 'Sending') return null
+  const snap = sendStatusFromCampaignRecipients({
+    campaignId: input.campaignId,
+    campaignStatus: status || 'Sending',
+    recipients
+  })
+  if (snap.total === 0 && status !== 'Sending') return null
+  return buildCampaignSendProgress(snap, input.campaignId)
+}
+
+export { countCampaignRecipientDeliveryStatuses }
+
+/**
  * Shared send progress UI for campaign list, detail, and wizard.
  * Status polling lives in the Pinia store (single timer for the whole app).
  */
@@ -168,6 +196,8 @@ export function useCampaignSendFlow() {
     hasCancellableActiveCampaignSends,
     sendProgress,
     buildCampaignSendProgress,
+    buildCampaignSendProgressFromRecipients,
+    countCampaignRecipientDeliveryStatuses,
     startSendStatusPolling,
     resumeSendStatusPolling,
     stopSendPolling,
