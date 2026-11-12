@@ -31,8 +31,9 @@ describe('email template approval send guard wiring', () => {
     const add = readFileSync(resolve(root, 'app/pages/tenant/campaigns/add.vue'), 'utf8')
     expect(edit).toContain('templateApprovalBlocksSend')
     expect(edit).toContain('Template needs approval')
-    expect(edit).toContain('allowTenantLoRecipientLists.value === true')
+    expect(edit).toContain('allowTenantTemplateApproval.value === true')
     expect(add).toContain('templateApprovalBlocksSend')
-    expect(add).toContain('allowTenantLoRecipientLists.value === true')
+    expect(add).toContain('allowTenantTemplateApproval.value === true')
   })
 })
+

@@ -26,6 +26,11 @@ export interface AdminTenantRow {
    */
   allowTenantLoRecipientLists: boolean
   /**
+   * When true, retail/tenant marketing requires email template approval before send.
+   * Default false = classic templates (no approval workflow).
+   */
+  allowTenantTemplateApproval: boolean
+  /**
    * When true, retail/tenant marketing may use the hosted Images library.
    * Default false hides the Images page.
    */

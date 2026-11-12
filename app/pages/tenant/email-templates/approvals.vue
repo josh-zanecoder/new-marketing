@@ -7,10 +7,10 @@ definePageMeta({ layout: 'default' })
 const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const {
-  allowTenantLoRecipientLists,
+  allowTenantTemplateApproval,
   canSelectAnyLoanOfficer,
   loadDefaultCampaignSender,
-  loaded: loFlagLoaded
+  loaded: tenantFlagsLoaded
 } = useDefaultCampaignSender()
 void loadDefaultCampaignSender()
 
@@ -29,8 +29,8 @@ const rejectReason = ref('')
 
 const canAccess = computed(
   () =>
-    loFlagLoaded.value &&
-    allowTenantLoRecipientLists.value === true &&
+    tenantFlagsLoaded.value &&
+    allowTenantTemplateApproval.value === true &&
     canSelectAnyLoanOfficer.value === true
 )
 
@@ -194,7 +194,7 @@ onMounted(() => {
     </header>
 
     <div
-      v-if="loFlagLoaded && !canAccess"
+      v-if="tenantFlagsLoaded && !canAccess"
       class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950"
       role="status"
     >

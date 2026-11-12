@@ -1,14 +1,14 @@
 /**
  * Shared pending template-approval count for the marketing sidebar badge.
- * Gated by LO recipient-lists flag + OM/Marketing approver access.
+ * Gated by Template approval flag + OM/Marketing approver access.
  */
 export function usePendingEmailTemplateApprovalsCount() {
   const marketingApi = useTenantMarketingApi()
   const {
-    allowTenantLoRecipientLists,
+    allowTenantTemplateApproval,
     canSelectAnyLoanOfficer,
     loadDefaultCampaignSender,
-    loaded: loFlagLoaded
+    loaded: approvalFlagLoaded
   } = useDefaultCampaignSender()
 
   const pendingCount = useState('marketing-pending-email-template-approvals-count', () => 0)
@@ -20,8 +20,8 @@ export function usePendingEmailTemplateApprovalsCount() {
 
   const canFetch = computed(
     () =>
-      loFlagLoaded.value &&
-      allowTenantLoRecipientLists.value === true &&
+      approvalFlagLoaded.value &&
+      allowTenantTemplateApproval.value === true &&
       canSelectAnyLoanOfficer.value === true
   )
 
@@ -43,7 +43,7 @@ export function usePendingEmailTemplateApprovalsCount() {
   }
 
   async function refreshPendingCount(options?: { force?: boolean }) {
-    if (!loFlagLoaded.value) {
+    if (!approvalFlagLoaded.value) {
       await loadDefaultCampaignSender()
     }
     if (!canFetch.value) {

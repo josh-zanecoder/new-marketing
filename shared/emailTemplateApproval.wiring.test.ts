@@ -5,6 +5,26 @@ import { describe, expect, it } from 'vitest'
 const root = resolve(__dirname, '..')
 
 describe('email template approval phase 2 wiring', () => {
+  it('exposes Template approval as a superadmin tenant permission', () => {
+    const permissions = readFileSync(
+      resolve(root, 'shared/tenantFeaturePermissions.ts'),
+      'utf8'
+    )
+    expect(permissions).toContain("key: 'allowTenantTemplateApproval'")
+    expect(permissions).toContain("code: 'email-templates:approval'")
+    expect(permissions).toContain("patchPath: 'allow-tenant-template-approval'")
+
+    const patch = readFileSync(
+      resolve(
+        root,
+        'server/api/v1/admin/tenants/db/[dbName]/allow-tenant-template-approval.patch.ts'
+      ),
+      'utf8'
+    )
+    expect(patch).toContain('allowTenantTemplateApproval')
+    expect(patch).toContain('parseAllowTenantTemplateApproval')
+  })
+
   it('exposes approvals APIs under email-templates', () => {
     const approvals = readFileSync(
       resolve(root, 'server/api/v1/tenant/email-templates/approvals.get.ts'),
@@ -24,13 +44,15 @@ describe('email template approval phase 2 wiring', () => {
     expect(reject).toContain('emailTemplateApprovalFieldsOnReject')
   })
 
-  it('sidebar Template approvals requires LO flag + approver', () => {
+  it('sidebar Template approvals requires Template approval flag + approver', () => {
     const nav = readFileSync(resolve(root, 'app/constants/marketingSidebarNav.ts'), 'utf8')
     expect(nav).toContain("to: '/tenant/email-templates/approvals'")
-    expect(nav).toContain('requiresLoRecipientLists: true')
+    expect(nav).toContain('requiresTenantTemplateApproval: true')
     expect(nav).toContain('requiresTemplateApprover: true')
 
     const layout = readFileSync(resolve(root, 'app/layouts/default.vue'), 'utf8')
+    expect(layout).toContain('requiresTenantTemplateApproval')
+    expect(layout).toContain('allowTenantTemplateApproval')
     expect(layout).toContain('requiresTemplateApprover')
     expect(layout).toContain('canSelectAnyLoanOfficer')
     expect(layout).toContain('usePendingEmailTemplateApprovalsCount')
@@ -60,6 +82,8 @@ describe('email template approval phase 2 wiring', () => {
     expect(approvalsPage).not.toContain('sendTestEmailForDraft')
     expect(approvalsPage).toContain('TenantEmailTemplateThumbnail')
     expect(approvalsPage).toContain('searchQuery')
+    expect(approvalsPage).toContain('allowTenantTemplateApproval')
+    expect(approvalsPage).not.toContain('allowTenantLoRecipientLists')
   })
 
   it('email templates library excludes pending for approvers', () => {

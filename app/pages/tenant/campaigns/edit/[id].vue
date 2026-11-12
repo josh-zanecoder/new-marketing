@@ -667,7 +667,7 @@
           </p>
         </div>
         <TenantEmailTemplateApprovalBadge
-          v-if="allowTenantLoRecipientLists && linkedEmailTemplateApprovalStatus"
+          v-if="allowTenantTemplateApproval && linkedEmailTemplateApprovalStatus"
           :status="linkedEmailTemplateApprovalStatus"
           class="shrink-0"
         />
@@ -892,6 +892,7 @@ const {
   sessionUser,
   allowTenantEditSender,
   allowTenantLoRecipientLists,
+  allowTenantTemplateApproval,
   allowTenantGrapesBuilder,
   allowTenantTemplateBuilder,
   loaded: tenantFlagsLoaded,
@@ -1109,7 +1110,7 @@ const linkedEmailTemplateSendable = ref(true)
 const linkedEmailTemplateCanApprove = ref(false)
 const templateApprovalBlocksSend = computed(
   () =>
-    allowTenantLoRecipientLists.value === true &&
+    allowTenantTemplateApproval.value === true &&
     !linkedEmailTemplateCanApprove.value &&
     Boolean(linkedEmailTemplateApprovalStatus.value) &&
     linkedEmailTemplateSendable.value === false

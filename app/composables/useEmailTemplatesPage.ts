@@ -32,16 +32,16 @@ export function useEmailTemplatesPage() {
   const marketingApi = useTenantMarketingApi()
   const toast = useAppToast()
   const {
-    allowTenantLoRecipientLists,
+    allowTenantTemplateApproval,
     canSelectAnyLoanOfficer,
     loadDefaultCampaignSender,
-    loaded: loListsFlagLoaded
+    loaded: tenantFlagsLoaded
   } = useDefaultCampaignSender()
   void loadDefaultCampaignSender()
 
-  /** Superadmin LO recipient-lists toggle — gates approval UI on this page. */
+  /** Superadmin Template approval toggle — gates approval UI on this page. */
   const approvalUiEnabled = computed(
-    () => loListsFlagLoaded.value && allowTenantLoRecipientLists.value === true
+    () => tenantFlagsLoaded.value && allowTenantTemplateApproval.value === true
   )
 
   const showApprovalsLink = computed(

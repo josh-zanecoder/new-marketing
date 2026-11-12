@@ -25,15 +25,20 @@ const {
   allowTenantInsertImage,
   allowTenantTemplateBuilder,
   allowTenantLoRecipientLists,
+  allowTenantTemplateApproval,
   loaded: tenantFlagsLoaded,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
 const canInsertTemplateImage = computed(
   () => tenantFlagsLoaded.value && allowTenantInsertImage.value
 )
-/** LO Recipients flag: auto-host on upload + approval UI. */
+/** LO Recipients flag: auto-host embedded images on HTML upload. */
 const canUploadTemplateImage = computed(
   () => tenantFlagsLoaded.value && allowTenantLoRecipientLists.value === true
+)
+/** Superadmin Template approval toggle — badges / approve CTA. */
+const approvalUiEnabled = computed(
+  () => tenantFlagsLoaded.value && allowTenantTemplateApproval.value === true
 )
 const editorMode = ref<'template' | 'html'>('template')
 const {
@@ -522,7 +527,7 @@ async function saveTemplate() {
           {{ isEdit ? 'Edit email template' : 'Create email template' }}
         </h1>
         <TenantEmailTemplateApprovalBadge
-          v-if="canUploadTemplateImage && isEdit"
+          v-if="approvalUiEnabled && isEdit"
           :status="approvalStatus"
         />
       </div>
@@ -530,7 +535,7 @@ async function saveTemplate() {
         Paste HTML or upload an .html file. The template is stored exactly as provided.
       </p>
       <p
-        v-if="canUploadTemplateImage && isEdit && approvalStatus === 'rejected'"
+        v-if="approvalUiEnabled && isEdit && approvalStatus === 'rejected'"
         class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
         role="status"
       >
@@ -539,21 +544,21 @@ async function saveTemplate() {
         <span v-if="approvalRejectionReason"> {{ approvalRejectionReason }}</span>
       </p>
       <p
-        v-else-if="canUploadTemplateImage && isEdit && approvalStatus === 'pending_approval'"
+        v-else-if="approvalUiEnabled && isEdit && approvalStatus === 'pending_approval'"
         class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
         role="status"
       >
         Waiting for Operations Manager or Marketing approval before this template can be sent.
       </p>
       <p
-        v-else-if="canUploadTemplateImage && isEdit && approvalStatus === 'approved' && approvalReviewedBy"
+        v-else-if="approvalUiEnabled && isEdit && approvalStatus === 'approved' && approvalReviewedBy"
         class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
         role="status"
       >
         Approved by {{ approvalReviewedBy }}
       </p>
       <div
-        v-if="canUploadTemplateImage && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"
+        v-if="approvalUiEnabled && isEdit && canApproveTemplate && approvalStatus === 'pending_approval'"
         class="mt-3 flex flex-wrap gap-2"
       >
         <NuxtLink

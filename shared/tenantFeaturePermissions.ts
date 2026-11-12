@@ -5,6 +5,7 @@
 export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantEditSender',
   'allowTenantLoRecipientLists',
+  'allowTenantTemplateApproval',
   'allowTenantImages',
   'allowTenantInsertImage',
   'allowTenantGrapesBuilder',
@@ -45,6 +46,16 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     group: 'recipient-lists',
     groupLabel: 'Recipient lists',
     patchPath: 'allow-tenant-lo-recipient-lists'
+  },
+  {
+    key: 'allowTenantTemplateApproval',
+    code: 'email-templates:approval',
+    label: 'Template approval',
+    description:
+      'Requires email templates to be approved before send. Shows Template approvals for OM / Marketing.',
+    group: 'email-templates',
+    groupLabel: 'Email templates',
+    patchPath: 'allow-tenant-template-approval'
   },
   {
     key: 'allowTenantImages',
@@ -94,6 +105,7 @@ export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionStat
   return {
     allowTenantEditSender: false,
     allowTenantLoRecipientLists: false,
+    allowTenantTemplateApproval: false,
     allowTenantImages: false,
     allowTenantInsertImage: false,
     allowTenantGrapesBuilder: false,

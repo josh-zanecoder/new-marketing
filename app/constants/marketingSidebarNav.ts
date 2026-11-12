@@ -4,6 +4,8 @@ export type MarketingSidebarNavItem = {
   iconPath: string
   /** When true, only show if superadmin LO Recipients toggle is ON. */
   requiresLoRecipientLists?: boolean
+  /** When true, only show if superadmin Template approval toggle is ON. */
+  requiresTenantTemplateApproval?: boolean
   /** When true, only show for OM / Marketing (template approvers). */
   requiresTemplateApprover?: boolean
   /** When true, only show if superadmin Images toggle is ON. */
@@ -57,7 +59,7 @@ export const marketingSidebarNavItems: MarketingSidebarNavItem[] = [
   {
     to: '/tenant/email-templates/approvals',
     label: 'Template approvals',
-    requiresLoRecipientLists: true,
+    requiresTenantTemplateApproval: true,
     requiresTemplateApprover: true,
     iconPath:
       'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',

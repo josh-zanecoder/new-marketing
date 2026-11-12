@@ -8,6 +8,7 @@ import { marketingTenantHandoffCookieBase } from "~~/shared/marketingTenantHando
 const { data: me, pending, refresh } = useMarketingMe();
 const {
   allowTenantLoRecipientLists,
+  allowTenantTemplateApproval,
   canSelectAnyLoanOfficer,
   allowTenantImages,
   loadDefaultCampaignSender,
@@ -24,10 +25,10 @@ const {
 const APPROVALS_NAV_TO = "/tenant/email-templates/approvals";
 
 watch(
-  [tenantFlagsLoaded, allowTenantLoRecipientLists, canSelectAnyLoanOfficer],
-  ([loaded, loOn, isApprover]) => {
+  [tenantFlagsLoaded, allowTenantTemplateApproval, canSelectAnyLoanOfficer],
+  ([loaded, approvalOn, isApprover]) => {
     if (!loaded) return;
-    if (loOn === true && isApprover) void refreshPendingCount();
+    if (approvalOn === true && isApprover) void refreshPendingCount();
     else void refreshPendingCount({ force: true });
   },
   { immediate: true },
@@ -175,6 +176,11 @@ const visibleSidebarNavItems = computed(() =>
   ).filter((item) => {
     if (item.requiresLoRecipientLists) {
       if (!(tenantFlagsLoaded.value && allowTenantLoRecipientLists.value === true)) {
+        return false;
+      }
+    }
+    if (item.requiresTenantTemplateApproval) {
+      if (!(tenantFlagsLoaded.value && allowTenantTemplateApproval.value === true)) {
         return false;
       }
     }
