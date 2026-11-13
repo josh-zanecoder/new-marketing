@@ -12,6 +12,7 @@ const {
   canSelectAnyLoanOfficer,
   allowTenantImages,
   allowTenantBeefreeBuilder,
+  allowTenantTemplateBuilder,
   loadDefaultCampaignSender,
   loaded: tenantFlagsLoaded,
 } = useDefaultCampaignSender();
@@ -195,6 +196,9 @@ const visibleSidebarNavItems = computed(() =>
     }
     if (item.requiresTenantBeefree) {
       return tenantFlagsLoaded.value && allowTenantBeefreeBuilder.value === true;
+    }
+    if (item.requiresTenantTemplateBuilder) {
+      return tenantFlagsLoaded.value && allowTenantTemplateBuilder.value === true;
     }
     return true;
   }),

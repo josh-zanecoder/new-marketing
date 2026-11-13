@@ -21,6 +21,12 @@ import {
   removeEmailTemplateHtmlImage,
   updateEmailTemplateHtmlImageLayout
 } from '../emailTemplateHtmlImages'
+import {
+  EMAIL_BLOCK_KINDS,
+  duplicateEmailBlock,
+  insertEmailBlock,
+  removeEmailBlock
+} from '../emailTemplateBlocks'
 
 /**
  * A saved email a user would open, not a blank canvas.
@@ -293,6 +299,32 @@ describe('existing template editor integrity', () => {
     expect(source).toContain('previewHeld = true')
     expect(source).toContain('if (!changed && held)')
     expect(source).toContain('return changed || held')
+  })
+
+  it('adds, duplicates, and deletes blocks without touching the rest of the email', () => {
+    const anchor = listEmailArrangeItems(existingTemplate).find((item) => item.label === 'A NEW PATH')?.part ?? null
+    expect(anchor).not.toBeNull()
+    let next = existingTemplate
+    for (const kind of EMAIL_BLOCK_KINDS) {
+      const added = insertEmailBlock(next, kind, anchor, 'https://cdn.example.com/new.png')
+      expect(added.part).not.toBeNull()
+      next = added.html
+    }
+    for (const token of kept) expect(next).toContain(token)
+    expect(texts(next).filter((text) => texts(existingTemplate).includes(text))).toEqual(texts(existingTemplate))
+    expect(next.indexOf('data-email-block')).toBeGreaterThan(next.indexOf('A NEW PATH'))
+    expect(next.lastIndexOf('data-email-block')).toBeLessThan(next.indexOf('At Forge Capital Lending'))
+
+    const added = insertEmailBlock(existingTemplate, 'title', anchor)
+    const copy = duplicateEmailBlock(added.html, added.part!)
+    expect(removeEmailBlock(copy.html, copy.part!)).toBe(added.html)
+    expect(removeEmailBlock(added.html, added.part!)).toBe(existingTemplate)
+  })
+
+  it('adds to the end of the content column when nothing is selected', () => {
+    const added = insertEmailBlock(existingTemplate, 'text', null)
+    expect(added.html.indexOf('data-email-block="text"')).toBeGreaterThan(added.html.indexOf('Get Approved'))
+    expect(added.html.indexOf('data-email-block="text"')).toBeLessThan(added.html.indexOf('</td></tr></table>\n</body>'))
   })
 
   it('preview markers do not become part of the saved document', () => {

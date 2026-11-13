@@ -3,7 +3,9 @@ import {
   isRegisteredTenantAuthContext,
   type RegisteredTenantAuthContext
 } from '@server/tenant/registry-auth'
+import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
+import { parseAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
 
 /** Ensure tenant auth + superadmin Insert image permission is ON. */
@@ -48,9 +50,10 @@ export async function requireTenantEmailTemplateImageHost(
   const registry = await getRegistryConnection()
   const regDoc = await registry.collection('clients').findOne(
     { dbName },
-    { projection: { allowTenantInsertImage: 1, allowTenantTemplateBuilder: 1 } }
+    { projection: { allowTenantInsertImage: 1, allowTenantReplaceImage: 1, allowTenantTemplateBuilder: 1 } }
   )
   const allowed = parseAllowTenantInsertImage(regDoc?.allowTenantInsertImage)
+    || parseAllowTenantReplaceImage(regDoc as RegistryTenantDoc | null)
     || parseAllowTenantTemplateBuilder(regDoc?.allowTenantTemplateBuilder)
   if (!allowed) {
     throw createError({

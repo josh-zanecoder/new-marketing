@@ -28,7 +28,8 @@ describe('tenant feature permissions', () => {
     ).toEqual(['allowTenantTemplateApproval'])
     expect(groups.find((group) => group.key === 'images')?.permissions.map((permission) => permission.key)).toEqual([
       'allowTenantImages',
-      'allowTenantInsertImage'
+      'allowTenantInsertImage',
+      'allowTenantReplaceImage'
     ])
   })
 
@@ -44,6 +45,7 @@ describe('tenant feature permissions', () => {
       allowTenantTemplateApproval: false,
       allowTenantImages: false,
       allowTenantInsertImage: false,
+      allowTenantReplaceImage: false,
       allowTenantGrapesBuilder: false,
       allowTenantBeefreeBuilder: false,
       allowTenantTemplateBuilder: false,

@@ -256,6 +256,29 @@ export function replaceEmailTextRun(html: string, index: number, nextText: strin
   return replaceEmailTextAt(html, run.start, run.end, nextText, true).html
 }
 
+/**
+ * Split one text run in two at a character offset so each part can be styled on its own.
+ * Returns the index of the second part, or null when there is nothing to split.
+ */
+export function splitEmailTextRun(html: string, index: number, at: number): { html: string, index: number } | null {
+  const run = listEmailTextRuns(html)[index]
+  if (!run || at <= 0 || at >= run.text.length) return null
+  const raw = html.slice(run.start, run.end)
+  let cut = 0
+  for (let seen = 0; seen < at && cut < raw.length; seen += 1) {
+    const entity = raw[cut] === '&' ? /^&(?:#\d+|#x[\da-f]+|\w+);/i.exec(raw.slice(cut)) : null
+    cut += entity ? entity[0].length : 1
+  }
+  const left = raw.slice(0, cut).replace(/(?:\s|&nbsp;)+$/i, '')
+  const right = raw.slice(cut).replace(/^(?:\s|&nbsp;)+/i, '')
+  if (!left || !right) return null
+  const gap = raw.slice(left.length, raw.length - right.length)
+  return {
+    html: `${html.slice(0, run.start)}${left}${gap}<span>${right}</span>${html.slice(run.end)}`,
+    index: index + 1
+  }
+}
+
 export const EMAIL_TEXT_FONTS = [
   { id: 'arial', label: 'Arial', stack: 'Arial, Helvetica, sans-serif' },
   { id: 'georgia', label: 'Georgia', stack: 'Georgia, Times, serif' },
@@ -274,7 +297,17 @@ export const EMAIL_TEXT_SIZES = [
 export const EMAIL_TEXT_SIZE_MIN = 8
 export const EMAIL_TEXT_SIZE_MAX = 96
 
+export const EMAIL_TEXT_LINE_HEIGHT_MIN = 8
+export const EMAIL_TEXT_LINE_HEIGHT_MAX = 200
+export const EMAIL_TEXT_LETTER_SPACING_MIN = -5
+export const EMAIL_TEXT_LETTER_SPACING_MAX = 40
+
+export const EMAIL_TEXT_ALIGNS = ['left', 'center', 'right', 'justify'] as const
+export const EMAIL_TEXT_DECORATIONS = ['none', 'underline', 'line-through'] as const
+
 export type EmailTextFontId = (typeof EMAIL_TEXT_FONTS)[number]['id']
+export type EmailTextAlign = (typeof EMAIL_TEXT_ALIGNS)[number]
+export type EmailTextDecoration = (typeof EMAIL_TEXT_DECORATIONS)[number]
 
 export type EmailTextStyle = {
   font: '' | EmailTextFontId
@@ -282,6 +315,10 @@ export type EmailTextStyle = {
   color: string
   bold: boolean
   italic: boolean
+  lineHeight: number | null
+  letterSpacing: number | null
+  align: '' | EmailTextAlign
+  decoration: EmailTextDecoration
 }
 
 export type EmailTextStylePatch = {
@@ -290,11 +327,18 @@ export type EmailTextStylePatch = {
   color?: string | null
   bold?: boolean
   italic?: boolean
+  lineHeight?: number | null
+  letterSpacing?: number | null
+  align?: '' | EmailTextAlign
+  decoration?: EmailTextDecoration
 }
 
 const STYLE_OWNER_SKIP = new Set(['html', 'body', 'head', 'table', 'tbody', 'thead', 'tfoot', 'tr'])
+const BLOCK_STYLE_TAGS = new Set([...TEXT_TAGS, 'h4', 'h5', 'h6', 'div', 'td', 'th'])
 const BOLD_TAGS = new Set(['b', 'strong', 'h1', 'h2', 'h3'])
 const ITALIC_TAGS = new Set(['i', 'em'])
+const UNDERLINE_TAGS = new Set(['u'])
+const STRIKE_TAGS = new Set(['s', 'strike', 'del'])
 
 function parseStyle(value: string): Map<string, string> {
   const map = new Map<string, string>()
@@ -396,8 +440,38 @@ function fontSizePx(value: string): number | null {
   return px
 }
 
+function boundedPx(value: string, min: number, max: number): number | null {
+  if (value.trim() === '0') return 0
+  const px = cssPx(value)
+  if (px == null || px < min || px > max) return null
+  return px
+}
+
+function blockStyleUpdates(patch: EmailTextStylePatch): Record<string, string | null> | null {
+  const updates: Record<string, string | null> = {}
+  if (patch.lineHeight !== undefined) {
+    if (patch.lineHeight == null) updates['line-height'] = null
+    else if (Number.isInteger(patch.lineHeight) && patch.lineHeight >= EMAIL_TEXT_LINE_HEIGHT_MIN && patch.lineHeight <= EMAIL_TEXT_LINE_HEIGHT_MAX) updates['line-height'] = `${patch.lineHeight}px`
+    else return null
+  }
+  if (patch.align !== undefined) {
+    if (patch.align && !EMAIL_TEXT_ALIGNS.includes(patch.align)) return null
+    updates['text-align'] = patch.align || null
+  }
+  return updates
+}
+
 function styleUpdates(patch: EmailTextStylePatch): Record<string, string | null> | null {
   const updates: Record<string, string | null> = {}
+  if (patch.letterSpacing !== undefined) {
+    if (patch.letterSpacing == null) updates['letter-spacing'] = null
+    else if (Number.isInteger(patch.letterSpacing) && patch.letterSpacing >= EMAIL_TEXT_LETTER_SPACING_MIN && patch.letterSpacing <= EMAIL_TEXT_LETTER_SPACING_MAX) updates['letter-spacing'] = `${patch.letterSpacing}px`
+    else return null
+  }
+  if (patch.decoration !== undefined) {
+    if (!EMAIL_TEXT_DECORATIONS.includes(patch.decoration)) return null
+    updates['text-decoration'] = patch.decoration
+  }
   if (patch.font !== undefined) {
     const font = EMAIL_TEXT_FONTS.find((entry) => entry.id === patch.font)
     updates['font-family'] = font?.stack ?? null
@@ -415,17 +489,45 @@ function styleUpdates(patch: EmailTextStylePatch): Record<string, string | null>
   return updates
 }
 
+function emptyTextStyle(): EmailTextStyle {
+  return { font: '', size: null, color: '', bold: false, italic: false, lineHeight: null, letterSpacing: null, align: '', decoration: 'none' }
+}
+
+function decorationFrom(value: string): EmailTextDecoration | null {
+  const words = value.toLowerCase().split(/\s+/)
+  if (words.includes('underline')) return 'underline'
+  if (words.includes('line-through')) return 'line-through'
+  if (words.includes('none')) return 'none'
+  return null
+}
+
 function readStyleFromChain(html: string, chain: EmailNode[]): EmailTextStyle {
-  const style: EmailTextStyle = { font: '', size: null, color: '', bold: false, italic: false }
+  const style = emptyTextStyle()
   let boldKnown = false
   let italicKnown = false
+  let decorationKnown = false
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const node = chain[index]
     if (!node) continue
-    const map = parseStyle(styleAttributeValue(html.slice(node.start, node.openEnd)))
+    const openTag = html.slice(node.start, node.openEnd)
+    const map = parseStyle(styleAttributeValue(openTag))
     if (!style.font) style.font = fontIdFromFamily(map.get('font-family') ?? '')
     if (style.size == null) style.size = fontSizePx(map.get('font-size') ?? '')
     if (!style.color) style.color = normalizeHex(map.get('color') ?? '') ?? ''
+    if (style.lineHeight == null) style.lineHeight = boundedPx(map.get('line-height') ?? '', EMAIL_TEXT_LINE_HEIGHT_MIN, EMAIL_TEXT_LINE_HEIGHT_MAX)
+    if (style.letterSpacing == null) style.letterSpacing = boundedPx(map.get('letter-spacing') ?? '', EMAIL_TEXT_LETTER_SPACING_MIN, EMAIL_TEXT_LETTER_SPACING_MAX)
+    if (!style.align) {
+      const align = (map.get('text-align') || /\balign\s*=\s*["']?(\w+)/i.exec(openTag)?.[1] || '').toLowerCase()
+      if ((EMAIL_TEXT_ALIGNS as readonly string[]).includes(align)) style.align = align as EmailTextAlign
+    }
+    if (!decorationKnown) {
+      const decoration = decorationFrom(map.get('text-decoration') ?? map.get('text-decoration-line') ?? '')
+        ?? (UNDERLINE_TAGS.has(node.tag) ? 'underline' : STRIKE_TAGS.has(node.tag) ? 'line-through' : null)
+      if (decoration) {
+        style.decoration = decoration
+        decorationKnown = true
+      }
+    }
     if (!boldKnown) {
       const weight = (map.get('font-weight') ?? '').toLowerCase()
       if (weight === 'normal' || weight === '400' || weight === 'lighter') {
@@ -460,12 +562,32 @@ function readStyleFromChain(html: string, chain: EmailNode[]): EmailTextStyle {
 export function readEmailTextStyle(html: string, index: number): EmailTextStyle {
   const runs = listEmailTextRuns(html)
   const run = runs[index]
-  if (!run) return { font: '', size: null, color: '', bold: false, italic: false }
+  if (!run) return emptyTextStyle()
   return readStyleFromChain(html, elementsContaining(html, run))
 }
 
-/** Write inline font, size, color, bold, or italic onto the words. Other styles stay put. */
+/** Line height and alignment live on the paragraph or cell around the words, so they affect the whole line. */
+function updateEmailBlockTextStyle(html: string, index: number, updates: Record<string, string | null>): string {
+  const run = listEmailTextRuns(html)[index]
+  if (!run) return html
+  const owner = [...elementsContaining(html, run)].reverse().find((node) => BLOCK_STYLE_TAGS.has(node.tag))
+  if (!owner) return html
+  const openTag = html.slice(owner.start, owner.openEnd)
+  let nextOpen = setStyleProperties(openTag, updates)
+  if ('text-align' in updates && /^<\s*(td|th|div|p|h[1-6])\b/i.test(nextOpen)) nextOpen = setAlignAttribute(nextOpen, updates['text-align'])
+  if (nextOpen === openTag) return html
+  return `${html.slice(0, owner.start)}${nextOpen}${html.slice(owner.openEnd)}`
+}
+
+/** Write inline text styles onto the words. Other styles stay put. */
 export function updateEmailTextStyle(html: string, index: number, patch: EmailTextStylePatch): string {
+  const blockUpdates = blockStyleUpdates(patch)
+  if (!blockUpdates) return html
+  const blockHtml = Object.keys(blockUpdates).length ? updateEmailBlockTextStyle(html, index, blockUpdates) : html
+  return updateEmailInlineTextStyle(blockHtml, index, patch)
+}
+
+function updateEmailInlineTextStyle(html: string, index: number, patch: EmailTextStylePatch): string {
   const updates = styleUpdates(patch)
   if (!updates || Object.keys(updates).length === 0) return html
   const runs = listEmailTextRuns(html)
@@ -493,7 +615,16 @@ export type EmailSectionBox = {
   paddingLeft: number
   width: number | null
   marginLeft: number
+  borderRadius: number
+  borderWidth: number
+  borderStyle: EmailBorderStyle
+  borderColor: string
 }
+
+export const EMAIL_BORDER_STYLES = ['solid', 'dashed', 'dotted'] as const
+export type EmailBorderStyle = (typeof EMAIL_BORDER_STYLES)[number]
+export const EMAIL_BORDER_RADIUS_MAX = 60
+export const EMAIL_BORDER_WIDTH_MAX = 20
 
 export type EmailSectionBoxPatch = {
   background?: string | null
@@ -503,6 +634,10 @@ export type EmailSectionBoxPatch = {
   paddingLeft?: number
   width?: number | null
   marginLeft?: number
+  borderRadius?: number
+  borderWidth?: number
+  borderStyle?: EmailBorderStyle
+  borderColor?: string
 }
 
 function cssPx(value: string | undefined): number | null {
@@ -545,6 +680,68 @@ function paddingBox(map: Map<string, string>): Pick<EmailSectionBox, 'paddingTop
   }
 }
 
+type SectionBorder = Pick<EmailSectionBox, 'borderRadius' | 'borderWidth' | 'borderStyle' | 'borderColor'>
+
+function borderFromStyle(map: Map<string, string>): SectionBorder {
+  const radius = cssPx((map.get('border-radius') ?? '').split(/\s+/)[0]) ?? 0
+  let width = 0
+  let style: EmailBorderStyle = 'solid'
+  let color = ''
+  let hasStyle = false
+  const take = (token: string) => {
+    const px = token === '0' ? 0 : cssPx(token)
+    if (px != null) {
+      width = px
+      return
+    }
+    const lower = token.toLowerCase()
+    if (lower === 'none' || lower === 'hidden') {
+      hasStyle = true
+      width = 0
+      return
+    }
+    if ((EMAIL_BORDER_STYLES as readonly string[]).includes(lower)) {
+      hasStyle = true
+      style = lower as EmailBorderStyle
+      return
+    }
+    const hex = normalizeHex(token)
+    if (hex) color = hex
+  }
+  for (const token of (map.get('border') ?? '').trim().split(/\s+(?![^(]*\))/).filter(Boolean)) take(token)
+  const longWidth = map.get('border-width')
+  if (longWidth) take(longWidth.split(/\s+/)[0] ?? '')
+  const longStyle = map.get('border-style')
+  if (longStyle) take(longStyle.split(/\s+/)[0] ?? '')
+  const longColor = map.get('border-color')
+  if (longColor) take(longColor.trim())
+  if (!hasStyle) width = 0
+  return {
+    borderRadius: Math.max(0, radius),
+    borderWidth: Math.max(0, width),
+    borderStyle: style,
+    borderColor: color
+  }
+}
+
+function borderStyleUpdates(current: SectionBorder, patch: EmailSectionBoxPatch): Record<string, string | null> {
+  const updates: Record<string, string | null> = {}
+  if (patch.borderRadius !== undefined) {
+    const radius = Math.max(0, Math.min(EMAIL_BORDER_RADIUS_MAX, Math.round(patch.borderRadius)))
+    updates['border-radius'] = radius ? `${radius}px` : null
+  }
+  if (patch.borderWidth !== undefined || patch.borderStyle !== undefined || patch.borderColor !== undefined) {
+    const width = Math.max(0, Math.min(EMAIL_BORDER_WIDTH_MAX, Math.round(patch.borderWidth ?? current.borderWidth)))
+    const style = patch.borderStyle && EMAIL_BORDER_STYLES.includes(patch.borderStyle) ? patch.borderStyle : current.borderStyle
+    const color = (patch.borderColor ? normalizeHex(patch.borderColor) : null) || current.borderColor || '#000000'
+    updates['border-width'] = null
+    updates['border-style'] = null
+    updates['border-color'] = null
+    updates.border = width ? `${width}px ${style} ${color}` : null
+  }
+  return updates
+}
+
 function backgroundFromOpenTag(openTag: string): string {
   const map = parseStyle(styleAttributeValue(openTag))
   const painted = normalizeHex(map.get('background-color') ?? '') || normalizeHex((map.get('background') ?? '').split(/\s+/)[0] ?? '')
@@ -561,6 +758,101 @@ function setBgColorAttribute(openTag: string, value: string | null): string {
   const gt = stripped.lastIndexOf('>')
   if (gt < 0) return openTag
   return `${stripped.slice(0, gt)} bgcolor="${value}"${stripped.slice(gt)}`
+}
+
+export type EmailPageColors = { background: string; content: string }
+
+function walkNodes(node: EmailNode, visit: (node: EmailNode) => void) {
+  for (const child of node.children) {
+    visit(child)
+    walkNodes(child, visit)
+  }
+}
+
+function fixedTableWidth(openTag: string): number {
+  const attr = /\bwidth\s*=\s*["']?(\d{3,4})(?:px)?["']?(?=[\s>/])/i.exec(openTag)?.[1]
+  const style = /(?:^|;)\s*width\s*:\s*(\d{3,4})px/i.exec(styleAttributeValue(openTag))?.[1]
+  return Math.max(Number(attr) || 0, Number(style) || 0)
+}
+
+/** The email's content card: the table marked as the column, else the widest fixed-width table. */
+function contentColumnNode(html: string, root: EmailNode): EmailNode | null {
+  let marked: EmailNode | null = null
+  let widest: EmailNode | null = null
+  let widestPx = 0
+  walkNodes(root, (node) => {
+    const openTag = html.slice(node.start, node.openEnd)
+    if (!marked && /\bdata-email-column\b/i.test(openTag)) marked = node
+    if (node.tag !== 'table') return
+    const px = fixedTableWidth(openTag)
+    if (px >= 320 && px <= 900 && px > widestPx) {
+      widest = node
+      widestPx = px
+    }
+  })
+  let column = marked as EmailNode | null
+  while (column && column.tag !== 'table') column = column.parent
+  return column ?? (widest as EmailNode | null)
+}
+
+/** Body plus every painted wrapper around the content card: these together are the email background. */
+function pageBackgroundNodes(html: string, root: EmailNode, column: EmailNode | null): { body: EmailNode | null; wrappers: EmailNode[] } {
+  let body: EmailNode | null = null
+  walkNodes(root, (node) => {
+    if (!body && node.tag === 'body') body = node
+  })
+  const wrappers: EmailNode[] = []
+  for (let node = column?.parent ?? null; node && node.tag !== 'body' && node.tag !== '#root'; node = node.parent) {
+    if (backgroundFromOpenTag(html.slice(node.start, node.openEnd))) wrappers.push(node)
+  }
+  return { body: body as EmailNode | null, wrappers }
+}
+
+export function readEmailPageColors(html: string): EmailPageColors {
+  const root = buildTree(html)
+  const column = contentColumnNode(html, root)
+  const { body, wrappers } = pageBackgroundNodes(html, root, column)
+  const nearest = wrappers[0] ?? body
+  return {
+    background: nearest ? backgroundFromOpenTag(html.slice(nearest.start, nearest.openEnd)) : '',
+    content: column ? backgroundFromOpenTag(html.slice(column.start, column.openEnd)) : ''
+  }
+}
+
+/** Change the email background (around the card) and/or the content card color. '' clears it. */
+export function updateEmailPageColors(html: string, patch: Partial<EmailPageColors>): string {
+  const root = buildTree(html)
+  const column = contentColumnNode(html, root)
+  const { body, wrappers } = pageBackgroundNodes(html, root, column)
+  const edits = new Map<EmailNode, string>()
+  const paint = (node: EmailNode, raw: string) => {
+    const value = raw ? normalizeHex(raw) : ''
+    if (value === null) return
+    const openTag = html.slice(node.start, node.openEnd)
+    const shorthand = parseStyle(styleAttributeValue(openTag)).get('background') ?? ''
+    const updates: Record<string, string | null> = { 'background-color': value || null }
+    if (shorthand && normalizeHex(shorthand)) updates.background = null
+    let next = setStyleProperties(openTag, updates)
+    if (node.tag !== 'div') next = setBgColorAttribute(next, value || null)
+    edits.set(node, next)
+  }
+  if (patch.background !== undefined) {
+    if (body) paint(body, patch.background)
+    for (const node of wrappers) paint(node, patch.background)
+  }
+  if (patch.content !== undefined && column) paint(column, patch.content)
+  let next = html
+  for (const [node, openTag] of [...edits.entries()].sort((a, b) => b[0].start - a[0].start)) {
+    next = `${next.slice(0, node.start)}${openTag}${next.slice(node.openEnd)}`
+  }
+  return next
+}
+
+export type EmailElement = EmailNode
+
+/** The parsed element whose opening tag starts at `start`, with parent and children links. */
+export function findEmailElementAt(html: string, start: number): EmailElement | null {
+  return findElementAt(html, start)
 }
 
 function findElementAt(html: string, start: number): EmailNode | null {
@@ -582,6 +874,11 @@ function sectionStyleNodes(html: string, part: number): EmailNode[] {
   if (!item || item.kind === 'image') return []
   const node = findElementAt(html, item.start)
   if (!node) return []
+  const box = addedBlockBox(html, node)
+  if (box) {
+    const cells = firstRowCells(box)
+    if (cells.length) return cells
+  }
   if (node.tag === 'tr') {
     const cells = node.children.filter((child) => child.tag === 'td' || child.tag === 'th')
     if (cells.length) return cells
@@ -664,6 +961,8 @@ function sectionWidthNode(html: string, part: number): EmailNode | null {
   if (!item || item.kind === 'image') return null
   const node = findElementAt(html, item.start)
   if (!node) return null
+  const box = addedBlockBox(html, node)
+  if (box) return box
   if (node.tag !== 'tr') return node
   let parent = node.parent
   while (parent) {
@@ -680,7 +979,11 @@ const EMPTY_SECTION_BOX: EmailSectionBox = {
   paddingBottom: 0,
   paddingLeft: 0,
   width: null,
-  marginLeft: 0
+  marginLeft: 0,
+  borderRadius: 0,
+  borderWidth: 0,
+  borderStyle: 'solid',
+  borderColor: ''
 }
 
 /** Background and padding on one section. Table rows use their cells, which email clients paint. */
@@ -690,11 +993,13 @@ export function readEmailSectionBox(html: string, part: number): EmailSectionBox
   const openTag = html.slice(node.start, node.openEnd)
   const sized = sectionWidthNode(html, part)
   const sizeTag = sized ? html.slice(sized.start, sized.openEnd) : openTag
+  const map = parseStyle(styleAttributeValue(openTag))
   return {
     background: backgroundFromOpenTag(openTag),
-    ...paddingBox(parseStyle(styleAttributeValue(openTag))),
+    ...paddingBox(map),
     width: readBoxWidth(sizeTag),
-    marginLeft: readMarginLeft(sizeTag)
+    marginLeft: readMarginLeft(sizeTag),
+    ...borderFromStyle(map)
   }
 }
 
@@ -725,7 +1030,7 @@ export function updateEmailSectionBox(html: string, part: number, patch: EmailSe
       if (replaced !== openTag) next = `${next.slice(0, sized.start)}${replaced}${next.slice(sized.openEnd)}`
     }
     const textRoot = findElementAt(next, listEmailArrangeItems(next)[part]?.start ?? -1)
-    if (textRoot && patch.width !== undefined) {
+    if (textRoot && patch.width !== undefined && !addedBlockBox(next, textRoot)) {
       const width = patch.width == null ? null : `${clampSectionWidth(patch.width)}px`
       const boxes = [...textBoxNodes(textRoot), ...spanNodes(textRoot)].sort((a, b) => b.start - a.start)
       for (const node of boxes) {
@@ -745,8 +1050,9 @@ export function updateEmailSectionBox(html: string, part: number, patch: EmailSe
   const ordered = [...sectionStyleNodes(next, part)].sort((a, b) => b.start - a.start)
   for (const node of ordered) {
     const openTag = next.slice(node.start, node.openEnd)
-    const current = paddingBox(parseStyle(styleAttributeValue(openTag)))
-    const updates: Record<string, string | null> = {}
+    const currentStyle = parseStyle(styleAttributeValue(openTag))
+    const current = paddingBox(currentStyle)
+    const updates: Record<string, string | null> = borderStyleUpdates(borderFromStyle(currentStyle), patch)
     if (paddingChange) {
       updates.padding = null
       updates['padding-top'] = `${clampSectionPad(patch.paddingTop ?? current.paddingTop)}px`
@@ -776,8 +1082,49 @@ export function emailPreviewWithTextMarkers(html: string): string {
   return next
 }
 
+function addedBlockKind(html: string, node: EmailNode): string {
+  return /\bdata-email-block\s*=\s*["']?([\w-]+)/i.exec(html.slice(node.start, node.openEnd))?.[1] ?? ''
+}
+
+function isBlockBox(html: string, node: EmailNode): boolean {
+  return node.tag === 'table' && /\bdata-email-box\b/i.test(html.slice(node.start, node.openEnd))
+}
+
+/** Added blocks size through their own box table, so one block never resizes the whole email. */
+function addedBlockBox(html: string, node: EmailNode): EmailNode | null {
+  if (!addedBlockKind(html, node)) return null
+  if (isBlockBox(html, node)) return node
+  const visit = (parent: EmailNode): EmailNode | null => {
+    for (const child of parent.children) {
+      if (isBlockBox(html, child)) return child
+      const found = visit(child)
+      if (found) return found
+    }
+    return null
+  }
+  return visit(node)
+}
+
+function firstRowCells(table: EmailNode): EmailNode[] {
+  const body = table.children.find((child) => child.tag === 'tbody') ?? table
+  const row = body.children.find((child) => child.tag === 'tr')
+  return row ? row.children.filter((child) => child.tag === 'td' || child.tag === 'th') : []
+}
+
+const ADDED_BLOCK_LABELS: Record<string, string> = {
+  sect100: '1 Column',
+  sect50: '2 Columns',
+  sect30: '3 Columns',
+  sect25: '4 Columns',
+  sect37: 'Narrow + Wide',
+  sect73: 'Wide + Narrow',
+  row: 'Columns',
+  html: 'HTML'
+}
+
 function nodeHasContent(html: string, node: EmailNode): boolean {
   if (node.tag === 'img') return true
+  if (addedBlockKind(html, node)) return true
   const slice = html.slice(node.start, node.end)
   if (/<img\b/i.test(slice)) return true
   return visibleText(slice).length > 0
@@ -810,18 +1157,26 @@ function itemLabel(html: string, node: EmailNode, kind: EmailArrangeKind): strin
     return alt || 'Image'
   }
   const text = visibleText(html.slice(node.start, node.end))
-  if (!text) return kind === 'text' ? 'Text' : 'Section'
+  if (!text) {
+    const added = addedBlockKind(html, node)
+    if (added) return ADDED_BLOCK_LABELS[added] ?? `${added.charAt(0).toUpperCase()}${added.slice(1)}`
+    return kind === 'text' ? 'Text' : 'Section'
+  }
   return text.length > 72 ? `${text.slice(0, 72).trim()}…` : text
 }
 
 type ArrangeDraft = Omit<EmailArrangeItem, 'part' | 'depth'> & { node: EmailNode }
 
+const SEALED_RE = /\bdata-email-(?:whole|html|video)\b/i
+
 function collect(html: string, node: EmailNode, items: ArrangeDraft[]) {
-  const movable = node.children.flatMap((child) => {
+  if (node.tag !== '#root' && SEALED_RE.test(html.slice(node.start, node.openEnd))) return
+  const found = node.children.flatMap((child) => {
     const kind = itemKind(child, html)
     return kind ? [{ child, kind }] : []
   })
-  if (movable.length >= 2) {
+  const movable = found.length >= 2 ? found : found.filter((entry) => addedBlockKind(html, entry.child))
+  if (movable.length) {
     const group = `p${node.start}:${node.tag}`
     for (const entry of movable) {
       items.push({
@@ -836,6 +1191,16 @@ function collect(html: string, node: EmailNode, items: ArrangeDraft[]) {
     }
   }
   for (const child of node.children) collect(html, child, items)
+}
+
+/** Where the closing tag of a group's parent starts, so new content can go after everything in it. */
+export function emailArrangeGroupInnerEnd(html: string, group: string): number | null {
+  const match = /^p(\d+):/.exec(group)
+  if (!match?.[1]) return null
+  const parent = findElementAt(html, Number(match[1]))
+  if (!parent?.closed || parent.end <= parent.openEnd) return null
+  const closeAt = html.lastIndexOf('<', parent.end - 1)
+  return closeAt >= parent.openEnd ? closeAt : null
 }
 
 /** Sections, text blocks, and images that have a sibling and can be reordered. */

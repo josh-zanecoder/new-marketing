@@ -40,6 +40,7 @@ export interface AdminTenantRow {
    * Default false hides Insert image.
    */
   allowTenantInsertImage: boolean
+  allowTenantReplaceImage: boolean
   /** When true, the tenant may open the GrapesJS email editor. Default false. */
   allowTenantGrapesBuilder: boolean
   /** When true, the tenant may open the Beefree email builder. Default false. */

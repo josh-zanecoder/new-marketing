@@ -13,6 +13,7 @@ import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipie
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
+import { parseAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
 import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
@@ -62,6 +63,10 @@ export function parseRegistryAllowTenantImages(doc: RegistryTenantDoc): boolean 
 
 export function parseRegistryAllowTenantInsertImage(doc: RegistryTenantDoc): boolean {
   return parseAllowTenantInsertImage(doc.allowTenantInsertImage)
+}
+
+export function parseRegistryAllowTenantReplaceImage(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantReplaceImage(doc)
 }
 
 export function parseRegistryAllowTenantGrapesBuilder(doc: RegistryTenantDoc): boolean {
@@ -370,6 +375,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantTemplateApproval = parseRegistryAllowTenantTemplateApproval(doc)
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
   const allowTenantInsertImage = parseRegistryAllowTenantInsertImage(doc)
+  const allowTenantReplaceImage = parseRegistryAllowTenantReplaceImage(doc)
   const allowTenantGrapesBuilder = parseRegistryAllowTenantGrapesBuilder(doc)
   const allowTenantBeefreeBuilder = parseRegistryAllowTenantBeefreeBuilder(doc)
   const allowTenantTemplateBuilder = parseRegistryAllowTenantTemplateBuilder(doc)
@@ -398,6 +404,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     allowTenantTemplateApproval,
     allowTenantImages,
     allowTenantInsertImage,
+    allowTenantReplaceImage,
     allowTenantGrapesBuilder,
     allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,

@@ -165,6 +165,18 @@ describe('toTenantAdminRow', () => {
     expect(row?.allowTenantInsertImage).toBe(true)
   })
 
+  it('keeps Replace images on for insert/builder tenants until a value is stored', () => {
+    const base = { name: 'Acme', dbName: 'acme_db', createdAt: '2026-01-01T00:00:00.000Z' }
+    expect(toTenantAdminRow(base)?.allowTenantReplaceImage).toBe(false)
+    expect(toTenantAdminRow({ ...base, allowTenantInsertImage: true })?.allowTenantReplaceImage).toBe(true)
+    expect(toTenantAdminRow({ ...base, allowTenantTemplateBuilder: true })?.allowTenantReplaceImage).toBe(true)
+    expect(
+      toTenantAdminRow({ ...base, allowTenantInsertImage: true, allowTenantReplaceImage: false })
+        ?.allowTenantReplaceImage
+    ).toBe(false)
+    expect(toTenantAdminRow({ ...base, allowTenantReplaceImage: true })?.allowTenantReplaceImage).toBe(true)
+  })
+
   it('reads contact_owner From address mode from the registry doc', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

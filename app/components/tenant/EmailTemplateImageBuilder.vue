@@ -16,34 +16,85 @@ import {
   updateEmailTemplateHtmlImageLayout
 } from '~~/shared/utils/emailTemplateHtmlImages'
 import {
+  EMAIL_BLOCK_OPTIONS,
+  duplicateEmailBlock,
+  emailTemplateContentWidth,
+  insertEmailBlock,
+  insertEmailBlockBeside,
+  insertEmailBlockIntoCell,
+  listEmailBlockLinks,
+  moveEmailBlock,
+  readEmailBlockAccent,
+  readEmailBlockHtml,
+  readEmailBlockVideo,
+  removeEmailBlock,
+  setEmailColumnSplit,
+  updateEmailBlockAccent,
+  updateEmailBlockHtml,
+  updateEmailBlockLinkAt,
+  updateEmailBlockVideo,
+  type EmailBlockEdit,
+  type EmailBlockKind,
+  type EmailBlockLinkItem
+} from '~~/shared/utils/emailTemplateBlocks'
+import {
+  EMAIL_BORDER_RADIUS_MAX,
+  EMAIL_BORDER_STYLES,
+  EMAIL_BORDER_WIDTH_MAX,
   EMAIL_TEXT_FONTS,
+  EMAIL_TEXT_LETTER_SPACING_MAX,
+  EMAIL_TEXT_LETTER_SPACING_MIN,
+  EMAIL_TEXT_LINE_HEIGHT_MAX,
+  EMAIL_TEXT_LINE_HEIGHT_MIN,
   EMAIL_TEXT_SIZE_MAX,
   EMAIL_TEXT_SIZE_MIN,
   emailPreviewWithArrangeMarkers,
   emailPreviewWithTextMarkers,
   listEmailArrangeItems,
   listEmailTextRuns,
+  moveEmailArrangeItemBy,
   moveEmailArrangeItemTo,
+  readEmailPageColors,
   readEmailSectionBox,
   readEmailTextStyle,
+  updateEmailPageColors,
+  type EmailPageColors,
   replaceEmailTextAt,
+  splitEmailTextRun,
   updateEmailSectionBox,
   updateEmailTextStyle,
+  type EmailBorderStyle,
   type EmailSectionBoxPatch,
+  type EmailTextAlign,
+  type EmailTextDecoration,
   type EmailTextStylePatch
 } from '~~/shared/utils/emailTemplateSections'
+
+const TEXT_ALIGN_OPTIONS: { value: EmailTextAlign; label: string }[] = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'right', label: 'Right' },
+  { value: 'justify', label: 'Justify' }
+]
+
+const TEXT_DECORATION_OPTIONS: { value: EmailTextDecoration; label: string; class: string }[] = [
+  { value: 'none', label: 'None', class: '' },
+  { value: 'underline', label: 'U', class: 'underline' },
+  { value: 'line-through', label: 'S', class: 'line-through' }
+]
 
 const props = defineProps<{
   modelValue: string
   canUploadImage: boolean
   canEditText?: boolean
   canResizeImage?: boolean
+  canReplaceImage?: boolean
   sourceHtml?: string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [html: string]
-  'loaded-template': [{ name: string; subject: string }]
+  'loaded-template': [{ id: string; name: string; subject: string }]
 }>()
 
 const marketingApi = useTenantMarketingApi()
@@ -69,9 +120,10 @@ const hostedPending = ref(false)
 const hostedError = ref('')
 const previewDropActive = ref(false)
 const replacePickerOpen = ref(false)
-const sidePanel = ref<'layout' | 'email' | 'uploads'>('layout')
+const sidePanel = ref<'add' | 'layout' | 'email' | 'uploads'>('layout')
 const selectedPart = ref<number | null>(null)
 const selectedTextIndex = ref<number | null>(null)
+const textSplitHint = ref<number | null>(null)
 const linkOpen = ref(false)
 const originalHtml = ref('')
 let hostedDragged = false
@@ -322,7 +374,7 @@ function placeHandlesAt(doc: Document, x: number, y: number, width: number, heig
 }
 
 function placeResizeHandles(doc: Document, img: HTMLImageElement) {
-  if (!props.canResizeImage) {
+  if (!props.canResizeImage || (props.canEditText && img.closest('[data-email-block]'))) {
     doc.getElementById('email-builder-handles')?.remove()
     return
   }
@@ -566,17 +618,31 @@ type SectionGesture = {
   startX: number
   startY: number
   scrollTop: number
+  startScroll: number
   moved: boolean
   styled: boolean
   priorStyle: DragStyle
   targetPart: number | null
   place: 'before' | 'after'
+  /** Moved from the cross handle: may land anywhere, including inside section cells. */
+  free: boolean
+  dropTarget: BlockTarget | null
 }
 
 let sectionGesture: SectionGesture | null = null
+type SectionEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+const SECTION_EDGES: readonly SectionEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
+const isSectionEdge = (value: unknown): value is SectionEdge => SECTION_EDGES.includes(value as SectionEdge)
+const verticalOf = (edge: SectionEdge) => (edge.includes('n') ? 'n' : edge.includes('s') ? 's' : null)
+const horizontalOf = (edge: SectionEdge) => (edge.includes('e') ? 'e' : edge.includes('w') ? 'w' : null)
+const SECTION_EDGE_CURSOR: Record<SectionEdge, string> = {
+  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize'
+}
 let sectionResize: {
   part: number
-  edge: 'n' | 's' | 'e' | 'w'
+  edge: SectionEdge
+  /** Image blocks scale from a corner, so the picture keeps its shape. */
+  keepRatio: boolean
   startX: number
   startY: number
   startPadding: number
@@ -593,7 +659,20 @@ let sectionResize: {
   minWord: number
   scrollTop: number
   moved: boolean
+  /** Set when the edge is a divider between two columns of the same row. */
+  columns: ColumnSplit | null
 } | null = null
+
+interface ColumnSplit {
+  left: HTMLElement
+  right: HTMLElement
+  leftIndex: number
+  rowWidth: number
+  startLeft: number
+  pair: number
+  leftPercent: number
+  pairPercent: number
+}
 let pendingTextEdit: { el: HTMLElement, index: number } | null = null
 let textEditReady = false
 let previewHeld = false
@@ -1168,6 +1247,14 @@ function paintPreviewTextStyle(el: HTMLElement, patch: EmailTextStylePatch) {
     const font = EMAIL_TEXT_FONTS.find((entry) => entry.id === patch.font)
     if (font) el.style.fontFamily = font.stack
   } else if (patch.font === '') el.style.removeProperty('font-family')
+  if (patch.letterSpacing != null) el.style.letterSpacing = `${patch.letterSpacing}px`
+  else if (patch.letterSpacing === null) el.style.removeProperty('letter-spacing')
+  if (patch.decoration) el.style.textDecoration = patch.decoration
+  const block = el.parentElement?.closest<HTMLElement>('p,h1,h2,h3,h4,h5,h6,li,blockquote,div,td,th')
+  if (!block) return
+  if (patch.lineHeight != null) block.style.lineHeight = `${patch.lineHeight}px`
+  else if (patch.lineHeight === null) block.style.removeProperty('line-height')
+  if (patch.align) block.style.textAlign = patch.align
 }
 
 function applyRunStyle(index: number, patch: EmailTextStylePatch) {
@@ -1225,6 +1312,32 @@ function toggleTextBold(index: number) {
 
 function toggleTextItalic(index: number) {
   applyRunStyle(index, { italic: !textRunStyle(index).italic })
+}
+
+function readWholePx(event: Event, min: number, max: number): number | null | undefined {
+  const value = (event.target as HTMLInputElement).value.trim()
+  if (!value) return null
+  const px = Number(value)
+  if (!Number.isInteger(px) || px < min || px > max) return undefined
+  return px
+}
+
+function onTextLineHeight(index: number, event: Event) {
+  const lineHeight = readWholePx(event, EMAIL_TEXT_LINE_HEIGHT_MIN, EMAIL_TEXT_LINE_HEIGHT_MAX)
+  if (lineHeight !== undefined) applyRunStyle(index, { lineHeight })
+}
+
+function onTextLetterSpacing(index: number, event: Event) {
+  const letterSpacing = readWholePx(event, EMAIL_TEXT_LETTER_SPACING_MIN, EMAIL_TEXT_LETTER_SPACING_MAX)
+  if (letterSpacing !== undefined) applyRunStyle(index, { letterSpacing })
+}
+
+function setTextAlign(index: number, align: EmailTextAlign) {
+  applyRunStyle(index, { align })
+}
+
+function setTextDecoration(index: number, decoration: EmailTextDecoration) {
+  applyRunStyle(index, { decoration })
 }
 
 function textFieldValue(index: number, text: string) {
@@ -1299,9 +1412,61 @@ function showElementDropLine(doc: Document, el: HTMLElement, after: boolean) {
   }
   const body = doc.body.getBoundingClientRect()
   const rect = el.getBoundingClientRect()
+  line.style.height = '3px'
+  line.style.background = '#2563eb'
+  line.style.border = ''
+  line.style.boxSizing = ''
+  line.textContent = ''
   line.style.top = `${(after ? rect.bottom : rect.top) - body.top}px`
   line.style.left = `${rect.left - body.left}px`
   line.style.width = `${Math.max(rect.width, 24)}px`
+}
+
+const EDGE_SCROLL_ZONE = 64
+const EDGE_SCROLL_MAX = 22
+
+/** How fast to scroll the preview while a drag is held near its top or bottom edge. */
+function edgeScrollSpeed(doc: Document, y: number): number {
+  const height = doc.defaultView?.innerHeight ?? 0
+  if (!height) return 0
+  const depth = y < EDGE_SCROLL_ZONE ? y - EDGE_SCROLL_ZONE : y > height - EDGE_SCROLL_ZONE ? y - (height - EDGE_SCROLL_ZONE) : 0
+  if (!depth) return 0
+  return Math.max(-EDGE_SCROLL_MAX, Math.min(EDGE_SCROLL_MAX, Math.round(depth / 3) || Math.sign(depth)))
+}
+
+let edgeScrollFrame = 0
+let edgeScrollPoint: { x: number; y: number } | null = null
+
+function stopEdgeScroll() {
+  if (edgeScrollFrame) cancelAnimationFrame(edgeScrollFrame)
+  edgeScrollFrame = 0
+  edgeScrollPoint = null
+}
+
+/** Keep a held section drag scrolling the preview until the pointer leaves the edge. */
+function runEdgeScroll(doc: Document, x: number, y: number) {
+  edgeScrollPoint = { x, y }
+  if (edgeScrollFrame || !edgeScrollSpeed(doc, y)) return
+  const tick = () => {
+    const gesture = sectionGesture
+    const view = doc.defaultView
+    const point = edgeScrollPoint
+    const speed = point ? edgeScrollSpeed(doc, point.y) : 0
+    if (!gesture || !view || !point || !speed) {
+      edgeScrollFrame = 0
+      return
+    }
+    const before = frameScrollTop(doc)
+    view.scrollBy(0, speed)
+    gesture.scrollTop = frameScrollTop(doc)
+    if (gesture.scrollTop === before) {
+      edgeScrollFrame = 0
+      return
+    }
+    paintSectionDrag(point.x, point.y)
+    edgeScrollFrame = requestAnimationFrame(tick)
+  }
+  edgeScrollFrame = requestAnimationFrame(tick)
 }
 
 function sectionDropAt(doc: Document, x: number, y: number, gesture: SectionGesture) {
@@ -1366,9 +1531,19 @@ function paintSectionDrag(x: number, y: number) {
     gesture.el.style.zIndex = '30'
     gesture.el.style.pointerEvents = 'none'
     gesture.el.style.opacity = '0.88'
+    for (const id of ['email-builder-section-resize', COLUMN_DIVIDER_LAYER]) {
+      const layer = doc.getElementById(id)
+      if (layer) layer.style.visibility = 'hidden'
+    }
   }
   if (frameScrollTop(doc) !== gesture.scrollTop) keepFrameScroll(doc, gesture.scrollTop)
-  gesture.el.style.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`
+  const scrolled = gesture.scrollTop - gesture.startScroll
+  gesture.el.style.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy + scrolled)}px, 0)`
+  runEdgeScroll(doc, x, y)
+  if (gesture.free) {
+    gesture.dropTarget = paintBlockDrop(doc, x, y, gesture.el, gesture.el.getAttribute('data-email-block'))
+    return
+  }
   const hit = sectionDropAt(doc, x, y, gesture)
   gesture.targetPart = hit?.part ?? null
   gesture.place = hit?.place ?? 'before'
@@ -1384,6 +1559,7 @@ function finishSectionDrag(event: PointerEvent) {
   gestureFrame = 0
   const point = pointerInFrame(event)
   if (point) paintSectionDrag(point.x, point.y)
+  stopEdgeScroll()
   pendingGesturePoint = null
   sectionGesture = null
   const doc = gesture.el.ownerDocument
@@ -1392,10 +1568,23 @@ function finishSectionDrag(event: PointerEvent) {
     doc.body.style.cursor = ''
   }
   doc?.getElementById('email-builder-drop-line')?.remove()
+  if (doc) markDropCell(doc, null)
   const textEdit = !gesture.moved ? pendingTextEdit : null
   pendingTextEdit = null
   writeDragStyle(gesture.el, gesture.priorStyle)
   selectSectionFromCanvas(gesture.part)
+  if (gesture.free) {
+    const result = gesture.moved && gesture.dropTarget
+      ? moveEmailBlock(props.modelValue, gesture.part, gesture.dropTarget)
+      : null
+    if (!result || result.html === props.modelValue) {
+      paintArrangeOutline()
+      if (textEdit?.el.isConnected) beginTextEdit(textEdit.el, textEdit.index, event)
+      return
+    }
+    commitBlockEdit(result)
+    return
+  }
   if (!gesture.moved || gesture.targetPart == null) {
     paintArrangeOutline()
     if (textEdit?.el.isConnected) beginTextEdit(textEdit.el, textEdit.index, event)
@@ -1421,11 +1610,14 @@ function beginSectionDrag(doc: Document, el: HTMLElement, part: number, group: s
     startX: event.clientX,
     startY: event.clientY,
     scrollTop,
+    startScroll: scrollTop,
     moved: false,
     styled: false,
     priorStyle: readDragStyle(el),
     targetPart: null,
-    place: 'before'
+    place: 'before',
+    free: el.hasAttribute('data-email-block'),
+    dropTarget: null
   }
   doc.body.style.userSelect = 'none'
   doc.body.style.cursor = 'grabbing'
@@ -1434,8 +1626,36 @@ function beginSectionDrag(doc: Document, el: HTMLElement, part: number, group: s
   keepFrameScroll(doc, scrollTop)
 }
 
+function beginBlockMove(doc: Document, event: PointerEvent) {
+  const el = selectedResizeElement(doc)
+  const part = Number(el?.getAttribute('data-email-part'))
+  if (!el || !Number.isFinite(part)) return
+  commitActiveTextEdit()
+  const point = pointerInFrame(event)
+  beginSectionDrag(doc, el, part, el.getAttribute('data-email-group') ?? '', event)
+  if (!sectionGesture) return
+  sectionGesture.free = true
+  sectionGesture.startX = point?.x ?? event.clientX
+  sectionGesture.startY = point?.y ?? event.clientY
+  doc.body.style.cursor = 'move'
+}
+
+/** Blocks added from the Add panel own a box table, so resizing one never resizes the whole email. */
+function addedBlockBox(node: HTMLElement): HTMLElement | null {
+  const view = node.ownerDocument.defaultView
+  if (!view || !node.hasAttribute('data-email-block')) return null
+  if (node.matches('table[data-email-box]')) return node
+  const box = node.querySelector('table[data-email-box]')
+  return box instanceof view.HTMLElement ? box : null
+}
+
 function sectionBoxTargets(el: HTMLElement): HTMLElement[] {
   const view = el.ownerDocument.defaultView
+  const box = addedBlockBox(el)
+  if (view && box instanceof view.HTMLTableElement) {
+    const cells = [...(box.rows[0]?.cells ?? [])].filter((cell): cell is HTMLTableCellElement => cell instanceof view.HTMLElement)
+    if (cells.length) return cells
+  }
   if (view && el.tagName === 'TR') {
     const cells = [...el.children].filter((node): node is HTMLElement =>
       node instanceof view.HTMLElement && (node.tagName === 'TD' || node.tagName === 'TH')
@@ -1447,6 +1667,8 @@ function sectionBoxTargets(el: HTMLElement): HTMLElement[] {
 
 function sectionWidthElement(node: HTMLElement): HTMLElement {
   const view = node.ownerDocument.defaultView
+  const box = addedBlockBox(node)
+  if (box) return box
   if (node.tagName === 'TR' && view) {
     const table = node.closest('table')
     if (table instanceof view.HTMLElement) return table
@@ -1485,6 +1707,8 @@ function fitTextFrame(frame: HTMLElement, width: number) {
 }
 
 function resizeBoxRect(node: HTMLElement): DOMRect {
+  const box = addedBlockBox(node)
+  if (box) return box.getBoundingClientRect()
   const frame = textFrameElement(node) ?? node
   const rects = [...frame.getClientRects()].filter((rect) => rect.width > 0 || rect.height > 0)
   if (!rects.length) return frame.getBoundingClientRect()
@@ -1497,11 +1721,11 @@ function resizeBoxRect(node: HTMLElement): DOMRect {
 
 function sectionResizeLayer(doc: Document): HTMLElement {
   let layer = doc.getElementById('email-builder-section-resize')
-  if (layer?.dataset.ready === '2') return layer
+  if (layer?.dataset.ready === '4') return layer
   layer?.remove()
   layer = doc.createElement('div')
   layer.id = 'email-builder-section-resize'
-  layer.dataset.ready = '2'
+  layer.dataset.ready = '4'
   layer.style.position = 'absolute'
   layer.style.inset = '0'
   layer.style.pointerEvents = 'none'
@@ -1559,6 +1783,48 @@ function sectionResizeLayer(doc: Document): HTMLElement {
     handle.appendChild(grip)
     layer.appendChild(handle)
   }
+  for (const corner of ['nw', 'ne', 'sw', 'se'] as const) {
+    const handle = doc.createElement('div')
+    handle.dataset.sectionResize = corner
+    handle.title = 'Drag to resize'
+    Object.assign(handle.style, {
+      position: 'absolute',
+      width: '12px',
+      height: '12px',
+      marginLeft: '-6px',
+      marginTop: '-6px',
+      background: '#fff',
+      border: '2px solid #2563eb',
+      borderRadius: '3px',
+      boxSizing: 'border-box',
+      cursor: SECTION_EDGE_CURSOR[corner],
+      pointerEvents: 'auto',
+      touchAction: 'none'
+    })
+    layer.appendChild(handle)
+  }
+  const move = doc.createElement('div')
+  move.dataset.sectionMove = ''
+  move.title = 'Drag to move'
+  move.setAttribute('aria-label', 'Drag to move this block')
+  Object.assign(move.style, {
+    position: 'absolute',
+    width: '22px',
+    height: '22px',
+    borderRadius: '6px',
+    background: '#2563eb',
+    border: '2px solid #fff',
+    boxSizing: 'border-box',
+    boxShadow: '0 1px 4px rgba(15,23,42,.35)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'move',
+    pointerEvents: 'auto',
+    touchAction: 'none'
+  })
+  move.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>'
+  layer.appendChild(move)
   doc.body.appendChild(layer)
   return layer
 }
@@ -1740,9 +2006,10 @@ function placeParentResizeHandles(node: HTMLElement | null) {
 
 function placeSectionResizeHandle(doc: Document) {
   const view = doc.defaultView
+  placeColumnDividers(doc)
   const node = selectedResizeElement(doc)
-  // Text boxes are edited, not resized. Handles stay off headings and paragraphs.
-  if (!view || !node || textFrameElement(node)) {
+  // Text boxes in existing templates are edited, not resized. Added blocks resize through their own box.
+  if (!view || !node || (!addedBlockBox(node) && textFrameElement(node))) {
     doc.getElementById('email-builder-section-resize')?.remove()
     placeParentResizeHandles(null)
     return
@@ -1782,15 +2049,44 @@ function placeSectionResizeHandle(doc: Document) {
     west.style.top = `${top}px`
     west.style.height = `${height}px`
   }
+  const added = !!addedBlockBox(node)
+  for (const corner of ['nw', 'ne', 'sw', 'se'] as const) {
+    const handle = handles.get(corner)
+    if (!handle) continue
+    handle.style.display = added ? 'block' : 'none'
+    handle.style.left = `${(corner.includes('w') ? rect.left : rect.left + Math.max(rect.width, 24)) - bodyRect.left}px`
+    handle.style.top = `${(corner.includes('n') ? rect.top : rect.top + height) - bodyRect.top}px`
+  }
+  const move = layer.querySelector<HTMLElement>('[data-section-move]')
+  if (move) {
+    move.style.display = props.canEditText ? 'flex' : 'none'
+    // Sits just outside the block so it never covers the block's words.
+    const left = rect.left - bodyRect.left
+    const above = rect.top - bodyRect.top - 26
+    if (above >= frameScrollTop(doc)) {
+      move.style.left = `${Math.max(0, left)}px`
+      move.style.top = `${above}px`
+    } else if (left >= 24) {
+      move.style.left = `${left - 24}px`
+      move.style.top = `${rect.top - bodyRect.top}px`
+    } else {
+      move.style.left = `${Math.max(0, left)}px`
+      move.style.top = `${rect.bottom - bodyRect.top + 4}px`
+    }
+  }
   placeParentResizeHandles(node)
 }
 
-function paintSectionPatch(part: number, patch: EmailSectionBoxPatch) {
+function paintSectionPatch(part: number, patch: EmailSectionBoxPatch, nextHtml: string) {
   const doc = frameRef.value?.contentDocument
   const view = doc?.defaultView
   const node = doc?.querySelector(`[data-email-part="${part}"]`)
   if (!doc || !view || !(node instanceof view.HTMLElement)) return false
+  const borderChange = patch.borderWidth !== undefined || patch.borderStyle !== undefined || patch.borderColor !== undefined
+  const box = borderChange || patch.borderRadius !== undefined ? readEmailSectionBox(nextHtml, part) : null
   for (const target of sectionBoxTargets(node)) {
+    if (box && patch.borderRadius !== undefined) target.style.borderRadius = box.borderRadius ? `${box.borderRadius}px` : ''
+    if (box && borderChange) target.style.border = box.borderWidth ? `${box.borderWidth}px ${box.borderStyle} ${box.borderColor || '#000000'}` : ''
     if (patch.background) target.style.backgroundColor = patch.background
     else if (patch.background === '' || patch.background === null) target.style.backgroundColor = ''
     if (patch.paddingBottom != null) target.style.paddingBottom = `${patch.paddingBottom}px`
@@ -1818,7 +2114,7 @@ function paintSectionPatch(part: number, patch: EmailSectionBoxPatch) {
 function applySectionBox(part: number, patch: EmailSectionBoxPatch) {
   const next = updateEmailSectionBox(props.modelValue, part, patch)
   if (next === props.modelValue) return
-  if (paintSectionPatch(part, patch)) skipNextPreviewSync = true
+  if (paintSectionPatch(part, patch, next)) skipNextPreviewSync = true
   emit('update:modelValue', next)
 }
 
@@ -1826,8 +2122,67 @@ function sectionBox(part: number) {
   return readEmailSectionBox(props.modelValue, part)
 }
 
+const PAGE_COLOR_FIELDS: { key: keyof EmailPageColors; label: string; fallback: string }[] = [
+  { key: 'background', label: 'Email background', fallback: '#f1f5f9' },
+  { key: 'content', label: 'Content background', fallback: '#ffffff' }
+]
+const pageColors = computed(() => readEmailPageColors(props.modelValue))
+
+/** Paint the preview in place so dragging the color picker does not reload the email. */
+function paintPageColor(key: keyof EmailPageColors, value: string): boolean {
+  const doc = frameRef.value?.contentDocument
+  const view = doc?.defaultView
+  if (!doc?.body || !view) return false
+  const column = doc.querySelector('[data-email-canvas-column]')
+  const paint = (el: HTMLElement) => {
+    el.style.backgroundColor = value
+    if (value) el.setAttribute('bgcolor', value)
+    else el.removeAttribute('bgcolor')
+  }
+  if (key === 'content') {
+    if (!(column instanceof view.HTMLElement)) return false
+    paint(column)
+  } else {
+    paint(doc.body)
+    for (let node = column?.parentElement ?? null; node && node !== doc.body; node = node.parentElement) {
+      if (node.style.backgroundColor || node.hasAttribute('bgcolor')) paint(node)
+    }
+  }
+  emailBackdropColor.value = paintedBackground(column instanceof view.HTMLElement ? column.parentElement : doc.body)
+  return true
+}
+
+function setPageColor(key: keyof EmailPageColors, value: string) {
+  const next = updateEmailPageColors(props.modelValue, { [key]: value })
+  if (next === props.modelValue) return
+  if (paintPageColor(key, value)) skipNextPreviewSync = true
+  emit('update:modelValue', next)
+}
+
 function onSectionBackground(part: number, event: Event) {
   applySectionBox(part, { background: (event.target as HTMLInputElement).value })
+}
+
+function onSectionBorderRadius(part: number, event: Event) {
+  const radius = readWholePx(event, 0, EMAIL_BORDER_RADIUS_MAX)
+  if (radius !== undefined) applySectionBox(part, { borderRadius: radius ?? 0 })
+}
+
+function onSectionBorderWidth(part: number, event: Event) {
+  const width = readWholePx(event, 0, EMAIL_BORDER_WIDTH_MAX)
+  if (width !== undefined) applySectionBox(part, { borderWidth: width ?? 0 })
+}
+
+function onSectionBorderStyle(part: number, event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (!(EMAIL_BORDER_STYLES as readonly string[]).includes(value)) return
+  const box = sectionBox(part)
+  applySectionBox(part, { borderStyle: value as EmailBorderStyle, ...(box.borderWidth ? {} : { borderWidth: 1 }) })
+}
+
+function onSectionBorderColor(part: number, event: Event) {
+  const box = sectionBox(part)
+  applySectionBox(part, { borderColor: (event.target as HTMLInputElement).value, ...(box.borderWidth ? {} : { borderWidth: 1 }) })
 }
 
 function clampDragWidth(value: number, maxWidth: number): number {
@@ -1835,22 +2190,154 @@ function clampDragWidth(value: number, maxWidth: number): number {
   return Math.max(80, Math.min(cap, Math.round(value)))
 }
 
-function beginSectionResize(doc: Document, event: PointerEvent, edge: 'n' | 's' | 'e' | 'w') {
+function cellPercent(cell: HTMLElement, count: number): number {
+  return Number(/^([\d.]+)%$/.exec(cell.getAttribute('width') ?? '')?.[1]) || 100 / count
+}
+
+/** The two columns either side of the dragged edge, when the block fills a column of a row. */
+function columnSplitFor(doc: Document, node: HTMLElement, edge: 'e' | 'w'): ColumnSplit | null {
+  const cell = node.parentElement
+  if (!cell || cell.tagName !== 'TD' || !cell.hasAttribute('data-email-cell') || cell.childElementCount !== 1) return null
+  const other = edge === 'e' ? cell.nextElementSibling : cell.previousElementSibling
+  if (!other || other.tagName !== 'TD' || !other.hasAttribute('data-email-cell')) return null
+  return columnSplitBetween(doc, (edge === 'e' ? cell : other) as HTMLElement, (edge === 'e' ? other : cell) as HTMLElement)
+}
+
+function columnSplitBetween(doc: Document, left: HTMLElement, right: HTMLElement): ColumnSplit | null {
+  const rowWidth = left.parentElement?.getBoundingClientRect().width ?? 0
+  const leftIndex = [...doc.querySelectorAll('[data-email-cell]')].indexOf(left)
+  if (rowWidth <= 0 || leftIndex < 0) return null
+  const count = left.parentElement?.childElementCount || 2
+  const leftPercent = cellPercent(left, count)
+  const startLeft = left.getBoundingClientRect().width
+  return {
+    left,
+    right,
+    leftIndex,
+    rowWidth,
+    startLeft,
+    pair: startLeft + right.getBoundingClientRect().width,
+    leftPercent,
+    pairPercent: leftPercent + cellPercent(right, count)
+  }
+}
+
+/** Drag the divider between two columns of a row, whatever the columns hold. */
+function beginColumnDrag(doc: Document, event: PointerEvent, leftIndex: number) {
+  const view = doc.defaultView
+  const left = doc.querySelectorAll('[data-email-cell]')[leftIndex]
+  const right = left?.nextElementSibling
+  if (!view || !(left instanceof view.HTMLElement) || !(right instanceof view.HTMLElement)) return
+  const columns = columnSplitBetween(doc, left, right)
+  if (!columns) return
+  commitActiveTextEdit()
+  const point = pointerInFrame(event)
+  try {
+    doc.body.setPointerCapture(event.pointerId)
+  } catch {
+    /* Pointer tracking on the window covers the rest of the gesture. */
+  }
+  sectionResize = {
+    part: selectedPart.value ?? -1,
+    edge: 'e',
+    keepRatio: false,
+    startX: point?.x ?? event.clientX,
+    startY: point?.y ?? event.clientY,
+    startPadding: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    startWidth: columns.startLeft,
+    width: columns.startLeft,
+    startMargin: 0,
+    marginLeft: 0,
+    maxWidth: columns.pair,
+    targets: [],
+    widthEl: left,
+    textFrame: null,
+    minWord: 0,
+    scrollTop: frameScrollTop(doc),
+    moved: false,
+    columns
+  }
+  doc.body.style.userSelect = 'none'
+  doc.body.style.cursor = 'col-resize'
+  startOutsideTracking()
+}
+
+const COLUMN_DIVIDER_LAYER = 'email-builder-column-dividers'
+
+/** A draggable divider between every pair of side-by-side columns. */
+function placeColumnDividers(doc: Document) {
+  const view = doc.defaultView
+  if (!view || !doc.body) return
+  let layer = doc.getElementById(COLUMN_DIVIDER_LAYER)
+  if (!props.canEditText || textEditing.value) {
+    layer?.remove()
+    return
+  }
+  if (!layer) {
+    layer = doc.createElement('div')
+    layer.id = COLUMN_DIVIDER_LAYER
+    Object.assign(layer.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '2147483645' })
+    const style = doc.createElement('style')
+    style.textContent = `#${COLUMN_DIVIDER_LAYER} [data-column-divider]>span{position:absolute;top:0;bottom:0;left:50%;width:0;margin-left:-1px;border-left:2px dashed rgba(37,99,235,.35)}`
+      + `#${COLUMN_DIVIDER_LAYER} [data-column-divider]:hover>span{border-left:2px solid #2563eb}`
+      + `#${COLUMN_DIVIDER_LAYER} [data-column-divider]>i{position:absolute;top:50%;left:50%;width:8px;height:32px;margin:-16px 0 0 -4px;border-radius:4px;background:#2563eb;border:1px solid #fff;box-sizing:border-box;opacity:.55}`
+      + `#${COLUMN_DIVIDER_LAYER} [data-column-divider]:hover>i{opacity:1}`
+    layer.appendChild(style)
+    doc.body.appendChild(layer)
+  }
+  layer.style.visibility = 'visible'
+  doc.body.style.position = 'relative'
+  const bodyRect = doc.body.getBoundingClientRect()
+  const cells = [...doc.querySelectorAll('[data-email-cell]')]
+  const seen = new Set<string>()
+  cells.forEach((cell, index) => {
+    const next = cell.nextElementSibling
+    if (!(cell instanceof view.HTMLElement) || !(next instanceof view.HTMLElement) || !next.hasAttribute('data-email-cell')) return
+    const rowRect = cell.parentElement?.getBoundingClientRect()
+    const rect = cell.getBoundingClientRect()
+    if (!rowRect || rowRect.height < 1 || rect.width < 1) return
+    const key = String(index)
+    seen.add(key)
+    let divider = layer!.querySelector<HTMLElement>(`[data-column-divider="${key}"]`)
+    if (!divider) {
+      divider = doc.createElement('div')
+      divider.dataset.columnDivider = key
+      divider.title = 'Drag to resize the columns'
+      Object.assign(divider.style, { position: 'absolute', width: '14px', marginLeft: '-7px', cursor: 'col-resize', pointerEvents: 'auto', touchAction: 'none' })
+      divider.append(doc.createElement('span'), doc.createElement('i'))
+      layer!.appendChild(divider)
+    }
+    divider.style.left = `${rect.right - bodyRect.left}px`
+    divider.style.top = `${rowRect.top - bodyRect.top}px`
+    divider.style.height = `${rowRect.height}px`
+  })
+  for (const divider of layer.querySelectorAll<HTMLElement>('[data-column-divider]')) {
+    if (!seen.has(divider.dataset.columnDivider ?? '')) divider.remove()
+  }
+}
+
+function beginSectionResize(doc: Document, event: PointerEvent, edge: SectionEdge) {
   const view = doc.defaultView
   const node = selectedResizeElement(doc)
   const part = Number(node?.getAttribute('data-email-part'))
-  if (!view || !node || !Number.isFinite(part) || textFrameElement(node)) return
+  const added = !!node && !!addedBlockBox(node)
+  if (!view || !node || !Number.isFinite(part) || (!added && textFrameElement(node))) return
+  if (edge.length === 2 && !added) return
   const targets = sectionBoxTargets(node)
   const first = targets[0]
   if (!first) return
   const widthEl = sectionWidthElement(node)
-  const textFrame = textFrameElement(node)
+  const textFrame = added ? null : textFrameElement(node)
   const widthStyle = view.getComputedStyle(widthEl)
   const startWidth = Math.max(24, Math.round(widthEl.getBoundingClientRect().width))
   const startMargin = Math.round(Number.parseFloat(widthStyle.marginLeft) || 0)
   const parentWidth = widthEl.parentElement?.clientWidth || startWidth
   const boxStyle = view.getComputedStyle(first)
-  const startPadding = Math.round(Number.parseFloat(edge === 'n' ? boxStyle.paddingTop : boxStyle.paddingBottom) || 0)
+  const vertical = verticalOf(edge)
+  const horizontal = horizontalOf(edge)
+  const startPadding = Math.round(Number.parseFloat(vertical === 'n' ? boxStyle.paddingTop : boxStyle.paddingBottom) || 0)
   const point = pointerInFrame(event)
   try {
     doc.body.setPointerCapture(event.pointerId)
@@ -1860,11 +2347,12 @@ function beginSectionResize(doc: Document, event: PointerEvent, edge: 'n' | 's' 
   sectionResize = {
     part,
     edge,
+    keepRatio: edge.length === 2 && node.getAttribute('data-email-block') === 'image',
     startX: point?.x ?? event.clientX,
     startY: point?.y ?? event.clientY,
     startPadding,
-    paddingTop: edge === 'n' ? startPadding : Math.round(Number.parseFloat(boxStyle.paddingTop) || 0),
-    paddingBottom: edge === 's' ? startPadding : Math.round(Number.parseFloat(boxStyle.paddingBottom) || 0),
+    paddingTop: vertical === 'n' ? startPadding : Math.round(Number.parseFloat(boxStyle.paddingTop) || 0),
+    paddingBottom: vertical === 's' ? startPadding : Math.round(Number.parseFloat(boxStyle.paddingBottom) || 0),
     startWidth,
     width: startWidth,
     startMargin,
@@ -1875,10 +2363,11 @@ function beginSectionResize(doc: Document, event: PointerEvent, edge: 'n' | 's' 
     textFrame,
     minWord: textFrame ? longestWordPx(textFrame) : 48,
     scrollTop: frameScrollTop(doc),
-    moved: false
+    moved: false,
+    columns: added && horizontal && !vertical ? columnSplitFor(doc, node, horizontal) : null
   }
   doc.body.style.userSelect = 'none'
-  doc.body.style.cursor = edge === 'n' || edge === 's' ? 'ns-resize' : 'ew-resize'
+  doc.body.style.cursor = SECTION_EDGE_CURSOR[edge]
   startOutsideTracking()
   keepFrameScroll(doc, sectionResize.scrollTop)
 }
@@ -1888,31 +2377,40 @@ function paintSectionResize(x: number, y: number) {
   if (!gesture) return
   const doc = gesture.widthEl.ownerDocument
   if (doc && frameScrollTop(doc) !== gesture.scrollTop) keepFrameScroll(doc, gesture.scrollTop)
-  if (gesture.edge === 'n' || gesture.edge === 's') {
+  const vertical = verticalOf(gesture.edge)
+  const horizontal = horizontalOf(gesture.edge)
+  if (vertical && !gesture.keepRatio) {
     const dy = y - gesture.startY
     if (Math.abs(dy) > 2) gesture.moved = true
-    const next = Math.max(0, Math.min(160, Math.round(gesture.startPadding + (gesture.edge === 'n' ? -dy : dy))))
-    if (gesture.edge === 'n') {
+    const next = Math.max(0, Math.min(160, Math.round(gesture.startPadding + (vertical === 'n' ? -dy : dy))))
+    if (vertical === 'n') {
       gesture.paddingTop = next
       for (const target of gesture.targets) target.style.paddingTop = `${next}px`
     } else {
       gesture.paddingBottom = next
       for (const target of gesture.targets) target.style.paddingBottom = `${next}px`
     }
-  } else {
+  }
+  if (horizontal && gesture.columns) {
+    const split = gesture.columns
     const dx = x - gesture.startX
     if (Math.abs(dx) > 2) gesture.moved = true
-    if (gesture.edge === 'e' && dx >= 0) {
-      gesture.width = gesture.startWidth
-      const room = Math.max(0, gesture.maxWidth - gesture.width)
-      gesture.marginLeft = Math.max(0, Math.min(room, Math.round(gesture.startMargin + dx)))
-    } else if (gesture.edge === 'e') {
-      gesture.width = clampDragWidth(gesture.startWidth + dx, gesture.maxWidth)
-      gesture.marginLeft = Math.min(gesture.startMargin, Math.max(0, gesture.maxWidth - gesture.width))
+    const leftPx = Math.max(split.pair * 0.1, Math.min(split.pair * 0.9, split.startLeft + dx))
+    split.leftPercent = Math.round((leftPx / split.pair) * split.pairPercent * 10000) / 10000
+    const rightPercent = Math.round((split.pairPercent - split.leftPercent) * 10000) / 10000
+    split.left.style.width = `${split.leftPercent}%`
+    split.left.setAttribute('width', `${split.leftPercent}%`)
+    split.right.style.width = `${rightPercent}%`
+    split.right.setAttribute('width', `${rightPercent}%`)
+  } else if (horizontal) {
+    const dx = x - gesture.startX
+    if (Math.abs(dx) > 2) gesture.moved = true
+    if (horizontal === 'e') {
+      gesture.width = clampDragWidth(gesture.startWidth + dx, gesture.maxWidth - gesture.startMargin)
+      gesture.marginLeft = gesture.startMargin
     } else {
-      gesture.width = clampDragWidth(gesture.startWidth - dx, gesture.maxWidth)
-      const room = Math.max(0, gesture.maxWidth - gesture.width)
-      gesture.marginLeft = Math.max(0, Math.min(room, Math.round(gesture.startMargin + gesture.startWidth - gesture.width)))
+      gesture.width = clampDragWidth(gesture.startWidth - dx, gesture.startWidth + gesture.startMargin)
+      gesture.marginLeft = Math.max(0, Math.round(gesture.startMargin + gesture.startWidth - gesture.width))
     }
     if (gesture.textFrame && gesture.width < gesture.minWord) {
       gesture.width = gesture.minWord
@@ -1951,9 +2449,21 @@ function finishSectionResize() {
     if (textEditing.value) void nextTick(() => inlineEditorRef.value?.focus())
     return
   }
-  if (gesture.edge === 'n') applySectionBox(gesture.part, { paddingTop: gesture.paddingTop })
-  else if (gesture.edge === 's') applySectionBox(gesture.part, { paddingBottom: gesture.paddingBottom })
-  else applySectionBox(gesture.part, { width: gesture.width, marginLeft: gesture.marginLeft })
+  const vertical = verticalOf(gesture.edge)
+  const horizontal = horizontalOf(gesture.edge)
+  if (gesture.columns) {
+    const next = setEmailColumnSplit(props.modelValue, gesture.columns.leftIndex, gesture.columns.leftPercent)
+    if (next !== props.modelValue) {
+      skipNextPreviewSync = true
+      emit('update:modelValue', next)
+    }
+  } else {
+    applySectionBox(gesture.part, {
+      ...(vertical === 'n' && !gesture.keepRatio ? { paddingTop: gesture.paddingTop } : {}),
+      ...(vertical === 's' && !gesture.keepRatio ? { paddingBottom: gesture.paddingBottom } : {}),
+      ...(horizontal ? { width: gesture.width, marginLeft: gesture.marginLeft } : {})
+    })
+  }
   if (textEditing.value) void nextTick(() => inlineEditorRef.value?.focus())
 }
 
@@ -2108,8 +2618,25 @@ function onFramePointerDown(event: PointerEvent) {
   const doc = frameRef.value?.contentDocument
   if (!doc?.body) return
   const target = elementFromEvent(doc, event.target)
+  if (target?.closest('[data-section-move]') && props.canEditText) {
+    window.clearTimeout(pendingTextBlur)
+    pendingTextBlur = 0
+    event.preventDefault()
+    event.stopPropagation()
+    beginBlockMove(doc, event)
+    return
+  }
+  const divider = target?.closest<HTMLElement>('[data-column-divider]')
+  if (divider && props.canEditText) {
+    window.clearTimeout(pendingTextBlur)
+    pendingTextBlur = 0
+    event.preventDefault()
+    event.stopPropagation()
+    beginColumnDrag(doc, event, Number(divider.dataset.columnDivider))
+    return
+  }
   const sectionEdge = target?.dataset.sectionResize
-  if (sectionEdge === 'n' || sectionEdge === 's' || sectionEdge === 'e' || sectionEdge === 'w') {
+  if (isSectionEdge(sectionEdge)) {
     if (pendingTextBlur) {
       window.clearTimeout(pendingTextBlur)
       pendingTextBlur = 0
@@ -2127,6 +2654,8 @@ function onFramePointerDown(event: PointerEvent) {
     img = frameImage(doc, index)
   } else {
     img = imageFromTarget(doc, event.target)
+    // A photo in an added block moves with its block, never on its own.
+    if (img && props.canEditText && img.closest('[data-email-block]')) img = null
     if (img) index = [...doc.querySelectorAll('img')].indexOf(img)
   }
   const textEl = textElementFromTarget(target)
@@ -2344,6 +2873,8 @@ function bindFrameInteractions(doc: Document) {
   doc.removeEventListener('drop', onFrameDrop)
   doc.addEventListener('dragover', onFrameDragOver)
   doc.addEventListener('drop', onFrameDrop)
+  doc.removeEventListener('wheel', onFrameWheel)
+  doc.addEventListener('wheel', onFrameWheel, { passive: false })
 }
 
 function applyPreview(html: string) {
@@ -2380,6 +2911,9 @@ function markImages() {
   }
   bindFrameInteractions(doc)
   const textRule = '[data-email-text]{cursor:text}[data-email-text]:hover{outline:1px dashed #93c5fd;outline-offset:0}[data-email-editing],[data-email-editing] *{color:transparent!important;-webkit-text-fill-color:transparent!important}'
+    + "[data-email-cell]:empty{outline:1px dashed #94a3b8;outline-offset:-4px}[data-email-cell]:empty::after{content:'Drop a block here';display:block;text-align:center;font:12px Arial,sans-serif;color:#94a3b8;padding-top:44px}"
+    + '[data-email-drop-cell]{outline:2px solid #2563eb!important;outline-offset:-4px;background-color:rgba(37,99,235,.08)!important}'
+    + '[data-email-box]:hover{outline:1px dashed #93c5fd;outline-offset:0}'
   let textStyle = doc.getElementById('email-builder-text-style')
   if (props.canEditText) {
     if (!textStyle) {
@@ -2391,12 +2925,14 @@ function markImages() {
   } else {
     textStyle?.remove()
   }
+  markContentColumn(doc)
   doc.querySelectorAll('img').forEach((node, index) => {
     const img = node as HTMLImageElement
     img.draggable = false
     img.style.touchAction = 'none'
-    const selected = index === selectedIndex.value
-    img.style.cursor = 'move'
+    const inBlock = props.canEditText && !!img.closest('[data-email-block]')
+    const selected = index === selectedIndex.value && !inBlock
+    img.style.cursor = inBlock ? 'grab' : 'move'
     img.style.outline = selected ? '2px solid #2563eb' : ''
     img.style.outlineOffset = '2px'
     const link = img.closest('a')
@@ -2410,12 +2946,57 @@ function markImages() {
     else doc.getElementById('email-builder-handles')?.remove()
   }
   paintArrangeOutline()
+  const view = doc.defaultView
+  if (view && 'ResizeObserver' in view && !doc.body.dataset.columnWatch) {
+    doc.body.dataset.columnWatch = '1'
+    new view.ResizeObserver(() => {
+      if (!sectionResize && !sectionGesture) placeSectionResizeHandle(doc)
+    }).observe(doc.body)
+  }
+  scrollPreviewToPendingPart(doc)
   const resume = resumeTextEdit
   if (resume && props.canEditText) {
     resumeTextEdit = null
     const node = findTextRunElement(doc, resume.text, resume.nth)
     const index = Number(node?.getAttribute('data-email-text'))
     if (node && Number.isFinite(index)) openTextEditor(node, index)
+  }
+}
+
+const emailBackdropColor = ref('#ffffff')
+
+function paintedBackground(el: Element | null): string {
+  const view = el?.ownerDocument.defaultView
+  for (let node = el; node && view; node = node.parentElement) {
+    const color = view.getComputedStyle(node).backgroundColor
+    if (color && color !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(color)) return color
+  }
+  return '#ffffff'
+}
+
+/** Outline the content column in the preview only, so it reads apart from the email background. */
+function markContentColumn(doc: Document) {
+  const view = doc.defaultView
+  if (!view) return
+  doc.querySelectorAll('[data-email-canvas-column]').forEach((node) => node.removeAttribute('data-email-canvas-column'))
+  const marked = doc.querySelector('[data-email-column]')?.closest('table')
+  const width = String(emailContentWidth.value)
+  const column = marked ?? [...doc.querySelectorAll('table')].find((table) => {
+    return table.getAttribute('width') === width || table.style.width === `${width}px`
+  })
+  if (column instanceof view.HTMLElement) {
+    column.setAttribute('data-email-canvas-column', '')
+    emailBackdropColor.value = paintedBackground(column.parentElement)
+  } else {
+    emailBackdropColor.value = paintedBackground(doc.body)
+  }
+  let style = doc.getElementById('email-builder-column-style')
+  if (!style) {
+    style = doc.createElement('style')
+    style.id = 'email-builder-column-style'
+    style.textContent = '[data-email-canvas-column]{outline:1px dashed #94a3b8;outline-offset:2px}'
+      + '[data-email-canvas-column]:has([data-email-column]):not(:has([data-email-column] *)){outline:none;height:320px}'
+    doc.head?.appendChild(style)
   }
 }
 
@@ -2426,15 +3007,18 @@ function paintArrangeOutline() {
   const resizeNode = selectedResizeElement(doc)
   doc.querySelectorAll('[data-email-part]').forEach((node) => {
     if (!(node instanceof view.HTMLElement)) return
-    const textBox = contentRect(node)
-    const hugsText = textBox.width < node.getBoundingClientRect().width - 8
+    const box = addedBlockBox(node)
+    const hugsText = !box && contentRect(node).width < node.getBoundingClientRect().width - 8
     const on = node === resizeNode && !hugsText
     if (node.tagName === 'IMG') {
       node.style.boxShadow = on ? '0 0 0 2px #2563eb' : ''
       return
     }
-    node.style.outline = on ? '2px solid #2563eb' : ''
-    node.style.outlineOffset = on ? '0' : ''
+    for (const target of box && box !== node ? [node, box] : [node]) {
+      const lit = on && target === (box ?? node)
+      target.style.outline = lit ? '2px solid #2563eb' : ''
+      target.style.outlineOffset = lit ? '0' : ''
+    }
     if (node.getAttribute('data-email-kind') === 'section') node.style.cursor = 'grab'
   })
   doc.querySelectorAll('[data-email-text]').forEach((node) => {
@@ -2448,11 +3032,526 @@ function paintArrangeOutline() {
 function focusArrangePart(part: number) {
   commitActiveTextEdit()
   selectedPart.value = blockPartFor(part)
+  const item = arrangeItems.value.find((entry) => entry.part === selectedPart.value)
+  const run = selectedTextIndex.value == null ? null : listEmailTextRuns(props.modelValue)[selectedTextIndex.value]
+  if (!item || !run || run.start < item.start || run.end > item.end) selectedTextIndex.value = null
   paintArrangeOutline()
   const node = frameRef.value?.contentDocument?.querySelector(`[data-email-part="${part}"]`)
   if (node && 'scrollIntoView' in node) {
     node.scrollIntoView({ block: 'center', inline: 'nearest' })
   }
+}
+
+const CANVAS_GUTTER = 24
+const emailContentWidth = computed(() => emailTemplateContentWidth(props.modelValue))
+const frameStyle = computed(() => {
+  const width = emailContentWidth.value + CANVAS_GUTTER * 2
+  return {
+    width: `${width}px`,
+    maxWidth: 'calc(100% - 32px)',
+    left: `max(16px, calc(50% - ${width / 2}px))`
+  }
+})
+const sideTabCount = computed(() => 1 + (props.canEditText ? 1 : 0) + (props.canUploadImage ? 2 : 0))
+const imageBlockPending = ref(false)
+const blockLinkDraft = ref<{ part: number; index: number; value: string } | null>(null)
+const blockLinkError = ref('')
+const blockHtmlDraft = ref<{ part: number; value: string } | null>(null)
+const blockHtmlError = ref('')
+const blockVideoDraft = ref<{ part: number; value: string } | null>(null)
+const blockVideoError = ref('')
+let scrollToPartOnLoad: number | null = null
+
+watch(sidePanel, (panel) => {
+  if (panel === 'uploads') return
+  imageBlockPending.value = false
+  pendingBlockTarget = null
+})
+
+function scrollPreviewToPendingPart(doc: Document) {
+  const part = scrollToPartOnLoad
+  scrollToPartOnLoad = null
+  if (part == null) return
+  const node = doc.querySelector(`[data-email-part="${part}"]`)
+  if (node && 'scrollIntoView' in node) node.scrollIntoView({ block: 'center', inline: 'nearest' })
+}
+
+function commitBlockEdit(edit: EmailBlockEdit) {
+  if (edit.html === props.modelValue) return
+  commitActiveTextEdit()
+  selectedIndex.value = null
+  selectedTextIndex.value = null
+  blockLinkDraft.value = null
+  blockLinkError.value = ''
+  blockHtmlDraft.value = null
+  blockHtmlError.value = ''
+  blockVideoDraft.value = null
+  blockVideoError.value = ''
+  scrollToPartOnLoad = edit.part
+  emit('update:modelValue', edit.html)
+  void nextTick(() => {
+    selectedPart.value = edit.part == null ? null : visibleSectionPart(edit.part)
+    sidePanel.value = 'layout'
+    void nextTick(() => {
+      const row = sectionListRef.value?.querySelector(`[data-section-part="${selectedPart.value}"]`)
+      if (row instanceof HTMLElement) row.scrollIntoView({ block: 'nearest' })
+    })
+  })
+}
+
+type BlockDropTarget = { part: number; place: 'before' | 'after' }
+type BlockTarget = BlockDropTarget | { part: number; side: 'left' | 'right' } | { cell: number }
+
+const BLOCK_LAYOUT_PREVIEW: Partial<Record<EmailBlockKind, number[]>> = {
+  sect100: [1],
+  sect50: [1, 1],
+  sect30: [1, 1, 1],
+  sect25: [1, 1, 1, 1],
+  sect37: [3, 7],
+  sect73: [7, 3]
+}
+const BLOCK_ICONS: Partial<Record<EmailBlockKind, string>> = {
+  title: 'M5 5h14M12 5v14',
+  text: 'M4 6h16M4 10h16M4 14h16M4 18h10',
+  list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+  image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15.5 9h.01',
+  button: 'M3 8h18v8H3zM8 12h8',
+  table: 'M4 5h16v14H4zM4 10h16M4 14.5h16M12 5v14',
+  divider: 'M3 12h18M12 4v4M12 16v4',
+  spacer: 'M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4',
+  social: 'M20 5a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0M9 12a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0M20 19a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0M8.7 10.8l6.6-4.6M8.7 13.2l6.6 4.6',
+  html: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16',
+  video: 'M3 6h13v12H3zM16 10l5-3v10l-5-3',
+  menu: 'M4 7h16M4 12h16M4 17h16'
+}
+const addTab = ref<'content' | 'rows' | 'settings'>('content')
+const BLOCK_DRAG_TYPE = 'application/x-email-block'
+const IMAGE_DRAG_TYPE = 'application/x-email-image'
+const blockDragKind = ref<EmailBlockKind | null>(null)
+let pendingBlockTarget: BlockTarget | null = null
+let blockDropTarget: BlockTarget | null = null
+let lastBlockDropAt = 0
+
+function insertBlockAt(kind: EmailBlockKind, target: BlockTarget | null, imageUrl?: string): EmailBlockEdit {
+  if (target && 'cell' in target) return insertEmailBlockIntoCell(props.modelValue, target.cell, kind, imageUrl)
+  if (target && 'side' in target) return insertEmailBlockBeside(props.modelValue, kind, target.part, target.side, imageUrl)
+  return insertEmailBlock(props.modelValue, kind, target?.part ?? null, imageUrl, target?.place)
+}
+
+function placeBlock(kind: EmailBlockKind, target: BlockTarget | null) {
+  if (kind === 'image') {
+    if (!props.canUploadImage) return
+    pendingBlockTarget = target
+    imageBlockPending.value = true
+    sidePanel.value = 'uploads'
+    if (!hostedImages.value.length) void loadHostedImages()
+    return
+  }
+  commitBlockEdit(insertBlockAt(kind, target))
+}
+
+function addBlock(kind: EmailBlockKind) {
+  const part = selectedPart.value
+  if (part == null) {
+    placeBlock(kind, null)
+    return
+  }
+  const doc = frameRef.value?.contentDocument
+  const view = doc?.defaultView
+  const el = doc?.querySelector(`[data-email-part="${part}"]`)
+  if (doc && view && el instanceof view.HTMLElement && LAYOUT_KINDS.has(kind)) {
+    placeBlock(kind, fullWidthDrop(doc, Number.POSITIVE_INFINITY, { el, part, place: 'after' }))
+    return
+  }
+  placeBlock(kind, { part, place: 'after' })
+}
+
+function cancelImageBlock() {
+  imageBlockPending.value = false
+  pendingBlockTarget = null
+  sidePanel.value = 'add'
+}
+
+function blockDragType(event: DragEvent): boolean {
+  return [...(event.dataTransfer?.types ?? [])].includes(BLOCK_DRAG_TYPE)
+}
+
+function onBlockDragStart(event: DragEvent, kind: EmailBlockKind) {
+  if (!event.dataTransfer) return
+  event.dataTransfer.setData(BLOCK_DRAG_TYPE, kind)
+  event.dataTransfer.effectAllowed = 'copy'
+  blockDragKind.value = kind
+  commitActiveTextEdit()
+}
+
+function markDropCell(doc: Document, cell: HTMLElement | null) {
+  for (const node of doc.querySelectorAll('[data-email-drop-cell]')) {
+    if (node !== cell) node.removeAttribute('data-email-drop-cell')
+  }
+  cell?.setAttribute('data-email-drop-cell', '')
+}
+
+function clearBlockDrop() {
+  blockDropTarget = null
+  previewDropActive.value = false
+  const doc = frameRef.value?.contentDocument
+  doc?.getElementById('email-builder-drop-line')?.remove()
+  if (doc) markDropCell(doc, null)
+}
+
+function onBlockDragEnd() {
+  blockDragKind.value = null
+  clearBlockDrop()
+}
+
+/** The innermost section cell under the pointer, by its index among all cells. */
+function blockCellAt(doc: Document, x: number, y: number, exclude?: HTMLElement): { el: HTMLElement; cell: number } | null {
+  const view = doc.defaultView
+  if (!view) return null
+  let best: { el: HTMLElement; cell: number; area: number } | null = null
+  doc.querySelectorAll('[data-email-cell]').forEach((el, cell) => {
+    if (!(el instanceof view.HTMLElement) || exclude?.contains(el)) return
+    const rect = el.getBoundingClientRect()
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return
+    const area = rect.width * rect.height
+    if (!best || area < best.area) best = { el, cell, area }
+  })
+  return best
+}
+
+/**
+ * Where a dragged block lands: inside an empty section cell, or before/after the section card
+ * nearest the pointer. Inside a filled cell only that cell's blocks are candidates. The top and
+ * bottom edges of a section mean "before/after this section", since cells fill the rest of it.
+ */
+function blockDropAt(doc: Document, x: number, y: number, exclude?: HTMLElement): (BlockTarget & { el: HTMLElement }) | null {
+  const view = doc.defaultView
+  if (!view) return null
+  const cards = sectionCards.value.flatMap((card) => {
+    const el = doc.querySelector(`[data-email-part="${card.part}"]`)
+    return el instanceof view.HTMLElement && !exclude?.contains(el) ? [{ el, part: card.part }] : []
+  })
+  const sideOf = (el: HTMLElement, maxZone: number): 'left' | 'right' | null => {
+    if (/^(TD|TH|LI|TBODY|THEAD|TFOOT)$/.test(el.tagName)) return null
+    if (el.tagName === 'TR' && !el.hasAttribute('data-email-block')) return null
+    const rect = (addedBlockBox(el) ?? el).getBoundingClientRect()
+    const zone = Math.min(maxZone, rect.width * 0.3)
+    if (x < rect.left + zone) return 'left'
+    if (x > rect.right - zone) return 'right'
+    return null
+  }
+  const cell = blockCellAt(doc, x, y, exclude)
+  const cellEmpty = !!cell && !cell.el.querySelector('[data-email-part]')
+  const owner = cell?.el.parentElement?.closest('[data-email-part]')
+  if (owner instanceof view.HTMLElement && !exclude?.contains(owner)) {
+    const part = Number(owner.getAttribute('data-email-part'))
+    const rect = owner.getBoundingClientRect()
+    const edge = Math.min(14, rect.height / 4)
+    // Over a column's own blocks the pointer means "in this column", even where they reach the row's edge.
+    const blockRects = [...(cell?.el.querySelectorAll('[data-email-part]') ?? [])]
+      .filter((el) => !exclude?.contains(el))
+      .map((el) => el.getBoundingClientRect())
+      .filter((box) => box.height >= 1)
+    const overBlocks = blockRects.length > 0
+      && y >= Math.min(...blockRects.map((box) => box.top))
+      && y <= Math.max(...blockRects.map((box) => box.bottom))
+    if (Number.isFinite(part) && !overBlocks && (y - rect.top < edge || rect.bottom - y < edge)) {
+      return { el: owner, part, place: y - rect.top < edge ? 'before' : 'after' }
+    }
+    // Over an empty dashed cell only the outer rim means "beside", so the cell stays easy to drop into.
+    const side = Number.isFinite(part) ? sideOf(owner, cellEmpty ? 24 : 96) : null
+    if (side) return { el: owner, part, side }
+  }
+  const candidates = cell ? cards.filter((card) => card.el !== cell.el && cell.el.contains(card.el)) : cards
+  if (cell && !candidates.length) return { el: cell.el, cell: cell.cell }
+  let inside: { el: HTMLElement; part: number; area: number } | null = null
+  let nearest: { el: HTMLElement; part: number; dist: number } | null = null
+  for (const { el, part } of candidates) {
+    const rect = el.getBoundingClientRect()
+    if (rect.height < 1) continue
+    if (y >= rect.top && y <= rect.bottom && x >= rect.left - 24 && x <= rect.right + 24) {
+      const area = rect.width * rect.height
+      if (!inside || area < inside.area) inside = { el, part, area }
+      continue
+    }
+    const dist = Math.min(Math.abs(y - rect.top), Math.abs(y - rect.bottom))
+    if (!nearest || dist < nearest.dist) nearest = { el, part, dist }
+  }
+  const side = inside ? sideOf(inside.el, 140) : null
+  if (inside && side) return { el: inside.el, part: inside.part, side }
+  const hit = inside ?? (nearest && (cell || nearest.dist <= 120) ? nearest : null)
+  if (!hit) return null
+  const rect = hit.el.getBoundingClientRect()
+  return { el: hit.el, part: hit.part, place: y > rect.top + rect.height / 2 ? 'after' : 'before' }
+}
+
+function showSideDropLine(doc: Document, el: HTMLElement, side: 'left' | 'right') {
+  showElementDropLine(doc, el, false)
+  const line = doc.getElementById('email-builder-drop-line')
+  if (!line) return
+  const body = doc.body.getBoundingClientRect()
+  const rect = (addedBlockBox(el) ?? el).getBoundingClientRect()
+  const half = Math.max(rect.width / 2, 40)
+  line.style.top = `${rect.top - body.top}px`
+  line.style.left = `${(side === 'left' ? rect.left : rect.right - half) - body.left}px`
+  line.style.width = `${half}px`
+  line.style.height = `${Math.max(rect.height, 32)}px`
+  line.style.boxSizing = 'border-box'
+  line.style.background = 'rgba(37, 99, 235, 0.12)'
+  line.style.border = '2px dashed #2563eb'
+  line.style.display = 'flex'
+  line.style.alignItems = 'center'
+  line.style.justifyContent = 'center'
+  line.style.font = '600 12px Arial, sans-serif'
+  line.style.color = '#1d4ed8'
+  line.textContent = 'Side by side'
+}
+
+const LAYOUT_KINDS = new Set<string>([...EMAIL_BLOCK_OPTIONS.filter((option) => option.group === 'Layout').map((option) => option.kind), 'row'])
+
+/**
+ * Layout sections always span the email. A drop into a column, or beside a block, lands above or
+ * below the section that owns that column instead of nesting a section inside half the email.
+ */
+function fullWidthDrop(doc: Document, y: number, hit: BlockTarget & { el: HTMLElement }): BlockTarget & { el: HTMLElement } {
+  const view = doc.defaultView
+  if (!view) return hit
+  let column: HTMLElement | null = null
+  for (let node: HTMLElement | null = hit.el; node; node = node.parentElement) {
+    const siblings = node.parentElement ? [...node.parentElement.children].filter((child) => child.hasAttribute('data-email-cell')) : []
+    if (node.hasAttribute('data-email-cell') && siblings.length > 1) column = node
+  }
+  const anchor = column?.parentElement?.closest('[data-email-part]') ?? ('side' in hit ? hit.el : null)
+  if (!(anchor instanceof view.HTMLElement)) return hit
+  const part = Number(anchor.getAttribute('data-email-part'))
+  if (!Number.isFinite(part)) return hit
+  const rect = anchor.getBoundingClientRect()
+  return { el: anchor, part, place: y > rect.top + rect.height / 2 ? 'after' : 'before' }
+}
+
+/** Show where a block would land and return that spot. */
+function paintBlockDrop(doc: Document, x: number, y: number, exclude?: HTMLElement, kind?: string | null): BlockTarget | null {
+  const found = blockDropAt(doc, x, y, exclude)
+  const hit = found && kind && LAYOUT_KINDS.has(kind) ? fullWidthDrop(doc, y, found) : found
+  if (hit && 'cell' in hit) {
+    doc.getElementById('email-builder-drop-line')?.remove()
+    markDropCell(doc, hit.el)
+    return { cell: hit.cell }
+  }
+  if (!hit) {
+    const column = doc.querySelector<HTMLElement>('[data-email-canvas-column]')
+    const empty = !!column?.querySelector('[data-email-column]') && !column.querySelector('[data-email-column] *')
+    markDropCell(doc, empty ? column : null)
+    doc.getElementById('email-builder-drop-line')?.remove()
+    return null
+  }
+  markDropCell(doc, null)
+  if ('side' in hit) {
+    showSideDropLine(doc, hit.el, hit.side)
+    return { part: hit.part, side: hit.side }
+  }
+  showElementDropLine(doc, hit.el, hit.place === 'after')
+  return { part: hit.part, place: hit.place }
+}
+
+function trackBlockDrop(doc: Document, x: number, y: number) {
+  blockDropTarget = paintBlockDrop(doc, x, y, undefined, blockDragKind.value)
+}
+
+function dropBlock(event: DragEvent) {
+  const kind = event.dataTransfer?.getData(BLOCK_DRAG_TYPE) as EmailBlockKind | undefined
+  const savedUrl = event.dataTransfer?.getData(IMAGE_DRAG_TYPE) || ''
+  const target = blockDropTarget
+  clearBlockDrop()
+  blockDragKind.value = null
+  if (!kind || !EMAIL_BLOCK_OPTIONS.some((option) => option.kind === kind)) return
+  event.preventDefault()
+  const now = Date.now()
+  if (now - lastBlockDropAt < 400) return
+  lastBlockDropAt = now
+  if (kind === 'image' && parseInsertableImageUrl(savedUrl)) {
+    commitBlockEdit(insertBlockAt('image', target, savedUrl))
+    return
+  }
+  placeBlock(kind, target)
+}
+
+const CARD_DRAG_TYPE = 'application/x-email-part'
+const cardDrag = ref<{ part: number; group: string } | null>(null)
+const cardDrop = ref<BlockDropTarget | null>(null)
+
+function onCardDragStart(event: DragEvent, part: number, group: string) {
+  if (!event.dataTransfer) return
+  commitActiveTextEdit()
+  event.dataTransfer.setData(CARD_DRAG_TYPE, String(part))
+  event.dataTransfer.effectAllowed = 'move'
+  const card = (event.currentTarget as HTMLElement | null)?.closest('li')
+  if (card) event.dataTransfer.setDragImage(card, 16, 16)
+  cardDrag.value = { part, group }
+}
+
+function onCardDragOver(event: DragEvent, part: number, group: string) {
+  const drag = cardDrag.value
+  if (!drag || drag.group !== group || drag.part === part) {
+    cardDrop.value = null
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const place = event.clientY > rect.top + rect.height / 2 ? 'after' : 'before'
+  if (cardDrop.value?.part !== part || cardDrop.value.place !== place) cardDrop.value = { part, place }
+}
+
+function onCardDrop(event: DragEvent) {
+  const drag = cardDrag.value
+  const drop = cardDrop.value
+  cardDrag.value = null
+  cardDrop.value = null
+  if (!drag || !drop) return
+  event.preventDefault()
+  commitBlockEdit(moveEmailArrangeItemTo(props.modelValue, drag.part, drop.part, drop.place))
+}
+
+function onCardDragEnd() {
+  cardDrag.value = null
+  cardDrop.value = null
+}
+
+function moveSelectedBlock(part: number, direction: -1 | 1) {
+  const moved = moveEmailArrangeItemBy(props.modelValue, part, direction)
+  if (moved.html === props.modelValue) return
+  commitBlockEdit(moved)
+}
+
+function canMoveBlock(part: number, direction: -1 | 1) {
+  const items = arrangeItems.value
+  const item = items[part]
+  if (!item) return false
+  const siblings = items.filter((entry) => entry.group === item.group)
+  const index = siblings.findIndex((entry) => entry.part === part)
+  return Boolean(siblings[index + direction])
+}
+
+function duplicateSelectedBlock(part: number) {
+  commitBlockEdit(duplicateEmailBlock(props.modelValue, part))
+}
+
+function deleteSelectedBlock(part: number) {
+  if (!arrangeItems.value[part]) return
+  commitBlockEdit({ html: removeEmailBlock(props.modelValue, part), part: null })
+}
+
+function blockAccent(part: number) {
+  return readEmailBlockAccent(props.modelValue, part)
+}
+
+function pickerColor(color: string): string {
+  return /^#[\da-f]{6}$/i.test(color) ? color : /^#[\da-f]{3}$/i.test(color) ? color.replace(/[\da-f]/gi, '$&$&') : '#000000'
+}
+
+function setBlockAccent(part: number, patch: { color?: string, size?: number }) {
+  const next = updateEmailBlockAccent(props.modelValue, part, patch)
+  if (next !== props.modelValue) emit('update:modelValue', next)
+}
+
+function splitRunAtCursor(index: number) {
+  const field = document.querySelector<HTMLTextAreaElement>(`[data-text-run="${index}"] textarea`)
+  if (!field || !props.canEditText) return
+  const lead = field.value.length - field.value.trimStart().length
+  const at = field.selectionStart - lead
+  commitTextField(index)
+  const split = splitEmailTextRun(props.modelValue, index, at)
+  textSplitHint.value = split ? null : index
+  if (!split) return
+  emit('update:modelValue', split.html)
+  selectedTextIndex.value = split.index
+}
+
+function addedKind(part: number): string | null {
+  const item = arrangeItems.value[part]
+  if (!item) return null
+  return /\bdata-email-block\s*=\s*"([\w-]+)"/.exec(props.modelValue.slice(item.start, item.openEnd))?.[1] ?? null
+}
+
+function blockLinks(part: number): EmailBlockLinkItem[] {
+  const kind = addedKind(part)
+  if (kind === 'video' || kind === 'html') return []
+  return listEmailBlockLinks(props.modelValue, part)
+}
+
+function blockLinkValue(part: number, link: EmailBlockLinkItem) {
+  const draft = blockLinkDraft.value
+  return draft?.part === part && draft.index === link.index ? draft.value : link.href
+}
+
+function onBlockLinkInput(part: number, index: number, event: Event) {
+  blockLinkDraft.value = { part, index, value: (event.target as HTMLInputElement).value }
+  blockLinkError.value = ''
+}
+
+function commitBlockLink(part: number, index: number) {
+  const draft = blockLinkDraft.value
+  if (!draft || draft.part !== part || draft.index !== index) return
+  const current = listEmailBlockLinks(props.modelValue, part)[index]?.href ?? ''
+  if (draft.value.trim() !== current) {
+    const next = updateEmailBlockLinkAt(props.modelValue, part, index, draft.value)
+    if (next === props.modelValue) {
+      blockLinkError.value = 'Use a full link like https://…, mailto:, or tel:.'
+      return
+    }
+    emit('update:modelValue', next)
+  }
+  blockLinkDraft.value = null
+  blockLinkError.value = ''
+}
+
+function blockHtml(part: number): string | null {
+  if (blockHtmlDraft.value?.part === part) return blockHtmlDraft.value.value
+  return addedKind(part) === 'html' ? readEmailBlockHtml(props.modelValue, part) : null
+}
+
+function onBlockHtmlInput(part: number, event: Event) {
+  blockHtmlDraft.value = { part, value: (event.target as HTMLTextAreaElement).value }
+  blockHtmlError.value = ''
+}
+
+function commitBlockHtml(part: number) {
+  const draft = blockHtmlDraft.value
+  if (!draft || draft.part !== part) return
+  const next = updateEmailBlockHtml(props.modelValue, part, draft.value)
+  if (next == null) {
+    blockHtmlError.value = 'Close every tag you open, and leave out scripts and forms.'
+    return
+  }
+  if (next !== props.modelValue) emit('update:modelValue', next)
+  blockHtmlDraft.value = null
+  blockHtmlError.value = ''
+}
+
+function blockVideo(part: number): string | null {
+  if (blockVideoDraft.value?.part === part) return blockVideoDraft.value.value
+  return addedKind(part) === 'video' ? readEmailBlockVideo(props.modelValue, part) : null
+}
+
+function onBlockVideoInput(part: number, event: Event) {
+  blockVideoDraft.value = { part, value: (event.target as HTMLInputElement).value }
+  blockVideoError.value = ''
+}
+
+function commitBlockVideo(part: number) {
+  const draft = blockVideoDraft.value
+  if (!draft || draft.part !== part) return
+  if (draft.value.trim() !== (readEmailBlockVideo(props.modelValue, part) ?? '')) {
+    const next = updateEmailBlockVideo(props.modelValue, part, draft.value)
+    if (next == null) {
+      blockVideoError.value = 'Paste a full video link like https://youtube.com/watch?v=…'
+      return
+    }
+    emit('update:modelValue', next)
+  }
+  blockVideoDraft.value = null
+  blockVideoError.value = ''
 }
 
 function scrollTemplateToImage(index: number) {
@@ -2485,14 +3584,14 @@ function selectImage(index: number, source: 'sidebar' | 'template' = 'sidebar') 
 }
 
 function startReplace(index: number) {
-  if (!props.canUploadImage || uploading.value) return
+  if (!props.canReplaceImage || !props.canUploadImage || uploading.value) return
   selectImage(index)
   replacePickerOpen.value = !replacePickerOpen.value
   if (replacePickerOpen.value && !hostedImages.value.length) void loadHostedImages()
 }
 
 function uploadReplacement() {
-  if (!props.canUploadImage || uploading.value || selectedIndex.value == null) return
+  if (!props.canReplaceImage || !props.canUploadImage || uploading.value || selectedIndex.value == null) return
   fileMode.value = 'replace'
   fileInputRef.value?.click()
 }
@@ -2523,6 +3622,10 @@ async function loadHostedImages() {
   }
 }
 
+watch(() => props.canReplaceImage, (allowed) => {
+  if (!allowed) replacePickerOpen.value = false
+})
+
 watch(() => props.canUploadImage, (allowed) => {
   if (allowed) void loadHostedImages()
 }, { immediate: true })
@@ -2535,6 +3638,17 @@ function startInsert() {
 }
 
 function insertImage(url: string) {
+  if (imageBlockPending.value) {
+    const target = pendingBlockTarget
+    imageBlockPending.value = false
+    pendingBlockTarget = null
+    commitBlockEdit(insertBlockAt('image', target, url))
+    return
+  }
+  if (props.canEditText) {
+    commitBlockEdit(insertBlockAt('image', selectedPart.value == null ? null : { part: selectedPart.value, place: 'after' }, url))
+    return
+  }
   const next = insertEmailTemplateHtmlImage(props.modelValue, url)
   const index = Math.max(0, listEmailTemplateHtmlImages(next).length - 1)
   emit('update:modelValue', next)
@@ -2585,9 +3699,19 @@ function onDeleteKey(event: KeyboardEvent) {
 
 function onHostedDragStart(event: DragEvent, url: string) {
   hostedDragged = true
-  event.dataTransfer?.setData('application/x-email-image', url)
+  event.dataTransfer?.setData(IMAGE_DRAG_TYPE, url)
   event.dataTransfer?.setData('text/plain', url)
+  if (props.canEditText) {
+    event.dataTransfer?.setData(BLOCK_DRAG_TYPE, 'image')
+    blockDragKind.value = 'image'
+    commitActiveTextEdit()
+  }
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
+}
+
+function onHostedDragEnd() {
+  hostedDragged = true
+  onBlockDragEnd()
 }
 
 function onHostedClick(url: string) {
@@ -2599,10 +3723,20 @@ function onHostedClick(url: string) {
 }
 
 function hostedDragType(event: DragEvent): boolean {
-  return [...(event.dataTransfer?.types ?? [])].includes('application/x-email-image')
+  return [...(event.dataTransfer?.types ?? [])].includes(IMAGE_DRAG_TYPE)
 }
 
 function onPreviewDragOver(event: DragEvent) {
+  if (blockDragType(event)) {
+    event.preventDefault()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    if (event.target !== frameRef.value) {
+      blockDropTarget = null
+      frameRef.value?.contentDocument?.getElementById('email-builder-drop-line')?.remove()
+    }
+    previewDropActive.value = true
+    return
+  }
   if (!hostedDragType(event)) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
@@ -2616,7 +3750,7 @@ function onPreviewDragLeave() {
 let lastImageDropAt = 0
 
 function dropHostedImage(event: DragEvent, x: number, y: number) {
-  const url = event.dataTransfer?.getData('application/x-email-image') || ''
+  const url = event.dataTransfer?.getData(IMAGE_DRAG_TYPE) || ''
   if (!parseInsertableImageUrl(url)) return
   const now = Date.now()
   if (now - lastImageDropAt < 400) return
@@ -2628,13 +3762,49 @@ function dropHostedImage(event: DragEvent, x: number, y: number) {
 }
 
 function onFrameDragOver(event: DragEvent) {
+  const doc = frameRef.value?.contentDocument
+  const inFrame = !!doc && event.view === doc.defaultView
+  if (blockDragType(event)) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    previewDropActive.value = true
+    if (doc && inFrame) {
+      const speed = edgeScrollSpeed(doc, event.clientY)
+      if (speed) doc.defaultView?.scrollBy(0, speed)
+      trackBlockDrop(doc, event.clientX, event.clientY)
+    }
+    return
+  }
   if (!hostedDragType(event)) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
   previewDropActive.value = true
+  if (doc && inFrame) {
+    const speed = edgeScrollSpeed(doc, event.clientY)
+    if (speed) doc.defaultView?.scrollBy(0, speed)
+  }
+}
+
+/** The mouse wheel still scrolls the email while a block is being dragged. */
+function onFrameWheel(event: WheelEvent) {
+  const gesture = sectionGesture
+  const doc = frameRef.value?.contentDocument
+  const view = doc?.defaultView
+  if (!gesture || !doc || !view) return
+  event.preventDefault()
+  view.scrollBy(0, event.deltaY)
+  gesture.scrollTop = frameScrollTop(doc)
+  const point = edgeScrollPoint ?? { x: gesture.startX, y: gesture.startY }
+  paintSectionDrag(point.x, point.y)
 }
 
 function onFrameDrop(event: DragEvent) {
+  if (blockDragType(event)) {
+    event.stopPropagation()
+    dropBlock(event)
+    return
+  }
   previewDropActive.value = false
   const doc = frameRef.value?.contentDocument
   const view = doc?.defaultView
@@ -2644,6 +3814,10 @@ function onFrameDrop(event: DragEvent) {
 }
 
 function onPreviewDrop(event: DragEvent) {
+  if (blockDragType(event)) {
+    dropBlock(event)
+    return
+  }
   previewDropActive.value = false
   const frame = frameRef.value
   if (!frame) return
@@ -2672,6 +3846,7 @@ onBeforeUnmount(() => {
 })
 
 function applySrc(index: number, url: string) {
+  if (!props.canReplaceImage) return
   const next = replaceEmailTemplateHtmlImageSrc(props.modelValue, index, url)
   if (next === props.modelValue) {
     uploadError.value = 'Could not find that image in the template anymore.'
@@ -2764,6 +3939,7 @@ async function loadTemplate(id: string) {
     originalHtml.value = html
     emit('update:modelValue', html)
     emit('loaded-template', {
+      id,
       name: response.template.name || '',
       subject: response.template.subject || ''
     })
@@ -2782,7 +3958,7 @@ async function loadTemplate(id: string) {
   <div class="flex h-full min-h-0 flex-1 bg-white">
     <aside class="flex w-96 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div class="border-b border-slate-200 px-3 py-3">
-        <p class="text-sm font-semibold text-slate-900">{{ templatesOpen ? 'Templates' : sidePanel === 'layout' ? 'Sections' : sidePanel === 'uploads' ? 'Uploads' : 'Images' }}</p>
+        <p class="text-sm font-semibold text-slate-900">{{ templatesOpen ? 'Templates' : sidePanel === 'add' ? 'Add blocks' : sidePanel === 'layout' ? 'Sections' : sidePanel === 'uploads' ? 'Uploads' : 'Images' }}</p>
         <div class="mt-2 grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -2834,8 +4010,17 @@ async function loadTemplate(id: string) {
       <div
         v-if="!templatesOpen"
         class="grid gap-1 border-b border-slate-200 p-2"
-        :class="canUploadImage ? 'grid-cols-3' : 'grid-cols-1'"
+        :style="{ gridTemplateColumns: `repeat(${sideTabCount}, minmax(0, 1fr))` }"
       >
+        <button
+          v-if="canEditText"
+          type="button"
+          class="rounded-md px-2 py-1.5 text-xs font-semibold"
+          :class="sidePanel === 'add' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'"
+          @click="sidePanel = 'add'"
+        >
+          Add
+        </button>
         <button
           type="button"
           class="rounded-md px-2 py-1.5 text-xs font-semibold"
@@ -2869,12 +4054,151 @@ async function loadTemplate(id: string) {
       <div v-if="!templatesOpen" class="min-h-0 flex-1 overflow-auto p-3">
         <p v-if="uploadError" class="mb-2 text-xs text-red-600">{{ uploadError }}</p>
 
-        <div v-if="sidePanel === 'layout'">
+        <div v-if="sidePanel === 'add' && canEditText">
+          <div class="sticky -top-3 z-10 -mx-3 -mt-3 mb-3 grid grid-cols-3 border-b border-slate-200 bg-white" role="tablist" aria-label="Add panel">
+            <button
+              v-for="tab in (['content', 'rows', 'settings'] as const)"
+              :key="tab"
+              type="button"
+              role="tab"
+              :aria-selected="addTab === tab"
+              class="border-b-2 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+              :class="addTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'"
+              @click="addTab = tab"
+            >
+              {{ tab }}
+            </button>
+          </div>
+
+          <template v-if="addTab === 'content'">
+            <p class="mb-3 text-xs leading-relaxed text-slate-500">
+              Drag content into a row's column, between blocks, or onto the left or right side of a block to put them side by side.
+              {{ selectedPart != null && arrangeItems[selectedPart]
+                ? `Or click to add it after “${arrangeItems[selectedPart]?.label}”.`
+                : 'Or click to add it at the end.' }}
+            </p>
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="option in EMAIL_BLOCK_OPTIONS.filter((entry) => entry.group === 'Content')"
+                v-show="option.kind !== 'image' || canUploadImage"
+                :key="option.kind"
+                type="button"
+                draggable="true"
+                class="flex cursor-grab flex-col items-center justify-center gap-1.5 rounded-md border bg-slate-50 px-1 py-3 text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 active:cursor-grabbing"
+                :class="blockDragKind === option.kind ? 'border-blue-500 opacity-60' : 'border-slate-200'"
+                :aria-label="`Add ${option.label}`"
+                @click="addBlock(option.kind)"
+                @dragstart="onBlockDragStart($event, option.kind)"
+                @dragend="onBlockDragEnd"
+              >
+                <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path :d="BLOCK_ICONS[option.kind]" />
+                </svg>
+                <span class="text-[10px] font-bold uppercase tracking-wide">{{ option.label }}</span>
+              </button>
+            </div>
+          </template>
+
+          <template v-else-if="addTab === 'rows'">
+            <p class="mb-3 text-xs leading-relaxed text-slate-500">
+              Rows span the full email width. Drag one in, then fill its columns with content.
+              Drag the dashed line between columns to resize them.
+            </p>
+            <div class="space-y-2">
+              <button
+                v-for="option in EMAIL_BLOCK_OPTIONS.filter((entry) => entry.group === 'Layout')"
+                :key="option.kind"
+                type="button"
+                draggable="true"
+                class="block w-full cursor-grab rounded-md border bg-white p-2 text-left hover:border-blue-400 hover:bg-blue-50 active:cursor-grabbing"
+                :class="blockDragKind === option.kind ? 'border-blue-500 opacity-60' : 'border-slate-200'"
+                :aria-label="`Add ${option.label} row`"
+                @click="addBlock(option.kind)"
+                @dragstart="onBlockDragStart($event, option.kind)"
+                @dragend="onBlockDragEnd"
+              >
+                <span class="flex h-9 gap-1" aria-hidden="true">
+                  <span
+                    v-for="(share, index) in BLOCK_LAYOUT_PREVIEW[option.kind]"
+                    :key="index"
+                    class="rounded-sm border border-dashed border-slate-400 bg-slate-100"
+                    :style="{ flex: share }"
+                  />
+                </span>
+                <span class="mt-1.5 block text-[10px] font-bold uppercase tracking-wide text-slate-600">{{ option.label }}</span>
+              </button>
+            </div>
+          </template>
+
+          <div v-else class="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Whole email</p>
+            <div v-for="field in PAGE_COLOR_FIELDS" :key="field.key" class="flex items-center justify-between gap-2">
+              <span class="text-xs font-medium text-slate-700">{{ field.label }}</span>
+              <span class="flex items-center gap-2">
+                <button
+                  v-if="pageColors[field.key]"
+                  type="button"
+                  class="text-[11px] text-slate-500 hover:text-red-600"
+                  :aria-label="`Clear ${field.label}`"
+                  @click="setPageColor(field.key, '')"
+                >
+                  Clear
+                </button>
+                <span v-else class="text-[11px] text-slate-400">None</span>
+                <span class="relative inline-flex h-8 w-8 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
+                  <input
+                    type="color"
+                    class="absolute inset-0 h-full w-full cursor-pointer border-0 p-0"
+                    :aria-label="field.label"
+                    :value="pageColors[field.key] || field.fallback"
+                    @input="setPageColor(field.key, ($event.target as HTMLInputElement).value)"
+                  >
+                </span>
+              </span>
+            </div>
+          </div>
+          <template v-if="canUploadImage && addTab === 'content'">
+            <div class="mb-1.5 mt-4 flex items-center justify-between gap-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Saved images</p>
+              <button
+                type="button"
+                class="text-[11px] font-medium text-blue-700 hover:underline disabled:opacity-50"
+                :disabled="uploading"
+                @click="startInsert"
+              >
+                {{ uploading && fileMode === 'insert' ? 'Uploading…' : 'Upload' }}
+              </button>
+            </div>
+            <p v-if="hostedError" class="text-xs text-red-600">{{ hostedError }}</p>
+            <p v-else-if="hostedPending && !hostedImages.length" class="text-xs text-slate-500">Loading saved images…</p>
+            <p v-else-if="!hostedImages.length" class="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">
+              No saved images yet.
+            </p>
+            <ul v-else class="grid grid-cols-3 gap-1.5">
+              <li v-for="item in hostedImages" :key="`add-${item.id}`">
+                <button
+                  type="button"
+                  draggable="true"
+                  class="block w-full cursor-grab overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:border-blue-500 active:cursor-grabbing"
+                  :title="item.fileName"
+                  :aria-label="`Add ${item.fileName}`"
+                  @dragstart="onHostedDragStart($event, item.url)"
+                  @dragend="onHostedDragEnd"
+                  @click="onHostedClick(item.url)"
+                >
+                  <img :src="item.url" alt="" draggable="false" class="pointer-events-none h-16 w-full object-contain">
+                </button>
+              </li>
+            </ul>
+          </template>
+        </div>
+
+        <div v-else-if="sidePanel === 'layout'">
           <p class="mb-3 text-sm leading-relaxed text-slate-600">
-            {{ canEditText ? 'Click the words, then change the text, font, size, bold, italic, or color.' : 'Click a block to select it.' }}
+            {{ canEditText ? 'Drag the dots to reorder, or drag blocks inside the email. Click the words to edit them.' : 'Click a block to select it.' }}
           </p>
           <p v-if="!sectionCards.length" class="rounded-xl border border-dashed border-slate-300 px-3 py-8 text-center text-sm text-slate-500">
-            {{ canEditText ? 'Click the words in the email to edit them.' : 'No blocks found in this email.' }}
+            {{ canEditText ? 'Nothing here yet. Drag a row or block in from the Add tab.' : 'No blocks found in this email.' }}
           </p>
           <ul v-else ref="sectionListRef" class="space-y-2">
             <li
@@ -2882,12 +4206,29 @@ async function loadTemplate(id: string) {
               :key="`${item.group}-${item.part}`"
               :data-section-part="item.part"
               class="rounded-xl border"
-              :class="selectedPart === item.part ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'border-slate-200 bg-white'"
+              :class="[
+                selectedPart === item.part ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'border-slate-200 bg-white',
+                cardDrag?.part === item.part ? 'opacity-50' : '',
+                cardDrop?.part === item.part ? (cardDrop.place === 'before' ? 'shadow-[0_-3px_0_0_#2563eb]' : 'shadow-[0_3px_0_0_#2563eb]') : ''
+              ]"
+              @dragover="onCardDragOver($event, item.part, item.group)"
+              @drop="onCardDrop"
             >
-              <div class="px-2.5 py-2">
+              <div class="flex items-start gap-1.5 px-2.5 py-2">
+                <span
+                  v-if="canEditText"
+                  draggable="true"
+                  class="mt-1 flex h-7 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+                  title="Drag to move"
+                  aria-hidden="true"
+                  @dragstart="onCardDragStart($event, item.part, item.group)"
+                  @dragend="onCardDragEnd"
+                >
+                  <svg viewBox="0 0 20 20" class="h-4 w-4" fill="currentColor"><path d="M7 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm0 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-1.5 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-1.5 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 16a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+                </span>
                 <button
                   type="button"
-                  class="w-full text-left"
+                  class="min-w-0 flex-1 text-left"
                   @click="focusArrangePart(item.part)"
                 >
                   <span class="text-[11px] font-medium text-slate-500">{{ sectionKindLabel(item.kind) }}</span>
@@ -2895,27 +4236,219 @@ async function loadTemplate(id: string) {
                 </button>
               </div>
               <div v-if="selectedPart === item.part" class="space-y-3 border-t border-blue-100 px-2.5 py-2.5">
+                <div v-if="canEditText" class="grid grid-cols-4 gap-1" role="group" aria-label="Block actions">
+                  <button
+                    type="button"
+                    class="rounded-md border border-slate-200 bg-white px-1 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-white"
+                    :disabled="!canMoveBlock(item.part, -1)"
+                    @click="moveSelectedBlock(item.part, -1)"
+                  >
+                    Up
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md border border-slate-200 bg-white px-1 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-white"
+                    :disabled="!canMoveBlock(item.part, 1)"
+                    @click="moveSelectedBlock(item.part, 1)"
+                  >
+                    Down
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md border border-slate-200 bg-white px-1 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    @click="duplicateSelectedBlock(item.part)"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md border border-red-200 bg-white px-1 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    @click="deleteSelectedBlock(item.part)"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <template v-if="canEditText">
+                  <label
+                    v-for="link in blockLinks(item.part)"
+                    :key="`link-${item.part}-${link.index}`"
+                    class="block"
+                  >
+                    <span class="text-[11px] font-medium text-slate-500">{{ blockLinks(item.part).length > 1 ? `${link.label} link` : 'Link' }}</span>
+                    <input
+                      type="url"
+                      class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      :aria-label="blockLinks(item.part).length > 1 ? `${link.label} link` : 'Block link'"
+                      placeholder="https://"
+                      :value="blockLinkValue(item.part, link)"
+                      @input="onBlockLinkInput(item.part, link.index, $event)"
+                      @blur="commitBlockLink(item.part, link.index)"
+                      @keydown.enter.prevent="commitBlockLink(item.part, link.index)"
+                    >
+                    <span
+                      v-if="blockLinkError && blockLinkDraft?.part === item.part && blockLinkDraft.index === link.index"
+                      class="mt-1 block text-[11px] text-red-600"
+                    >{{ blockLinkError }}</span>
+                  </label>
+                  <label v-if="blockVideo(item.part) != null" class="block">
+                    <span class="text-[11px] font-medium text-slate-500">Video link</span>
+                    <input
+                      type="url"
+                      class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      aria-label="Video link"
+                      placeholder="https://youtube.com/watch?v=…"
+                      :value="blockVideo(item.part) ?? ''"
+                      @input="onBlockVideoInput(item.part, $event)"
+                      @blur="commitBlockVideo(item.part)"
+                      @keydown.enter.prevent="commitBlockVideo(item.part)"
+                    >
+                    <span class="mt-1 block text-[11px] text-slate-500">Emails can't play video, so readers click through. YouTube links show the video's thumbnail.</span>
+                    <span v-if="blockVideoError && blockVideoDraft?.part === item.part" class="mt-1 block text-[11px] text-red-600">{{ blockVideoError }}</span>
+                  </label>
+                  <div v-if="blockHtml(item.part) != null" class="block">
+                    <span class="text-[11px] font-medium text-slate-500">HTML</span>
+                    <textarea
+                      rows="6"
+                      spellcheck="false"
+                      class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      aria-label="Custom HTML"
+                      :value="blockHtml(item.part) ?? ''"
+                      @input="onBlockHtmlInput(item.part, $event)"
+                    />
+                    <div class="mt-1 flex items-center justify-between gap-2">
+                      <span v-if="blockHtmlError && blockHtmlDraft?.part === item.part" class="text-[11px] text-red-600">{{ blockHtmlError }}</span>
+                      <span v-else class="text-[11px] text-slate-500">Scripts and forms are removed.</span>
+                      <button
+                        type="button"
+                        class="rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-40"
+                        :disabled="blockHtmlDraft?.part !== item.part"
+                        @click="commitBlockHtml(item.part)"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <div v-if="canEditText && blockAccent(item.part)" class="flex items-center justify-between gap-2 rounded-lg bg-white/80 p-2">
+                  <label class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-slate-700">{{ blockAccent(item.part)!.kind === 'button' ? 'Button color' : 'Line color' }}</span>
+                    <span class="relative inline-flex h-8 w-8 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
+                      <input
+                        type="color"
+                        class="absolute inset-0 h-full w-full cursor-pointer border-0 p-0"
+                        :aria-label="blockAccent(item.part)!.kind === 'button' ? 'Button color' : 'Line color'"
+                        :value="pickerColor(blockAccent(item.part)!.color)"
+                        @change="setBlockAccent(item.part, { color: ($event.target as HTMLInputElement).value })"
+                      >
+                    </span>
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-slate-700">{{ blockAccent(item.part)!.kind === 'button' ? 'Corners' : 'Thickness' }}</span>
+                    <span class="flex w-16 items-center rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                      <input
+                        type="number"
+                        :min="blockAccent(item.part)!.kind === 'button' ? 0 : 1"
+                        :max="blockAccent(item.part)!.kind === 'button' ? 60 : 20"
+                        step="1"
+                        class="w-full bg-transparent text-xs text-slate-800 outline-none"
+                        :aria-label="blockAccent(item.part)!.kind === 'button' ? 'Button corners' : 'Line thickness'"
+                        :value="blockAccent(item.part)!.size"
+                        @change="setBlockAccent(item.part, { size: Number(($event.target as HTMLInputElement).value) })"
+                      >
+                      <span class="text-[10px] text-slate-400">px</span>
+                    </span>
+                  </label>
+                </div>
                 <div v-if="item.kind !== 'image'" class="space-y-3 rounded-lg bg-white/80 p-2">
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Decorations</p>
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-700">Block color</span>
+                    <span class="text-xs font-medium text-slate-700">Background</span>
                     <span class="flex items-center gap-2">
-                      <span class="text-[11px] text-slate-400">{{ sectionBox(item.part).background ? '' : 'None' }}</span>
+                      <button
+                        v-if="sectionBox(item.part).background"
+                        type="button"
+                        class="text-[11px] text-slate-500 hover:text-red-600"
+                        aria-label="Clear block background"
+                        @click="applySectionBox(item.part, { background: '' })"
+                      >
+                        Clear
+                      </button>
+                      <span v-else class="text-[11px] text-slate-400">None</span>
                       <span class="relative inline-flex h-8 w-8 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
                         <input
                           type="color"
                           class="absolute inset-0 h-full w-full cursor-pointer border-0 p-0"
-                          aria-label="Block color"
+                          aria-label="Block background"
                           :value="sectionBox(item.part).background || '#ffffff'"
                           @input="onSectionBackground(item.part, $event)"
                         >
                       </span>
                     </span>
                   </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="block">
+                      <span class="text-[11px] font-medium text-slate-500">Corner radius</span>
+                      <span class="mt-1 flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          :max="EMAIL_BORDER_RADIUS_MAX"
+                          step="1"
+                          class="w-full bg-transparent text-xs text-slate-800 outline-none"
+                          aria-label="Corner radius"
+                          :value="sectionBox(item.part).borderRadius"
+                          @change="onSectionBorderRadius(item.part, $event)"
+                        >
+                        <span class="text-[10px] text-slate-400">px</span>
+                      </span>
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium text-slate-500">Border width</span>
+                      <span class="mt-1 flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          :max="EMAIL_BORDER_WIDTH_MAX"
+                          step="1"
+                          class="w-full bg-transparent text-xs text-slate-800 outline-none"
+                          aria-label="Border width"
+                          :value="sectionBox(item.part).borderWidth"
+                          @change="onSectionBorderWidth(item.part, $event)"
+                        >
+                        <span class="text-[10px] text-slate-400">px</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="flex items-end justify-between gap-2">
+                    <label class="block min-w-0 flex-1">
+                      <span class="text-[11px] font-medium text-slate-500">Border style</span>
+                      <select
+                        class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs capitalize text-slate-800"
+                        aria-label="Border style"
+                        :value="sectionBox(item.part).borderStyle"
+                        @change="onSectionBorderStyle(item.part, $event)"
+                      >
+                        <option v-for="style in EMAIL_BORDER_STYLES" :key="style" :value="style">{{ style }}</option>
+                      </select>
+                    </label>
+                    <label class="flex items-center gap-2">
+                      <span class="text-[11px] font-medium text-slate-500">Border color</span>
+                      <span class="relative inline-flex h-8 w-8 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
+                        <input
+                          type="color"
+                          class="absolute inset-0 h-full w-full cursor-pointer border-0 p-0"
+                          aria-label="Border color"
+                          :value="sectionBox(item.part).borderColor || '#000000'"
+                          @input="onSectionBorderColor(item.part, $event)"
+                        >
+                      </span>
+                    </label>
+                  </div>
                 </div>
                 <template v-if="item.kind === 'image'">
                   <p class="text-sm text-slate-600">This is a photo.</p>
                   <button
-                    v-if="canUploadImage"
+                    v-if="canUploadImage && canReplaceImage"
                     type="button"
                     class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
                     @click="sidePanel = 'email'"
@@ -2941,6 +4474,18 @@ async function loadTemplate(id: string) {
                           @blur="commitTextField(run.index)"
                         />
                       </label>
+                      <button
+                        type="button"
+                        class="text-left text-[11px] font-medium text-blue-700 hover:underline"
+                        @mousedown.prevent
+                        @click="splitRunAtCursor(run.index)"
+                      >
+                        Split here to style part of the words differently
+                      </button>
+                      <p v-if="textSplitHint === run.index" class="text-[11px] text-slate-500">
+                        Click in the words where the new style should start, then split.
+                      </p>
+                      <p class="pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Typography</p>
                       <div class="grid grid-cols-2 gap-2">
                         <label class="block min-w-0">
                           <span class="text-[11px] font-medium text-slate-500">Font</span>
@@ -3009,6 +4554,77 @@ async function loadTemplate(id: string) {
                           </button>
                         </span>
                       </div>
+                      <div class="grid grid-cols-2 gap-2">
+                        <label class="block">
+                          <span class="text-[11px] font-medium text-slate-500">Line height</span>
+                          <span class="mt-1 flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                            <input
+                              type="number"
+                              :min="EMAIL_TEXT_LINE_HEIGHT_MIN"
+                              :max="EMAIL_TEXT_LINE_HEIGHT_MAX"
+                              step="1"
+                              class="w-full bg-transparent text-xs text-slate-800 outline-none"
+                              aria-label="Line height"
+                              placeholder="Auto"
+                              :value="textRunStyle(run.index).lineHeight ?? ''"
+                              @change="onTextLineHeight(run.index, $event)"
+                              @keydown.enter.prevent="finishTextSize"
+                            >
+                            <span class="text-[10px] text-slate-400">px</span>
+                          </span>
+                        </label>
+                        <label class="block">
+                          <span class="text-[11px] font-medium text-slate-500">Letter spacing</span>
+                          <span class="mt-1 flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                            <input
+                              type="number"
+                              :min="EMAIL_TEXT_LETTER_SPACING_MIN"
+                              :max="EMAIL_TEXT_LETTER_SPACING_MAX"
+                              step="1"
+                              class="w-full bg-transparent text-xs text-slate-800 outline-none"
+                              aria-label="Letter spacing"
+                              placeholder="Normal"
+                              :value="textRunStyle(run.index).letterSpacing ?? ''"
+                              @change="onTextLetterSpacing(run.index, $event)"
+                              @keydown.enter.prevent="finishTextSize"
+                            >
+                            <span class="text-[10px] text-slate-400">px</span>
+                          </span>
+                        </label>
+                      </div>
+                      <div>
+                        <span class="text-[11px] font-medium text-slate-500">Align</span>
+                        <div class="mt-1 grid grid-cols-4 overflow-hidden rounded-lg border border-slate-200" role="group" aria-label="Text align">
+                          <button
+                            v-for="option in TEXT_ALIGN_OPTIONS"
+                            :key="option.value"
+                            type="button"
+                            class="px-1 py-1.5 text-xs"
+                            :class="textRunStyle(run.index).align === option.value ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'"
+                            :aria-pressed="textRunStyle(run.index).align === option.value"
+                            @click="setTextAlign(run.index, option.value)"
+                          >
+                            {{ option.label }}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <span class="text-[11px] font-medium text-slate-500">Decoration</span>
+                        <div class="mt-1 grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200" role="group" aria-label="Text decoration">
+                          <button
+                            v-for="option in TEXT_DECORATION_OPTIONS"
+                            :key="option.value"
+                            type="button"
+                            class="px-1 py-1.5 text-xs font-semibold"
+                            :class="[option.class, textRunStyle(run.index).decoration === option.value ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50']"
+                            :aria-label="option.value === 'none' ? 'No decoration' : option.value === 'underline' ? 'Underline' : 'Strikethrough'"
+                            :aria-pressed="textRunStyle(run.index).decoration === option.value"
+                            @click="setTextDecoration(run.index, option.value)"
+                          >
+                            {{ option.label }}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <button
                       v-else
@@ -3039,6 +4655,12 @@ async function loadTemplate(id: string) {
         </div>
 
         <div v-else-if="sidePanel === 'uploads' && canUploadImage">
+          <div v-if="imageBlockPending" class="mb-3 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+            <p class="text-xs text-blue-800">Pick or upload a photo for the new Image block.</p>
+            <button type="button" class="shrink-0 text-xs font-medium text-blue-700 hover:underline" @click="cancelImageBlock">
+              Cancel
+            </button>
+          </div>
           <div class="mb-2 flex items-center justify-between gap-2">
             <p class="text-sm text-slate-600">Click a photo to add it, or drag it onto the email.</p>
             <button
@@ -3064,7 +4686,7 @@ async function loadTemplate(id: string) {
                 :title="item.fileName"
                 :aria-label="`Insert ${item.fileName}`"
                 @dragstart="onHostedDragStart($event, item.url)"
-                @dragend="hostedDragged = true"
+                @dragend="onHostedDragEnd"
                 @click="onHostedClick(item.url)"
               >
                 <img :src="item.url" alt="" draggable="false" class="pointer-events-none h-24 w-full object-contain">
@@ -3111,7 +4733,7 @@ async function loadTemplate(id: string) {
       <div v-if="!templatesOpen && sidePanel !== 'layout' && (selectedIndex != null || canUploadImage)" class="border-t border-slate-200 bg-white p-3">
         <div v-if="selectedIndex != null" class="flex gap-2">
           <button
-            v-if="canUploadImage"
+            v-if="canUploadImage && canReplaceImage"
             type="button"
             class="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             :disabled="uploading"
@@ -3127,9 +4749,9 @@ async function loadTemplate(id: string) {
             Remove
           </button>
         </div>
-        <p v-else class="text-sm text-slate-600">Click a photo to change or remove it.</p>
+        <p v-else class="text-sm text-slate-600">{{ canReplaceImage ? 'Click a photo to change or remove it.' : 'Click a photo to remove it.' }}</p>
 
-        <div v-if="replacePickerOpen && selectedIndex != null && canUploadImage" class="mt-3">
+        <div v-if="replacePickerOpen && selectedIndex != null && canUploadImage && canReplaceImage" class="mt-3">
           <p class="text-xs font-medium text-slate-700">Replace with</p>
           <p v-if="hostedPending && !hostedImages.length" class="mt-2 text-xs text-slate-500">Loading uploaded images…</p>
           <p v-else-if="!hostedImages.length" class="mt-2 text-xs text-slate-500">No uploaded images yet.</p>
@@ -3181,7 +4803,7 @@ async function loadTemplate(id: string) {
                 Insert
               </button>
               <button
-                v-if="selectedIndex != null"
+                v-if="selectedIndex != null && canReplaceImage"
                 type="button"
                 class="flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
                 @click="applyUrl"
@@ -3202,22 +4824,40 @@ async function loadTemplate(id: string) {
     </aside>
     <div
       ref="previewCanvasRef"
-      class="relative min-h-0 min-w-0 flex-1 self-stretch overflow-hidden"
-      :class="previewDropActive ? 'bg-blue-50' : ''"
+      class="relative min-h-0 min-w-0 flex-1 self-stretch overflow-hidden transition-colors"
+      :class="previewDropActive ? 'bg-blue-100/70' : 'bg-slate-200/70'"
       @dragover="onPreviewDragOver"
       @dragleave="onPreviewDragLeave"
       @drop="onPreviewDrop"
     >
       <p
-        v-if="previewDropActive"
-        class="pointer-events-none absolute inset-x-0 top-4 z-10 text-center text-sm font-medium text-blue-700"
+        class="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-9 items-center justify-center gap-2 text-xs font-medium"
+        :class="previewDropActive ? 'text-blue-700' : 'text-slate-500'"
       >
-        Drop to place the image
+        <template v-if="previewDropActive && blockDragKind">
+          Drop where the blue line shows · drop outside the email to add at the end
+        </template>
+        <template v-else-if="previewDropActive">
+          Drop to place the image
+        </template>
+        <template v-else>
+          <span>Email · {{ emailContentWidth }}px wide</span>
+          <span class="text-slate-300" aria-hidden="true">|</span>
+          <span class="inline-flex items-center gap-1">
+            <span class="h-3 w-3 rounded-sm border border-dashed border-slate-400" :style="{ backgroundColor: pageColors.content || 'transparent' }" aria-hidden="true" />
+            Content
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <span class="h-3 w-3 rounded-sm border border-slate-300" :style="{ backgroundColor: emailBackdropColor }" aria-hidden="true" />
+            Email background
+          </span>
+        </template>
       </p>
       <iframe
         ref="frameRef"
-        class="absolute inset-0 block h-full w-full border-0 bg-white"
-        :class="previewDropActive ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'"
+        class="absolute top-9 block h-[calc(100%-2.25rem)] rounded-t-lg border-0 bg-white shadow-xl ring-1"
+        :class="previewDropActive ? 'ring-2 ring-blue-500' : 'ring-slate-300'"
+        :style="frameStyle"
         title="Email template"
         data-vue-devtools-ignore
         sandbox="allow-same-origin"

@@ -30,6 +30,7 @@ export type TenantMeCampaignSender = {
   allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
+  allowTenantReplaceImage?: boolean
   allowTenantGrapesBuilder?: boolean
   allowTenantBeefreeBuilder?: boolean
   allowTenantTemplateBuilder?: boolean
@@ -63,8 +64,10 @@ export function useDefaultCampaignSender() {
   const allowTenantTemplateApproval = ref(false)
   /** Superadmin gate; false hides the Images library. */
   const allowTenantImages = ref(false)
-  /** Superadmin gate; false hides email template Insert image and Replace. */
+  /** Superadmin gate; false hides email template Insert image. */
   const allowTenantInsertImage = ref(false)
+  /** Superadmin gate; false hides Replace on images already in a template. */
+  const allowTenantReplaceImage = ref(false)
   /** Superadmin gate; false hides the GrapesJS email editor. */
   const allowTenantGrapesBuilder = ref(false)
   /** Superadmin gate; false hides the Beefree email builder. */
@@ -131,6 +134,7 @@ export function useDefaultCampaignSender() {
       allowTenantTemplateApproval.value = me?.allowTenantTemplateApproval === true
       allowTenantImages.value = me?.allowTenantImages === true
       allowTenantInsertImage.value = me?.allowTenantInsertImage === true
+      allowTenantReplaceImage.value = me?.allowTenantReplaceImage === true
       allowTenantGrapesBuilder.value = me?.allowTenantGrapesBuilder === true
       allowTenantBeefreeBuilder.value = me?.allowTenantBeefreeBuilder === true
       allowTenantTemplateBuilder.value = me?.allowTenantTemplateBuilder === true
@@ -170,6 +174,7 @@ export function useDefaultCampaignSender() {
       allowTenantTemplateApproval.value = false
       allowTenantImages.value = false
       allowTenantInsertImage.value = false
+      allowTenantReplaceImage.value = false
       allowTenantGrapesBuilder.value = false
       allowTenantBeefreeBuilder.value = false
       allowTenantTemplateBuilder.value = false
@@ -192,6 +197,7 @@ export function useDefaultCampaignSender() {
     allowTenantTemplateApproval,
     allowTenantImages,
     allowTenantInsertImage,
+    allowTenantReplaceImage,
     allowTenantGrapesBuilder,
     allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,

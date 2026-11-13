@@ -15,6 +15,7 @@ import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipie
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
 import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
+import { parseAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
 import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
@@ -115,6 +116,8 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantImages: parseAllowTenantImages(registryDoc?.allowTenantImages),
     /** When false/omitted, email template Insert image stays hidden. */
     allowTenantInsertImage: parseAllowTenantInsertImage(registryDoc?.allowTenantInsertImage),
+    /** When false, Replace on images already in a template stays hidden. */
+    allowTenantReplaceImage: parseAllowTenantReplaceImage(registryDoc),
     /** When false/omitted, the GrapesJS email editor stays hidden. */
     allowTenantGrapesBuilder: parseAllowTenantGrapesBuilder(registryDoc?.allowTenantGrapesBuilder),
     /** When false/omitted, the Beefree email builder stays hidden. */

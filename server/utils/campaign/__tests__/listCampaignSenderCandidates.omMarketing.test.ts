@@ -52,7 +52,6 @@ describe('OM/Marketing typed LO sender hello+sistarlo', () => {
         lean: async () => []
       })
     }))
-    const Contact = { aggregate, find } as never
 
     // Tenant-wide: marketingAudienceOwnerEmailsFromAuth returns null when canSelectAny.
     const auth = {

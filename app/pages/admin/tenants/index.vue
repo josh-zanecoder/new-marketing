@@ -448,6 +448,7 @@ async function fetchTenants() {
         allowTenantTemplateApproval?: boolean
         allowTenantImages?: boolean
         allowTenantInsertImage?: boolean
+        allowTenantReplaceImage?: boolean
         allowTenantGrapesBuilder?: boolean
         allowTenantBeefreeBuilder?: boolean
         allowTenantTemplateBuilder?: boolean
@@ -486,6 +487,7 @@ async function fetchTenants() {
       allowTenantTemplateApproval: t.allowTenantTemplateApproval === true,
       allowTenantImages: t.allowTenantImages === true,
       allowTenantInsertImage: t.allowTenantInsertImage === true,
+      allowTenantReplaceImage: t.allowTenantReplaceImage === true,
       allowTenantGrapesBuilder: t.allowTenantGrapesBuilder === true,
       allowTenantBeefreeBuilder: t.allowTenantBeefreeBuilder === true,
       allowTenantTemplateBuilder: t.allowTenantTemplateBuilder === true,

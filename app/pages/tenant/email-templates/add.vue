@@ -22,6 +22,7 @@ const marketingApi = useTenantMarketingApi()
 const toast = useAppToast()
 const {
   allowTenantInsertImage,
+  allowTenantReplaceImage,
   allowTenantTemplateBuilder,
   allowTenantLoRecipientLists,
   allowTenantTemplateApproval,
@@ -32,6 +33,9 @@ const {
 } = useDefaultCampaignSender()
 const canInsertTemplateImage = computed(
   () => tenantFlagsLoaded.value && allowTenantInsertImage.value
+)
+const canReplaceTemplateImage = computed(
+  () => tenantFlagsLoaded.value && allowTenantReplaceImage.value
 )
 /** LO Recipients flag: auto-host embedded images on HTML upload. */
 const canUploadTemplateImage = computed(
@@ -107,7 +111,7 @@ function emailTemplateImageSnippet(url: string): string {
 
 const templateHtmlImages = computed(() => listEmailTemplateHtmlImages(htmlContent.value))
 const showTemplateImageReplace = computed(
-  () => canInsertTemplateImage.value && templateHtmlImages.value.length > 0
+  () => (canInsertTemplateImage.value || canReplaceTemplateImage.value) && templateHtmlImages.value.length > 0
 )
 const anyImageBusy = computed(() => uploadPending.value || imageUploadPending.value)
 
@@ -359,7 +363,7 @@ function openInsertImagePicker() {
 }
 
 function openReplaceImagePicker(index: number) {
-  if (!canInsertTemplateImage.value || anyImageBusy.value) return
+  if (!canReplaceTemplateImage.value || anyImageBusy.value) return
   imageUploadError.value = ''
   replaceImageIndex.value = index
   imageFileInputRef.value?.click()
@@ -394,7 +398,8 @@ async function onTemplateImageFile(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!canInsertTemplateImage.value || !file || imageUploadPending.value) return
+  const allowed = replaceImageIndex.value != null ? canReplaceTemplateImage.value : canInsertTemplateImage.value
+  if (!allowed || !file || imageUploadPending.value) return
 
   imageUploadPending.value = true
   imageUploadError.value = ''
@@ -811,6 +816,7 @@ function saveTemplateCopy(copyName: string) {
         :can-upload-image="true"
         :can-edit-text="allowTenantEditText"
         :can-resize-image="allowTenantResizeImage"
+        :can-replace-image="allowTenantReplaceImage"
       />
 
       <div
@@ -834,7 +840,10 @@ function saveTemplateCopy(copyName: string) {
                     : ' Saving hosts embedded/remote images so sends stay unbroken.'
                 }}
                 <template v-if="canInsertTemplateImage">
-                  Insert image adds a photo to this template, including one you already saved. Replace swaps one image already in it.
+                  Insert image adds a photo to this template, including one you already saved.
+                </template>
+                <template v-if="canReplaceTemplateImage">
+                  Replace swaps one image already in it.
                 </template>
               </p>
             </div>
@@ -856,7 +865,7 @@ function saveTemplateCopy(copyName: string) {
                 {{ uploadPending ? 'Uploading & hosting images…' : 'Upload file' }}
               </button>
               <input
-                v-if="canInsertTemplateImage"
+                v-if="canInsertTemplateImage || canReplaceTemplateImage"
                 ref="imageFileInputRef"
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
@@ -900,7 +909,7 @@ function saveTemplateCopy(copyName: string) {
                 Images in this template
                 <span class="ml-1 tabular-nums text-slate-400">({{ templateHtmlImages.length }})</span>
               </p>
-              <p v-if="canInsertTemplateImage" class="text-xs text-slate-500">
+              <p v-if="canReplaceTemplateImage" class="text-xs text-slate-500">
                 Replace updates that image only — no HTML editing needed.
               </p>
             </div>
@@ -938,7 +947,7 @@ function saveTemplateCopy(copyName: string) {
                     Preview
                   </button>
                   <button
-                    v-if="canInsertTemplateImage"
+                    v-if="canReplaceTemplateImage"
                     type="button"
                     class="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="anyImageBusy"

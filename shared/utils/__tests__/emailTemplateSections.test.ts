@@ -239,6 +239,44 @@ describe('email template sections', () => {
     expect(updateEmailTextStyle(html, 0, { bold: false })).toBe('<h1 style="color:#abc;font-weight:400">Grow</h1>')
   })
 
+  it('puts line height and alignment on the paragraph, and spacing and underline on the words', () => {
+    const html = '<p style="margin:0"><span style="color:#ff6a00">Hello</span> world</p><p>Tail</p>'
+    const index = listEmailTextRuns(html).findIndex((run) => run.text === 'Hello')
+    const next = updateEmailTextStyle(html, index, { lineHeight: 28, align: 'center', letterSpacing: 2, decoration: 'underline' })
+    expect(next).toBe('<p style="margin:0;line-height:28px;text-align:center" align="center"><span style="color:#ff6a00;letter-spacing:2px;text-decoration:underline">Hello</span> world</p><p>Tail</p>')
+    expect(readEmailTextStyle(next, index)).toMatchObject({ lineHeight: 28, align: 'center', letterSpacing: 2, decoration: 'underline' })
+    expect(readEmailTextStyle(next, listEmailTextRuns(next).findIndex((run) => run.text === 'Tail'))).toMatchObject({ lineHeight: null, align: '', decoration: 'none' })
+  })
+
+  it('reads underline and strike tags, and ignores a zero line height', () => {
+    const html = '<p style="line-height:0px"><u>Under</u> <s>Gone</s></p>'
+    const runs = listEmailTextRuns(html)
+    expect(readEmailTextStyle(html, runs.findIndex((run) => run.text === 'Under'))).toMatchObject({ decoration: 'underline', lineHeight: null })
+    expect(readEmailTextStyle(html, runs.findIndex((run) => run.text === 'Gone')).decoration).toBe('line-through')
+    expect(updateEmailTextStyle(html, 0, { lineHeight: 0 })).toBe(html)
+  })
+
+  it('adds a rounded border to a block and removes it again', () => {
+    const html = '<table><tr><td style="padding:10px">One</td></tr><tr><td>Two</td></tr></table>'
+    const part = listEmailArrangeItems(html).find((item) => item.label === 'One')?.part
+    expect(part).toBeTypeOf('number')
+    const bordered = updateEmailSectionBox(html, part!, { borderWidth: 2, borderColor: '#123456', borderRadius: 8 })
+    expect(bordered).toContain('border-radius:8px')
+    expect(bordered).toContain('border:2px solid #123456')
+    expect(bordered).toContain('<td>Two</td>')
+    expect(readEmailSectionBox(bordered, part!)).toMatchObject({ borderWidth: 2, borderStyle: 'solid', borderColor: '#123456', borderRadius: 8 })
+    const dashed = updateEmailSectionBox(bordered, part!, { borderStyle: 'dashed' })
+    expect(dashed).toContain('border:2px dashed #123456')
+    const cleared = updateEmailSectionBox(dashed, part!, { borderWidth: 0, borderRadius: 0 })
+    expect(cleared).toBe(html)
+  })
+
+  it('reads a border written as separate properties', () => {
+    const html = '<div style="border-width:3px;border-style:dotted;border-color:rgb(255, 0, 0)">Alpha</div><div>Beta</div>'
+    expect(readEmailSectionBox(html, 0)).toMatchObject({ borderWidth: 3, borderStyle: 'dotted', borderColor: '#ff0000' })
+    expect(readEmailSectionBox('<div style="border-width:3px">Alpha</div><div>Beta</div>', 0).borderWidth).toBe(0)
+  })
+
   it('marks preview sections without changing the saved tags order', () => {
     const html = '<div><p>Alpha</p></div><div><p>Beta</p></div>'
     const marked = emailPreviewWithArrangeMarkers(html)

@@ -46,10 +46,15 @@ export interface RegistryTenantDoc {
    */
   allowTenantImages?: unknown
   /**
-   * When true, retail/tenant marketing may insert or replace images in email templates.
+   * When true, retail/tenant marketing may insert new images into email templates.
    * Missing/false → Insert image stays hidden. Independent of the Images library.
    */
   allowTenantInsertImage?: unknown
+  /**
+   * When true, the tenant may replace images already in email templates.
+   * Missing → follows Insert image / template builder (pre-split behaviour) until a value is stored.
+   */
+  allowTenantReplaceImage?: unknown
   /**
    * When true, the tenant may open the GrapesJS email editor.
    * Missing/false → Grapes stays hidden.
@@ -146,6 +151,7 @@ export interface TenantAdminRow {
    * Default false hides Insert image.
    */
   allowTenantInsertImage: boolean
+  allowTenantReplaceImage: boolean
   /** When true, the tenant may open the GrapesJS email editor. Default false. */
   allowTenantGrapesBuilder: boolean
   /** When true, the tenant may open the Beefree email builder. Default false. */

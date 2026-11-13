@@ -8,6 +8,7 @@ export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantTemplateApproval',
   'allowTenantImages',
   'allowTenantInsertImage',
+  'allowTenantReplaceImage',
   'allowTenantGrapesBuilder',
   'allowTenantBeefreeBuilder',
   'allowTenantTemplateBuilder',
@@ -73,10 +74,19 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     key: 'allowTenantInsertImage',
     code: 'images:insert',
     label: 'Insert image',
-    description: 'Tenant can insert and replace images in email templates.',
+    description: 'Tenant can insert new images into email templates.',
     group: 'images',
     groupLabel: 'Images',
     patchPath: 'allow-tenant-insert-image'
+  },
+  {
+    key: 'allowTenantReplaceImage',
+    code: 'images:replace',
+    label: 'Replace images',
+    description: 'Tenant can replace images already in email templates, in the HTML editor and the template builder.',
+    group: 'images',
+    groupLabel: 'Images',
+    patchPath: 'allow-tenant-replace-image'
   },
   {
     key: 'allowTenantGrapesBuilder',
@@ -138,6 +148,7 @@ export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionStat
     allowTenantTemplateApproval: false,
     allowTenantImages: false,
     allowTenantInsertImage: false,
+    allowTenantReplaceImage: false,
     allowTenantGrapesBuilder: false,
     allowTenantBeefreeBuilder: false,
     allowTenantTemplateBuilder: false,

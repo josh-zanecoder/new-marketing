@@ -54,6 +54,7 @@ const {
   allowTenantTemplateBuilder,
   allowTenantEditText,
   allowTenantResizeImage,
+  allowTenantReplaceImage,
   loaded: imagePermissionLoaded,
   loadDefaultCampaignSender
 } = useDefaultCampaignSender()
@@ -576,6 +577,20 @@ function queueDynamicVariableBlocksSync() {
   }, 120)
 }
 
+const EDITABLE_STYLE_SECTORS = new Set(['typography', 'decorations'])
+
+function limitStyleSectors(editor: Editor) {
+  const styleManager = editor.StyleManager
+  for (const sector of [...styleManager.getSectors()]) {
+    const name = String(sector.getName()).toLowerCase()
+    if (!EDITABLE_STYLE_SECTORS.has(name)) {
+      styleManager.removeSector(sector.getId())
+    } else if (name === 'typography') {
+      sector.setOpen(true)
+    }
+  }
+}
+
 function hardenTextBlocks(editor: Editor) {
   const bm = editor.BlockManager
   const safeTextContent = `
@@ -943,6 +958,7 @@ watch([isMounted, htmlReady, builderMode, canUseGrapes], async () => {
           attributes: { title: 'Save to Device' }
         })
       }
+      limitStyleSectors(editor)
       hardenTextBlocks(editor)
       if (initialHtml.value) {
         try {
@@ -1100,6 +1116,7 @@ function handleSaveAndExit() {
         :can-upload-image="true"
         :can-edit-text="allowTenantEditText"
         :can-resize-image="allowTenantResizeImage"
+        :can-replace-image="allowTenantReplaceImage"
         @loaded-template="onLoadedTemplate"
       />
       <div

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { listCampaignSenderCandidates } from '../listCampaignSenderCandidates'
+import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
 
 vi.mock('@server/utils/auth/marketingAudienceFromAuth', () => ({
   marketingAudienceOwnerEmailsFromAuth: () => null // OM/Marketing tenant-wide
@@ -21,9 +23,6 @@ vi.mock('@server/tenant/registry-auth', async () => {
     tenantUserEmailFromAuth: () => 'marketing.user@zanecoder.com'
   }
 })
-
-import { listCampaignSenderCandidates } from '../listCampaignSenderCandidates'
-import { resolveTypedCampaignSenderName } from '~~/shared/resolveTypedCampaignSenderName'
 
 describe('OM/Marketing type hello+sistarlo@ → first+last Sender name', () => {
   const loEmail = 'hello+sistarlo@zanecoder.com'

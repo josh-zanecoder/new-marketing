@@ -2,6 +2,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { isAdminAuthContext } from '@server/tenant/registry-auth'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
+import { pinAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { toTenantAdminRow } from '@server/utils/registry/tenantAdminRow'
 
 /**
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
 
   await registryConn.collection('clients').updateOne(
     { dbName },
-    { $set: { allowTenantTemplateBuilder } }
+    { $set: { ...pinAllowTenantReplaceImage(existing), allowTenantTemplateBuilder } }
   )
 
   const doc = await registryConn.collection('clients').findOne({ dbName })

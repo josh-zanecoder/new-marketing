@@ -56,12 +56,7 @@ export async function hostEmailTemplateHtmlImagesOnSave(
     return emptyHostResult(source)
   }
 
-  let tenantName = ''
-  try {
-    tenantName = await resolveCustomMarketingTenantFolderName(auth)
-  } catch {
-    tenantName = ''
-  }
+  const tenantName = await resolveCustomMarketingTenantFolderName(auth).catch(() => '')
   if (!tenantName) {
     throw createError({
       statusCode: 400,

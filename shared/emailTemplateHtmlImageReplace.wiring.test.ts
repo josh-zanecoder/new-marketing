@@ -24,6 +24,21 @@ describe('email template HTML image insert and replace', () => {
     expect(page).not.toContain('canUploadTemplateImage')
   })
 
+  it('Replace has its own permission in the HTML editor and every builder', () => {
+    const page = readFileSync(resolve(root, 'app/pages/tenant/email-templates/add.vue'), 'utf8')
+    expect(page).toContain('canReplaceTemplateImage')
+    expect(page).toContain('v-if="canReplaceTemplateImage"')
+    for (const path of [
+      'app/pages/tenant/email-templates/add.vue',
+      'app/pages/tenant/email-editor/index.vue',
+      'app/pages/tenant/template-builder/index.vue'
+    ]) {
+      expect(readFileSync(resolve(root, path), 'utf8')).toContain(':can-replace-image="allowTenantReplaceImage"')
+    }
+    const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
+    expect(builder).toContain('if (!props.canReplaceImage) return')
+  })
+
   it('the template editor does not use the Insert image permission', () => {
     const editor = readFileSync(resolve(root, 'app/pages/tenant/email-editor/index.vue'), 'utf8')
     expect(editor).toContain(':can-upload-image="true"')

@@ -1358,6 +1358,7 @@ interface TenantDetail {
   allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean
   allowTenantInsertImage?: boolean
+  allowTenantReplaceImage?: boolean
   allowTenantGrapesBuilder?: boolean
   allowTenantBeefreeBuilder?: boolean
   allowTenantTemplateBuilder?: boolean
