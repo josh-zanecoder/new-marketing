@@ -46,6 +46,25 @@ export function canDeleteHostedImage(
   return Boolean(owner) && viewer.ownerEmails.includes(owner)
 }
 
+/** Why an uploaded image cannot be deleted yet; empty when nothing uses it. */
+export function hostedImageInUseMessage(usage: {
+  visibleTemplateNames: string[]
+  otherCount: number
+}): string {
+  const names = usage.visibleTemplateNames
+  const total = names.length + Math.max(0, usage.otherCount)
+  if (!total) return ''
+  const shown = names.slice(0, 3).map((n) => `"${n}"`)
+  const rest = total - shown.length
+  const parts = rest > 0
+    ? [...shown, `${rest} other ${rest === 1 ? 'template or campaign' : 'templates or campaigns'}`]
+    : shown
+  const list = parts.length > 1
+    ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+    : parts[0]
+  return `This image is still used in ${list}. Remove it from there first so those emails don't show a broken image.`
+}
+
 /** Read ownership fields from GCS `file.metadata.metadata` (values may be non-strings). */
 export function hostedImageOwnershipFromGcsMetadata(raw: unknown): HostedImageOwnership {
   if (!raw || typeof raw !== 'object') return {}

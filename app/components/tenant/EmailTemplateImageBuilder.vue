@@ -117,9 +117,12 @@ const templatesOpen = ref(false)
 const templatesPending = ref(false)
 const templatesError = ref('')
 const templates = ref<Array<{ id: string; name: string; subject: string; html: string }>>([])
-const hostedImages = ref<Array<{ id: string; url: string; fileName: string }>>([])
+type HostedImage = { id: string; url: string; objectPath: string; fileName: string; canDelete: boolean }
+const hostedImages = ref<HostedImage[]>([])
 const hostedPending = ref(false)
 const hostedError = ref('')
+const hostedPendingDelete = ref<HostedImage | null>(null)
+const hostedDeleting = ref(false)
 const previewDropActive = ref(false)
 const replacePickerOpen = ref(false)
 const sidePanel = ref<'add' | 'layout' | 'email' | 'uploads'>('layout')
@@ -3614,13 +3617,53 @@ async function loadHostedImages() {
       .map((item) => ({
         id: item.id || item.objectPath || item.url,
         url: item.url.trim(),
-        fileName: item.fileName || 'Uploaded image'
+        objectPath: item.objectPath || '',
+        fileName: item.fileName || 'Uploaded image',
+        canDelete: item.canDelete === true && Boolean(item.objectPath)
       }))
   } catch {
     hostedError.value = 'Could not load uploaded images.'
     hostedImages.value = []
   } finally {
     hostedPending.value = false
+  }
+}
+
+function hostedImageInEmail(item: HostedImage): boolean {
+  const name = item.objectPath.split('/').pop() || ''
+  return Boolean(name) && images.value.some((image) => image.src.includes(name))
+}
+
+function askDeleteHostedImage(item: HostedImage) {
+  if (!item.canDelete || hostedDeleting.value) return
+  if (hostedImageInEmail(item)) {
+    toast.error('This image is in the email you are editing. Remove it from the email first.')
+    return
+  }
+  hostedPendingDelete.value = item
+}
+
+function cancelDeleteHostedImage() {
+  if (hostedDeleting.value) return
+  hostedPendingDelete.value = null
+}
+
+async function confirmDeleteHostedImage() {
+  const item = hostedPendingDelete.value
+  if (!item || hostedDeleting.value) return
+  hostedDeleting.value = true
+  try {
+    await marketingApi.deleteEmailTemplateImage(item.objectPath)
+    hostedImages.value = hostedImages.value.filter((h) => h.id !== item.id)
+    toast.success('Image deleted.')
+  } catch (err) {
+    const data = err && typeof err === 'object' && 'data' in err
+      ? (err as { data?: { message?: string; statusMessage?: string } }).data
+      : undefined
+    toast.error(data?.message || data?.statusMessage || 'Could not delete image.')
+  } finally {
+    hostedDeleting.value = false
+    hostedPendingDelete.value = null
   }
 }
 
@@ -4686,7 +4729,7 @@ async function loadTemplate(id: string) {
             No uploaded images yet.
           </p>
           <ul v-else class="grid grid-cols-2 gap-2">
-            <li v-for="item in hostedImages" :key="item.id">
+            <li v-for="item in hostedImages" :key="item.id" class="relative">
               <button
                 type="button"
                 draggable="true"
@@ -4698,6 +4741,19 @@ async function loadTemplate(id: string) {
                 @click="onHostedClick(item.url)"
               >
                 <img :src="item.url" alt="" draggable="false" class="pointer-events-none h-24 w-full object-contain">
+              </button>
+              <button
+                v-if="item.canDelete"
+                type="button"
+                class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white/95 text-red-600 shadow-sm hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+                title="Delete image"
+                :aria-label="`Delete ${item.fileName}`"
+                :disabled="hostedDeleting"
+                @click.stop="askDeleteHostedImage(item)"
+              >
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
               </button>
             </li>
           </ul>
@@ -4923,5 +4979,16 @@ async function loadTemplate(id: string) {
         </div>
       </div>
     </Teleport>
+
+    <ClientConfirmationModal
+      :open="hostedPendingDelete != null"
+      title="Delete image?"
+      message="This permanently removes the image from Uploads. It can't be added to emails again."
+      confirm-text="Delete"
+      variant="danger"
+      :confirm-loading="hostedDeleting"
+      @confirm="confirmDeleteHostedImage"
+      @cancel="cancelDeleteHostedImage"
+    />
   </div>
 </template>

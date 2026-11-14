@@ -7,6 +7,7 @@ import {
   HOSTED_IMAGE_VISIBILITY_SHARED,
   canDeleteHostedImage,
   canViewHostedImage,
+  hostedImageInUseMessage,
   hostedImageOwnershipFromGcsMetadata
 } from '~~/shared/hostedImageAccess'
 
@@ -101,5 +102,29 @@ describe('image visibility', () => {
       hostedImageOwnershipFromGcsMetadata({ ownerEmail: 'a@b.com', visibility: 7, tenantName: 'Forge' })
     ).toEqual({ ownerEmail: 'a@b.com', visibility: undefined, uploadedBy: undefined })
     expect(hostedImageOwnershipFromGcsMetadata(undefined)).toEqual({})
+  })
+})
+
+describe('hostedImageInUseMessage', () => {
+  it('is empty when nothing uses the image', () => {
+    expect(hostedImageInUseMessage({ visibleTemplateNames: [], otherCount: 0 })).toBe('')
+  })
+
+  it('names the templates the user can see', () => {
+    expect(hostedImageInUseMessage({ visibleTemplateNames: ['Welcome', 'Promo'], otherCount: 0 }))
+      .toContain('"Welcome" and "Promo"')
+  })
+
+  it('counts templates the user cannot see without naming them', () => {
+    const message = hostedImageInUseMessage({ visibleTemplateNames: ['Welcome'], otherCount: 1 })
+    expect(message).toContain('"Welcome" and 1 other template or campaign')
+  })
+
+  it('caps the list at three names', () => {
+    const message = hostedImageInUseMessage({
+      visibleTemplateNames: ['A', 'B', 'C', 'D', 'E'],
+      otherCount: 0
+    })
+    expect(message).toContain('"A", "B", "C" and 2 other templates or campaigns')
   })
 })

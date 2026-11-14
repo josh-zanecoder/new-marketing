@@ -52,6 +52,25 @@ describe('email template HTML image insert and replace', () => {
     expect(builder.match(/@click="startLibraryUpload"/g)).toHaveLength(2)
   })
 
+  it('Template Builder Uploads can delete an image after confirmation', () => {
+    const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
+    const api = readFileSync(
+      resolve(root, 'server/api/v1/tenant/email-templates/images.delete.ts'),
+      'utf8'
+    )
+    expect(builder).toContain('v-if="item.canDelete"')
+    expect(builder).toContain('@click.stop="askDeleteHostedImage(item)"')
+    expect(builder).toContain('title="Delete image?"')
+    expect(builder).toContain('@confirm="confirmDeleteHostedImage"')
+    expect(builder).toContain('marketingApi.deleteEmailTemplateImage(item.objectPath)')
+    expect(builder).toContain('hostedImageInEmail(item)')
+    expect(api).toContain('requireTenantEmailTemplateImageHost')
+    expect(api.indexOf('findEmailTemplatesUsingHostedImage(')).toBeLessThan(
+      api.indexOf('deleteCustomMarketingTenantImages(')
+    )
+    expect(api).toContain('statusCode: 409')
+  })
+
   it('the template editor does not use the Insert image permission', () => {
     const editor = readFileSync(resolve(root, 'app/pages/tenant/email-editor/index.vue'), 'utf8')
     expect(editor).toContain(':can-upload-image="true"')

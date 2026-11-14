@@ -246,6 +246,8 @@ export type TenantHostedImageListItem = {
   contentType: string
   size: number
   createdAt: string
+  /** Whether this session may delete the object (owner in scope, or tenant-wide). */
+  canDelete: boolean
 }
 
 const IMAGE_CONTENT_TYPE_RE = /^image\/(png|jpe?g|gif|webp)$/i
@@ -302,9 +304,8 @@ export async function listCustomMarketingTenantImages(
   const items: TenantHostedImageListItem[] = []
   for (const file of files) {
     if (items.length >= maxResults) break
-    if (!canViewHostedImage(hostedImageOwnershipFromGcsMetadata(file.metadata?.metadata), opts.viewer)) {
-      continue
-    }
+    const ownership = hostedImageOwnershipFromGcsMetadata(file.metadata?.metadata)
+    if (!canViewHostedImage(ownership, opts.viewer)) continue
     const objectPath = String(file.name ?? '').trim()
     if (!objectPath || objectPath.endsWith('/')) continue
     const contentType = String(file.metadata?.contentType ?? '').trim()
@@ -333,7 +334,8 @@ export async function listCustomMarketingTenantImages(
       fileName,
       contentType: contentType || 'image/jpeg',
       size,
-      createdAt
+      createdAt,
+      canDelete: canDeleteHostedImage(ownership, opts.viewer)
     })
   }
 

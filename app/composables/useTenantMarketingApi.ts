@@ -659,9 +659,18 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
         contentType: string
         size: number
         createdAt: string
+        canDelete?: boolean
       }>
       total: number
     }>('/api/v1/tenant/email-templates/images', tenantFetchInit({ timeout: 60000 }))
+  }
+
+  /** Delete one uploaded template image. 409 when a template or campaign still uses it. */
+  async function deleteEmailTemplateImage(objectPath: string) {
+    return $fetch<{ ok: boolean; deleted: string }>(
+      '/api/v1/tenant/email-templates/images',
+      tenantFetchInit({ method: 'DELETE', body: { objectPath }, timeout: 60000 })
+    )
   }
 
   /** Host an image for HTML email templates; returns public HTTPS URL for img src. */
@@ -758,6 +767,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     uploadCustomMarketingImage,
     fetchEmailTemplateImages,
     uploadEmailTemplateImage,
+    deleteEmailTemplateImage,
     fetchTenantHostedImages,
     uploadTenantHostedImage,
     deleteTenantHostedImages
