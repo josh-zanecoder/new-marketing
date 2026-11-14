@@ -52,6 +52,25 @@ describe('email template HTML image insert and replace', () => {
     expect(builder.match(/@click="startLibraryUpload"/g)).toHaveLength(2)
   })
 
+  it('clicking an upload only selects it; Insert image adds it', () => {
+    const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
+    const start = builder.indexOf('function onHostedClick(')
+    const onClick = builder.slice(start, builder.indexOf('\nfunction ', start + 1))
+    expect(start).toBeGreaterThan(-1)
+    expect(onClick).not.toContain('insertImage(')
+    expect(onClick).toContain('selectedHostedId.value')
+    expect(builder).not.toContain('onHostedClick(item.url)')
+
+    const insertStart = builder.indexOf('function insertSelectedHosted(')
+    const insert = builder.slice(insertStart, builder.indexOf('\n}', insertStart))
+    expect(insert.indexOf('selectedHostedId.value = null')).toBeLessThan(insert.indexOf('insertImage('))
+
+    expect(builder).toContain('@click="insertSelectedHosted"')
+    expect(builder).toContain('@click="clearHostedSelection"')
+    expect(builder).toContain(':aria-pressed="selectedHostedId === item.id"')
+    expect(builder).toMatch(/sidePanel\.value === 'uploads' && selectedHosted\.value/)
+  })
+
   it('Template Builder Uploads can delete an image after confirmation', () => {
     const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
     const api = readFileSync(

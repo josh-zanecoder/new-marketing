@@ -123,6 +123,10 @@ const hostedPending = ref(false)
 const hostedError = ref('')
 const hostedPendingDelete = ref<HostedImage | null>(null)
 const hostedDeleting = ref(false)
+const selectedHostedId = ref<string | null>(null)
+const selectedHosted = computed(() =>
+  hostedImages.value.find((item) => item.id === selectedHostedId.value) ?? null
+)
 const previewDropActive = ref(false)
 const replacePickerOpen = ref(false)
 const sidePanel = ref<'add' | 'layout' | 'email' | 'uploads'>('layout')
@@ -235,6 +239,11 @@ function visibleSectionPart(part: number): number {
 function selectSectionFromCanvas(part: number) {
   const visible = visibleSectionPart(part)
   selectedPart.value = visible
+  // While an upload is selected, clicking the email picks where it goes.
+  if (sidePanel.value === 'uploads' && selectedHosted.value) {
+    paintArrangeOutline()
+    return
+  }
   sidePanel.value = 'layout'
   templatesOpen.value = false
   void nextTick(() => {
@@ -3655,6 +3664,7 @@ async function confirmDeleteHostedImage() {
   try {
     await marketingApi.deleteEmailTemplateImage(item.objectPath)
     hostedImages.value = hostedImages.value.filter((h) => h.id !== item.id)
+    if (selectedHostedId.value === item.id) selectedHostedId.value = null
     toast.success('Image deleted.')
   } catch (err) {
     const data = err && typeof err === 'object' && 'data' in err
@@ -3759,12 +3769,41 @@ function onHostedDragEnd() {
   onBlockDragEnd()
 }
 
-function onHostedClick(url: string) {
+/** Clicking an upload only selects it; the Insert button decides when it goes in. */
+function onHostedClick(item: HostedImage, panel: 'add' | 'uploads' = 'uploads') {
   if (hostedDragged) {
     hostedDragged = false
     return
   }
-  insertImage(url)
+  if (panel === 'add') {
+    selectedHostedId.value = item.id
+    sidePanel.value = 'uploads'
+    return
+  }
+  selectedHostedId.value = selectedHostedId.value === item.id ? null : item.id
+}
+
+const hostedInsertHint = computed(() => {
+  if (imageBlockPending.value) return 'It will fill the new Image block you added.'
+  if (!props.canEditText) {
+    return 'It will go at the end of the email. To place it elsewhere, drag it onto the email.'
+  }
+  const label = selectedPart.value == null
+    ? ''
+    : arrangeItems.value.find((entry) => entry.part === selectedPart.value)?.label
+  if (label) return `It will go after “${label}”. Click another part of the email to change this.`
+  return 'Click the part of the email it should go after, or drag it onto the email. Otherwise it goes at the end.'
+})
+
+function clearHostedSelection() {
+  selectedHostedId.value = null
+}
+
+function insertSelectedHosted() {
+  const item = selectedHosted.value
+  if (!item) return
+  selectedHostedId.value = null
+  insertImage(item.url)
 }
 
 function hostedDragType(event: DragEvent): boolean {
@@ -3804,6 +3843,7 @@ function dropHostedImage(event: DragEvent, x: number, y: number) {
   const doc = frameRef.value?.contentDocument
   if (!doc) return
   insertImageAt(url, doc, x, y)
+  if (selectedHosted.value?.url === url) selectedHostedId.value = null
 }
 
 function onFrameDragOver(event: DragEvent) {
@@ -3918,15 +3958,20 @@ async function onFile(event: Event) {
     const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
     const url = typeof uploaded?.url === 'string' ? uploaded.url.trim() : ''
     if (!url) throw new Error('Upload succeeded but no image link was returned.')
+    let selectAfterLoad = false
     if (mode === 'replace') {
       if (index != null) applySrc(index, url)
     } else if (imageBlockPending.value) {
       // The user already placed an Image block and is filling it.
       insertImage(url)
     } else {
-      toast.success('Image uploaded. Click it or drag it onto the email to add it.')
+      selectAfterLoad = true
+      toast.success('Image uploaded and selected. Click Insert or drag it onto the email.')
     }
     await loadHostedImages()
+    if (selectAfterLoad) {
+      selectedHostedId.value = hostedImages.value.find((item) => item.url === url)?.id ?? null
+    }
   } catch (err) {
     const data = err && typeof err === 'object' && 'data' in err
       ? (err as { data?: { message?: string; statusMessage?: string } }).data
@@ -4232,10 +4277,10 @@ async function loadTemplate(id: string) {
                   draggable="true"
                   class="block w-full cursor-grab overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:border-blue-500 active:cursor-grabbing"
                   :title="item.fileName"
-                  :aria-label="`Add ${item.fileName}`"
+                  :aria-label="`Select ${item.fileName}`"
                   @dragstart="onHostedDragStart($event, item.url)"
                   @dragend="onHostedDragEnd"
-                  @click="onHostedClick(item.url)"
+                  @click="onHostedClick(item, 'add')"
                 >
                   <img :src="item.url" alt="" draggable="false" class="pointer-events-none h-16 w-full object-contain">
                 </button>
@@ -4713,7 +4758,7 @@ async function loadTemplate(id: string) {
             </button>
           </div>
           <div class="mb-2 flex items-center justify-between gap-2">
-            <p class="text-sm text-slate-600">Click a photo to add it, or drag it onto the email.</p>
+            <p class="text-sm text-slate-600">Click a photo to select it, or drag it onto the email.</p>
             <button
               type="button"
               class="shrink-0 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
@@ -4722,6 +4767,40 @@ async function loadTemplate(id: string) {
             >
               {{ uploading && fileMode === 'upload' ? 'Uploading…' : 'Upload' }}
             </button>
+          </div>
+          <div
+            v-if="selectedHosted"
+            class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-2.5"
+            role="region"
+            aria-label="Selected photo"
+          >
+            <div class="flex items-center gap-2.5">
+              <img
+                :src="selectedHosted.url"
+                alt=""
+                class="h-11 w-11 shrink-0 rounded-md bg-white object-contain ring-1 ring-blue-200"
+              >
+              <p class="min-w-0 flex-1 text-xs leading-snug text-blue-900">
+                <span class="block font-semibold">Photo selected</span>
+                {{ hostedInsertHint }}
+              </p>
+            </div>
+            <div class="mt-2 flex gap-2">
+              <button
+                type="button"
+                class="flex-1 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+                @click="insertSelectedHosted"
+              >
+                Insert image
+              </button>
+              <button
+                type="button"
+                class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                @click="clearHostedSelection"
+              >
+                Clear
+              </button>
+            </div>
           </div>
           <p v-if="hostedError" class="text-xs text-red-600">{{ hostedError }}</p>
           <p v-else-if="hostedPending && !hostedImages.length" class="text-xs text-slate-500">Loading uploaded images…</p>
@@ -4733,15 +4812,28 @@ async function loadTemplate(id: string) {
               <button
                 type="button"
                 draggable="true"
-                class="block w-full cursor-grab overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:border-blue-500 active:cursor-grabbing"
+                class="block w-full cursor-grab overflow-hidden rounded-lg border bg-slate-50 active:cursor-grabbing"
+                :class="selectedHostedId === item.id
+                  ? 'border-blue-600 ring-2 ring-blue-500'
+                  : 'border-slate-200 hover:border-blue-500'"
                 :title="item.fileName"
-                :aria-label="`Insert ${item.fileName}`"
+                :aria-label="`Select ${item.fileName}`"
+                :aria-pressed="selectedHostedId === item.id"
                 @dragstart="onHostedDragStart($event, item.url)"
                 @dragend="onHostedDragEnd"
-                @click="onHostedClick(item.url)"
+                @click="onHostedClick(item)"
               >
                 <img :src="item.url" alt="" draggable="false" class="pointer-events-none h-24 w-full object-contain">
               </button>
+              <span
+                v-if="selectedHostedId === item.id"
+                class="pointer-events-none absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm"
+                aria-hidden="true"
+              >
+                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
               <button
                 v-if="item.canDelete"
                 type="button"
