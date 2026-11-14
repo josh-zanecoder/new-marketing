@@ -561,7 +561,14 @@ export async function beginCampaignSend(
     await enqueueCampaignBatch({ campaignId, dbName, sendRunId, page: 0 })
   } catch (e: unknown) {
     await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
-    await (Campaign as CampaignModel).updateOne(campaignScope, { status: revertStatus })
+    // scheduledAt was unset when moving to Sending; a Scheduled revert without it loses the saved time.
+    const restoreScheduledAt = revertStatus === 'Scheduled' && campaign.scheduledAt
+    await (Campaign as CampaignModel).updateOne(campaignScope, {
+      $set: {
+        status: revertStatus,
+        ...(restoreScheduledAt ? { scheduledAt: campaign.scheduledAt } : {})
+      }
+    })
     logSendError('enqueueFailed', {
       campaignId,
       dbName,

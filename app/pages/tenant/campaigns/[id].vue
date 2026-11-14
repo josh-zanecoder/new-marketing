@@ -20,7 +20,7 @@ import {
   CAMPAIGN_UNSCHEDULE_ERROR_FALLBACK,
   CAMPAIGN_UNSCHEDULE_SUCCESS
 } from '~~/shared/campaignUnscheduleCopy'
-import { defaultScheduleDatetimeLocal, toDatetimeLocalValue } from '~~/shared/datetimeLocal'
+import { initialScheduleDatetimeLocal } from '~~/shared/datetimeLocal'
 
 const route = useRoute()
 const campaignStore = useCampaignStore()
@@ -490,7 +490,7 @@ const scheduleModalConfirmLabel = computed(() =>
 function openScheduleModal() {
   scheduleModalMode.value = 'schedule'
   scheduleError.value = ''
-  scheduleLocal.value = defaultScheduleDatetimeLocal()
+  scheduleLocal.value = initialScheduleDatetimeLocal(campaignForSend.value?.scheduledAt)
   scheduleModalOpen.value = true
 }
 
@@ -499,11 +499,7 @@ function openRescheduleModal() {
   if (!c || !canRescheduleScheduled(c)) return
   scheduleModalMode.value = 'reschedule'
   scheduleError.value = ''
-  const existing = c.scheduledAt ? new Date(c.scheduledAt) : null
-  scheduleLocal.value =
-    existing && !Number.isNaN(existing.getTime())
-      ? toDatetimeLocalValue(existing)
-      : defaultScheduleDatetimeLocal()
+  scheduleLocal.value = initialScheduleDatetimeLocal(c.scheduledAt)
   scheduleModalOpen.value = true
 }
 

@@ -873,6 +873,7 @@ import {
   CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
   CAMPAIGN_SCHEDULE_SUCCESS
 } from '~~/shared/campaignScheduleWizardCopy'
+import { defaultScheduleDatetimeLocal } from '~~/shared/datetimeLocal'
 
 const campaignStore = useCampaignStore()
 const {
@@ -1257,14 +1258,9 @@ const wizardSendBusy = computed(
   () => isSaving.value || !!sendingCampaignId.value || scheduleSubmitting.value
 )
 
-function toDatetimeLocalValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function openScheduleModalFromWizard() {
   scheduleError.value = ''
-  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
+  scheduleLocal.value = scheduleLocal.value || defaultScheduleDatetimeLocal()
   scheduleModalOpen.value = true
 }
 

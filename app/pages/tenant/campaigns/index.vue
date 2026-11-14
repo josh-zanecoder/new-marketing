@@ -17,6 +17,7 @@ import {
   CAMPAIGN_UNSCHEDULE_SUCCESS,
   campaignUnscheduleConfirmMessage
 } from '~~/shared/campaignUnscheduleCopy'
+import { initialScheduleDatetimeLocal } from '~~/shared/datetimeLocal'
 
 definePageMeta({ layout: 'default' })
 
@@ -339,15 +340,10 @@ function closeSendSuccessModal() {
   sendSuccessSummary.value = null
 }
 
-function toDatetimeLocalValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function openScheduleModal(c: Campaign) {
   campaignToSchedule.value = c
   scheduleError.value = ''
-  scheduleLocal.value = toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
+  scheduleLocal.value = initialScheduleDatetimeLocal(c.scheduledAt)
 }
 
 function closeScheduleModal() {

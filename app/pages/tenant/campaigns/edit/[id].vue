@@ -882,6 +882,7 @@ import {
   CAMPAIGN_SCHEDULE_ERROR_INVALID,
   validateCampaignScheduleWhen
 } from '~~/shared/campaignScheduleTime'
+import { initialScheduleDatetimeLocal } from '~~/shared/datetimeLocal'
 
 const campaignStore = useCampaignStore()
 const {
@@ -1285,15 +1286,6 @@ const wizardSendBusy = computed(
   () => isSaving.value || !!sendingCampaignId.value || scheduleSubmitting.value
 )
 
-function toDatetimeLocalValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function defaultScheduleDatetimeLocal() {
-  return toDatetimeLocalValue(new Date(Date.now() + 65 * 60 * 1000))
-}
-
 const campaignNameForSendModal = computed(() => {
   const id = sendingCampaignId.value
   if (!id) return 'campaign'
@@ -1552,6 +1544,9 @@ function deselectAllListContacts() {
   form.value.recipientsManual = []
 }
 
+/** Skeleton until campaign data and recipient lists are ready. */
+const editLoadPending = ref(true)
+
 watch(
   () => [form.value.recipientsMode, form.value.recipientsListId] as const,
   () => {
@@ -1686,8 +1681,6 @@ const cancelOrBackLabel = computed(() => (editId.value ? 'Back to campaign' : 'B
 const editCampaignStatus = ref('Draft')
 const editCampaignScheduledAt = ref('')
 const editCampaignMeta = ref({ createdAt: '', updatedAt: '' })
-/** Skeleton until campaign data and recipient lists are ready. */
-const editLoadPending = ref(true)
 const loadedEditCampaignId = ref('')
 const showWizardSkeleton = computed(() => editLoadPending.value)
 
@@ -1719,17 +1712,7 @@ const scheduleWizardConfirmLabel = computed(() => {
 
 function openScheduleModalFromWizard() {
   scheduleError.value = ''
-  if (isEditRescheduleMode.value) {
-    const existing = editCampaignScheduledAt.value
-      ? new Date(editCampaignScheduledAt.value)
-      : null
-    scheduleLocal.value =
-      existing && !Number.isNaN(existing.getTime())
-        ? toDatetimeLocalValue(existing)
-        : defaultScheduleDatetimeLocal()
-  } else {
-    scheduleLocal.value = defaultScheduleDatetimeLocal()
-  }
+  scheduleLocal.value = initialScheduleDatetimeLocal(editCampaignScheduledAt.value)
   scheduleModalOpen.value = true
 }
 
@@ -1793,12 +1776,31 @@ function applyCampaignToEditForm(c: TenantCampaignDetail) {
   }
 }
 
+/** Cached detail can predate a schedule change; the server is the source of truth for status/time. */
+async function syncEditScheduleFromServer(campaignId: string) {
+  try {
+    const res = await marketingApi.fetchCampaignById(campaignId)
+    if (editId.value !== campaignId) return
+    const status = String(res.campaign.status || 'Draft')
+    const scheduledAt = String(res.campaign.scheduledAt ?? '').trim()
+    editCampaignStatus.value = status
+    editCampaignScheduledAt.value = scheduledAt
+    campaignStore.patchCampaignDetailCache(campaignId, {
+      status,
+      scheduledAt: scheduledAt || undefined
+    })
+  } catch {
+    /* keep cached values */
+  }
+}
+
 async function hydrateEditCampaign() {
   await defaultSenderReady
   if (!editId.value) return
   const cached = campaignStore.getCampaignDetailCache(editId.value)
   if (cached) {
     applyCampaignToEditForm(cached)
+    void syncEditScheduleFromServer(editId.value)
     return
   }
   try {
