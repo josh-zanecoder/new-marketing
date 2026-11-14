@@ -320,6 +320,25 @@ const RESIZE_ORIGIN: Record<ResizeDir, string> = {
 }
 
 let imageGesture: ImageGesture | null = null
+/** The image's `style` attribute before a move/resize, so Esc can put it back. */
+let imageGesturePriorStyle: string | null = null
+let capturedPointer: { doc: Document; id: number } | null = null
+
+function capturePointer(doc: Document, id: number) {
+  doc.body.setPointerCapture(id)
+  capturedPointer = { doc, id }
+}
+
+function releaseCapturedPointer() {
+  const captured = capturedPointer
+  capturedPointer = null
+  if (!captured) return
+  try {
+    if (captured.doc.body?.hasPointerCapture(captured.id)) captured.doc.body.releasePointerCapture(captured.id)
+  } catch {
+    /* The document may already be gone after a preview reload. */
+  }
+}
 
 function frameImage(doc: Document, index: number): HTMLImageElement | null {
   const ImageCtor = doc.defaultView?.HTMLImageElement
@@ -1613,7 +1632,7 @@ function finishSectionDrag(event: PointerEvent) {
 function beginSectionDrag(doc: Document, el: HTMLElement, part: number, group: string, event: PointerEvent) {
   const scrollTop = frameScrollTop(doc)
   try {
-    doc.body.setPointerCapture(event.pointerId)
+    capturePointer(doc, event.pointerId)
   } catch {
     /* Pointer tracking on the window covers the rest of the gesture. */
   }
@@ -1907,6 +1926,7 @@ function onParentResizeDown(event: PointerEvent) {
   const edge = (event.currentTarget as HTMLElement | null)?.dataset.sectionResize
   const doc = frameRef.value?.contentDocument
   if (!doc || (edge !== 'n' && edge !== 's' && edge !== 'e' && edge !== 'w')) return
+  if (event.button !== 0) return
   window.clearTimeout(pendingTextBlur)
   pendingTextBlur = 0
   event.preventDefault()
@@ -2247,7 +2267,7 @@ function beginColumnDrag(doc: Document, event: PointerEvent, leftIndex: number) 
   commitActiveTextEdit()
   const point = pointerInFrame(event)
   try {
-    doc.body.setPointerCapture(event.pointerId)
+    capturePointer(doc, event.pointerId)
   } catch {
     /* Pointer tracking on the window covers the rest of the gesture. */
   }
@@ -2354,7 +2374,7 @@ function beginSectionResize(doc: Document, event: PointerEvent, edge: SectionEdg
   const startPadding = Math.round(Number.parseFloat(vertical === 'n' ? boxStyle.paddingTop : boxStyle.paddingBottom) || 0)
   const point = pointerInFrame(event)
   try {
-    doc.body.setPointerCapture(event.pointerId)
+    capturePointer(doc, event.pointerId)
   } catch {
     /* Pointer tracking on the window covers the rest of the gesture. */
   }
@@ -2564,6 +2584,7 @@ function onOutsidePointer(event: PointerEvent) {
   }
   if (!imageGesture && !sectionGesture && !sectionResize) return
   if (view && event.view === view) return
+  if (event.type === 'pointermove' && releaseMissed(event)) return
   const point = pointerInFrame(event)
   if (!point) return
   if (event.type === 'pointerup' || event.type === 'pointercancel') {
@@ -2572,6 +2593,83 @@ function onOutsidePointer(event: PointerEvent) {
   }
   event.preventDefault()
   queueGesturePoint(point.x, point.y)
+}
+
+function hasActiveGesture(): boolean {
+  return Boolean(imageGesture || sectionGesture || sectionResize)
+}
+
+/** Drop an in-progress move or resize without saving and put the element back where it was. */
+function cancelActiveGesture(): boolean {
+  const image = imageGesture
+  const section = sectionGesture
+  const resize = sectionResize
+  textPress = null
+  if (!image && !section && !resize) return false
+  imageGesture = null
+  sectionGesture = null
+  sectionResize = null
+  pendingTextEdit = null
+  stopOutsideTracking()
+  stopEdgeScroll()
+  releaseCapturedPointer()
+  if (gestureFrame) {
+    cancelAnimationFrame(gestureFrame)
+    gestureFrame = 0
+  }
+  pendingGesturePoint = null
+  const doc = frameRef.value?.contentDocument
+  if (doc?.body) {
+    doc.body.style.userSelect = ''
+    doc.body.style.cursor = ''
+  }
+  doc?.getElementById('email-builder-drop-line')?.remove()
+  if (doc) markDropCell(doc, null)
+  if (section) {
+    writeDragStyle(section.el, section.priorStyle)
+    paintArrangeOutline()
+  }
+  if (image && doc) {
+    const img = frameImage(doc, image.index)
+    if (img) {
+      if (imageGesturePriorStyle == null) img.removeAttribute('style')
+      else img.setAttribute('style', imageGesturePriorStyle)
+      img.style.outline = '2px solid #2563eb'
+      img.style.outlineOffset = '2px'
+      placeResizeHandles(doc, img)
+    }
+  }
+  imageGesturePriorStyle = null
+  if (resize) reloadPreviewFromModel()
+  return true
+}
+
+/** A resize paints many nodes live; re-render from the saved HTML to undo all of it. */
+function reloadPreviewFromModel() {
+  const frame = frameRef.value
+  if (!frame) return
+  const doc = frame.contentDocument
+  scrollRestore = doc ? frameScrollTop(doc) : 0
+  frame.srcdoc = ''
+  frame.srcdoc = previewHtml(props.modelValue)
+}
+
+/** The release happened where we could not see it (context menu, other window): never keep dragging. */
+function releaseMissed(event: PointerEvent): boolean {
+  if (event.pointerType !== 'mouse' || event.buttons !== 0 || !hasActiveGesture()) return false
+  cancelActiveGesture()
+  return true
+}
+
+function onGestureEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !hasActiveGesture()) return
+  event.preventDefault()
+  event.stopPropagation()
+  cancelActiveGesture()
+}
+
+function onGestureInterrupted() {
+  cancelActiveGesture()
 }
 
 function startOutsideTracking() {
@@ -2631,6 +2729,11 @@ function releaseTextPress(event: PointerEvent, edit: boolean) {
 function onFramePointerDown(event: PointerEvent) {
   const doc = frameRef.value?.contentDocument
   if (!doc?.body) return
+  // Only the main button drags; right/middle click leave the email alone.
+  if (event.button !== 0) {
+    cancelActiveGesture()
+    return
+  }
   const target = elementFromEvent(doc, event.target)
   if (target?.closest('[data-section-move]') && props.canEditText) {
     window.clearTimeout(pendingTextBlur)
@@ -2718,10 +2821,11 @@ function onFramePointerDown(event: PointerEvent) {
   event.stopPropagation()
   const scrollTop = frameScrollTop(doc)
   try {
-    doc.body.setPointerCapture(event.pointerId)
+    capturePointer(doc, event.pointerId)
   } catch {
     /* Pointer tracking on the window covers the rest of the gesture. */
   }
+  imageGesturePriorStyle = img.getAttribute('style')
   img.style.willChange = 'transform'
   img.style.position = 'relative'
   img.style.zIndex = '20'
@@ -2763,6 +2867,7 @@ function onFramePointerMove(event: PointerEvent) {
     return
   }
   if (!imageGesture && !sectionGesture && !sectionResize) return
+  if (releaseMissed(event)) return
   const point = pointerInFrame(event)
   if (!point) return
   event.preventDefault()
@@ -2793,6 +2898,7 @@ function onFramePointerUp(event: PointerEvent) {
   if (point) paintGesture(point.x, point.y)
   pendingGesturePoint = null
   imageGesture = null
+  imageGesturePriorStyle = null
   const doc = frameRef.value?.contentDocument
   const img = doc ? frameImage(doc, gesture.index) : null
   if (doc?.body) {
@@ -2883,6 +2989,10 @@ function bindFrameInteractions(doc: Document) {
   doc.addEventListener('click', blockFrameLinkJump, true)
   doc.removeEventListener('keydown', onDeleteKey)
   doc.addEventListener('keydown', onDeleteKey)
+  doc.removeEventListener('keydown', onGestureEscape, true)
+  doc.addEventListener('keydown', onGestureEscape, true)
+  doc.removeEventListener('contextmenu', onGestureInterrupted, true)
+  doc.addEventListener('contextmenu', onGestureInterrupted, true)
   doc.removeEventListener('dragover', onFrameDragOver)
   doc.removeEventListener('drop', onFrameDrop)
   doc.addEventListener('dragover', onFrameDragOver)
@@ -3910,7 +4020,11 @@ function onPreviewDrop(event: DragEvent) {
   dropHostedImage(event, event.clientX - frameRect.left, event.clientY - frameRect.top)
 }
 
-onMounted(() => window.addEventListener('keydown', onDeleteKey))
+onMounted(() => {
+  window.addEventListener('keydown', onDeleteKey)
+  window.addEventListener('keydown', onGestureEscape, true)
+  window.addEventListener('contextmenu', onGestureInterrupted, true)
+})
 onBeforeUnmount(() => {
   textPress = null
   window.clearTimeout(pendingTextBlur)
@@ -3928,6 +4042,8 @@ onBeforeUnmount(() => {
   stopOutsideTracking()
   if (gestureFrame) cancelAnimationFrame(gestureFrame)
   window.removeEventListener('keydown', onDeleteKey)
+  window.removeEventListener('keydown', onGestureEscape, true)
+  window.removeEventListener('contextmenu', onGestureInterrupted, true)
 })
 
 function applySrc(index: number, url: string) {

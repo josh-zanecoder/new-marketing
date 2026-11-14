@@ -52,6 +52,29 @@ describe('email template HTML image insert and replace', () => {
     expect(builder.match(/@click="startLibraryUpload"/g)).toHaveLength(2)
   })
 
+  it('right-click never starts a drag and Esc cancels an active one', () => {
+    const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
+    const down = builder.slice(builder.indexOf('function onFramePointerDown('))
+    expect(down.slice(0, 400)).toMatch(/if \(event\.button !== 0\) \{\s*cancelActiveGesture\(\)\s*return/)
+    const parentDown = builder.slice(builder.indexOf('function onParentResizeDown('))
+    expect(parentDown.slice(0, 400)).toContain('if (event.button !== 0) return')
+
+    expect(builder).toContain("doc.addEventListener('keydown', onGestureEscape, true)")
+    expect(builder).toContain("window.addEventListener('keydown', onGestureEscape, true)")
+    expect(builder).toContain("doc.addEventListener('contextmenu', onGestureInterrupted, true)")
+    expect(builder).toContain("window.addEventListener('contextmenu', onGestureInterrupted, true)")
+    expect(builder).not.toContain("window.addEventListener('blur'")
+    expect(builder).toMatch(/event\.pointerType !== 'mouse' \|\| event\.buttons !== 0/)
+
+    const cancel = builder.slice(builder.indexOf('function cancelActiveGesture('))
+    const body = cancel.slice(0, cancel.indexOf('\n}\n'))
+    expect(body).toContain('writeDragStyle(section.el, section.priorStyle)')
+    expect(body).toContain("img.setAttribute('style', imageGesturePriorStyle)")
+    expect(body).toContain('reloadPreviewFromModel()')
+    expect(body).not.toContain("emit('update:modelValue'")
+    expect(builder.match(/doc\.body\.setPointerCapture\(/g)).toHaveLength(1)
+  })
+
   it('clicking an upload only selects it; Insert image adds it', () => {
     const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
     const start = builder.indexOf('function onHostedClick(')
