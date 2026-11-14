@@ -39,6 +39,19 @@ describe('email template HTML image insert and replace', () => {
     expect(builder).toContain('if (!props.canReplaceImage) return')
   })
 
+  it('Template Builder upload only adds to the Uploads library', () => {
+    const builder = readFileSync(resolve(root, 'app/components/tenant/EmailTemplateImageBuilder.vue'), 'utf8')
+    const start = builder.indexOf('async function onFile(')
+    const end = builder.indexOf('\nfunction ', start)
+    const onFile = builder.slice(start, end)
+    expect(start).toBeGreaterThan(-1)
+    expect(onFile.match(/insertImage\(url\)/g)).toHaveLength(1)
+    expect(onFile).toMatch(/else if \(imageBlockPending\.value\) \{[^}]*insertImage\(url\)/)
+    expect(onFile).toContain('await loadHostedImages()')
+    expect(builder).not.toContain('startInsert')
+    expect(builder.match(/@click="startLibraryUpload"/g)).toHaveLength(2)
+  })
+
   it('the template editor does not use the Insert image permission', () => {
     const editor = readFileSync(resolve(root, 'app/pages/tenant/email-editor/index.vue'), 'utf8')
     expect(editor).toContain(':can-upload-image="true"')

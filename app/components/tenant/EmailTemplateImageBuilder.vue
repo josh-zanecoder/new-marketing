@@ -98,6 +98,7 @@ const emit = defineEmits<{
 }>()
 
 const marketingApi = useTenantMarketingApi()
+const toast = useAppToast()
 const frameRef = ref<HTMLIFrameElement | null>(null)
 const previewCanvasRef = ref<HTMLElement | null>(null)
 const inlineEditorRef = ref<HTMLTextAreaElement | null>(null)
@@ -107,7 +108,8 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageListRef = ref<HTMLElement | null>(null)
 const sectionListRef = ref<HTMLElement | null>(null)
 const selectedIndex = ref<number | null>(null)
-const fileMode = ref<'replace' | 'insert'>('replace')
+/** `upload` adds to the Uploads library only; `replace` swaps the selected photo. */
+const fileMode = ref<'replace' | 'upload'>('replace')
 const uploading = ref(false)
 const uploadError = ref('')
 const imageUrl = ref('')
@@ -3630,9 +3632,9 @@ watch(() => props.canUploadImage, (allowed) => {
   if (allowed) void loadHostedImages()
 }, { immediate: true })
 
-function startInsert() {
+function startLibraryUpload() {
   if (!props.canUploadImage || uploading.value) return
-  fileMode.value = 'insert'
+  fileMode.value = 'upload'
   uploadError.value = ''
   fileInputRef.value?.click()
 }
@@ -3873,8 +3875,14 @@ async function onFile(event: Event) {
     const uploaded = await marketingApi.uploadEmailTemplateImage({ dataUrl })
     const url = typeof uploaded?.url === 'string' ? uploaded.url.trim() : ''
     if (!url) throw new Error('Upload succeeded but no image link was returned.')
-    if (mode === 'insert') insertImage(url)
-    else if (index != null) applySrc(index, url)
+    if (mode === 'replace') {
+      if (index != null) applySrc(index, url)
+    } else if (imageBlockPending.value) {
+      // The user already placed an Image block and is filling it.
+      insertImage(url)
+    } else {
+      toast.success('Image uploaded. Click it or drag it onto the email to add it.')
+    }
     await loadHostedImages()
   } catch (err) {
     const data = err && typeof err === 'object' && 'data' in err
@@ -4164,9 +4172,9 @@ async function loadTemplate(id: string) {
                 type="button"
                 class="text-[11px] font-medium text-blue-700 hover:underline disabled:opacity-50"
                 :disabled="uploading"
-                @click="startInsert"
+                @click="startLibraryUpload"
               >
-                {{ uploading && fileMode === 'insert' ? 'Uploading…' : 'Upload' }}
+                {{ uploading && fileMode === 'upload' ? 'Uploading…' : 'Upload' }}
               </button>
             </div>
             <p v-if="hostedError" class="text-xs text-red-600">{{ hostedError }}</p>
@@ -4667,9 +4675,9 @@ async function loadTemplate(id: string) {
               type="button"
               class="shrink-0 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
               :disabled="uploading"
-              @click="startInsert"
+              @click="startLibraryUpload"
             >
-              {{ uploading && fileMode === 'insert' ? 'Uploading…' : 'Upload' }}
+              {{ uploading && fileMode === 'upload' ? 'Uploading…' : 'Upload' }}
             </button>
           </div>
           <p v-if="hostedError" class="text-xs text-red-600">{{ hostedError }}</p>
