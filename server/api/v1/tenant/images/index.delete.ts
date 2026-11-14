@@ -2,6 +2,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { deleteCustomMarketingTenantImages } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { requireTenantImages } from '@server/utils/requireTenantImages'
+import { hostedImageViewerFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 
 /**
  * Delete one or more hosted tenant images from GCS.
@@ -37,12 +38,15 @@ export default defineEventHandler(async (event) => {
   }
 
   const tenantName = await resolveCustomMarketingTenantFolderName(auth)
-  const result = await deleteCustomMarketingTenantImages(tenantName, objectPaths)
+  const viewer = hostedImageViewerFromAuth(auth)
+  const result = await deleteCustomMarketingTenantImages(tenantName, objectPaths, viewer)
 
   if (!result.deleted.length) {
     throw createError({
       statusCode: 404,
-      message: 'No matching images were deleted'
+      message: viewer.ownerEmails === null
+        ? 'No matching images were deleted'
+        : 'No matching images were deleted. You can only delete images you uploaded.'
     })
   }
 

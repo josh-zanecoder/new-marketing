@@ -12,6 +12,13 @@ import {
 } from '~~/shared/customMarketingHostedImages'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
 import { isAllowedCustomMarketingImageMime } from '~~/shared/customMarketingEditorOptions'
+import {
+  canDeleteHostedImage,
+  canViewHostedImage,
+  hostedImageOwnershipFromGcsMetadata,
+  type HostedImageOwnership,
+  type HostedImageViewer
+} from '~~/shared/hostedImageAccess'
 
 type GcsEnv = {
   bucketName: string
@@ -109,11 +116,22 @@ export type UploadCustomMarketingImageInput = {
   recipientListId: string
   buffer: Buffer
   contentType: string
+  /** Uploader tags that drive Images library visibility. */
+  ownership?: HostedImageOwnership
 }
 
 export type UploadCustomMarketingImageResult = {
   url: string
   objectPath: string
+}
+
+function gcsOwnershipMetadata(ownership: HostedImageOwnership | undefined): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const key of ['ownerEmail', 'visibility', 'uploadedBy'] as const) {
+    const value = String(ownership?.[key] ?? '').trim()
+    if (value) out[key] = value
+  }
+  return out
 }
 
 /** Upload a photo to GCS under `custom-marketing/{tenant}/{recipientListId}/…`. */
@@ -153,7 +171,8 @@ export async function uploadCustomMarketingImageToGcs(
         metadata: {
           tenantName: input.tenantName,
           recipientListId: input.recipientListId,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          ...gcsOwnershipMetadata(input.ownership)
         }
       }
     })
@@ -190,6 +209,7 @@ export async function uploadCustomMarketingImageDataUrlToGcs(input: {
   tenantName: string
   recipientListId: string
   dataUrl: string
+  ownership?: HostedImageOwnership
 }): Promise<UploadCustomMarketingImageResult> {
   const parsed = parseCustomMarketingImageDataUrl(input.dataUrl)
   if (!parsed) {
@@ -198,7 +218,8 @@ export async function uploadCustomMarketingImageDataUrlToGcs(input: {
   return uploadParsedCustomMarketingImageToGcs({
     tenantName: input.tenantName,
     recipientListId: input.recipientListId,
-    parsed
+    parsed,
+    ownership: input.ownership
   })
 }
 
@@ -206,12 +227,14 @@ async function uploadParsedCustomMarketingImageToGcs(input: {
   tenantName: string
   recipientListId: string
   parsed: ParsedCustomMarketingImageDataUrl
+  ownership?: HostedImageOwnership
 }): Promise<UploadCustomMarketingImageResult> {
   return uploadCustomMarketingImageToGcs({
     tenantName: input.tenantName,
     recipientListId: input.recipientListId,
     buffer: Buffer.from(input.parsed.base64, 'base64'),
-    contentType: input.parsed.mime
+    contentType: input.parsed.mime,
+    ownership: input.ownership
   })
 }
 
@@ -226,6 +249,7 @@ export type TenantHostedImageListItem = {
 }
 
 const IMAGE_CONTENT_TYPE_RE = /^image\/(png|jpe?g|gif|webp)$/i
+const LIST_SCAN_MAX_OBJECTS = 5000
 
 /**
  * List hosted image objects under `custom-marketing/{tenant}/…`
@@ -233,25 +257,39 @@ const IMAGE_CONTENT_TYPE_RE = /^image\/(png|jpe?g|gif|webp)$/i
  */
 export async function listCustomMarketingTenantImages(
   tenantName: string,
-  opts?: { maxResults?: number; folder?: string }
+  opts: { viewer: HostedImageViewer; maxResults?: number; folder?: string }
 ): Promise<TenantHostedImageListItem[]> {
   const tenant = sanitizeCustomMarketingGcsPathSegment(tenantName, 'tenant')
-  const folder = opts?.folder
+  const folder = opts.folder
     ? sanitizeCustomMarketingGcsPathSegment(opts.folder, '')
     : ''
   const prefix = folder
     ? `custom-marketing/${tenant}/${folder}/`
     : `custom-marketing/${tenant}/`
-  const maxResults = Math.min(500, Math.max(1, opts?.maxResults ?? 300))
+  const maxResults = Math.min(500, Math.max(1, opts.maxResults ?? 300))
   const bucket = getGcsBucket()
 
-  let files: GetFilesResponse[0]
+  // Owner-scoped viewers filter after listing, so keep paging until enough visible images.
+  const files: GetFilesResponse[0] = []
+  let visibleCount = 0
+  let pageToken: string | undefined
   try {
-    ;[files] = await bucket.getFiles({
-      prefix,
-      maxResults,
-      autoPaginate: false
-    })
+    do {
+      const [page, nextQuery] = await bucket.getFiles({
+        prefix,
+        maxResults,
+        autoPaginate: false,
+        ...(pageToken ? { pageToken } : {})
+      })
+      files.push(...page)
+      visibleCount += page.filter((f) =>
+        canViewHostedImage(hostedImageOwnershipFromGcsMetadata(f.metadata?.metadata), opts.viewer)
+      ).length
+      pageToken =
+        nextQuery && typeof (nextQuery as { pageToken?: unknown }).pageToken === 'string'
+          ? (nextQuery as { pageToken: string }).pageToken
+          : undefined
+    } while (pageToken && visibleCount < maxResults && files.length < LIST_SCAN_MAX_OBJECTS)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'GCS list failed'
     console.error('Custom Marketing GCS list failed', message)
@@ -263,6 +301,10 @@ export async function listCustomMarketingTenantImages(
 
   const items: TenantHostedImageListItem[] = []
   for (const file of files) {
+    if (items.length >= maxResults) break
+    if (!canViewHostedImage(hostedImageOwnershipFromGcsMetadata(file.metadata?.metadata), opts.viewer)) {
+      continue
+    }
     const objectPath = String(file.name ?? '').trim()
     if (!objectPath || objectPath.endsWith('/')) continue
     const contentType = String(file.metadata?.contentType ?? '').trim()
@@ -305,7 +347,8 @@ export async function listCustomMarketingTenantImages(
  */
 export async function deleteCustomMarketingTenantImages(
   tenantName: string,
-  objectPaths: string[]
+  objectPaths: string[],
+  viewer: HostedImageViewer
 ): Promise<{ deleted: string[]; skipped: string[] }> {
   const tenant = sanitizeCustomMarketingGcsPathSegment(tenantName, 'tenant')
   const prefix = `custom-marketing/${tenant}/`
@@ -327,7 +370,15 @@ export async function deleteCustomMarketingTenantImages(
       continue
     }
     try {
-      await bucket.file(objectPath).delete({ ignoreNotFound: true })
+      const file = bucket.file(objectPath)
+      if (viewer.ownerEmails !== null) {
+        const [meta] = await file.getMetadata()
+        if (!canDeleteHostedImage(hostedImageOwnershipFromGcsMetadata(meta?.metadata), viewer)) {
+          skipped.push(objectPath)
+          continue
+        }
+      }
+      await file.delete({ ignoreNotFound: true })
       deleted.push(objectPath)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'GCS delete failed'
@@ -345,7 +396,7 @@ export async function deleteCustomMarketingTenantImages(
  */
 export async function rewriteCustomMarketingDataImagesToGcs(
   html: string,
-  input: { tenantName: string; recipientListId: string }
+  input: { tenantName: string; recipientListId: string; ownership?: HostedImageOwnership }
 ): Promise<string> {
   const srcs = collectCustomMarketingDataImageSrcs(html)
   if (!srcs.length) return String(html ?? '')
@@ -355,7 +406,8 @@ export async function rewriteCustomMarketingDataImagesToGcs(
     const uploaded = await uploadCustomMarketingImageDataUrlToGcs({
       tenantName: input.tenantName,
       recipientListId: input.recipientListId,
-      dataUrl: src
+      dataUrl: src,
+      ownership: input.ownership
     })
     next = replaceCustomMarketingImageSrc(next, src, uploaded.url)
   }

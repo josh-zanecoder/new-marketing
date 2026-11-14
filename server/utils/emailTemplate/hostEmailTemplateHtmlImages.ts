@@ -3,6 +3,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { rewriteEmailTemplateImagesForHosting } from '@server/utils/emailTemplate/rewriteEmailTemplateImagesForHosting'
+import { hostedImageOwnershipFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { emailTemplateHtmlNeedsImageHosting } from '~~/shared/utils/emailTemplateHostableImages'
 
@@ -64,5 +65,8 @@ export async function hostEmailTemplateHtmlImagesOnSave(
     })
   }
 
-  return rewriteEmailTemplateImagesForHosting(source, { tenantName })
+  return rewriteEmailTemplateImagesForHosting(source, {
+    tenantName,
+    ownership: hostedImageOwnershipFromAuth(auth)
+  })
 }

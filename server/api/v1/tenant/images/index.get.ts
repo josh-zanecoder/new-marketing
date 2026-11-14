@@ -2,6 +2,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { listCustomMarketingTenantImages } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { requireTenantImages } from '@server/utils/requireTenantImages'
+import { hostedImageViewerFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 
 /**
  * List hosted tenant images (public HTTPS URLs) for the Images gallery.
@@ -15,7 +16,9 @@ export default defineEventHandler(async (event) => {
   )
 
   const tenantName = await resolveCustomMarketingTenantFolderName(auth)
-  const items = await listCustomMarketingTenantImages(tenantName)
+  const items = await listCustomMarketingTenantImages(tenantName, {
+    viewer: hostedImageViewerFromAuth(auth)
+  })
 
   return {
     ok: true,

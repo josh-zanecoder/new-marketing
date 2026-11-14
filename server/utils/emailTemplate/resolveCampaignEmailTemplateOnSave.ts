@@ -4,6 +4,7 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignModel } from '@server/types/tenant/campaign.model'
 import type { EmailTemplateDoc, EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
 import { rewriteCustomMarketingDataImagesToGcs } from '@server/services/customMarketingImageUpload.service'
+import { hostedImageOwnershipFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 import {
   canWriteEmailTemplate,
   emailTemplateOwnershipFromAuth,
@@ -100,7 +101,11 @@ export async function resolveCampaignEmailTemplateOnSave(
         message: 'Photos must be hosted for email clients. Configure GCS tenant credentials.'
       })
     }
-    html = await rewriteCustomMarketingDataImagesToGcs(html, { tenantName, recipientListId })
+    html = await rewriteCustomMarketingDataImagesToGcs(html, {
+      tenantName,
+      recipientListId,
+      ownership: hostedImageOwnershipFromAuth(input.auth)
+    })
   }
 
   if (html) {

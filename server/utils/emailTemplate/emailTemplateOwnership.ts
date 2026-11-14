@@ -20,7 +20,7 @@ const SHARED_TEMPLATE_FILTER = {
  * Owner-scoped session (CRM handoff without `tenantWideContacts`). Tenant-wide, Firebase and
  * admin sessions manage shared templates and see every template.
  */
-function ownerScopedEmails(auth: unknown): string[] | null {
+export function ownerScopedEmails(auth: unknown): string[] | null {
   if (!isTenantApiKeyAuthContext(auth)) return null
   if (auth.tenantWideContacts === true) return null
   return (auth.contactOwnerScope ?? [])

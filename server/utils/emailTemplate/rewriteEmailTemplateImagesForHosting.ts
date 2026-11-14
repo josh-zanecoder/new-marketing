@@ -12,6 +12,7 @@ import {
 import {
   planEmailTemplateHostableImages
 } from '~~/shared/utils/emailTemplateHostableImages'
+import type { HostedImageOwnership } from '~~/shared/hostedImageAccess'
 
 const REMOTE_FETCH_TIMEOUT_MS = 15_000
 const REMOTE_FETCH_MAX_BYTES = CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES * 2
@@ -73,7 +74,7 @@ async function fetchRemoteImageBuffer(
  */
 export async function rewriteEmailTemplateImagesForHosting(
   html: string,
-  input: { tenantName: string }
+  input: { tenantName: string; ownership?: HostedImageOwnership }
 ): Promise<RewriteEmailTemplateImagesResult> {
   const tenantName = String(input.tenantName ?? '').trim()
   let next = String(html ?? '')
@@ -90,7 +91,8 @@ export async function rewriteEmailTemplateImagesForHosting(
     const before = next
     next = await rewriteCustomMarketingDataImagesToGcs(next, {
       tenantName,
-      recipientListId: CUSTOM_MARKETING_GCS_LIBRARY_FOLDER
+      recipientListId: CUSTOM_MARKETING_GCS_LIBRARY_FOLDER,
+      ownership: input.ownership
     })
     if (next !== before) {
       hostedCount += plan.dataUrls.length
@@ -111,7 +113,8 @@ export async function rewriteEmailTemplateImagesForHosting(
           tenantName,
           recipientListId: CUSTOM_MARKETING_GCS_LIBRARY_FOLDER,
           buffer: fetched.buffer,
-          contentType: fetched.contentType
+          contentType: fetched.contentType,
+          ownership: input.ownership
         })
         next = replaceCustomMarketingImageSrc(next, remoteUrl, uploaded.url)
         hostedCount += 1

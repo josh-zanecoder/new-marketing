@@ -2,6 +2,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { uploadCustomMarketingImageDataUrlToGcs } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
+import { hostedImageOwnershipFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
 import {
   CUSTOM_MARKETING_GCS_NO_LIST_FOLDER,
@@ -48,7 +49,8 @@ export default defineEventHandler(async (event) => {
   const uploaded = await uploadCustomMarketingImageDataUrlToGcs({
     tenantName,
     recipientListId,
-    dataUrl
+    dataUrl,
+    ownership: hostedImageOwnershipFromAuth(auth)
   })
 
   return { ok: true, url: uploaded.url, objectPath: uploaded.objectPath }

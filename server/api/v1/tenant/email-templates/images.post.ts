@@ -2,6 +2,7 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { requireTenantEmailTemplateImageHost } from '@server/utils/requireTenantInsertImage'
 import { uploadCustomMarketingImageDataUrlToGcs } from '@server/services/customMarketingImageUpload.service'
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
+import { hostedImageOwnershipFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
 import { CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES } from '~~/shared/customMarketingEmailSize'
 import {
   CUSTOM_MARKETING_GCS_EMAIL_TEMPLATE_FOLDER,
@@ -44,7 +45,8 @@ export default defineEventHandler(async (event) => {
   const uploaded = await uploadCustomMarketingImageDataUrlToGcs({
     tenantName,
     recipientListId: EMAIL_TEMPLATE_GCS_IMAGE_FOLDER,
-    dataUrl
+    dataUrl,
+    ownership: hostedImageOwnershipFromAuth(auth)
   })
 
   return { ok: true, url: uploaded.url, objectPath: uploaded.objectPath }
