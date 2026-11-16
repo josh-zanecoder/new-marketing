@@ -16,6 +16,7 @@ import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 import { parseAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
 import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
+import { parseGrapesBuilderUrl } from '~~/shared/grapesBuilderUrl'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
 import { parseAllowTenantEditText } from '~~/shared/allowTenantEditText'
 import { parseAllowTenantResizeImage } from '~~/shared/allowTenantResizeImage'
@@ -377,6 +378,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantInsertImage = parseRegistryAllowTenantInsertImage(doc)
   const allowTenantReplaceImage = parseRegistryAllowTenantReplaceImage(doc)
   const allowTenantGrapesBuilder = parseRegistryAllowTenantGrapesBuilder(doc)
+  const grapesBuilderUrl = parseGrapesBuilderUrl(doc.grapesBuilderUrl)
   const allowTenantBeefreeBuilder = parseRegistryAllowTenantBeefreeBuilder(doc)
   const allowTenantTemplateBuilder = parseRegistryAllowTenantTemplateBuilder(doc)
   const allowTenantEditText = parseRegistryAllowTenantEditText(doc)
@@ -406,6 +408,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     allowTenantInsertImage,
     allowTenantReplaceImage,
     allowTenantGrapesBuilder,
+    grapesBuilderUrl,
     allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,
     allowTenantEditText,

@@ -6,6 +6,9 @@
 .cache
 dist
 
+# Built Grapes iframe app (npm run build:grapes)
+public/grapes-builder
+
 # Node dependencies
 node_modules
 

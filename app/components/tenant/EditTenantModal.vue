@@ -165,6 +165,25 @@
           </div>
 
           <div class="compact-modal-field compact-modal-field--full">
+            <label for="edit-tenant-grapes-builder-url" class="compact-modal-label">
+              Grapes builder URL <span class="compact-modal-label-hint">(optional)</span>
+            </label>
+            <input
+              id="edit-tenant-grapes-builder-url"
+              v-model="grapesBuilderUrl"
+              type="url"
+              autocomplete="url"
+              placeholder="https://grapes.example.com"
+              class="compact-modal-input"
+            >
+            <p class="mt-1.5 text-xs text-slate-500">
+              Optional override for the Grapes iframe. Leave blank to use the in-app
+              <span class="font-mono">/grapes-builder/</span>
+              (or env <span class="font-mono">NUXT_PUBLIC_GRAPES_BUILDER_URL</span>).
+            </p>
+          </div>
+
+          <div class="compact-modal-field compact-modal-field--full">
             <label for="edit-tenant-email-provider" class="compact-modal-label">
               Email provider
             </label>
@@ -433,6 +452,7 @@ const emit = defineEmits<{
     name: string
     email: string | null
     crmAppUrl: string | null
+    grapesBuilderUrl: string | null
     tenantId: string | null
     defaultCampaignSenderEmail: string | null
     defaultCampaignSenderName: string | null
@@ -458,6 +478,7 @@ const defaultCampaignSenderName = ref('')
 const defaultCampaignSenderEmail = ref('')
 const campaignFromAddressMode = ref<CampaignFromAddressMode>(CAMPAIGN_FROM_ADDRESS_MODE_DEFAULT)
 const crmAppUrl = ref('')
+const grapesBuilderUrl = ref('')
 const brevoApiKey = ref('')
 const clearBrevoApiKey = ref(false)
 const brevoWebhookSecret = ref('')
@@ -483,6 +504,7 @@ function loadFromTenant(t: AdminTenantRow) {
   defaultCampaignSenderEmail.value = t.defaultCampaignSenderEmail ?? ''
   campaignFromAddressMode.value = parseCampaignFromAddressMode(t.campaignFromAddressMode)
   crmAppUrl.value = t.crmAppUrl ?? ''
+  grapesBuilderUrl.value = t.grapesBuilderUrl ?? ''
   brevoApiKey.value = ''
   clearBrevoApiKey.value = false
   brevoWebhookSecret.value = ''
@@ -532,6 +554,7 @@ function handleSubmit() {
   const trimmedName = name.value.trim()
   const trimmedEmail = email.value.trim()
   const trimmedCrm = crmAppUrl.value.trim()
+  const trimmedGrapesBuilder = grapesBuilderUrl.value.trim()
   const trimmedTid = tenantId.value.trim()
   const trimmedSenderName = defaultCampaignSenderName.value.trim()
   const trimmedSenderEmail = defaultCampaignSenderEmail.value.trim()
@@ -569,6 +592,14 @@ function handleSubmit() {
     return
   }
 
+  if (
+    trimmedGrapesBuilder
+    && !/^https?:\/\/.+/i.test(trimmedGrapesBuilder)
+  ) {
+    errorMessage.value = 'Grapes builder URL must start with http:// or https://'
+    return
+  }
+
   if (emailProvider.value === 'ZC_MAIL') {
     if (!zcMailTenant.value.trim()) {
       errorMessage.value = 'zcMail tenant name is required.'
@@ -593,6 +624,7 @@ function handleSubmit() {
     name: string
     email: string | null
     crmAppUrl: string | null
+    grapesBuilderUrl: string | null
     tenantId: string | null
     defaultCampaignSenderName: string | null
     defaultCampaignSenderEmail: string | null
@@ -609,6 +641,7 @@ function handleSubmit() {
     name: trimmedName,
     email: trimmedEmail.toLowerCase(),
     crmAppUrl: trimmedCrm || null,
+    grapesBuilderUrl: trimmedGrapesBuilder || null,
     tenantId: trimmedTid,
     defaultCampaignSenderName: trimmedSenderName || null,
     defaultCampaignSenderEmail: trimmedSenderEmail

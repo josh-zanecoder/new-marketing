@@ -61,17 +61,13 @@ const {
 const builderMode = ref<'template' | 'grapes'>('template')
 const visualHtml = ref('')
 const canUseTemplate = computed(() => imagePermissionLoaded.value && allowTenantTemplateBuilder.value)
-const canUseGrapes = computed(() => imagePermissionLoaded.value && allowTenantGrapesBuilder.value)
+const canUseGrapes = computed(
+  () =>
+    imagePermissionLoaded.value &&
+    (allowTenantGrapesBuilder.value || import.meta.dev)
+)
 const canUseEmailBuilder = computed(() => canUseTemplate.value || canUseGrapes.value)
 
-watch([imagePermissionLoaded, canUseTemplate, canUseGrapes], () => {
-  if (!imagePermissionLoaded.value) return
-  if (builderMode.value === 'grapes' && !canUseGrapes.value) builderMode.value = 'template'
-  if (builderMode.value === 'template' && !canUseTemplate.value && canUseGrapes.value) {
-    initialHtml.value = visualHtml.value
-    builderMode.value = 'grapes'
-  }
-})
 const editorContainerRef = ref<HTMLDivElement | null>(null)
 const editorRef = ref<Editor | null>(null)
 const initialHtml = ref<string | null>(null)
@@ -214,6 +210,26 @@ function queryParamString(q: unknown): string {
   if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0] : ''
   return typeof q === 'string' ? q : String(q)
 }
+
+const preferredMode = computed<'template' | 'grapes'>(() =>
+  queryParamString(route.query.mode) === 'grapes' ? 'grapes' : 'template'
+)
+
+watch([imagePermissionLoaded, canUseTemplate, canUseGrapes, preferredMode], () => {
+  if (!imagePermissionLoaded.value) return
+  if (preferredMode.value === 'grapes' && canUseGrapes.value) {
+    if (builderMode.value !== 'grapes') {
+      initialHtml.value = visualHtml.value
+      builderMode.value = 'grapes'
+    }
+    return
+  }
+  if (builderMode.value === 'grapes' && !canUseGrapes.value) builderMode.value = 'template'
+  if (builderMode.value === 'template' && !canUseTemplate.value && canUseGrapes.value) {
+    initialHtml.value = visualHtml.value
+    builderMode.value = 'grapes'
+  }
+})
 
 const htmlFromUrl = computed(() => queryParamString(route.query.html))
 const builderId = computed(() => queryParamString(route.query.builderId))

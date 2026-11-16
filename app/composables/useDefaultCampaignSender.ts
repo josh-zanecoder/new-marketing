@@ -32,6 +32,7 @@ export type TenantMeCampaignSender = {
   allowTenantInsertImage?: boolean
   allowTenantReplaceImage?: boolean
   allowTenantGrapesBuilder?: boolean
+  grapesBuilderUrl?: string | null
   allowTenantBeefreeBuilder?: boolean
   allowTenantTemplateBuilder?: boolean
   allowTenantEditText?: boolean
@@ -70,6 +71,8 @@ export function useDefaultCampaignSender() {
   const allowTenantReplaceImage = ref(false)
   /** Superadmin gate; false hides the GrapesJS email editor. */
   const allowTenantGrapesBuilder = ref(false)
+  /** Optional Grapes iframe origin; empty → in-app `/grapes-builder/`. */
+  const grapesBuilderUrl = ref('')
   /** Superadmin gate; false hides the Beefree email builder. */
   const allowTenantBeefreeBuilder = ref(false)
   /** Superadmin gate; false hides the template image builder. */
@@ -136,6 +139,8 @@ export function useDefaultCampaignSender() {
       allowTenantInsertImage.value = me?.allowTenantInsertImage === true
       allowTenantReplaceImage.value = me?.allowTenantReplaceImage === true
       allowTenantGrapesBuilder.value = me?.allowTenantGrapesBuilder === true
+      grapesBuilderUrl.value =
+        typeof me?.grapesBuilderUrl === 'string' ? me.grapesBuilderUrl.trim() : ''
       allowTenantBeefreeBuilder.value = me?.allowTenantBeefreeBuilder === true
       allowTenantTemplateBuilder.value = me?.allowTenantTemplateBuilder === true
       allowTenantEditText.value = me?.allowTenantEditText === true
@@ -176,6 +181,7 @@ export function useDefaultCampaignSender() {
       allowTenantInsertImage.value = false
       allowTenantReplaceImage.value = false
       allowTenantGrapesBuilder.value = false
+      grapesBuilderUrl.value = ''
       allowTenantBeefreeBuilder.value = false
       allowTenantTemplateBuilder.value = false
       allowTenantEditText.value = false
@@ -199,6 +205,7 @@ export function useDefaultCampaignSender() {
     allowTenantInsertImage,
     allowTenantReplaceImage,
     allowTenantGrapesBuilder,
+    grapesBuilderUrl,
     allowTenantBeefreeBuilder,
     allowTenantTemplateBuilder,
     allowTenantEditText,

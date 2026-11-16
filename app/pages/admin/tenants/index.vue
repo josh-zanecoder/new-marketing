@@ -439,6 +439,7 @@ async function fetchTenants() {
         tenantId: string | null
         apiKeyPrefix: string | null
         crmAppUrl: string | null
+        grapesBuilderUrl?: string | null
         kafkaOutboundTopic: string | null
         defaultCampaignSenderEmail: string | null
         defaultCampaignSenderName: string | null
@@ -477,6 +478,7 @@ async function fetchTenants() {
       tenantId: t.tenantId,
       apiKeyPrefix: t.apiKeyPrefix,
       crmAppUrl: t.crmAppUrl,
+      grapesBuilderUrl: t.grapesBuilderUrl ?? null,
       kafkaOutboundTopic: t.kafkaOutboundTopic ?? null,
       defaultCampaignSenderEmail: t.defaultCampaignSenderEmail ?? null,
       defaultCampaignSenderName: t.defaultCampaignSenderName ?? null,
@@ -545,6 +547,7 @@ async function handleEditTenantSubmit(payload: {
   name: string
   email: string | null
   crmAppUrl: string | null
+  grapesBuilderUrl: string | null
   tenantId: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null

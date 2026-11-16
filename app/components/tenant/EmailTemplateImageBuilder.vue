@@ -11,6 +11,7 @@ import {
   listEmailTemplateHtmlImages,
   moveEmailTemplateHtmlImageTo,
   parseInsertableImageUrl,
+  pruneEmptyEmailImageBlocks,
   removeEmailTemplateHtmlImage,
   replaceEmailTemplateHtmlImageSrc,
   updateEmailTemplateHtmlImageLayout
@@ -149,6 +150,11 @@ watch(() => props.sourceHtml, (html) => {
 
 watch(() => props.modelValue, (html) => {
   rememberOriginal(html)
+  const cleaned = pruneEmptyEmailImageBlocks(html)
+  if (cleaned !== html) {
+    emit('update:modelValue', cleaned)
+    return
+  }
 }, { immediate: true })
 
 const canResetDesign = computed(() => Boolean(originalHtml.value.trim()))
@@ -2679,12 +2685,23 @@ function startOutsideTracking() {
   window.addEventListener('pointercancel', onOutsidePointer, true)
 }
 
+function pruneEmptyImageBlocksFromDoc(doc: Document) {
+  const view = doc.defaultView
+  if (!view) return
+  for (const node of [...doc.querySelectorAll('[data-email-block="image"]')]) {
+    if (!(node instanceof view.HTMLElement)) continue
+    if (node.querySelector('img')) continue
+    node.remove()
+  }
+}
+
 function applyImagePlacement(doc: Document, img: HTMLImageElement, placement: EmailImagePlacement) {
   if (placement.kind === 'before-image') {
     const images = [...doc.querySelectorAll('img')]
     const dest = images[placement.index]
     if (!dest || dest === img || !dest.parentNode) return
     dest.parentNode.insertBefore(img, dest)
+    pruneEmptyImageBlocksFromDoc(doc)
     return
   }
   const slot = doc.querySelector(`[data-email-slot="${placement.index}"]`)
@@ -2693,6 +2710,7 @@ function applyImagePlacement(doc: Document, img: HTMLImageElement, placement: Em
   else if (placement.kind === 'after-block') slot.parentNode.insertBefore(img, slot.nextSibling)
   else if (placement.kind === 'end-of-block') slot.appendChild(img)
   else slot.insertBefore(img, slot.firstChild)
+  pruneEmptyImageBlocksFromDoc(doc)
 }
 
 function elementFromEvent(doc: Document, target: EventTarget | null): HTMLElement | null {

@@ -53,7 +53,12 @@ export default defineNuxtConfig({
       firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
       /** Classic Places Autocomplete. Maps JavaScript API + Places library. */
       googleMapsApiKey:
-        process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || ''
+        process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || '',
+      /**
+       * Optional override for the Grapes iframe origin.
+       * Empty → same-origin `/grapes-builder/` (built into Marketing public/).
+       */
+      grapesBuilderUrl: process.env.NUXT_PUBLIC_GRAPES_BUILDER_URL || ''
     },
     redisHost: process.env.REDIS_HOST || '127.0.0.1',
     redisPort: Number(process.env.REDIS_PORT) || 6379,
@@ -112,6 +117,12 @@ export default defineNuxtConfig({
     '@vuepic/vue-datepicker/dist/main.css',
     '~/assets/css/google-places.css'
   ],
+  vue: {
+    compilerOptions: {
+      /** Lit Pigeon mounts as a web component. */
+      isCustomElement: (tag) => tag.startsWith('pigeon-')
+    }
+  },
   vite: {
     optimizeDeps: {
       include: [
@@ -124,7 +135,9 @@ export default defineNuxtConfig({
         'firebase/auth',
         'echarts/core',
         'vue-echarts',
-        '@beefree.io/sdk'
+        '@beefree.io/sdk',
+        '@templatical/editor',
+        '@lit-pigeon/editor'
       ]
     }
   },

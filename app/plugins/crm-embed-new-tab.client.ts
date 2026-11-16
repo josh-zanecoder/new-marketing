@@ -55,6 +55,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       marketingTenantHandoffCookieBase()
     )
     if (embedCookie.value !== '1') return
+    // Keep localhost top-level for local Template Builder QA; CRM iframe still embeds normally.
+    const host = window.location.hostname
+    if (host === 'localhost' || host === '127.0.0.1') return
     const route = useRoute()
     let bounced = false
     function bounceToCrm(): void {

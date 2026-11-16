@@ -18,6 +18,7 @@ import { parseAllowTenantInsertImage } from '~~/shared/allowTenantInsertImage'
 import { parseAllowTenantReplaceImage } from '~~/shared/allowTenantReplaceImage'
 import { parseAllowTenantGrapesBuilder } from '~~/shared/allowTenantGrapesBuilder'
 import { parseAllowTenantBeefreeBuilder } from '~~/shared/allowTenantBeefreeBuilder'
+import { parseGrapesBuilderUrl } from '~~/shared/grapesBuilderUrl'
 import { parseAllowTenantTemplateBuilder } from '~~/shared/allowTenantTemplateBuilder'
 import { parseAllowTenantEditText } from '~~/shared/allowTenantEditText'
 import { parseAllowTenantResizeImage } from '~~/shared/allowTenantResizeImage'
@@ -120,6 +121,8 @@ export async function buildTenantMeResponse(event: H3Event) {
     allowTenantReplaceImage: parseAllowTenantReplaceImage(registryDoc),
     /** When false/omitted, the GrapesJS email editor stays hidden. */
     allowTenantGrapesBuilder: parseAllowTenantGrapesBuilder(registryDoc?.allowTenantGrapesBuilder),
+    /** Isolated Grapes builder origin; null → env `NUXT_PUBLIC_GRAPES_BUILDER_URL`. */
+    grapesBuilderUrl: parseGrapesBuilderUrl(registryDoc?.grapesBuilderUrl),
     /** When false/omitted, the Beefree email builder stays hidden. */
     allowTenantBeefreeBuilder: parseAllowTenantBeefreeBuilder(registryDoc?.allowTenantBeefreeBuilder),
     /** When false/omitted, the template image builder stays hidden. */

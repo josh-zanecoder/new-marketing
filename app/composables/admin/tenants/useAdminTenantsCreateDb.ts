@@ -134,6 +134,7 @@ export function useAdminTenantsCreateDb() {
       name: string
       email: string | null
       crmAppUrl: string | null
+      grapesBuilderUrl: string | null
       tenantId: string | null
       defaultCampaignSenderEmail: string | null
       defaultCampaignSenderName: string | null

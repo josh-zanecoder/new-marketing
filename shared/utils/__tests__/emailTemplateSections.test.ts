@@ -75,6 +75,16 @@ describe('email template sections', () => {
     expect(listEmailArrangeItems(html)).toEqual([])
   })
 
+  it('hides empty Image blocks left after the photo was moved out', () => {
+    const html =
+      '<body><table data-email-block="title" data-email-box style="width:100%"><tr><td style="padding:16px"><h2>Title</h2><img src="photo.png" width="180"></td></tr></table>'
+      + '<table data-email-block="image" data-email-box style="width:100%"><tr><td style="padding:16px;border:1px solid #000"></td></tr></table></body>'
+    const items = listEmailArrangeItems(html)
+    // Ghost Image *block* (no <img>) must not appear as a section card.
+    expect(items.some((item) => item.kind === 'section' && item.label === 'Image')).toBe(false)
+    expect(items.some((item) => item.label === 'Title')).toBe(true)
+  })
+
   it('lists the text inside a section and leaves style and spacers out', () => {
     const html = '<style>p{color:red}</style><div><h1>Hello &amp; co</h1><p>&#8202;</p><p>Body copy</p></div>'
     expect(listEmailTextRuns(html).map((run) => run.text)).toEqual(['Hello & co', 'Body copy'])
