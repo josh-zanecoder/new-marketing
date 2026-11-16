@@ -28,6 +28,24 @@
         </dd>
       </div>
 
+      <div class="overview-identity-field">
+        <dt class="overview-field-label">
+          Grapes builder URL
+        </dt>
+        <dd class="overview-field-value min-w-0">
+          <a
+            v-if="tenant.grapesBuilderUrl"
+            :href="tenant.grapesBuilderUrl"
+            class="overview-field-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ tenant.grapesBuilderUrl }}
+          </a>
+          <span v-else class="text-slate-400">Env default</span>
+        </dd>
+      </div>
+
       <div
         class="rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/40 px-4 py-4 shadow-sm sm:px-5 sm:py-4"
       >
@@ -216,6 +234,7 @@ defineProps<{
   tenant: {
     email: string | null
     crmAppUrl: string | null
+    grapesBuilderUrl?: string | null
     tenantId: string | null
     apiKeyPrefix: string | null
     createdAt: string

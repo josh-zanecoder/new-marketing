@@ -16,6 +16,7 @@ import {
   parseRegistryCampaignFromAddressMode,
   toTenantAdminRow
 } from '@server/utils/registry/tenantAdminRow'
+import { normalizeGrapesBuilderUrlInput } from '~~/shared/grapesBuilderUrl'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -35,6 +36,7 @@ export default defineEventHandler(async (event) => {
     name?: string
     email?: string | null
     crmAppUrl?: string | null
+    grapesBuilderUrl?: string | null
     tenantId?: string | null
     defaultCampaignSenderEmail?: string | null
     defaultCampaignSenderName?: string | null
@@ -96,6 +98,22 @@ export default defineEventHandler(async (event) => {
       })
     }
     crmAppUrl = u
+  }
+
+  if (body?.grapesBuilderUrl === undefined) {
+    throw createError({
+      statusCode: 400,
+      message: 'grapesBuilderUrl is required (string or null)'
+    })
+  }
+  let grapesBuilderUrl: string | null
+  try {
+    grapesBuilderUrl = normalizeGrapesBuilderUrlInput(body.grapesBuilderUrl)
+  } catch (err) {
+    throw createError({
+      statusCode: 400,
+      message: err instanceof Error ? err.message : 'Invalid Grapes builder URL'
+    })
   }
 
   if (body?.tenantId === undefined) {
@@ -160,6 +178,7 @@ export default defineEventHandler(async (event) => {
     name: displayName,
     email: contactEmail,
     crmAppUrl,
+    grapesBuilderUrl,
     tenantId,
     defaultCampaignSenderEmail,
     defaultCampaignSenderName,

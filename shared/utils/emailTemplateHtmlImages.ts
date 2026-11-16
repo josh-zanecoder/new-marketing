@@ -223,23 +223,77 @@ function placeImageTag(html: string, tag: string, placement: EmailImagePlacement
   return { html: emailClientSafeImageHtml(next), index: index < 0 ? 0 : index }
 }
 
+/** Keep the on-screen size so a photo does not jump bigger when it leaves a narrow column. */
+function lockImageTagWidth(tag: string, widthPx: number): string {
+  const width = Math.max(80, Math.round(widthPx))
+  const styleMatch = tag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+  const style = styleWithoutUnsafeImageLayout(parseStyleDeclarations(styleMatch?.[1] ?? styleMatch?.[2] ?? ''))
+  style.set('display', style.get('display') || 'block')
+  style.set('width', `${width}px`)
+  style.set('max-width', '100%')
+  if (!style.has('height') || style.get('height') === 'auto') style.set('height', 'auto')
+  let nextTag = rewriteImageTag(tag, style)
+  nextTag = upsertQuotedAttr(nextTag, 'width', String(width))
+  nextTag = nextTag.replace(/\s*\bheight\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '')
+  return nextTag
+}
+
+/**
+ * Remove Image blocks that no longer contain a photo (left behind after dragging the
+ * `<img>` out of `data-email-block="image"`).
+ */
+export function pruneEmptyEmailImageBlocks(html: string): string {
+  if (!html || !/\bdata-email-block\s*=\s*["']?image\b/i.test(html)) return html
+  const re = /<(\w+)\b[^>]*\bdata-email-block\s*=\s*["']?image\b[^>]*>/gi
+  const ranges: { start: number; end: number }[] = []
+  let match: RegExpExecArray | null
+  while ((match = re.exec(html)) !== null) {
+    const name = (match[1] || '').toLowerCase()
+    if (!name) continue
+    const openEnd = match.index + match[0].length
+    const closeStart = matchingCloseStart(html, openEnd, name)
+    if (closeStart < 0) continue
+    const closeEnd = html.indexOf('>', closeStart)
+    if (closeEnd < 0) continue
+    if (/<img\b/i.test(html.slice(openEnd, closeStart))) continue
+    ranges.push({ start: match.index, end: closeEnd + 1 })
+  }
+  let next = html
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    const range = ranges[i]
+    if (!range) continue
+    next = next.slice(0, range.start) + next.slice(range.end)
+  }
+  return next
+}
+
 /** Move an image into the section under the pointer. Leaves it alone when that section is missing. */
 export function moveEmailTemplateHtmlImageTo(
   html: string,
   imageIndex: number,
-  placement: EmailImagePlacement | null
+  placement: EmailImagePlacement | null,
+  options?: { width?: number }
 ): { html: string; index: number } {
   const from = listEmailTemplateHtmlImages(html)[imageIndex]
   if (!from || !placement) return { html, index: imageIndex }
   if (placement.kind === 'before-image' && placement.index === imageIndex) return { html, index: imageIndex }
-  const tag = html.slice(from.tagStart, from.tagEnd)
+  let tag = html.slice(from.tagStart, from.tagEnd)
+  if (options?.width != null && options.width > 0) tag = lockImageTagWidth(tag, options.width)
   const without = html.slice(0, from.tagStart) + html.slice(from.tagEnd)
   let target = placement
   if (placement.kind === 'before-image') {
     const dest = imageIndex < placement.index ? placement.index - 1 : placement.index
     target = { kind: 'before-image', index: dest }
   }
-  return placeImageTag(without, tag, target) ?? { html, index: imageIndex }
+  const placed = placeImageTag(without, tag, target) ?? { html, index: imageIndex }
+  if (placed.html === html) return placed
+  const cleaned = pruneEmptyEmailImageBlocks(placed.html)
+  if (cleaned === placed.html) return placed
+  const src = readSrcFromTag(tag)
+  const index = src
+    ? listEmailTemplateHtmlImages(cleaned).findIndex((image) => image.src === src)
+    : placed.index
+  return { html: cleaned, index: index < 0 ? placed.index : index }
 }
 
 /** Insert a hosted image into the section under the pointer. */
@@ -291,8 +345,8 @@ export function updateEmailTemplateHtmlImageLayout(
   const target = listEmailTemplateHtmlImages(html)[imageIndex]
   if (!target || layout.width == null) return html
 
-  const width = Math.max(24, Math.round(layout.width))
-  const height = layout.height != null ? Math.max(24, Math.round(layout.height)) : null
+  const width = Math.max(80, Math.round(layout.width))
+  const height = layout.height != null ? Math.max(80, Math.round(layout.height)) : null
   const tag = html.slice(target.tagStart, target.tagEnd)
   const styleMatch = tag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
   const style = styleWithoutUnsafeImageLayout(parseStyleDeclarations(styleMatch?.[1] ?? styleMatch?.[2] ?? ''))

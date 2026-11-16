@@ -14,6 +14,7 @@ import {
   moveEmailTemplateHtmlImageBeforeText,
   moveEmailTemplateHtmlImageTo,
   parseInsertableImageUrl,
+  pruneEmptyEmailImageBlocks,
   removeEmailTemplateHtmlImage,
   replaceEmailTemplateHtmlImageSrc,
   updateEmailTemplateHtmlImageLayout
@@ -138,6 +139,20 @@ describe('emailTemplateHtmlImages', () => {
     expect(moved.html.indexOf('photo.png')).toBeLessThan(moved.html.indexOf('Footer line'))
     expect(moved.html.indexOf('photo.png')).toBeLessThan(moved.html.lastIndexOf('</div>'))
     expect(moved.index).toBe(0)
+    const locked = moveEmailTemplateHtmlImageTo(html, 0, { kind: 'into-block', index: footer?.index ?? -1 }, { width: 180 })
+    expect(locked.html).toContain('width="180"')
+    expect(locked.html).toContain('width: 180px')
+    const withBlock =
+      '<html><body><table data-email-block="image"><tr><td><img src="photo.png" width="320"></td></tr></table><div><p>Footer line</p></div></body></html>'
+    const footerOnly = listEmailContentBlocks(withBlock).find((block) =>
+      withBlock.slice(block.tagEnd, block.tagEnd + 20).includes('Footer')
+    )
+    const pulled = moveEmailTemplateHtmlImageTo(withBlock, 0, { kind: 'into-block', index: footerOnly?.index ?? -1 }, { width: 180 })
+    expect(pulled.html).not.toContain('data-email-block="image"')
+    expect(pulled.html).toContain('width="180"')
+    expect(pruneEmptyEmailImageBlocks(
+      '<table data-email-block="image"><tr><td style="padding:16px"></td></tr></table><p>Keep</p>'
+    )).toBe('<p>Keep</p>')
     const marked = emailPreviewWithBlockMarkers(html)
     expect(marked).toContain(`data-email-slot="${footer?.index}"`)
     expect(marked).not.toContain('data-email-slot="0" data-email-slot')

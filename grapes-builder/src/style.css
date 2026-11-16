@@ -1,0 +1,118 @@
+:root {
+  color-scheme: light;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --bg: #0f172a;
+  --panel: #ffffff;
+  --accent: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.bar[hidden] {
+  display: none !important;
+}
+
+.bar__title {
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.bar__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #f8fafc;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  filter: brightness(0.96);
+}
+
+#gjs {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.status {
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-top: 1px solid #fecaca;
+  flex-shrink: 0;
+}
+
+/* Full-bleed Grapes shell */
+.gjs-editor-cont {
+  height: 100% !important;
+}
+
+.gjs-cv-canvas {
+  height: 100% !important;
+  top: 0 !important;
+  width: 100% !important;
+}
+
+.gjs-pn-panel {
+  border-radius: 0;
+}
+
+html.is-embedded,
+html.is-embedded body,
+html.is-embedded #app {
+  background: #1e1e1e;
+}

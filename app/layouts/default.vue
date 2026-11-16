@@ -12,6 +12,7 @@ const {
   canSelectAnyLoanOfficer,
   allowTenantImages,
   allowTenantBeefreeBuilder,
+  allowTenantGrapesBuilder,
   allowTenantTemplateBuilder,
   loadDefaultCampaignSender,
   loaded: tenantFlagsLoaded,
@@ -196,6 +197,11 @@ const visibleSidebarNavItems = computed(() =>
     }
     if (item.requiresTenantBeefree) {
       return tenantFlagsLoaded.value && allowTenantBeefreeBuilder.value === true;
+    }
+    if (item.requiresTenantGrapesBuilder) {
+      // Local Nuxt dev always shows Grapes so we can QA drag/drop without flipping the admin flag.
+      if (import.meta.dev) return true
+      return tenantFlagsLoaded.value && allowTenantGrapesBuilder.value === true;
     }
     if (item.requiresTenantTemplateBuilder) {
       return tenantFlagsLoaded.value && allowTenantTemplateBuilder.value === true;

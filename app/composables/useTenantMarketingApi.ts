@@ -626,6 +626,7 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     senderEmail?: string
     senderMode?: string
     templateHtml?: string
+    templateHtmlSource?: 'editor' | 'upload'
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
     recipientsManual?: string[]

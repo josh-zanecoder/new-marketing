@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
     senderEmail?: string
     senderMode?: string
     templateHtml?: string
+    templateHtmlSource?: 'editor' | 'upload'
     recipientsType?: 'list' | 'manual'
     recipientsListId?: string
     recipientsManual?: string[]
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
     senderEmail: body?.senderEmail,
     senderMode: body?.senderMode,
     templateHtml: body?.templateHtml,
+    templateHtmlSource: body?.templateHtmlSource,
     recipientsType: body?.recipientsType,
     recipientsListId: body?.recipientsListId,
     recipientsManual: body?.recipientsManual

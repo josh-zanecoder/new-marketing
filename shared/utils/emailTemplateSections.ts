@@ -1126,6 +1126,10 @@ function nodeHasContent(html: string, node: EmailNode): boolean {
   if (node.tag === 'img') return true
   if (addedBlockKind(html, node)) return true
   const slice = html.slice(node.start, node.end)
+  // Empty Image shells (photo dragged out, no <img>) stay out of Sections.
+  const open = html.slice(node.start, node.openEnd)
+  const blockKind = /\bdata-email-block\s*=\s*["']?([\w-]+)/i.exec(open)?.[1] ?? ''
+  if (blockKind === 'image') return /<img\b/i.test(slice)
   if (/<img\b/i.test(slice)) return true
   return visibleText(slice).length > 0
 }

@@ -131,6 +131,7 @@ describe('toTenantAdminRow', () => {
       createdAt: '2026-01-01T00:00:00.000Z'
     })
     expect(row?.allowTenantGrapesBuilder).toBe(false)
+    expect(row?.grapesBuilderUrl).toBe(null)
     expect(row?.allowTenantBeefreeBuilder).toBe(false)
     expect(row?.allowTenantTemplateBuilder).toBe(false)
     expect(row?.allowTenantEditText).toBe(false)
@@ -143,12 +144,14 @@ describe('toTenantAdminRow', () => {
       dbName: 'acme_db',
       createdAt: '2026-01-01T00:00:00.000Z',
       allowTenantGrapesBuilder: true,
+      grapesBuilderUrl: 'https://grapes.example.com/',
       allowTenantBeefreeBuilder: true,
       allowTenantTemplateBuilder: true,
       allowTenantEditText: true,
       allowTenantResizeImage: true
     })
     expect(row?.allowTenantGrapesBuilder).toBe(true)
+    expect(row?.grapesBuilderUrl).toBe('https://grapes.example.com')
     expect(row?.allowTenantBeefreeBuilder).toBe(true)
     expect(row?.allowTenantTemplateBuilder).toBe(true)
     expect(row?.allowTenantEditText).toBe(true)

@@ -43,6 +43,8 @@ export interface AdminTenantRow {
   allowTenantReplaceImage: boolean
   /** When true, the tenant may open the GrapesJS email editor. Default false. */
   allowTenantGrapesBuilder: boolean
+  /** Isolated Grapes builder origin; null uses env `NUXT_PUBLIC_GRAPES_BUILDER_URL`. */
+  grapesBuilderUrl: string | null
   /** When true, the tenant may open the Beefree email builder. Default false. */
   allowTenantBeefreeBuilder: boolean
   /** When true, the tenant may open the template image builder. Default false. */

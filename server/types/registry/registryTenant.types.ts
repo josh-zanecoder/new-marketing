@@ -61,6 +61,11 @@ export interface RegistryTenantDoc {
    */
   allowTenantGrapesBuilder?: unknown
   /**
+   * Origin for the isolated Grapes email builder iframe (e.g. https://grapes.example.com).
+   * Missing/empty → tenant uses env `NUXT_PUBLIC_GRAPES_BUILDER_URL`.
+   */
+  grapesBuilderUrl?: unknown
+  /**
    * When true, the tenant may open the Beefree email builder.
    * Missing/false → Beefree stays hidden.
    */
@@ -154,6 +159,8 @@ export interface TenantAdminRow {
   allowTenantReplaceImage: boolean
   /** When true, the tenant may open the GrapesJS email editor. Default false. */
   allowTenantGrapesBuilder: boolean
+  /** Isolated Grapes builder origin for this tenant; null uses env default. */
+  grapesBuilderUrl: string | null
   /** When true, the tenant may open the Beefree email builder. Default false. */
   allowTenantBeefreeBuilder: boolean
   /** When true, the tenant may open the template image builder. Default false. */

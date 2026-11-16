@@ -1350,6 +1350,7 @@ interface TenantDetail {
   apiKeyPrefix: string | null
   createdAt: string
   crmAppUrl: string | null
+  grapesBuilderUrl?: string | null
   kafkaOutboundTopic: string | null
   defaultCampaignSenderEmail: string | null
   defaultCampaignSenderName: string | null
