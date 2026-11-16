@@ -1,4 +1,4 @@
-import type { Connection, Types } from 'mongoose'
+import { Types, type Connection } from 'mongoose'
 import {
   namesFromContactPayload,
   type ContactDeletedEventEnvelope,
