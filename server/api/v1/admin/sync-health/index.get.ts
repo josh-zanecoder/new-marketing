@@ -2,11 +2,13 @@ import { assertAdminAuth } from '@server/utils/admin/adminCampaigns'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import {
   getMarketingSyncWorkerHealth,
+  listMarketingSyncDlqEntries,
   listMarketingSyncHealthDocs,
   listMarketingSyncHealthLogs
 } from '@server/utils/marketingSyncHealth/store'
 import {
   deriveMarketingSyncHealthStatus,
+  type MarketingSyncDlqEntry,
   type MarketingSyncHealthDoc,
   type MarketingSyncHealthLog,
   type MarketingSyncHealthStatus,
@@ -23,13 +25,14 @@ export type AdminSyncHealthResponse = {
   summary: Record<MarketingSyncHealthStatus, number>
   tenants: AdminSyncHealthTenantRow[]
   logs: MarketingSyncHealthLog[]
+  dlq: MarketingSyncDlqEntry[]
 }
 
 export default defineEventHandler(async (event): Promise<AdminSyncHealthResponse> => {
   assertAdminAuth(event)
 
   const registry = await getRegistryConnection()
-  const [clients, healthDocs, worker, logs] = await Promise.all([
+  const [clients, healthDocs, worker, logs, dlq] = await Promise.all([
     registry
       .collection('clients')
       .find({})
@@ -37,7 +40,8 @@ export default defineEventHandler(async (event): Promise<AdminSyncHealthResponse
       .toArray(),
     listMarketingSyncHealthDocs(),
     getMarketingSyncWorkerHealth(),
-    listMarketingSyncHealthLogs()
+    listMarketingSyncHealthLogs(),
+    listMarketingSyncDlqEntries()
   ])
 
   const healthByKey = new Map<string, MarketingSyncHealthDoc>()
@@ -122,6 +126,7 @@ export default defineEventHandler(async (event): Promise<AdminSyncHealthResponse
     worker,
     summary,
     tenants,
-    logs
+    logs,
+    dlq
   }
 })

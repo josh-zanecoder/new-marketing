@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type {
+  MarketingSyncDlqEntry,
   MarketingSyncHealthLog,
   MarketingSyncHealthLogKind,
   MarketingSyncHealthLogLevel,
   MarketingSyncHealthStatus,
+  MarketingSyncRunSummary,
   MarketingSyncWorkerHealth
 } from '~~/shared/marketingSyncHealth'
 
@@ -40,21 +42,72 @@ type AdminSyncHealthResponse = {
   summary: Record<MarketingSyncHealthStatus, number>
   tenants: AdminSyncHealthTenantRow[]
   logs: MarketingSyncHealthLog[]
+  dlq: MarketingSyncDlqEntry[]
 }
 
-type HistoryKindFilter = 'all' | 'sync' | 'contact' | 'error'
+type AdminTenantSyncHistoryResponse = {
+  generatedAt: string
+  dbName: string
+  tenantName?: string
+  tenantId?: string
+  limit: number
+  logCount: number
+  logs: MarketingSyncHealthLog[]
+  runs: MarketingSyncRunSummary[]
+}
+
+type HistoryKindFilter = 'all' | 'sync' | 'contact' | 'error' | 'dlq'
+
+const historyKindOptions: { value: HistoryKindFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'sync', label: 'Sync' },
+  { value: 'contact', label: 'Contacts' },
+  { value: 'error', label: 'Failures' },
+  { value: 'dlq', label: 'DLQ' }
+]
+
+const historyLevelOptions: { value: 'all' | MarketingSyncHealthLogLevel; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'info', label: 'Info' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'error', label: 'Error' }
+]
 
 const statusFilter = ref<'all' | MarketingSyncHealthStatus>('all')
 const search = ref('')
 const logLevelFilter = ref<'all' | MarketingSyncHealthLogLevel>('all')
 const historyKindFilter = ref<HistoryKindFilter>('all')
 const selectedDbName = ref('')
+const expandedSyncId = ref('')
 
 const { data, pending, error, refresh } = await useAsyncData('admin-sync-health', () => {
   const reqFetch = import.meta.server ? useRequestFetch() : $fetch
   return reqFetch<AdminSyncHealthResponse>('/api/v1/admin/sync-health', {
     credentials: 'include'
   })
+})
+
+const {
+  data: tenantHistory,
+  pending: tenantHistoryPending,
+  error: tenantHistoryError,
+  refresh: refreshTenantHistory
+} = await useAsyncData(
+  'admin-sync-health-tenant-history',
+  () => {
+    const dbName = selectedDbName.value.trim()
+    if (!dbName) return Promise.resolve(null)
+    const reqFetch = import.meta.server ? useRequestFetch() : $fetch
+    return reqFetch<AdminTenantSyncHistoryResponse>(
+      `/api/v1/admin/sync-health/${encodeURIComponent(dbName)}/history`,
+      { credentials: 'include' }
+    )
+  },
+  { watch: [selectedDbName], immediate: false }
+)
+
+watch(selectedDbName, () => {
+  expandedSyncId.value = ''
 })
 
 const loadError = computed(() => {
@@ -95,9 +148,23 @@ const filteredTenants = computed(() => {
 function matchesHistoryKind(kind: MarketingSyncHealthLogKind, filter: HistoryKindFilter): boolean {
   if (filter === 'all') return true
   if (filter === 'contact') return kind === 'contact'
-  if (filter === 'error') return kind === 'error' || kind === 'worker'
+  if (filter === 'dlq') return kind === 'dlq'
+  if (filter === 'error') return kind === 'error' || kind === 'worker' || kind === 'dlq'
   return kind === 'progress' || kind === 'success'
 }
+
+const filteredDlq = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  const rows = data.value?.dlq ?? []
+  return rows.filter((row) => {
+    if (selectedDbName.value && row.dbName !== selectedDbName.value) return false
+    if (!q) return true
+    const tenantLabel = row.dbName ? tenantNameByDb.value.get(row.dbName) || '' : ''
+    const hay =
+      `${row.error} ${row.dbName || ''} ${row.tenantId || ''} ${tenantLabel} ${row.eventType || ''} ${row.kafkaTopic || ''} ${row.offset || ''}`.toLowerCase()
+    return hay.includes(q)
+  })
+})
 
 const filteredHistory = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -183,6 +250,39 @@ function selectTenant(dbName: string) {
 function clearTenantFilter() {
   selectedDbName.value = ''
 }
+
+function toggleSyncRun(syncId: string) {
+  const key = syncId || '__orphan'
+  expandedSyncId.value = expandedSyncId.value === key ? '' : key
+}
+
+function syncRunKey(run: MarketingSyncRunSummary): string {
+  return run.syncId || '__orphan'
+}
+
+const tenantHistoryLoadError = computed(() => {
+  const err = tenantHistoryError.value
+  if (!err || !selectedDbName.value) return ''
+  const dataMessage =
+    err && typeof err === 'object' && 'data' in err
+      ? (err as { data?: { message?: string; statusMessage?: string } }).data
+      : undefined
+  return (
+    dataMessage?.message ||
+    dataMessage?.statusMessage ||
+    (err instanceof Error ? err.message : '') ||
+    'Unable to load tenant sync history.'
+  )
+})
+
+const selectedTenantLabel = computed(() => {
+  if (!selectedDbName.value) return ''
+  return (
+    tenantHistory.value?.tenantName ||
+    tenantNameByDb.value.get(selectedDbName.value) ||
+    selectedDbName.value
+  )
+})
 </script>
 
 <template>
@@ -192,13 +292,16 @@ function clearTenantFilter() {
         <p class="page-eyebrow">Ops</p>
         <h1 class="page-title">Sync health</h1>
         <p class="page-lead">
-          Global Kafka ingest status and history for sync + contact events (prospect / client / contact).
+          Global Kafka ingest status and history for sync + contact events. Click a tenant for its full sync run history.
         </p>
       </div>
       <TenantRefreshIconButton
         label="Refresh sync health"
-        :pending="pending"
-        @click="() => refresh()"
+        :pending="pending || tenantHistoryPending"
+        @click="() => {
+          void refresh()
+          if (selectedDbName) void refreshTenantHistory()
+        }"
       />
     </header>
 
@@ -230,6 +333,12 @@ function clearTenantFilter() {
           </div>
           <p v-if="data.worker.consumerGroupId" class="mt-2 truncate text-xs text-slate-500">
             {{ data.worker.consumerGroupId }}
+          </p>
+          <p
+            v-if="(data.dlq?.length || 0) > 0"
+            class="mt-2 text-xs font-medium text-rose-700"
+          >
+            {{ data.dlq.length }} dead-lettered message{{ data.dlq.length === 1 ? '' : 's' }}
           </p>
         </div>
 
@@ -357,46 +466,179 @@ function clearTenantFilter() {
         </table>
       </div>
 
+      <section
+        v-if="selectedDbName"
+        class="space-y-3"
+      >
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0 space-y-1">
+            <h2 class="text-base font-semibold text-slate-900">
+              Sync history · {{ selectedTenantLabel }}
+            </h2>
+            <p class="text-sm text-slate-500">
+              Full / delta sync runs for this tenant (retained per tenant, not the global board window).
+              Click a run to expand chunk-level events.
+            </p>
+          </div>
+          <p class="text-xs text-slate-500">
+            <template v-if="tenantHistoryPending">Loading…</template>
+            <template v-else-if="tenantHistory">
+              {{ tenantHistory.runs.length }} run{{ tenantHistory.runs.length === 1 ? '' : 's' }}
+              · {{ tenantHistory.logCount }} events
+            </template>
+          </p>
+        </div>
+
+        <p
+          v-if="tenantHistoryLoadError"
+          class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+        >
+          {{ tenantHistoryLoadError }}
+        </p>
+
+        <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80">
+          <div
+            v-for="run in tenantHistory?.runs || []"
+            :key="syncRunKey(run)"
+            class="border-b border-slate-100 last:border-0"
+          >
+            <button
+              type="button"
+              class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50/80"
+              @click="toggleSyncRun(syncRunKey(run))"
+            >
+              <span
+                class="mt-0.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset"
+                :class="statusBadgeClass(run.status)"
+              >
+                {{ run.status }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-slate-900">
+                  {{ run.syncMode || 'sync' }}
+                  <span v-if="run.syncId" class="font-normal text-slate-500">
+                    · {{ run.syncId }}
+                  </span>
+                </p>
+                <p class="mt-0.5 text-xs text-slate-500">
+                  {{ formatWhen(run.startedAt) }}
+                  <template v-if="run.finishedAt && run.finishedAt !== run.startedAt">
+                    → {{ formatWhen(run.finishedAt) }}
+                  </template>
+                  <template v-if="typeof run.syncedCount === 'number'">
+                    · {{ run.syncedCount }} contacts
+                  </template>
+                  <template v-if="typeof run.chunkCount === 'number'">
+                    · {{ typeof run.chunkIndex === 'number' ? `${run.chunkIndex}/` : '' }}{{ run.chunkCount }} chunks
+                  </template>
+                  · {{ run.eventCount }} events
+                </p>
+                <p
+                  v-if="run.lastMessage"
+                  class="mt-1 truncate text-xs text-slate-600"
+                >
+                  {{ run.lastMessage }}
+                </p>
+              </div>
+              <span class="shrink-0 text-xs text-slate-400">
+                {{ expandedSyncId === syncRunKey(run) ? 'Hide' : 'Details' }}
+              </span>
+            </button>
+
+            <div
+              v-if="expandedSyncId === syncRunKey(run)"
+              class="border-t border-slate-100 bg-slate-950 px-4 py-2 font-mono text-xs text-slate-100"
+            >
+              <div
+                v-for="event in run.events"
+                :key="event.id"
+                class="border-b border-white/5 py-2 last:border-0"
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-slate-400">{{ formatWhen(event.at) }}</span>
+                  <span
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset"
+                    :class="logLevelClass(event.level)"
+                  >
+                    {{ event.level }}
+                  </span>
+                  <span class="text-slate-500">{{ event.kind }}</span>
+                  <span
+                    v-if="typeof event.chunkIndex === 'number' && typeof event.chunkCount === 'number'"
+                    class="text-slate-400"
+                  >
+                    chunk {{ event.chunkIndex }}/{{ event.chunkCount }}
+                  </span>
+                </div>
+                <p class="mt-1 whitespace-pre-wrap break-words">{{ event.message }}</p>
+              </div>
+            </div>
+          </div>
+
+          <p
+            v-if="!tenantHistoryPending && (tenantHistory?.runs.length || 0) === 0"
+            class="px-4 py-8 text-center text-sm text-slate-500"
+          >
+            No sync runs recorded for this tenant yet.
+          </p>
+        </div>
+      </section>
+
       <section class="space-y-3">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div class="min-w-0 space-y-1">
             <h2 class="text-base font-semibold text-slate-900">History</h2>
             <p class="text-sm text-slate-500">
               Recent sync and contact ingest events (including prospect / client / contact create-update-delete).
             </p>
           </div>
-          <div class="flex flex-col items-stretch gap-2 sm:items-end">
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="kind in (['all', 'sync', 'contact', 'error'] as const)"
-                :key="kind"
-                type="button"
-                class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition"
-                :class="
-                  historyKindFilter === kind
-                    ? 'bg-slate-900 text-white ring-slate-900'
-                    : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-                "
-                @click="historyKindFilter = kind"
-              >
-                {{ kind }}
-              </button>
+          <div
+            class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4"
+            role="group"
+            aria-label="History filters"
+          >
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Event
+              </span>
+              <div class="inline-flex flex-wrap gap-1 rounded-lg bg-slate-100/80 p-0.5">
+                <button
+                  v-for="kind in historyKindOptions"
+                  :key="kind.value"
+                  type="button"
+                  class="rounded-md px-2.5 py-1 text-xs font-semibold transition"
+                  :class="
+                    historyKindFilter === kind.value
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+                  "
+                  @click="historyKindFilter = kind.value"
+                >
+                  {{ kind.label }}
+                </button>
+              </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="level in (['all', 'info', 'warn', 'error'] as const)"
-                :key="level"
-                type="button"
-                class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition"
-                :class="
-                  logLevelFilter === level
-                    ? 'bg-slate-700 text-white ring-slate-700'
-                    : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-                "
-                @click="logLevelFilter = level"
-              >
-                {{ level }}
-              </button>
+            <div class="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Level
+              </span>
+              <div class="inline-flex flex-wrap gap-1 rounded-lg bg-slate-100/80 p-0.5">
+                <button
+                  v-for="level in historyLevelOptions"
+                  :key="level.value"
+                  type="button"
+                  class="rounded-md px-2.5 py-1 text-xs font-semibold transition"
+                  :class="
+                    logLevelFilter === level.value
+                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+                  "
+                  @click="logLevelFilter = level.value"
+                >
+                  {{ level.label }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -450,6 +692,73 @@ function clearTenantFilter() {
               No history yet. Contact create/update/delete and sync events appear after the inbound worker processes them.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section class="space-y-3">
+        <div class="min-w-0 space-y-1">
+          <h2 class="text-base font-semibold text-slate-900">Dead letter queue</h2>
+          <p class="text-sm text-slate-500">
+            Skipped Kafka messages (handler errors that no longer crash the shared worker). Use topic/offset to investigate; recover with a tenant delta/full sync.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-rose-200/80 bg-white/80">
+          <table class="min-w-full text-left text-sm">
+            <thead class="border-b border-rose-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <tr>
+                <th class="px-4 py-3">When</th>
+                <th class="px-4 py-3">Tenant</th>
+                <th class="px-4 py-3">Event</th>
+                <th class="px-4 py-3">Topic / offset</th>
+                <th class="px-4 py-3">Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in filteredDlq"
+                :key="row.id"
+                class="cursor-pointer border-b border-slate-50 align-top last:border-0 hover:bg-rose-50/40"
+                @click="row.dbName && selectTenant(row.dbName)"
+              >
+                <td class="px-4 py-3 text-slate-600">
+                  {{ formatWhen(row.at) }}
+                </td>
+                <td class="px-4 py-3">
+                  <p class="font-medium text-slate-900">
+                    {{ row.dbName ? tenantNameByDb.get(row.dbName) || row.dbName : '—' }}
+                  </p>
+                  <p v-if="row.dbName" class="text-xs text-slate-500">{{ row.dbName }}</p>
+                </td>
+                <td class="px-4 py-3 text-slate-700">
+                  {{ row.eventType || '—' }}
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-slate-600">
+                  <p>{{ row.kafkaTopic || '—' }}</p>
+                  <p v-if="row.offset != null">
+                    p{{ row.partition ?? '?' }} @ {{ row.offset }}
+                  </p>
+                </td>
+                <td class="px-4 py-3">
+                  <p class="max-w-md text-rose-700" :title="row.error">
+                    {{ row.error }}
+                  </p>
+                  <p
+                    v-if="row.rawPreview"
+                    class="mt-1 max-w-md truncate font-mono text-[10px] text-slate-400"
+                    :title="row.rawPreview"
+                  >
+                    {{ row.rawPreview }}
+                  </p>
+                </td>
+              </tr>
+              <tr v-if="filteredDlq.length === 0">
+                <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">
+                  No dead-lettered messages.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </template>

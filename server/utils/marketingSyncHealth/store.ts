@@ -3,7 +3,12 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import {
   deriveMarketingSyncHealthStatus,
   deriveMarketingSyncWorkerStatus,
+  MARKETING_SYNC_DLQ_LIMIT,
   MARKETING_SYNC_HEALTH_LOG_LIMIT,
+  MARKETING_SYNC_HISTORY_KINDS,
+  MARKETING_SYNC_TENANT_CONTACT_LOG_LIMIT,
+  MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT,
+  type MarketingSyncDlqEntry,
   type MarketingSyncHealthDoc,
   type MarketingSyncHealthLog,
   type MarketingSyncHealthLogKind,
@@ -14,7 +19,10 @@ import {
 
 export const MARKETING_SYNC_HEALTH_COLLECTION = 'marketing_sync_health'
 export const MARKETING_SYNC_HEALTH_LOGS_COLLECTION = 'marketing_sync_health_logs'
+export const MARKETING_SYNC_DLQ_COLLECTION = 'marketing_sync_health_dlq'
 export const MARKETING_SYNC_WORKER_HEALTH_ID = 'kafka-inbound-worker'
+
+const DLQ_RAW_PREVIEW_MAX = 4_000
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -71,13 +79,43 @@ async function appendMarketingSyncHealthLog(input: {
   }
 
   await registry.collection(MARKETING_SYNC_HEALTH_LOGS_COLLECTION).insertOne(doc)
+  await pruneMarketingSyncHealthLogsAfterAppend({
+    dbName: doc.dbName,
+    kind: doc.kind as MarketingSyncHealthLogKind
+  })
+}
 
-  // Keep the collection bounded for the admin board.
+async function pruneMarketingSyncHealthLogsAfterAppend(input: {
+  dbName: string
+  kind: MarketingSyncHealthLogKind
+}): Promise<void> {
+  const registry = await getRegistryConnection()
+  const dbName = String(input.dbName || '').trim()
+  const kind = input.kind
+
+  let filter: Record<string, unknown>
+  let keep: number
+
+  if (dbName && MARKETING_SYNC_HISTORY_KINDS.includes(kind)) {
+    // Retain full sync history per tenant (not a single global 500-row window).
+    filter = { dbName, kind: { $in: [...MARKETING_SYNC_HISTORY_KINDS] } }
+    keep = MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT
+  } else if (dbName && kind === 'contact') {
+    filter = { dbName, kind: 'contact' }
+    keep = MARKETING_SYNC_TENANT_CONTACT_LOG_LIMIT
+  } else {
+    // Worker / DLQ / unscoped rows: keep the global board window.
+    filter = {
+      $or: [{ dbName: '' }, { dbName: { $exists: false } }, { kind: { $in: ['worker', 'dlq'] } }]
+    }
+    keep = MARKETING_SYNC_HEALTH_LOG_LIMIT
+  }
+
   const overflow = await registry
     .collection(MARKETING_SYNC_HEALTH_LOGS_COLLECTION)
-    .find({}, { projection: { _id: 1 } })
+    .find(filter, { projection: { _id: 1 } })
     .sort({ at: -1 })
-    .skip(MARKETING_SYNC_HEALTH_LOG_LIMIT)
+    .skip(keep)
     .limit(200)
     .toArray()
   if (overflow.length > 0) {
@@ -122,6 +160,125 @@ export async function listMarketingSyncHealthLogs(
     .limit(take)
     .toArray()
   return rows.map((row) => mapLogRow(row as Record<string, unknown>))
+}
+
+/** Full sync history for one tenant (progress / success / error), newest first. */
+export async function listMarketingSyncHealthLogsForTenant(input: {
+  dbName: string
+  limit?: number
+}): Promise<MarketingSyncHealthLog[]> {
+  const dbName = String(input.dbName || '').trim()
+  if (!dbName) return []
+
+  const registry = await getRegistryConnection()
+  const take = Math.min(
+    Math.max(1, input.limit ?? MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT),
+    MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT
+  )
+  const rows = await registry
+    .collection(MARKETING_SYNC_HEALTH_LOGS_COLLECTION)
+    .find({
+      dbName,
+      kind: { $in: [...MARKETING_SYNC_HISTORY_KINDS] }
+    })
+    .sort({ at: -1 })
+    .limit(take)
+    .toArray()
+  return rows.map((row) => mapLogRow(row as Record<string, unknown>))
+}
+
+function mapDlqRow(row: Record<string, unknown>): MarketingSyncDlqEntry {
+  return {
+    id: String(row.key || row._id || ''),
+    at: typeof row.at === 'string' ? row.at : nowIso(),
+    error: String(row.error || ''),
+    eventType: typeof row.eventType === 'string' && row.eventType ? row.eventType : undefined,
+    tenantId: typeof row.tenantId === 'string' && row.tenantId ? row.tenantId : undefined,
+    dbName: typeof row.dbName === 'string' && row.dbName ? row.dbName : undefined,
+    kafkaTopic: typeof row.kafkaTopic === 'string' && row.kafkaTopic ? row.kafkaTopic : undefined,
+    partition: typeof row.partition === 'number' ? row.partition : undefined,
+    offset: typeof row.offset === 'string' && row.offset ? row.offset : undefined,
+    rawPreview: typeof row.rawPreview === 'string' && row.rawPreview ? row.rawPreview : undefined
+  }
+}
+
+export async function listMarketingSyncDlqEntries(
+  limit = MARKETING_SYNC_DLQ_LIMIT
+): Promise<MarketingSyncDlqEntry[]> {
+  const registry = await getRegistryConnection()
+  const take = Math.min(Math.max(1, limit), MARKETING_SYNC_DLQ_LIMIT)
+  const rows = await registry
+    .collection(MARKETING_SYNC_DLQ_COLLECTION)
+    .find({})
+    .sort({ at: -1 })
+    .limit(take)
+    .toArray()
+  return rows.map((row) => mapDlqRow(row as Record<string, unknown>))
+}
+
+/**
+ * Persist a skipped (swallowed) Kafka ingest failure so multi-tenant continue
+ * does not lose the poison message forever.
+ */
+export async function recordMarketingSyncDlq(input: {
+  error: string
+  eventType?: string
+  tenantId?: string
+  dbName?: string
+  kafkaTopic?: string
+  partition?: number
+  offset?: string
+  raw?: string
+}): Promise<void> {
+  const error = String(input.error || '').trim().slice(0, 500)
+  if (!error) return
+
+  const registry = await getRegistryConnection()
+  const at = nowIso()
+  const raw = String(input.raw || '')
+  const rawPreview = raw ? raw.slice(0, DLQ_RAW_PREVIEW_MAX) : ''
+  const tenantId = String(input.tenantId || '').trim()
+  const dbName = String(input.dbName || '').trim()
+  const eventType = String(input.eventType || '').trim()
+  const kafkaTopic = String(input.kafkaTopic || '').trim()
+
+  await registry.collection(MARKETING_SYNC_DLQ_COLLECTION).insertOne({
+    key: randomUUID(),
+    at,
+    error,
+    eventType,
+    tenantId,
+    dbName,
+    kafkaTopic,
+    partition: typeof input.partition === 'number' ? input.partition : null,
+    offset: String(input.offset || ''),
+    rawPreview,
+    createdAt: at
+  })
+
+  const overflow = await registry
+    .collection(MARKETING_SYNC_DLQ_COLLECTION)
+    .find({}, { projection: { _id: 1 } })
+    .sort({ at: -1 })
+    .skip(MARKETING_SYNC_DLQ_LIMIT)
+    .limit(200)
+    .toArray()
+  if (overflow.length > 0) {
+    await registry.collection(MARKETING_SYNC_DLQ_COLLECTION).deleteMany({
+      _id: { $in: overflow.map((row) => row._id) }
+    })
+  }
+
+  await appendMarketingSyncHealthLog({
+    level: 'error',
+    kind: 'dlq',
+    message: `DLQ: ${error}`,
+    tenantId,
+    dbName,
+    eventType,
+    kafkaTopic,
+    at
+  })
 }
 
 export async function recordMarketingSyncProgress(input: {
@@ -386,6 +543,8 @@ export async function recordMarketingSyncError(input: {
   error: string
   eventType?: string
   kafkaTopic?: string
+  syncId?: string
+  syncMode?: MarketingSyncHealthMode
 }): Promise<void> {
   const tenantId = String(input.tenantId || '').trim()
   const dbName = String(input.dbName || '').trim()
@@ -423,6 +582,8 @@ export async function recordMarketingSyncError(input: {
   })
   const eventType = input.eventType || existing?.lastEventType || ''
   const kafkaTopic = input.kafkaTopic || existing?.kafkaTopic || ''
+  const syncId = String(input.syncId || existing?.lastSyncId || '').trim()
+  const syncMode = (input.syncMode || existing?.lastSyncMode || '') as MarketingSyncHealthMode
 
   await registry.collection(MARKETING_SYNC_HEALTH_COLLECTION).updateOne(
     { key: tenantKey(tenantId, dbName) },
@@ -435,6 +596,8 @@ export async function recordMarketingSyncError(input: {
         lastError: error,
         lastErrorAt: at,
         lastEventType: eventType,
+        lastSyncId: syncId || existing?.lastSyncId || '',
+        lastSyncMode: syncMode || existing?.lastSyncMode || '',
         kafkaTopic,
         lastEventAt: at,
         updatedAt: at
@@ -452,6 +615,8 @@ export async function recordMarketingSyncError(input: {
     message: error,
     tenantId,
     dbName,
+    syncMode,
+    syncId,
     eventType,
     kafkaTopic,
     at

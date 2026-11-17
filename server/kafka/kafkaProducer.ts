@@ -47,6 +47,7 @@ import {
 } from './handlers/inboundEmailTemplates'
 import {
   recordMarketingContactIngest,
+  recordMarketingSyncDlq,
   recordMarketingSyncError,
   recordMarketingSyncProgress,
   recordMarketingSyncSuccess,
@@ -368,7 +369,9 @@ async function handleMarketingSyncRequested(
         dbName: evt.dBname,
         error: err instanceof Error ? err.message : String(err),
         eventType: SYNC_REQUESTED_EVENT_TYPE,
-        kafkaTopic: topic
+        kafkaTopic: topic,
+        syncId,
+        syncMode
       })
     )
     throw err
@@ -1483,6 +1486,10 @@ export async function startInboundEventsConsumer(
         const ctx: InboundMessageContext = { heartbeat }
         const stopKeepalive = runInboundConsumerHeartbeatKeepalive(heartbeat)
         try {
+          // Local/staging only: force a handler failure to exercise DLQ without bad payloads.
+          if (process.env.KAFKA_INBOUND_FORCE_HANDLER_ERROR === 'true') {
+            throw new Error('KAFKA_INBOUND_FORCE_HANDLER_ERROR')
+          }
           await handleInboundKafkaMessage(parsed, ctx, t)
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err)
@@ -1535,6 +1542,22 @@ export async function startInboundEventsConsumer(
                 error: errMsg,
                 eventType,
                 kafkaTopic: t
+              })
+            )
+          }
+
+          // Swallowed handler failures → DLQ so the message is not lost after offset advances.
+          if (!plan.rethrow) {
+            await safeRecordSyncHealth(() =>
+              recordMarketingSyncDlq({
+                error: errMsg,
+                eventType,
+                tenantId,
+                dbName,
+                kafkaTopic: t,
+                partition,
+                offset: String(offset),
+                raw
               })
             )
           }

@@ -47,6 +47,7 @@ export type MarketingSyncHealthLogKind =
   | 'error'
   | 'worker'
   | 'contact'
+  | 'dlq'
 
 export type MarketingSyncHealthLog = {
   id: string
@@ -71,6 +72,110 @@ export type MarketingSyncHealthLog = {
 
 /** Max recent history rows returned / retained for the admin board. */
 export const MARKETING_SYNC_HEALTH_LOG_LIMIT = 500
+
+/**
+ * Max sync-related log rows retained per tenant (progress / success / error).
+ * Keeps full sync run history from being wiped by other tenants' activity.
+ */
+export const MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT = 2_000
+
+/** Max contact ingest log rows retained per tenant. */
+export const MARKETING_SYNC_TENANT_CONTACT_LOG_LIMIT = 300
+
+/** Max retained dead-letter rows for skipped Kafka ingest failures. */
+export const MARKETING_SYNC_DLQ_LIMIT = 200
+
+export const MARKETING_SYNC_HISTORY_KINDS: MarketingSyncHealthLogKind[] = [
+  'progress',
+  'success',
+  'error'
+]
+
+export type MarketingSyncRunSummary = {
+  syncId: string
+  syncMode?: MarketingSyncHealthMode
+  status: 'syncing' | 'ok' | 'error' | 'unknown'
+  startedAt?: string
+  finishedAt?: string
+  syncedCount?: number
+  chunkIndex?: number
+  chunkCount?: number
+  lastMessage?: string
+  eventCount: number
+  events: MarketingSyncHealthLog[]
+}
+
+/** Collapse flat sync logs into newest-first sync runs (by syncId). */
+export function groupMarketingSyncRuns(
+  logs: MarketingSyncHealthLog[]
+): MarketingSyncRunSummary[] {
+  const syncLogs = logs.filter((log) =>
+    MARKETING_SYNC_HISTORY_KINDS.includes(log.kind)
+  )
+  const byId = new Map<string, MarketingSyncHealthLog[]>()
+  let orphan = 0
+
+  for (const log of syncLogs) {
+    const syncId = (log.syncId || '').trim() || `__orphan_${orphan++}`
+    const bucket = byId.get(syncId)
+    if (bucket) bucket.push(log)
+    else byId.set(syncId, [log])
+  }
+
+  const runs: MarketingSyncRunSummary[] = []
+  for (const [syncId, events] of byId) {
+    const sorted = [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+    const newest = sorted[sorted.length - 1]
+    const oldest = sorted[0]
+    const success = [...sorted].reverse().find((e) => e.kind === 'success')
+    const error = [...sorted].reverse().find((e) => e.kind === 'error')
+    const progress = [...sorted].reverse().find((e) => e.kind === 'progress')
+
+    let status: MarketingSyncRunSummary['status'] = 'unknown'
+    if (success && (!error || Date.parse(success.at) >= Date.parse(error.at))) status = 'ok'
+    else if (error) status = 'error'
+    else if (progress) status = 'syncing'
+
+    const withCounts = [...sorted].reverse().find((e) => typeof e.syncedCount === 'number')
+    const withChunks = [...sorted]
+      .reverse()
+      .find((e) => typeof e.chunkIndex === 'number' || typeof e.chunkCount === 'number')
+
+    runs.push({
+      syncId: syncId.startsWith('__orphan_') ? '' : syncId,
+      syncMode: newest?.syncMode || oldest?.syncMode,
+      status,
+      startedAt: oldest?.at,
+      finishedAt: success?.at || error?.at || newest?.at,
+      syncedCount: withCounts?.syncedCount,
+      chunkIndex: withChunks?.chunkIndex,
+      chunkCount: withChunks?.chunkCount ?? success?.chunkCount,
+      lastMessage: newest?.message,
+      eventCount: sorted.length,
+      events: sorted
+    })
+  }
+
+  return runs.sort((a, b) => {
+    const aAt = Date.parse(a.finishedAt || a.startedAt || '') || 0
+    const bAt = Date.parse(b.finishedAt || b.startedAt || '') || 0
+    return bAt - aAt
+  })
+}
+
+export type MarketingSyncDlqEntry = {
+  id: string
+  at: string
+  error: string
+  eventType?: string
+  tenantId?: string
+  dbName?: string
+  kafkaTopic?: string
+  partition?: number
+  offset?: string
+  /** Truncated raw Kafka payload for replay / debug. */
+  rawPreview?: string
+}
 
 /** Worker heartbeat older than this → stale. */
 export const MARKETING_SYNC_WORKER_STALE_MS = 5 * 60 * 1000
