@@ -17,7 +17,8 @@ import { logger } from '../utils/logger'
 import {
   isKafkaConsumerGroupCoordinationError,
   isKafkaMissingTopicPartitionError,
-  runInboundConsumerHeartbeatKeepalive
+  runInboundConsumerHeartbeatKeepalive,
+  planInboundHandlerFailure
 } from './inboundConsumerKeepalive'
 import {
   CONTACT_EVENT_TYPES,
@@ -45,6 +46,7 @@ import {
   saveMarketingEmailTemplateFromUpdatedEvent
 } from './handlers/inboundEmailTemplates'
 import {
+  recordMarketingContactIngest,
   recordMarketingSyncError,
   recordMarketingSyncProgress,
   recordMarketingSyncSuccess,
@@ -938,6 +940,22 @@ async function handleInboundKafkaMessage(
         email: contactEvent.payload.email,
         company: contactEvent.payload.company || ''
       })
+      {
+        const { firstName: fn, lastName: ln } = namesFromContactPayload(contactEvent.payload)
+        await safeRecordSyncHealth(() =>
+          recordMarketingContactIngest({
+            tenantId: contactEvent.tenantId,
+            dbName: contactEvent.dBname,
+            eventType: CONTACT_EVENT_TYPES.CREATED,
+            kafkaTopic,
+            contactType: contactEvent.payload.contactType,
+            externalId: contactEvent.payload.externalId,
+            email: contactEvent.payload.email,
+            contactName: formatContactFullName(fn, ln),
+            company: contactEvent.payload.company || ''
+          })
+        )
+      }
       break
     case CONTACT_EVENT_TYPES.UPDATED:
       if (!contactEvent) {
@@ -973,6 +991,22 @@ async function handleInboundKafkaMessage(
         contactType: contactEvent.payload.contactType,
         company: contactEvent.payload.company || ''
       })
+      {
+        const { firstName: fn, lastName: ln } = namesFromContactPayload(contactEvent.payload)
+        await safeRecordSyncHealth(() =>
+          recordMarketingContactIngest({
+            tenantId: contactEvent.tenantId,
+            dbName: contactEvent.dBname,
+            eventType: CONTACT_EVENT_TYPES.UPDATED,
+            kafkaTopic,
+            contactType: contactEvent.payload.contactType,
+            externalId: contactEvent.payload.externalId,
+            email: contactEvent.payload.email,
+            contactName: formatContactFullName(fn, ln),
+            company: contactEvent.payload.company || ''
+          })
+        )
+      }
       break
     case CONTACT_EVENT_TYPES.DELETED:
       if (!deletedEvent) {
@@ -991,6 +1025,15 @@ async function handleInboundKafkaMessage(
         tenantId: deletedEvent.tenantId,
         externalId: deletedEvent.payload.externalId
       })
+      await safeRecordSyncHealth(() =>
+        recordMarketingContactIngest({
+          tenantId: deletedEvent.tenantId,
+          dbName: deletedEvent.dBname,
+          eventType: CONTACT_EVENT_TYPES.DELETED,
+          kafkaTopic,
+          externalId: deletedEvent.payload.externalId
+        })
+      )
       break
     case EMAIL_TEMPLATE_EVENT_TYPES.CREATED: {
       const emailTplEvent = parseEmailTemplateCreatedEventEnvelope(parsed)
@@ -1443,19 +1486,7 @@ export async function startInboundEventsConsumer(
           await handleInboundKafkaMessage(parsed, ctx, t)
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err)
-          if (isKafkaConsumerGroupCoordinationError(err)) {
-            logger.error('Kafka inbound handler error (consumer group coordination)', {
-              err: errMsg,
-              eventType: parsed.eventType,
-              topic: t,
-              partition
-            })
-          } else {
-            logger.error('Kafka inbound handler error', {
-              err: errMsg,
-              eventType: parsed.eventType
-            })
-          }
+          const offset = message.offset
           const tenantId =
             typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
           const dbName =
@@ -1464,18 +1495,53 @@ export async function startInboundEventsConsumer(
               : typeof parsed.dbName === 'string'
                 ? parsed.dbName.trim()
                 : ''
-          if (parsed.eventType !== SYNC_REQUESTED_EVENT_TYPE) {
+          const eventType =
+            typeof parsed.eventType === 'string' ? parsed.eventType : ''
+          const plan = planInboundHandlerFailure({
+            err,
+            eventType,
+            syncRequestedEventType: SYNC_REQUESTED_EVENT_TYPE
+          })
+
+          if (plan.kind === 'coordination') {
+            logger.error('Kafka inbound handler error (consumer group coordination)', {
+              err: errMsg,
+              eventType,
+              topic: t,
+              partition,
+              offset,
+              tenantId,
+              dbName
+            })
+          } else {
+            // Swallow handler/data errors so one tenant poison message cannot stall all tenants.
+            logger.error('Kafka inbound handler error (skipped; consumer continues)', {
+              err: errMsg,
+              eventType,
+              topic: t,
+              partition,
+              offset,
+              tenantId,
+              dbName
+            })
+          }
+
+          // Sync path already records via handleMarketingSyncRequested; still record others.
+          if (plan.recordHealth) {
             await safeRecordSyncHealth(() =>
               recordMarketingSyncError({
                 tenantId,
                 dbName,
                 error: errMsg,
-                eventType: typeof parsed.eventType === 'string' ? parsed.eventType : '',
+                eventType,
                 kafkaTopic: t
               })
             )
           }
-          throw err
+
+          if (plan.rethrow) {
+            throw err
+          }
         } finally {
           stopKeepalive()
           try {

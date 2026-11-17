@@ -23,6 +23,44 @@ export function isKafkaConsumerGroupCoordinationError(err: unknown): boolean {
 }
 
 /**
+ * Handler/data bugs must not crash the shared multi-tenant consumer.
+ * Only rethrow broker membership/rebalance failures (consumer already unusable).
+ * Set `KAFKA_INBOUND_FAIL_FAST=true` to restore throw-on-handler-error for debugging.
+ */
+export function shouldRethrowInboundHandlerError(err: unknown): boolean {
+  if (process.env.KAFKA_INBOUND_FAIL_FAST === 'true') return true
+  return isKafkaConsumerGroupCoordinationError(err)
+}
+
+export type InboundHandlerFailurePlan = {
+  /** Log as coordination vs skipped handler error. */
+  kind: 'coordination' | 'handler'
+  /** Persist to sync-health (false for marketing.sync.requested — recorded upstream). */
+  recordHealth: boolean
+  /** Rethrow so KafkaJS stops / restarts the consumer. */
+  rethrow: boolean
+}
+
+/**
+ * Decide how eachMessage should treat a handler failure.
+ * Success path is unchanged: this is only consulted from `catch`.
+ */
+export function planInboundHandlerFailure(input: {
+  err: unknown
+  eventType?: string
+  syncRequestedEventType?: string
+}): InboundHandlerFailurePlan {
+  const syncType = input.syncRequestedEventType || 'marketing.sync.requested'
+  const isSync = input.eventType === syncType
+  const coordination = isKafkaConsumerGroupCoordinationError(input.err)
+  return {
+    kind: coordination ? 'coordination' : 'handler',
+    recordHealth: !isSync,
+    rethrow: shouldRethrowInboundHandlerError(input.err)
+  }
+}
+
+/**
  * Kafka only heartbeats after eachMessage returns unless we call heartbeat() manually.
  * Long Mongo sync chunks must tick heartbeats during processing or the broker drops the member.
  */

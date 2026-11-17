@@ -37,6 +37,10 @@ async function appendMarketingSyncHealthLog(input: {
   chunkCount?: number
   eventType?: string
   kafkaTopic?: string
+  contactType?: string
+  externalId?: string
+  email?: string
+  contactName?: string
   at?: string
 }): Promise<void> {
   const message = String(input.message || '').trim().slice(0, 800)
@@ -59,6 +63,10 @@ async function appendMarketingSyncHealthLog(input: {
     chunkCount: typeof input.chunkCount === 'number' ? input.chunkCount : null,
     eventType: input.eventType || '',
     kafkaTopic: input.kafkaTopic || '',
+    contactType: input.contactType || '',
+    externalId: input.externalId || '',
+    email: input.email || '',
+    contactName: input.contactName || '',
     createdAt: at
   }
 
@@ -94,7 +102,11 @@ function mapLogRow(row: Record<string, unknown>): MarketingSyncHealthLog {
     chunkIndex: typeof row.chunkIndex === 'number' ? row.chunkIndex : undefined,
     chunkCount: typeof row.chunkCount === 'number' ? row.chunkCount : undefined,
     eventType: typeof row.eventType === 'string' && row.eventType ? row.eventType : undefined,
-    kafkaTopic: typeof row.kafkaTopic === 'string' && row.kafkaTopic ? row.kafkaTopic : undefined
+    kafkaTopic: typeof row.kafkaTopic === 'string' && row.kafkaTopic ? row.kafkaTopic : undefined,
+    contactType: typeof row.contactType === 'string' && row.contactType ? row.contactType : undefined,
+    externalId: typeof row.externalId === 'string' && row.externalId ? row.externalId : undefined,
+    email: typeof row.email === 'string' && row.email ? row.email : undefined,
+    contactName: typeof row.contactName === 'string' && row.contactName ? row.contactName : undefined
   }
 }
 
@@ -277,6 +289,97 @@ export async function recordMarketingSyncSuccess(input: {
   })
 }
 
+export async function recordMarketingContactIngest(input: {
+  tenantId: string
+  dbName: string
+  eventType: string
+  kafkaTopic?: string
+  contactType?: string
+  externalId?: string
+  email?: string
+  contactName?: string
+  company?: string
+}): Promise<void> {
+  const tenantId = String(input.tenantId || '').trim()
+  const dbName = String(input.dbName || '').trim()
+  if (!tenantId || !dbName || !input.eventType) return
+
+  const registry = await getRegistryConnection()
+  const at = nowIso()
+  const contactType = String(input.contactType || '').trim()
+  const externalId = String(input.externalId || '').trim()
+  const email = String(input.email || '').trim().toLowerCase()
+  const contactName = String(input.contactName || '').trim()
+  const company = String(input.company || '').trim()
+  const kafkaTopic = String(input.kafkaTopic || '').trim()
+
+  const existing = (await registry.collection(MARKETING_SYNC_HEALTH_COLLECTION).findOne({
+    key: tenantKey(tenantId, dbName)
+  })) as MarketingSyncHealthDoc | null
+
+  const status = deriveMarketingSyncHealthStatus({
+    lastSuccessAt: existing?.lastSuccessAt,
+    lastErrorAt: existing?.lastErrorAt,
+    lastError: existing?.lastError
+  })
+
+  await registry.collection(MARKETING_SYNC_HEALTH_COLLECTION).updateOne(
+    { key: tenantKey(tenantId, dbName) },
+    {
+      $set: {
+        key: tenantKey(tenantId, dbName),
+        tenantId,
+        dbName,
+        status,
+        lastEventType: input.eventType,
+        lastContactEventAt: at,
+        lastContactEventType: input.eventType,
+        lastContactType: contactType,
+        lastContactExternalId: externalId,
+        lastContactEmail: email,
+        kafkaTopic: kafkaTopic || existing?.kafkaTopic || '',
+        lastEventAt: at,
+        updatedAt: at
+      },
+      $setOnInsert: {
+        createdAt: at
+      }
+    },
+    { upsert: true }
+  )
+
+  const who =
+    contactName ||
+    email ||
+    externalId ||
+    'contact'
+  const typeLabel = contactType || 'unknown'
+  const companyLabel = company ? ` · ${company}` : ''
+  const action =
+    input.eventType === 'contact.created'
+      ? 'created'
+      : input.eventType === 'contact.updated'
+        ? 'updated'
+        : input.eventType === 'contact.deleted'
+          ? 'deleted'
+          : input.eventType
+
+  await appendMarketingSyncHealthLog({
+    level: 'info',
+    kind: 'contact',
+    message: `${typeLabel} ${action}: ${who}${companyLabel}`,
+    tenantId,
+    dbName,
+    eventType: input.eventType,
+    kafkaTopic,
+    contactType,
+    externalId,
+    email,
+    contactName,
+    at
+  })
+}
+
 export async function recordMarketingSyncError(input: {
   tenantId?: string
   dbName?: string
@@ -422,6 +525,14 @@ export async function listMarketingSyncHealthDocs(): Promise<MarketingSyncHealth
       lastChunkCount: typeof r.lastChunkCount === 'number' ? r.lastChunkCount : undefined,
       lastEventType: typeof r.lastEventType === 'string' ? r.lastEventType : undefined,
       lastError,
+      lastContactEventAt:
+        typeof r.lastContactEventAt === 'string' ? r.lastContactEventAt : undefined,
+      lastContactEventType:
+        typeof r.lastContactEventType === 'string' ? r.lastContactEventType : undefined,
+      lastContactType: typeof r.lastContactType === 'string' ? r.lastContactType : undefined,
+      lastContactExternalId:
+        typeof r.lastContactExternalId === 'string' ? r.lastContactExternalId : undefined,
+      lastContactEmail: typeof r.lastContactEmail === 'string' ? r.lastContactEmail : undefined,
       lastSuccessAt,
       lastErrorAt,
       lastEventAt,

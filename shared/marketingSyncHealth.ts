@@ -18,6 +18,12 @@ export type MarketingSyncHealthDoc = {
   lastChunkCount?: number
   lastEventType?: string
   lastError?: string
+  /** Last ingested contact.* event (create/update/delete). */
+  lastContactEventAt?: string
+  lastContactEventType?: string
+  lastContactType?: string
+  lastContactExternalId?: string
+  lastContactEmail?: string
   /** ISO timestamps */
   lastSuccessAt?: string
   lastErrorAt?: string
@@ -40,6 +46,7 @@ export type MarketingSyncHealthLogKind =
   | 'success'
   | 'error'
   | 'worker'
+  | 'contact'
 
 export type MarketingSyncHealthLog = {
   id: string
@@ -56,10 +63,14 @@ export type MarketingSyncHealthLog = {
   chunkCount?: number
   eventType?: string
   kafkaTopic?: string
+  contactType?: string
+  externalId?: string
+  email?: string
+  contactName?: string
 }
 
-/** Max recent log rows returned / retained for the admin board. */
-export const MARKETING_SYNC_HEALTH_LOG_LIMIT = 100
+/** Max recent history rows returned / retained for the admin board. */
+export const MARKETING_SYNC_HEALTH_LOG_LIMIT = 500
 
 /** Worker heartbeat older than this → stale. */
 export const MARKETING_SYNC_WORKER_STALE_MS = 5 * 60 * 1000

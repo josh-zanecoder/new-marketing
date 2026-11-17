@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   MarketingSyncHealthLog,
+  MarketingSyncHealthLogKind,
   MarketingSyncHealthLogLevel,
   MarketingSyncHealthStatus,
   MarketingSyncWorkerHealth
@@ -21,6 +22,11 @@ type AdminSyncHealthTenantRow = {
   lastChunkCount?: number
   lastEventType?: string
   lastError?: string
+  lastContactEventAt?: string
+  lastContactEventType?: string
+  lastContactType?: string
+  lastContactExternalId?: string
+  lastContactEmail?: string
   lastSuccessAt?: string
   lastErrorAt?: string
   lastEventAt?: string
@@ -36,9 +42,12 @@ type AdminSyncHealthResponse = {
   logs: MarketingSyncHealthLog[]
 }
 
+type HistoryKindFilter = 'all' | 'sync' | 'contact' | 'error'
+
 const statusFilter = ref<'all' | MarketingSyncHealthStatus>('all')
 const search = ref('')
 const logLevelFilter = ref<'all' | MarketingSyncHealthLogLevel>('all')
+const historyKindFilter = ref<HistoryKindFilter>('all')
 const selectedDbName = ref('')
 
 const { data, pending, error, refresh } = await useAsyncData('admin-sync-health', () => {
@@ -78,20 +87,29 @@ const filteredTenants = computed(() => {
     if (statusFilter.value !== 'all' && row.status !== statusFilter.value) return false
     if (selectedDbName.value && row.dbName !== selectedDbName.value) return false
     if (!q) return true
-    const hay = `${row.tenantName || ''} ${row.dbName} ${row.tenantId} ${row.kafkaTopic || ''}`.toLowerCase()
+    const hay = `${row.tenantName || ''} ${row.dbName} ${row.tenantId} ${row.kafkaTopic || ''} ${row.lastContactEmail || ''}`.toLowerCase()
     return hay.includes(q)
   })
 })
 
-const filteredLogs = computed(() => {
+function matchesHistoryKind(kind: MarketingSyncHealthLogKind, filter: HistoryKindFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'contact') return kind === 'contact'
+  if (filter === 'error') return kind === 'error' || kind === 'worker'
+  return kind === 'progress' || kind === 'success'
+}
+
+const filteredHistory = computed(() => {
   const q = search.value.trim().toLowerCase()
   const rows = data.value?.logs ?? []
   return rows.filter((log) => {
     if (logLevelFilter.value !== 'all' && log.level !== logLevelFilter.value) return false
+    if (!matchesHistoryKind(log.kind, historyKindFilter.value)) return false
     if (selectedDbName.value && log.dbName !== selectedDbName.value) return false
     if (!q) return true
     const tenantLabel = log.dbName ? tenantNameByDb.value.get(log.dbName) || '' : ''
-    const hay = `${log.message} ${log.dbName || ''} ${log.tenantId || ''} ${tenantLabel} ${log.eventType || ''}`.toLowerCase()
+    const hay =
+      `${log.message} ${log.dbName || ''} ${log.tenantId || ''} ${tenantLabel} ${log.eventType || ''} ${log.contactType || ''} ${log.email || ''} ${log.externalId || ''} ${log.contactName || ''}`.toLowerCase()
     return hay.includes(q)
   })
 })
@@ -151,6 +169,13 @@ function chunkLabel(row: AdminSyncHealthTenantRow): string {
   return `${row.lastChunkIndex}/${row.lastChunkCount}`
 }
 
+function lastContactLabel(row: AdminSyncHealthTenantRow): string {
+  if (!row.lastContactEventAt) return '—'
+  const type = row.lastContactType || 'contact'
+  const action = row.lastContactEventType?.replace('contact.', '') || 'event'
+  return `${type} ${action}`
+}
+
 function selectTenant(dbName: string) {
   selectedDbName.value = selectedDbName.value === dbName ? '' : dbName
 }
@@ -167,7 +192,7 @@ function clearTenantFilter() {
         <p class="page-eyebrow">Ops</p>
         <h1 class="page-title">Sync health</h1>
         <p class="page-lead">
-          Global Kafka contact sync status across all marketing tenants (CRM and retail).
+          Global Kafka ingest status and history for sync + contact events (prospect / client / contact).
         </p>
       </div>
       <TenantRefreshIconButton
@@ -231,7 +256,7 @@ function clearTenantFilter() {
           <input
             v-model="search"
             type="search"
-            placeholder="Search tenant, db, topic, logs…"
+            placeholder="Search tenant, contact email, event…"
             class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
           >
         </label>
@@ -259,6 +284,7 @@ function clearTenantFilter() {
               <th class="px-4 py-3">Mode</th>
               <th class="px-4 py-3">Chunk</th>
               <th class="px-4 py-3">Synced</th>
+              <th class="px-4 py-3">Last contact event</th>
               <th class="px-4 py-3">Last success</th>
               <th class="px-4 py-3">Last error</th>
             </tr>
@@ -301,6 +327,13 @@ function clearTenantFilter() {
               <td class="px-4 py-3 tabular-nums text-slate-700">
                 {{ typeof row.lastSyncedCount === 'number' ? row.lastSyncedCount : '—' }}
               </td>
+              <td class="px-4 py-3">
+                <p class="text-slate-700">{{ lastContactLabel(row) }}</p>
+                <p class="text-xs text-slate-500">{{ formatWhen(row.lastContactEventAt) }}</p>
+                <p v-if="row.lastContactEmail" class="mt-0.5 truncate text-xs text-slate-400">
+                  {{ row.lastContactEmail }}
+                </p>
+              </td>
               <td class="px-4 py-3 text-slate-600">
                 {{ formatWhen(row.lastSuccessAt) }}
               </td>
@@ -316,7 +349,7 @@ function clearTenantFilter() {
               </td>
             </tr>
             <tr v-if="filteredTenants.length === 0">
-              <td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">
+              <td colspan="8" class="px-4 py-8 text-center text-sm text-slate-500">
                 No tenants match this filter.
               </td>
             </tr>
@@ -327,33 +360,51 @@ function clearTenantFilter() {
       <section class="space-y-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0 space-y-1">
-            <h2 class="text-base font-semibold text-slate-900">Recent logs</h2>
+            <h2 class="text-base font-semibold text-slate-900">History</h2>
             <p class="text-sm text-slate-500">
-              Latest sync start / progress / success / error events from the inbound worker.
+              Recent sync and contact ingest events (including prospect / client / contact create-update-delete).
             </p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="level in (['all', 'info', 'warn', 'error'] as const)"
-              :key="level"
-              type="button"
-              class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition"
-              :class="
-                logLevelFilter === level
-                  ? 'bg-slate-900 text-white ring-slate-900'
-                  : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-              "
-              @click="logLevelFilter = level"
-            >
-              {{ level }}
-            </button>
+          <div class="flex flex-col items-stretch gap-2 sm:items-end">
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="kind in (['all', 'sync', 'contact', 'error'] as const)"
+                :key="kind"
+                type="button"
+                class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition"
+                :class="
+                  historyKindFilter === kind
+                    ? 'bg-slate-900 text-white ring-slate-900'
+                    : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                "
+                @click="historyKindFilter = kind"
+              >
+                {{ kind }}
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="level in (['all', 'info', 'warn', 'error'] as const)"
+                :key="level"
+                type="button"
+                class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition"
+                :class="
+                  logLevelFilter === level
+                    ? 'bg-slate-700 text-white ring-slate-700'
+                    : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                "
+                @click="logLevelFilter = level"
+              >
+                {{ level }}
+              </button>
+            </div>
           </div>
         </div>
 
         <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 text-slate-100">
-          <div class="max-h-[28rem] overflow-y-auto font-mono text-xs leading-relaxed">
+          <div class="max-h-[32rem] overflow-y-auto font-mono text-xs leading-relaxed">
             <div
-              v-for="log in filteredLogs"
+              v-for="log in filteredHistory"
               :key="log.id"
               class="border-b border-white/5 px-4 py-2.5 last:border-0"
             >
@@ -366,6 +417,7 @@ function clearTenantFilter() {
                   {{ log.level }}
                 </span>
                 <span class="text-slate-500">{{ log.kind }}</span>
+                <span v-if="log.contactType" class="text-violet-300">{{ log.contactType }}</span>
                 <button
                   v-if="log.dbName"
                   type="button"
@@ -378,8 +430,13 @@ function clearTenantFilter() {
               <p class="mt-1 whitespace-pre-wrap break-words text-slate-100">
                 {{ log.message }}
               </p>
-              <p v-if="log.eventType || log.syncId" class="mt-1 text-slate-500">
+              <p
+                v-if="log.eventType || log.syncId || log.email || log.externalId"
+                class="mt-1 text-slate-500"
+              >
                 <span v-if="log.eventType">{{ log.eventType }}</span>
+                <span v-if="log.email"> · {{ log.email }}</span>
+                <span v-if="log.externalId"> · id {{ log.externalId }}</span>
                 <span v-if="log.syncId"> · sync {{ log.syncId }}</span>
                 <span v-if="typeof log.chunkIndex === 'number' && typeof log.chunkCount === 'number'">
                   · chunk {{ log.chunkIndex }}/{{ log.chunkCount }}
@@ -387,10 +444,10 @@ function clearTenantFilter() {
               </p>
             </div>
             <p
-              v-if="filteredLogs.length === 0"
+              v-if="filteredHistory.length === 0"
               class="px-4 py-8 text-center text-sm text-slate-400"
             >
-              No sync logs yet. They appear after the inbound worker records sync activity.
+              No history yet. Contact create/update/delete and sync events appear after the inbound worker processes them.
             </p>
           </div>
         </div>
