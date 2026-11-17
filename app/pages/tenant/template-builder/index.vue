@@ -47,6 +47,14 @@ const builderRef = ref<{ applyLoadTemplate: (id: string) => Promise<void> } | nu
 /** Skip one route-query open after we intentionally change templateId ourselves. */
 const skipNextQueryOpen = ref(false)
 
+const {
+  canUndo,
+  canRedo,
+  undo,
+  redo,
+  resetFromCurrent: resetEditHistory
+} = useTemplateBuilderHistory({ html, name, subject })
+
 const isDirty = computed(() =>
   isEmailTemplateDirty(
     { html: html.value, name: name.value, subject: subject.value },
@@ -70,6 +78,7 @@ function openDocument(next: { id: string; name: string; subject: string; html: s
   savedHtml.value = next.html
   formError.value = ''
   builderKey.value += 1
+  void nextTick(() => resetEditHistory())
 }
 
 function startBlank() {
@@ -127,6 +136,29 @@ function onLoadedTemplate(template: { id: string; name: string; subject: string 
   savedHtml.value = html.value
   skipNextQueryOpen.value = true
   void router.replace({ query: { templateId: template.id } })
+  void nextTick(() => resetEditHistory())
+}
+
+function onHistoryKeydown(event: KeyboardEvent) {
+  if (status.value !== 'ready' || saving.value) return
+  const target = event.target
+  if (target instanceof HTMLElement) {
+    const tag = target.tagName
+    // Allow undo/redo even in name/subject inputs; skip when typing in other fields if needed.
+    if (tag === 'TEXTAREA') return
+  }
+  const key = event.key.toLowerCase()
+  const mod = event.metaKey || event.ctrlKey
+  if (!mod) return
+  if (key === 'z' && !event.shiftKey) {
+    event.preventDefault()
+    undo()
+    return
+  }
+  if ((key === 'z' && event.shiftKey) || key === 'y') {
+    event.preventDefault()
+    redo()
+  }
 }
 
 async function onRequestLoadTemplate(id: string) {
@@ -230,6 +262,7 @@ watch(() => route.query.templateId, async () => {
 
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('keydown', onHistoryKeydown)
   if (!tenantFlagsLoaded.value) await loadDefaultCampaignSender()
   if (!allowTenantTemplateBuilder.value) {
     await navigateTo('/tenant/dashboard')
@@ -240,6 +273,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('keydown', onHistoryKeydown)
 })
 </script>
 
@@ -277,6 +311,42 @@ onBeforeUnmount(() => {
         >
       </label>
       <div class="flex shrink-0 items-center gap-2">
+        <div class="flex items-center rounded-lg border border-slate-300 bg-white p-0.5">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="saving || status !== 'ready' || !canUndo"
+            title="Undo (Ctrl/⌘ Z)"
+            aria-label="Undo"
+            @click="undo"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path
+                fill-rule="evenodd"
+                d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Undo
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="saving || status !== 'ready' || !canRedo"
+            title="Redo (Ctrl/⌘ Shift Z)"
+            aria-label="Redo"
+            @click="redo"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path
+                fill-rule="evenodd"
+                d="M12.293 3.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 7H9a5 5 0 00-5 5v2a1 1 0 11-2 0v-2a7 7 0 017-7h5.586l-2.293-2.293a1 1 0 010-1.414z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Redo
+          </button>
+        </div>
         <button
           type="button"
           class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
