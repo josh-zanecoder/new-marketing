@@ -3,6 +3,13 @@ import { emailTemplateStarterHtml } from '~~/shared/utils/emailTemplateBlocks'
 import { emailImageBuilderExportHtml } from '~~/shared/utils/emailTemplateHtmlImages'
 import { ensureEmailTemplateUnsubscribe } from '~~/shared/utils/ensureEmailTemplateUnsubscribe'
 import { normalizeUploadedEmailHtml } from '~~/shared/utils/uploadedEmailHtml'
+import { isEmailTemplateDirty } from '~~/shared/utils/isEmailTemplateDirty'
+import {
+  TEMPLATE_SAVE_ERROR_EMPTY_CONTENT,
+  TEMPLATE_SAVE_ERROR_GENERIC,
+  TEMPLATE_SAVE_ERROR_NAME_REQUIRED,
+  TEMPLATE_SAVE_ERROR_SUBJECT_REQUIRED
+} from '~~/shared/constants/templateSaveError'
 
 definePageMeta({ layout: 'default' })
 
@@ -11,6 +18,9 @@ const router = useRouter()
 const toast = useAppToast()
 const marketingApi = useTenantMarketingApi()
 const sidebarCompact = useState('layout-marketing-sidebar-compact', () => false)
+const unsavedGuard = useUnsavedTemplateGuard()
+const unsavedOpen = unsavedGuard.open
+const unsavedBusy = unsavedGuard.busy
 const {
   allowTenantTemplateBuilder,
   allowTenantEditText,
@@ -32,11 +42,16 @@ const status = ref<'loading' | 'ready' | 'error'>('loading')
 const loadError = ref('')
 const saving = ref(false)
 const formError = ref('')
+const saveErrorOpen = ref(false)
+const builderRef = ref<{ applyLoadTemplate: (id: string) => Promise<void> } | null>(null)
+/** Skip one route-query open after we intentionally change templateId ourselves. */
+const skipNextQueryOpen = ref(false)
 
 const isDirty = computed(() =>
-  html.value !== savedHtml.value
-  || name.value.trim() !== savedMeta.value.name
-  || subject.value.trim() !== savedMeta.value.subject
+  isEmailTemplateDirty(
+    { html: html.value, name: name.value, subject: subject.value },
+    { html: savedHtml.value, name: savedMeta.value.name, subject: savedMeta.value.subject }
+  )
 )
 
 function queryTemplateId(): string {
@@ -86,15 +101,21 @@ async function openFromRoute() {
   }
 }
 
-function confirmDiscard(): boolean {
-  if (!isDirty.value || typeof window === 'undefined') return true
-  return window.confirm('You have unsaved changes. Leave without saving?')
+/** Stay / discard / save before replacing the editor or leaving the page. */
+async function allowLeaveOrReplace(): Promise<boolean> {
+  formError.value = ''
+  return unsavedGuard.confirmIfDirty(isDirty.value, {
+    onSave: () => save('update')
+  })
 }
 
 async function newBlank() {
-  if (!confirmDiscard()) return
+  if (!(await allowLeaveOrReplace())) return
   templateId.value = ''
-  if (queryTemplateId()) await router.replace({ query: {} })
+  if (queryTemplateId()) {
+    skipNextQueryOpen.value = true
+    await router.replace({ query: {} })
+  }
   startBlank()
 }
 
@@ -104,20 +125,37 @@ function onLoadedTemplate(template: { id: string; name: string; subject: string 
   subject.value = template.subject
   savedMeta.value = { name: template.name.trim(), subject: template.subject.trim() }
   savedHtml.value = html.value
+  skipNextQueryOpen.value = true
   void router.replace({ query: { templateId: template.id } })
 }
 
-async function save(mode: 'update' | 'copy') {
+async function onRequestLoadTemplate(id: string) {
+  if (!(await allowLeaveOrReplace())) return
+  await builderRef.value?.applyLoadTemplate(id)
+}
+
+function reportSaveError(message: string) {
+  formError.value = message
+  // Unsaved-changes dialog already shows `formError`; otherwise open the save-error modal.
+  if (!unsavedOpen.value) saveErrorOpen.value = true
+}
+
+function closeSaveError() {
+  saveErrorOpen.value = false
+}
+
+async function save(mode: 'update' | 'copy'): Promise<boolean> {
   formError.value = ''
+  saveErrorOpen.value = false
   const templateName = mode === 'copy' ? `${name.value.trim() || 'Untitled email'} (copy)` : name.value.trim()
   const templateSubject = subject.value.trim()
   if (!templateName) {
-    formError.value = 'Template name is required.'
-    return
+    reportSaveError(TEMPLATE_SAVE_ERROR_NAME_REQUIRED)
+    return false
   }
   if (!templateSubject) {
-    formError.value = 'Subject is required.'
-    return
+    reportSaveError(TEMPLATE_SAVE_ERROR_SUBJECT_REQUIRED)
+    return false
   }
   let output = ''
   let footerAppended = false
@@ -126,8 +164,8 @@ async function save(mode: 'update' | 'copy') {
     output = check.html
     footerAppended = check.footerAppended
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : 'This email has no content to save.'
-    return
+    reportSaveError(e instanceof Error ? e.message : TEMPLATE_SAVE_ERROR_EMPTY_CONTENT)
+    return false
   }
   saving.value = true
   try {
@@ -144,6 +182,7 @@ async function save(mode: 'update' | 'copy') {
       const created = await marketingApi.createEmailTemplate(body)
       templateId.value = created.template.id
       name.value = templateName
+      skipNextQueryOpen.value = true
       await router.replace({ query: { templateId: created.template.id } })
     }
     html.value = output
@@ -151,8 +190,10 @@ async function save(mode: 'update' | 'copy') {
     savedMeta.value = { name: templateName, subject: templateSubject }
     clearNuxtPayloadCache(TENANT_EMAIL_TEMPLATES_INDEX_CACHE_KEY)
     toast.success(footerAppended ? 'Saved. An unsubscribe link was added at the bottom.' : 'Saved to Email templates')
+    return true
   } catch {
-    formError.value = 'Could not save this template. Please try again.'
+    reportSaveError(TEMPLATE_SAVE_ERROR_GENERIC)
+    return false
   } finally {
     saving.value = false
   }
@@ -164,13 +205,27 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
-onBeforeRouteLeave((to) => {
+onBeforeRouteLeave(async (to) => {
   if (to.path === route.path) return true
-  return confirmDiscard()
+  return allowLeaveOrReplace()
 })
 
-watch(() => route.query.templateId, () => {
-  if (status.value !== 'loading' && queryTemplateId() !== templateId.value) void openFromRoute()
+watch(() => route.query.templateId, async () => {
+  if (skipNextQueryOpen.value) {
+    skipNextQueryOpen.value = false
+    return
+  }
+  if (status.value === 'loading') return
+  const nextId = queryTemplateId()
+  if (nextId === templateId.value) return
+  if (!(await allowLeaveOrReplace())) {
+    skipNextQueryOpen.value = true
+    await router.replace({
+      query: templateId.value ? { templateId: templateId.value } : {}
+    })
+    return
+  }
+  await openFromRoute()
 })
 
 onMounted(async () => {
@@ -248,21 +303,23 @@ onBeforeUnmount(() => {
           {{ saving ? 'Saving…' : templateId ? 'Save' : 'Save template' }}
         </button>
       </div>
-      <p v-if="formError" class="w-full text-sm text-rose-600">{{ formError }}</p>
     </header>
 
     <div class="relative flex min-h-0 flex-1">
       <TenantEmailTemplateImageBuilder
         v-if="status === 'ready'"
+        ref="builderRef"
         :key="builderKey"
         v-model="html"
         class="min-h-0 flex-1"
         :source-html="sourceHtml"
+        :has-unsaved-changes="isDirty"
         :can-upload-image="true"
         :can-edit-text="allowTenantEditText"
         :can-resize-image="allowTenantResizeImage"
         :can-replace-image="allowTenantReplaceImage"
         @loaded-template="onLoadedTemplate"
+        @request-load-template="onRequestLoadTemplate"
       />
       <div v-else-if="status === 'loading'" class="flex flex-1 flex-col items-center justify-center gap-3">
         <div class="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-primary-600" />
@@ -290,5 +347,25 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <TenantUnsavedTemplateChangesModal
+      :open="unsavedOpen"
+      :title="unsavedGuard.title"
+      :message="unsavedGuard.message"
+      :stay-text="unsavedGuard.stayText"
+      :discard-text="unsavedGuard.discardText"
+      :save-text="unsavedGuard.saveText"
+      :busy="unsavedBusy || saving"
+      :error="formError"
+      @stay="unsavedGuard.stay"
+      @discard="unsavedGuard.discard"
+      @save="unsavedGuard.saveAndContinue"
+    />
+
+    <TenantTemplateSaveErrorModal
+      :open="saveErrorOpen"
+      :message="formError"
+      @close="closeSaveError"
+    />
   </div>
 </template>
