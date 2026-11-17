@@ -91,11 +91,14 @@ const props = defineProps<{
   canResizeImage?: boolean
   canReplaceImage?: boolean
   sourceHtml?: string
+  /** When true, Load template asks the parent to confirm before replacing the editor. */
+  hasUnsavedChanges?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [html: string]
   'loaded-template': [{ id: string; name: string; subject: string }]
+  'request-load-template': [id: string]
 }>()
 
 const marketingApi = useTenantMarketingApi()
@@ -4160,7 +4163,7 @@ async function openTemplateList() {
   }
 }
 
-async function loadTemplate(id: string) {
+async function applyLoadTemplate(id: string) {
   templatesPending.value = true
   templatesError.value = ''
   try {
@@ -4182,6 +4185,18 @@ async function loadTemplate(id: string) {
     templatesPending.value = false
   }
 }
+
+async function loadTemplate(id: string) {
+  if (props.hasUnsavedChanges) {
+    emit('request-load-template', id)
+    return
+  }
+  await applyLoadTemplate(id)
+}
+
+defineExpose({
+  applyLoadTemplate
+})
 </script>
 
 <template>
