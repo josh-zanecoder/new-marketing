@@ -254,6 +254,17 @@ const navIconClass = 'nav-item-icon'
           </svg>
           <span>Tracking</span>
         </NuxtLink>
+        <NuxtLink
+          to="/admin/sync-health"
+          :class="navLinkClass"
+          :active-class="navActiveClass"
+          @click="collapseSidebarIfMobileExpanded"
+        >
+          <svg :class="navIconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12h3l2-7 4 14 2-7h5" />
+          </svg>
+          <span>Sync health</span>
+        </NuxtLink>
       </nav>
 
       <div class="mt-auto shrink-0 border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

@@ -44,6 +44,12 @@ import {
   saveMarketingEmailTemplateFromCreatedEvent,
   saveMarketingEmailTemplateFromUpdatedEvent
 } from './handlers/inboundEmailTemplates'
+import {
+  recordMarketingSyncError,
+  recordMarketingSyncProgress,
+  recordMarketingSyncSuccess,
+  touchMarketingSyncWorkerHeartbeat
+} from '../utils/marketingSyncHealth/store'
 
 // --- Runtime / client config -------------------------------------------------
 const SYNC_REQUESTED_EVENT_TYPE = 'marketing.sync.requested' as const
@@ -171,9 +177,20 @@ function scheduleInboundConsumerRestart(reason: string, err: unknown): void {
   }, retryMs)
 }
 
+async function safeRecordSyncHealth(fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn()
+  } catch (err) {
+    logger.warn('Marketing sync health write failed', {
+      err: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
 async function handleMarketingSyncRequested(
   parsed: Record<string, unknown>,
-  ctx?: InboundMessageContext
+  ctx?: InboundMessageContext,
+  kafkaTopic?: string
 ): Promise<void> {
   const evt = parseMarketingSyncRequestedEnvelope(parsed)
   if (!evt) {
@@ -185,6 +202,7 @@ async function handleMarketingSyncRequested(
   const chunkIndex = evt.payload.chunkIndex ?? 1
   const chunkCount = evt.payload.chunkCount ?? 1
   const syncId = evt.payload.syncId ?? ''
+  const topic = kafkaTopic || ''
   if (syncMode === 'delta' && chunkIndex === 1) {
     logger.info('Kafka inbound marketing.sync.delta started', {
       tenantId: evt.tenantId,
@@ -199,6 +217,19 @@ async function handleMarketingSyncRequested(
   }
   inboundSyncActiveCount += 1
   try {
+    await safeRecordSyncHealth(() =>
+      recordMarketingSyncProgress({
+        tenantId: evt.tenantId,
+        dbName: evt.dBname,
+        syncMode,
+        syncId,
+        chunkIndex,
+        chunkCount,
+        eventType: SYNC_REQUESTED_EVENT_TYPE,
+        kafkaTopic: topic,
+        syncing: true
+      })
+    )
     const startedAt = Date.now()
     const snapshot = {
       tenantId: evt.tenantId,
@@ -251,7 +282,24 @@ async function handleMarketingSyncRequested(
       syncedCount,
       durationMs: Date.now() - startedAt
     })
-    if (chunkCount > 0 && chunkIndex >= chunkCount) {
+    const isFinalChunk = chunkCount > 0 && chunkIndex >= chunkCount
+    await safeRecordSyncHealth(() =>
+      recordMarketingSyncProgress({
+        tenantId: evt.tenantId,
+        dbName: evt.dBname,
+        syncMode,
+        syncId,
+        syncedCount,
+        chunkIndex,
+        chunkCount,
+        eventType: SYNC_REQUESTED_EVENT_TYPE,
+        kafkaTopic: topic,
+        syncing: !isFinalChunk,
+        // Mid-chunk: log counts. Final chunk: success log follows.
+        appendLog: !isFinalChunk
+      })
+    )
+    if (isFinalChunk) {
       const rebuildStartedAt = Date.now()
       let rebuild = { listCount: 0, memberCount: 0, concurrency: 0 }
       try {
@@ -297,7 +345,31 @@ async function handleMarketingSyncRequested(
       } else {
         logger.info('Kafka inbound marketing.sync.completed', completedLog)
       }
+      await safeRecordSyncHealth(() =>
+        recordMarketingSyncSuccess({
+          tenantId: evt.tenantId,
+          dbName: evt.dBname,
+          syncMode,
+          syncId,
+          syncedCount,
+          chunkCount,
+          eventType:
+            syncMode === 'delta' ? 'marketing.sync.delta.completed' : 'marketing.sync.completed',
+          kafkaTopic: topic
+        })
+      )
     }
+  } catch (err) {
+    await safeRecordSyncHealth(() =>
+      recordMarketingSyncError({
+        tenantId: evt.tenantId,
+        dbName: evt.dBname,
+        error: err instanceof Error ? err.message : String(err),
+        eventType: SYNC_REQUESTED_EVENT_TYPE,
+        kafkaTopic: topic
+      })
+    )
+    throw err
   } finally {
     inboundSyncActiveCount = Math.max(0, inboundSyncActiveCount - 1)
     if (inboundSyncActiveCount === 0 && pendingInboundTopicRefresh) {
@@ -822,7 +894,8 @@ function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
 
 async function handleInboundKafkaMessage(
   parsed: Record<string, unknown>,
-  ctx?: InboundMessageContext
+  ctx?: InboundMessageContext,
+  kafkaTopic?: string
 ): Promise<void> {
   const eventType = typeof parsed.eventType === 'string' ? parsed.eventType : ''
   const contactEvent = parseContactEventEnvelope(parsed)
@@ -830,7 +903,7 @@ async function handleInboundKafkaMessage(
 
   switch (eventType) {
     case SYNC_REQUESTED_EVENT_TYPE:
-      await handleMarketingSyncRequested(parsed, ctx)
+      await handleMarketingSyncRequested(parsed, ctx, kafkaTopic)
       break
     case CONTACT_EVENT_TYPES.CREATED:
       if (!contactEvent) {
@@ -976,6 +1049,33 @@ let inboundConsumerShuttingDown = false
 let inboundSyncActiveCount = 0
 let pendingInboundTopicRefresh = false
 let pendingInboundTopicRefreshReason = ''
+let inboundWorkerHeartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+function stopInboundWorkerHeartbeatTimer(): void {
+  if (!inboundWorkerHeartbeatTimer) return
+  clearInterval(inboundWorkerHeartbeatTimer)
+  inboundWorkerHeartbeatTimer = null
+}
+
+function startInboundWorkerHeartbeatTimer(input: {
+  consumerGroupId: string
+  topics: string[]
+}): void {
+  stopInboundWorkerHeartbeatTimer()
+  const beat = () => {
+    void safeRecordSyncHealth(() =>
+      touchMarketingSyncWorkerHeartbeat({
+        consumerGroupId: input.consumerGroupId,
+        topics: input.topics
+      })
+    )
+  }
+  beat()
+  inboundWorkerHeartbeatTimer = setInterval(beat, 60_000)
+  if (typeof inboundWorkerHeartbeatTimer.unref === 'function') {
+    inboundWorkerHeartbeatTimer.unref()
+  }
+}
 
 function inboundSyncBusy(): boolean {
   return inboundSyncActiveCount > 0
@@ -1103,6 +1203,7 @@ export async function stopInboundEventsConsumer(): Promise<void> {
   inboundEventsConsumer = null
   activeInboundTopics = []
   g.__marketingInboundKafkaConsumerStarted = false
+  stopInboundWorkerHeartbeatTimer()
   if (!consumer) return
   try {
     await consumer.stop()
@@ -1318,6 +1419,7 @@ export async function startInboundEventsConsumer(
   g.__marketingInboundKafkaConsumerStarted = true
   inboundEventsConsumer = consumer
   activeInboundTopics = topics
+  startInboundWorkerHeartbeatTimer({ consumerGroupId: groupId, topics })
 
   void consumer
     .run({
@@ -1338,7 +1440,7 @@ export async function startInboundEventsConsumer(
         const ctx: InboundMessageContext = { heartbeat }
         const stopKeepalive = runInboundConsumerHeartbeatKeepalive(heartbeat)
         try {
-          await handleInboundKafkaMessage(parsed, ctx)
+          await handleInboundKafkaMessage(parsed, ctx, t)
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err)
           if (isKafkaConsumerGroupCoordinationError(err)) {
@@ -1353,6 +1455,25 @@ export async function startInboundEventsConsumer(
               err: errMsg,
               eventType: parsed.eventType
             })
+          }
+          const tenantId =
+            typeof parsed.tenantId === 'string' ? parsed.tenantId.trim() : ''
+          const dbName =
+            typeof parsed.dBname === 'string'
+              ? parsed.dBname.trim()
+              : typeof parsed.dbName === 'string'
+                ? parsed.dbName.trim()
+                : ''
+          if (parsed.eventType !== SYNC_REQUESTED_EVENT_TYPE) {
+            await safeRecordSyncHealth(() =>
+              recordMarketingSyncError({
+                tenantId,
+                dbName,
+                error: errMsg,
+                eventType: typeof parsed.eventType === 'string' ? parsed.eventType : '',
+                kafkaTopic: t
+              })
+            )
           }
           throw err
         } finally {
@@ -1372,6 +1493,7 @@ export async function startInboundEventsConsumer(
     .catch(async (err) => {
       g.__marketingInboundKafkaConsumerStarted = false
       inboundEventsConsumer = null
+      stopInboundWorkerHeartbeatTimer()
       try {
         await consumer.stop()
       } catch {
