@@ -1118,6 +1118,8 @@ const ADDED_BLOCK_LABELS: Record<string, string> = {
   sect25: '4 Columns',
   sect37: 'Narrow + Wide',
   sect73: 'Wide + Narrow',
+  images2: '2 Images',
+  images3: '3 Images',
   row: 'Columns',
   html: 'HTML'
 }

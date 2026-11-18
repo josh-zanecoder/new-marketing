@@ -64,10 +64,42 @@ export function replaceEmailTemplateHtmlImageSrc(
 }
 
 /** `<img>` markup inserted into pasted campaign or template HTML. */
-export function emailHtmlImageTag(url: string, options?: { width?: number }): string {
+export function emailHtmlImageTag(
+  url: string,
+  options?: { width?: number; /** Fill the parent column — safe for side-by-side rows. */ fluid?: boolean }
+): string {
   const src = String(url ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  if (options?.fluid) {
+    return `<img src="${src}" alt="" width="100%" style="display:block;width:100%;max-width:100%;height:auto;border:0;" />`
+  }
   const width = options?.width && options.width > 0 ? Math.round(options.width) : 600
   return `<img src="${src}" alt="" width="${width}" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;" />`
+}
+
+/**
+ * Make block images fill their column (`width:100%`) so side-by-side layouts do not overflow
+ * in clients that ignore `max-width` (e.g. Outlook). Keeps intentionally resized smaller images.
+ */
+export function fluidizeEmailBlockImages(html: string): string {
+  if (!html || !/<img\b/i.test(html)) return html
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const widthAttr = /\bwidth\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
+    const raw = (widthAttr?.[1] ?? widthAttr?.[2] ?? widthAttr?.[3] ?? '').trim()
+    const px = /^(\d+(?:\.\d+)?)(?:px)?$/i.exec(raw)?.[1]
+    // Leave modest logos alone; only fluidize full-bleed / near-full template widths.
+    if (px && Number(px) > 0 && Number(px) < 280) return tag
+    if (/^100%$/.test(raw)) return tag
+    const styleMatch = tag.match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    const style = parseStyleDeclarations(styleMatch?.[1] ?? styleMatch?.[2] ?? '')
+    style.set('display', style.get('display') || 'block')
+    style.set('width', '100%')
+    style.set('max-width', '100%')
+    if (!style.has('height') || style.get('height') === 'auto') style.set('height', 'auto')
+    let next = rewriteImageTag(tag, style)
+    next = upsertQuotedAttr(next, 'width', '100%')
+    next = next.replace(/\s*\bheight\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '')
+    return next
+  })
 }
 
 export type EmailTemplateImageLayout = {

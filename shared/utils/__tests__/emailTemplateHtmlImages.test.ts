@@ -6,6 +6,7 @@ import {
   emailPreviewDocument,
   emailPreviewWithBlockMarkers,
   emailTemplateHtmlImageLabel,
+  fluidizeEmailBlockImages,
   insertEmailTemplateHtmlImage,
   insertEmailTemplateHtmlImageAtPlacement,
   insertEmailTemplateHtmlImageBeforeText,
@@ -21,6 +22,24 @@ import {
 } from '../emailTemplateHtmlImages'
 
 describe('emailTemplateHtmlImages', () => {
+  it('builds fluid image tags for column layouts', () => {
+    const tag = emailHtmlImageTag('https://cdn.example.com/a.png', { fluid: true })
+    expect(tag).toContain('width="100%"')
+    expect(tag).toContain('width:100%')
+    expect(tag).toContain('max-width:100%')
+  })
+
+  it('fluidizes wide block images but keeps small logos', () => {
+    const html =
+      '<img src="a.png" width="552" style="display:block;width:552px;max-width:100%;height:auto;border:0;" />' +
+      '<img src="logo.png" width="120" style="display:block;width:120px;max-width:100%;height:auto;border:0;" />'
+    const next = fluidizeEmailBlockImages(html)
+    expect(next).toMatch(/src="a\.png"[^>]*width="100%"/)
+    expect(next).toContain('width:100%')
+    expect(next).toMatch(/src="logo\.png"[^>]*width="120"/)
+    expect(next).toContain('width:120px')
+  })
+
   it('lists img tags in order including data-URL srcs', () => {
     const html = `
       <p>hi</p>

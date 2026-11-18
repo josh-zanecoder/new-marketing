@@ -298,6 +298,37 @@ describe('email template blocks', () => {
     expect(insertEmailBlock(email, 'image', 0).html).toBe(email)
   })
 
+  it('places two images side by side with fluid widths that fit the columns', () => {
+    const html = insertEmailBlock(email, 'image', partOf(email, 'Footer'), 'https://cdn.example.com/a.png').html
+    const first = listEmailArrangeItems(html).find((item) => item.label === 'Image')?.part
+    expect(first).toEqual(expect.any(Number))
+    const next = insertEmailBlockBeside(html, 'image', first!, 'right', 'https://cdn.example.com/b.png')
+    expect(next.html).toMatch(/data-email-block="row"[\s\S]*data-email-block="image"[\s\S]*data-email-block="image"/)
+    expect(widths(next.html).filter((w) => w === 50)).toEqual([50, 50])
+    const imgs = [...next.html.matchAll(/<img\b[^>]*>/g)].map((match) => match[0])
+    expect(imgs).toHaveLength(2)
+    for (const tag of imgs) {
+      expect(tag).toMatch(/\bwidth="100%"/)
+      expect(tag).toMatch(/width:100%/)
+      expect(tag).toMatch(/max-width:100%/)
+      expect(tag).not.toMatch(/width:552px/)
+    }
+  })
+
+  it('offers 2 Images / 3 Images rows and fills them with photos', () => {
+    const row = insertEmailBlock(email, 'images2', partOf(email, 'Welcome'))
+    expect(listEmailArrangeItems(row.html).some((item) => item.label === '2 Images')).toBe(true)
+    expect(countEmailBlockCells(row.html)).toBe(2)
+    const withFirst = insertEmailBlockIntoCell(row.html, 0, 'image', 'https://cdn.example.com/a.png').html
+    const html = insertEmailBlockIntoCell(withFirst, 1, 'image', 'https://cdn.example.com/b.png').html
+    expect(html.match(/data-email-block="image"/g)).toHaveLength(2)
+    expect(html).toContain('src="https://cdn.example.com/a.png"')
+    expect(html).toContain('src="https://cdn.example.com/b.png"')
+    const three = insertEmailBlock(email, 'images3', partOf(email, 'Welcome'))
+    expect(countEmailBlockCells(three.html)).toBe(3)
+    expect(listEmailArrangeItems(three.html).some((item) => item.label === '3 Images')).toBe(true)
+  })
+
   it('duplicates and removes a block', () => {
     const part = partOf(email, 'Body copy')!
     const copied = duplicateEmailBlock(email, part)

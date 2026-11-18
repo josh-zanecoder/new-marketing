@@ -1,4 +1,4 @@
-import { emailHtmlImageTag } from './emailTemplateHtmlImages'
+import { emailHtmlImageTag, fluidizeEmailBlockImages } from './emailTemplateHtmlImages'
 import {
   emailArrangeGroupInnerEnd,
   findEmailElementAt,
@@ -13,6 +13,8 @@ export const EMAIL_BLOCK_KINDS = [
   'sect25',
   'sect37',
   'sect73',
+  'images2',
+  'images3',
   'title',
   'text',
   'text-sect',
@@ -39,6 +41,8 @@ export const EMAIL_BLOCK_OPTIONS: { kind: EmailBlockKind; label: string; group: 
   { kind: 'sect25', label: '4 Columns', group: 'Layout' },
   { kind: 'sect37', label: 'Narrow + Wide', group: 'Layout' },
   { kind: 'sect73', label: 'Wide + Narrow', group: 'Layout' },
+  { kind: 'images2', label: '2 Images', group: 'Layout' },
+  { kind: 'images3', label: '3 Images', group: 'Layout' },
   { kind: 'title', label: 'Title', group: 'Content' },
   { kind: 'text', label: 'Paragraph', group: 'Content' },
   { kind: 'list', label: 'List', group: 'Content' },
@@ -64,7 +68,9 @@ const SECTION_COLUMNS: Partial<Record<EmailBlockKind, number[]>> = {
   sect30: [33.3333, 33.3333, 33.3333],
   sect25: [25, 25, 25, 25],
   sect37: [30, 70],
-  sect73: [70, 30]
+  sect73: [70, 30],
+  images2: [50, 50],
+  images3: [33.3333, 33.3333, 33.3333]
 }
 
 const SOCIAL_LINKS = [
@@ -139,7 +145,14 @@ function blockCells(kind: EmailBlockKind, imageUrl?: string): string | null {
       return cell(buttonHtml(), '16px 24px')
     case 'image':
       if (!imageUrl) return null
-      return cell(emailHtmlImageTag(imageUrl, { width: 552 }).replace('display:block;', 'display:block;margin:0 auto;'), '16px 24px')
+      // Fluid width so side-by-side / multi-column rows do not overflow email clients.
+      return cell(
+        emailHtmlImageTag(imageUrl, { fluid: true }).replace(
+          'display:block;',
+          'display:block;margin:0 auto;'
+        ),
+        '8px'
+      )
     case 'quote':
       return cell(
         `<p style="margin:0;padding:4px 0 4px 16px;border-left:4px solid #cbd5e1;font-family:${FONT};font-size:18px;line-height:26px;font-style:italic;color:#475569">Quote</p>`,
@@ -312,11 +325,12 @@ export function insertEmailBlockIntoCell(html: string, cell: number, kind: Email
   const open = [...html.matchAll(CELL_OPEN_RE)][cell]
   const block = emailBlockHtml(kind, false, imageUrl)
   if (!open || !block) return { html, part: null }
+  const fitted = fluidizeEmailBlockImages(block)
   const end = emailArrangeGroupInnerEnd(html, `p${open.index}:td`)
   if (end == null) return { html, part: null }
   const freed = freeCellTag(open[0])
   const at = end + freed.length - open[0].length
-  const next = `${html.slice(0, open.index)}${freed}${html.slice(open.index + open[0].length, end)}${block}${html.slice(end)}`
+  const next = `${html.slice(0, open.index)}${freed}${html.slice(open.index + open[0].length, end)}${fitted}${html.slice(end)}`
   return { html: next, part: partAt(next, at) }
 }
 
@@ -346,11 +360,21 @@ function fullWidthBox(content: string): string {
 function cellContent(slice: string): string | null {
   if (/^<(td|th|tbody|thead|tfoot|li)\b/i.test(slice)) return null
   const content = /^<tr\b/i.test(slice) ? blockInForm(slice, false) : slice
-  return content == null ? null : fullWidthBox(content)
+  return content == null ? null : fluidizeEmailBlockImages(fullWidthBox(content))
 }
 
 const MAX_COLUMNS = 4
-const COLUMN_KINDS = new Set(['row', 'sect100', 'sect50', 'sect30', 'sect25', 'sect37', 'sect73'])
+const COLUMN_KINDS = new Set([
+  'row',
+  'sect100',
+  'sect50',
+  'sect30',
+  'sect25',
+  'sect37',
+  'sect73',
+  'images2',
+  'images3'
+])
 
 /** Temporary attributes that follow elements through an edit: target, moved, source cell, removed. */
 type Mark = 't' | 'm' | 's' | 'x'
@@ -476,13 +500,19 @@ function rebuildRow(
 function besideAt(html: string, targetStart: number, side: 'left' | 'right', content: string): string | null {
   const target = findEmailElementAt(html, targetStart)
   if (!target) return null
+  const fitted = fluidizeEmailBlockImages(content)
   const hasRoom = (cells: EmailElement[]) => {
     const leaving = cells.filter((cell) => !cell.children.length && /data-email-mark="s"/.test(openTagOf(html, cell))).length
     return cells.length - leaving < MAX_COLUMNS
   }
   if (COLUMN_KINDS.has(blockKindOf(html, target))) {
     const cells = rowCellsOf(html, target)
-    if (cells.length && hasRoom(cells)) return rebuildRow(html, target, cells, { insertAt: side === 'left' ? 0 : cells.length, content })
+    if (cells.length && hasRoom(cells)) {
+      return rebuildRow(html, target, cells, {
+        insertAt: side === 'left' ? 0 : cells.length,
+        content: fitted
+      })
+    }
   }
   const cell = target.parent
   if (cell && isCellNode(html, cell) && cell.children.length === 1) {
@@ -490,12 +520,17 @@ function besideAt(html: string, targetStart: number, side: 'left' | 'right', con
     if (owner && COLUMN_KINDS.has(blockKindOf(html, owner))) {
       const cells = rowCellsOf(html, owner)
       const index = cells.findIndex((entry) => entry.start === cell.start)
-      if (index >= 0 && hasRoom(cells)) return rebuildRow(html, owner, cells, { insertAt: side === 'left' ? index : index + 1, content })
+      if (index >= 0 && hasRoom(cells)) {
+        return rebuildRow(html, owner, cells, {
+          insertAt: side === 'left' ? index : index + 1,
+          content: fitted
+        })
+      }
     }
   }
   const own = cellContent(html.slice(target.start, target.end))
   if (own == null) return null
-  const cells = (side === 'left' ? [content, own] : [own, content]).map((entry) => columnCell(50, entry)).join('')
+  const cells = (side === 'left' ? [fitted, own] : [own, fitted]).map((entry) => columnCell(50, entry)).join('')
   const wrapper = target.tag === 'tr'
     ? `<tr data-email-block="row"><td align="center" style="padding:0"><table ${TABLE_ATTRS} data-email-box style="width:100%"><tr>${cells}</tr></table></td></tr>`
     : `<table ${TABLE_ATTRS} data-email-block="row" data-email-box style="width:100%"><tr>${cells}</tr></table>`

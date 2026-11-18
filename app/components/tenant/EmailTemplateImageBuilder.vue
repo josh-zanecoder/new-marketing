@@ -3253,13 +3253,17 @@ const BLOCK_LAYOUT_PREVIEW: Partial<Record<EmailBlockKind, number[]>> = {
   sect30: [1, 1, 1],
   sect25: [1, 1, 1, 1],
   sect37: [3, 7],
-  sect73: [7, 3]
+  sect73: [7, 3],
+  images2: [1, 1],
+  images3: [1, 1, 1]
 }
 const BLOCK_ICONS: Partial<Record<EmailBlockKind, string>> = {
   title: 'M5 5h14M12 5v14',
   text: 'M4 6h16M4 10h16M4 14h16M4 18h10',
   list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
   image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15.5 9h.01',
+  images2: 'M3 6h8v12H3zM13 6h8v12h-8z',
+  images3: 'M2 7h6v10H2zM9 7h6v10H9zM16 7h6v10h-6z',
   button: 'M3 8h18v8H3zM8 12h8',
   table: 'M4 5h16v14H4zM4 10h16M4 14.5h16M12 5v14',
   divider: 'M3 12h18M12 4v4M12 16v4',
@@ -4346,8 +4350,9 @@ defineExpose({
 
           <template v-else-if="addTab === 'rows'">
             <p class="mb-3 text-xs leading-relaxed text-slate-500">
-              Rows span the full email width. Drag one in, then fill its columns with content.
-              Drag the dashed line between columns to resize them.
+              Rows span the full email width. Use <span class="font-semibold">2 Images</span> /
+              <span class="font-semibold">3 Images</span> for side-by-side photos, or any column row
+              and drop an image into each cell. Drag the dashed line between columns to resize them.
             </p>
             <div class="space-y-2">
               <button

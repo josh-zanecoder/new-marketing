@@ -6,6 +6,7 @@ export type BrevoTrackingDatePresetId =
   | 'last30days'
   | 'last90days'
   | 'mtd'
+  | 'ytd'
   | 'lastMonth'
   | 'lastYear'
   | 'custom'
@@ -63,7 +64,8 @@ export function presetToBrevoTrackingRange(
   const ymdToday = toYmdLocal(today)
 
   if (preset === 'custom') return { from: null, to: null }
-  if (preset === 'all' || preset === 'last90days') {
+  if (preset === 'all') return { from: null, to: null }
+  if (preset === 'last90days') {
     const start = new Date(today)
     start.setDate(start.getDate() - 89)
     return { from: toYmdLocal(start), to: ymdToday }
@@ -91,6 +93,11 @@ export function presetToBrevoTrackingRange(
 
   if (preset === 'mtd') {
     const first = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { from: toYmdLocal(first), to: ymdToday }
+  }
+
+  if (preset === 'ytd') {
+    const first = new Date(now.getFullYear(), 0, 1)
     return { from: toYmdLocal(first), to: ymdToday }
   }
 
@@ -215,6 +222,8 @@ export function formatBrevoTrackingDateRangeLabel(
         }
       : presetToBrevoTrackingRange(preset, now)
 
+  if (preset === 'all') return 'All time'
+
   if (range.from && range.to) {
     return `${formatSlashYmd(range.from)} - ${formatSlashYmd(range.to)}`
   }
@@ -226,6 +235,19 @@ export function formatBrevoTrackingDateRangeLabel(
     'Last 7 Days'
   )
 }
+
+/** Sync health history — compact presets matching ops filters. */
+export const SYNC_HEALTH_DATE_PRESET_OPTIONS: {
+  id: BrevoTrackingDatePresetId
+  label: string
+}[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'mtd', label: 'MTD' },
+  { id: 'ytd', label: 'YTD' },
+  { id: 'all', label: 'All time' },
+  { id: 'custom', label: 'Custom range' }
+]
 
 export function useBrevoTrackingDateRange(options?: {
   /** When set, clamp effective range and custom picks to this many inclusive days. */

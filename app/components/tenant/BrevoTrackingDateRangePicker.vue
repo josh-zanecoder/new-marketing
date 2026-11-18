@@ -21,10 +21,13 @@ const props = withDefaults(
     presetOptions?: readonly { id: BrevoTrackingDatePresetId; label: string }[]
     /** Max inclusive days for a custom selection. */
     maxRangeDays?: number
+    /** Preset restored by the clear (×) control. */
+    defaultPreset?: BrevoTrackingDatePresetId
   }>(),
   {
     presetOptions: undefined,
-    maxRangeDays: undefined
+    maxRangeDays: undefined,
+    defaultPreset: BREVO_TRACKING_DEFAULT_PRESET
   }
 )
 
@@ -40,6 +43,8 @@ const calendarRange = ref<[Date, Date] | null>(null)
 const isCompact = ref(false)
 const panelStyle = ref<Record<string, string>>({})
 let mediaQuery: MediaQueryList | null = null
+/** Ignore VueDatePicker emissions caused by syncing a preset into the calendar. */
+let syncingCalendarFromPreset = false
 
 const maxSelectableDate = computed(() => {
   const now = new Date()
@@ -59,6 +64,17 @@ function syncCompact() {
   isCompact.value = window.matchMedia('(max-width: 767px)').matches
 }
 
+function schedulePanelReposition() {
+  nextTick(() => {
+    updatePanelPosition()
+    requestAnimationFrame(() => {
+      updatePanelPosition()
+      // VueDatePicker dual-month width settles a frame later.
+      requestAnimationFrame(() => updatePanelPosition())
+    })
+  })
+}
+
 function updatePanelPosition() {
   if (!import.meta.client || isCompact.value) {
     panelStyle.value = {}
@@ -75,47 +91,80 @@ function updatePanelPosition() {
   const rect = root.getBoundingClientRect()
   const gap = 8
   const viewportPad = 12
-  const panelWidth = panel?.offsetWidth || 640
-  const panelHeight = panel?.offsetHeight || 420
-  const maxLeft = window.innerWidth - panelWidth - viewportPad
-  const left = Math.max(viewportPad, Math.min(rect.left, maxLeft))
+  const panelWidth = Math.max(panel?.offsetWidth || 0, 640)
+  const maxWidth = Math.min(panelWidth, window.innerWidth - viewportPad * 2)
 
-  const spaceBelow = window.innerHeight - rect.bottom - viewportPad
-  const spaceAbove = rect.top - viewportPad
-  const openUp = spaceBelow < Math.min(panelHeight, 360) && spaceAbove > spaceBelow
+  // Anchor to the trigger's right edge when the control sits on the right.
+  const preferRightAlign = rect.left > window.innerWidth * 0.45
+  const right = Math.max(viewportPad, window.innerWidth - rect.right)
+  const left = preferRightAlign
+    ? Math.max(viewportPad, rect.right - maxWidth)
+    : Math.max(viewportPad, Math.min(rect.left, window.innerWidth - maxWidth - viewportPad))
 
-  if (openUp) {
-    panelStyle.value = {
-      left: `${left}px`,
-      bottom: `${window.innerHeight - rect.top + gap}px`,
-      top: 'auto',
-      maxWidth: `${Math.min(panelWidth, window.innerWidth - viewportPad * 2)}px`
-    }
-    return
-  }
+  const spaceBelow = window.innerHeight - rect.bottom - viewportPad - gap
+  const spaceAbove = rect.top - viewportPad - gap
+  // Natural picker height is ~520px; flip up when below can't fit it.
+  const naturalHeight = Math.max(panel?.scrollHeight || 0, 520)
+  const openUp = spaceBelow < naturalHeight && spaceAbove > spaceBelow
+  const available = Math.max(280, openUp ? spaceAbove : spaceBelow)
+  const maxHeight = Math.min(available, window.innerHeight - viewportPad * 2)
 
-  panelStyle.value = {
-    left: `${left}px`,
-    top: `${rect.bottom + gap}px`,
-    bottom: 'auto',
-    maxWidth: `${Math.min(panelWidth, window.innerWidth - viewportPad * 2)}px`
-  }
+  const placement = openUp
+    ? {
+        top: 'auto',
+        bottom: `${window.innerHeight - rect.top + gap}px`
+      }
+    : {
+        top: `${rect.bottom + gap}px`,
+        bottom: 'auto'
+      }
+
+  panelStyle.value = preferRightAlign
+    ? {
+        left: 'auto',
+        right: `${right}px`,
+        maxWidth: `${maxWidth}px`,
+        maxHeight: `${maxHeight}px`,
+        ...placement
+      }
+    : {
+        left: `${left}px`,
+        right: 'auto',
+        maxWidth: `${maxWidth}px`,
+        maxHeight: `${maxHeight}px`,
+        ...placement
+      }
 }
 
 function syncCalendarFromModels() {
-  if (datePreset.value === 'custom') {
-    calendarRange.value = ymdRangeToDates(customDateFrom.value, customDateTo.value)
-    return
+  syncingCalendarFromPreset = true
+  try {
+    if (datePreset.value === 'custom') {
+      calendarRange.value = ymdRangeToDates(customDateFrom.value, customDateTo.value)
+      return
+    }
+    const range = presetToBrevoTrackingRange(datePreset.value)
+    if (range.from && range.to) {
+      calendarRange.value = ymdRangeToDates(range.from, range.to)
+      return
+    }
+    calendarRange.value = null
+  } finally {
+    // VueDatePicker may emit update:model-value after the preset sync settles.
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        syncingCalendarFromPreset = false
+      })
+    })
   }
-  const range = presetToBrevoTrackingRange(datePreset.value)
-  if (range.from && range.to) {
-    calendarRange.value = ymdRangeToDates(range.from, range.to)
-    return
-  }
-  calendarRange.value = null
 }
 
 function selectPreset(id: BrevoTrackingDatePresetId) {
+  if (id === 'custom') {
+    datePreset.value = 'custom'
+    syncCalendarFromModels()
+    return
+  }
   datePreset.value = id
   customDateFrom.value = ''
   customDateTo.value = ''
@@ -123,6 +172,8 @@ function selectPreset(id: BrevoTrackingDatePresetId) {
 }
 
 function applyCalendarRange(dates: [Date, Date] | null) {
+  // Preset clicks update v-model; don't overwrite the chosen preset as "custom".
+  if (syncingCalendarFromPreset) return
   if (!dates?.[0] || !dates?.[1]) return
   if (dates[0].getTime() > dates[1].getTime()) return
   let from = toYmdLocal(dates[0])
@@ -131,6 +182,11 @@ function applyCalendarRange(dates: [Date, Date] | null) {
     const clamped = clampBrevoTrackingRangeToMaxDays({ from, to }, props.maxRangeDays)
     from = clamped.from || from
     to = clamped.to || to
+  }
+  // Same range as the active preset → keep the preset (not a user custom pick).
+  if (datePreset.value !== 'custom') {
+    const expected = presetToBrevoTrackingRange(datePreset.value)
+    if (expected.from === from && expected.to === to) return
   }
   customDateFrom.value = from
   customDateTo.value = to
@@ -142,9 +198,14 @@ function onRangeEnd(dates: [Date, Date] | null) {
   applyCalendarRange(dates)
 }
 
+const clearLabel = computed(() => {
+  const match = presetOptions.value.find((option) => option.id === props.defaultPreset)
+  return match?.label || 'default range'
+})
+
 function clearToDefault(event: MouseEvent) {
   event.stopPropagation()
-  datePreset.value = BREVO_TRACKING_DEFAULT_PRESET
+  datePreset.value = props.defaultPreset
   customDateFrom.value = ''
   customDateTo.value = ''
   syncCalendarFromModels()
@@ -173,17 +234,14 @@ function onViewportChange() {
   nextTick(() => updatePanelPosition())
 }
 
-watch(open, async (isOpen) => {
+watch(open, (isOpen) => {
   if (!import.meta.client) return
   document.body.style.overflow = isOpen && isCompact.value ? 'hidden' : ''
 
   if (isOpen) {
     syncCompact()
     syncCalendarFromModels()
-    await nextTick()
-    updatePanelPosition()
-    // Remeasure after calendar paints (dual month width).
-    requestAnimationFrame(() => updatePanelPosition())
+    schedulePanelReposition()
     window.addEventListener('scroll', onViewportChange, true)
     window.addEventListener('resize', onViewportChange)
   } else {
@@ -226,7 +284,12 @@ onBeforeUnmount(() => {
     <button
       id="brevo-tracking-date-range"
       type="button"
-      class="inline-flex w-full max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-white py-2 pl-3.5 pr-2.5 text-left text-sm text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition hover:border-zinc-300 focus:border-[#6E56CF] focus:outline-none focus:ring-2 focus:ring-[#6E56CF]/25 sm:w-auto sm:min-w-[15rem] sm:pl-4 sm:pr-3"
+      class="inline-flex w-full max-w-full items-center gap-2 rounded-full border bg-white py-2 pl-3.5 pr-2.5 text-left text-sm text-zinc-800 shadow-sm shadow-zinc-950/[0.04] transition focus:outline-none sm:w-auto sm:min-w-[15rem] sm:pl-4 sm:pr-3"
+      :class="
+        open
+          ? 'border-[#6E56CF] ring-2 ring-[#6E56CF]/25'
+          : 'border-zinc-200 hover:border-zinc-300 focus:border-[#6E56CF] focus:ring-2 focus:ring-[#6E56CF]/25'
+      "
       :aria-expanded="open"
       aria-haspopup="dialog"
       @click="toggleOpen"
@@ -236,7 +299,7 @@ onBeforeUnmount(() => {
         class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
         role="button"
         tabindex="-1"
-        aria-label="Reset to Last 7 Days"
+        :aria-label="`Reset to ${clearLabel}`"
         @click="clearToDefault"
       >
         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -268,7 +331,7 @@ onBeforeUnmount(() => {
         :class="
           isCompact
             ? 'fixed inset-x-0 bottom-0 max-h-[min(92dvh,40rem)] rounded-t-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]'
-            : 'fixed max-h-[min(85dvh,36rem)] w-max max-w-[calc(100vw-1.5rem)] rounded-2xl sm:flex-row'
+            : 'fixed w-max max-w-[calc(100vw-1.5rem)] rounded-2xl sm:flex-row'
         "
         role="dialog"
         aria-label="Choose date range"
@@ -295,7 +358,7 @@ onBeforeUnmount(() => {
         </div>
 
         <aside
-          class="flex shrink-0 gap-2 overflow-x-auto overscroll-x-contain border-b border-zinc-100 p-3 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 md:w-[11.5rem] md:flex-col md:overflow-visible md:border-b-0 md:border-r md:p-4 [&::-webkit-scrollbar]:hidden"
+          class="flex shrink-0 gap-2 overflow-x-auto overscroll-contain border-b border-zinc-100 p-3 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 md:w-[11.5rem] md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-4 [&::-webkit-scrollbar]:hidden"
           :class="isCompact ? 'flex-row' : 'md:flex-col'"
           aria-label="Date presets"
         >
