@@ -17,11 +17,14 @@ const items: MarketingSidebarNavItem[] = [
 
 describe("filterMarketingSidebarNavItems", () => {
   it("maps every Marketing sidebar page to a distinct permission", () => {
-    // Images, Beefree, and Template approvals are gated by registry flags, not CRM page permissions.
+    // Images, Beefree, builders, and Template approvals are gated by registry flags
+    // (builders may reuse email-templates:read). Page tabs each need a distinct CRM code.
     const permissionBound = marketingSidebarNavItems.filter(
       (item) =>
         !item.requiresTenantImages &&
         !item.requiresTenantBeefree &&
+        !item.requiresTenantGrapesBuilder &&
+        !item.requiresTenantTemplateBuilder &&
         !item.requiresTenantTemplateApproval &&
         !item.requiresTemplateApprover &&
         !item.requiresLoRecipientLists,
@@ -29,6 +32,7 @@ describe("filterMarketingSidebarNavItems", () => {
     const permissions = permissionBound.map((item) => item.requiredPermission);
     expect(permissions.every(Boolean)).toBe(true);
     expect(new Set(permissions).size).toBe(permissionBound.length);
+    expect(permissions).toContain("marketing:flyers:read");
   });
 
   it("keeps existing navigation for sessions without a CRM permission snapshot", () => {

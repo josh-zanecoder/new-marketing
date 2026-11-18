@@ -1,5 +1,6 @@
 @import './tokens.css';
 @import './filter-tables.css';
+@import './flyer-upload-loader.css';
 
 @tailwind base;
 @tailwind components;
