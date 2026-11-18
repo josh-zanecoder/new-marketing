@@ -134,26 +134,38 @@ function gcsOwnershipMetadata(ownership: HostedImageOwnership | undefined): Reco
   return out
 }
 
-/** Upload a photo to GCS under `custom-marketing/{tenant}/{recipientListId}/…`. */
-export async function uploadCustomMarketingImageToGcs(
-  input: UploadCustomMarketingImageInput
+type UploadCustomMarketingBinaryInput = {
+  tenantName: string
+  recipientListId: string
+  buffer: Buffer
+  contentType: string
+  fileExtension: string
+  maxBytes: number
+  emptyMessage: string
+  tooLargeMessage: string
+  ownership?: HostedImageOwnership
+  /** Prefer inline so PDF/images open in-browser for print. */
+  contentDisposition?: string
+}
+
+/** Upload any binary under `custom-marketing/{tenant}/{folder}/…` (caller validates MIME). */
+export async function uploadCustomMarketingBinaryToGcs(
+  input: UploadCustomMarketingBinaryInput
 ): Promise<UploadCustomMarketingImageResult> {
   const contentType = String(input.contentType ?? '').toLowerCase()
-  if (!isAllowedCustomMarketingImageMime(contentType)) {
-    throw createError({ statusCode: 400, message: 'Use PNG, JPEG, GIF, or WebP images.' })
-  }
   if (!input.buffer.length) {
-    throw createError({ statusCode: 400, message: 'Image payload is empty.' })
+    throw createError({ statusCode: 400, message: input.emptyMessage })
   }
-  if (input.buffer.length > CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES * 2) {
-    throw createError({
-      statusCode: 400,
-      message: 'Image is too large after compression. Try a smaller photo.'
-    })
+  if (input.buffer.length > input.maxBytes) {
+    throw createError({ statusCode: 400, message: input.tooLargeMessage })
   }
 
-  const ext = extensionForCustomMarketingImageMime(contentType)
-  const fileName = `${Date.now()}-${randomUUID()}.${ext}`
+  const ext = String(input.fileExtension ?? '')
+    .trim()
+    .replace(/[^a-z0-9]+/gi, '')
+    .toLowerCase()
+    .slice(0, 8)
+  const fileName = `${Date.now()}-${randomUUID()}.${ext || 'bin'}`
   const objectPath = buildCustomMarketingGcsObjectPath({
     tenantName: input.tenantName,
     recipientListId: input.recipientListId,
@@ -168,6 +180,9 @@ export async function uploadCustomMarketingImageToGcs(
       metadata: {
         contentType,
         cacheControl: 'public, max-age=31536000',
+        ...(input.contentDisposition
+          ? { contentDisposition: input.contentDisposition }
+          : {}),
         metadata: {
           tenantName: input.tenantName,
           recipientListId: input.recipientListId,
@@ -180,12 +195,12 @@ export async function uploadCustomMarketingImageToGcs(
     const message = err instanceof Error ? err.message : 'GCS upload failed'
     const isDenied =
       /Permission|denied|storage\.objects\.create|does not have/i.test(message)
-    console.error('Custom Marketing GCS upload failed', message)
+    console.error('[customMarketingGcs] upload failed', message)
     throw createError({
       statusCode: isDenied ? 403 : 502,
       message: isDenied
         ? 'GCS upload denied. Grant the upload service account roles/storage.objectAdmin on bucket custom-marketing-images.'
-        : 'Could not upload image to GCS. Check GCS_BUCKET and credentials.'
+        : 'Could not upload file to GCS. Check GCS_BUCKET and credentials.'
     })
   }
 
@@ -194,7 +209,7 @@ export async function uploadCustomMarketingImageToGcs(
   } catch (err: unknown) {
     // Uniform bucket-level access often blocks makePublic; public IAM on prefix still works.
     console.error(
-      'GCS makePublic skipped',
+      '[customMarketingGcs] makePublic skipped',
       err instanceof Error ? err.message : 'unknown'
     )
   }
@@ -203,6 +218,27 @@ export async function uploadCustomMarketingImageToGcs(
     url: buildPublicGcsObjectUrl(bucket.name, objectPath),
     objectPath
   }
+}
+
+/** Upload a photo to GCS under `custom-marketing/{tenant}/{recipientListId}/…`. */
+export async function uploadCustomMarketingImageToGcs(
+  input: UploadCustomMarketingImageInput
+): Promise<UploadCustomMarketingImageResult> {
+  const contentType = String(input.contentType ?? '').toLowerCase()
+  if (!isAllowedCustomMarketingImageMime(contentType)) {
+    throw createError({ statusCode: 400, message: 'Use PNG, JPEG, GIF, or WebP images.' })
+  }
+  return uploadCustomMarketingBinaryToGcs({
+    tenantName: input.tenantName,
+    recipientListId: input.recipientListId,
+    buffer: input.buffer,
+    contentType,
+    fileExtension: extensionForCustomMarketingImageMime(contentType),
+    maxBytes: CUSTOM_MARKETING_COMPRESSED_IMAGE_MAX_BYTES * 2,
+    emptyMessage: 'Image payload is empty.',
+    tooLargeMessage: 'Image is too large after compression. Try a smaller photo.',
+    ownership: input.ownership
+  })
 }
 
 export async function uploadCustomMarketingImageDataUrlToGcs(input: {
@@ -388,6 +424,34 @@ export async function deleteCustomMarketingTenantImages(
   }
 
   return { deleted, skipped }
+}
+
+/** Download a hosted object by path (used for flyer PDF thumbnails / inline open). */
+export async function downloadCustomMarketingObjectBuffer(
+  objectPath: string
+): Promise<{ buffer: Buffer; contentType: string }> {
+  const path = String(objectPath ?? '').trim().replace(/^\/+/, '')
+  if (!path || path.includes('..') || !path.startsWith('custom-marketing/')) {
+    throw createError({ statusCode: 400, message: 'Invalid object path' })
+  }
+  const bucket = getGcsBucket()
+  const file = bucket.file(path)
+  try {
+    const [buffer] = await file.download()
+    const [meta] = await file.getMetadata()
+    const contentType =
+      typeof meta?.contentType === 'string' && meta.contentType.trim()
+        ? meta.contentType.trim()
+        : 'application/octet-stream'
+    return { buffer, contentType }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'GCS download failed'
+    console.error('[customMarketingGcs] download failed', { objectPath: path, error: message })
+    throw createError({
+      statusCode: 502,
+      message: 'Could not download file from GCS.'
+    })
+  }
 }
 
 /**
