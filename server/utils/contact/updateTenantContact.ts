@@ -46,23 +46,33 @@ export async function updateTenantContact(
     { _id: objectId, deletedAt: null },
     auth
   )
-  const current = await Contact.findOne(scopeFilter).select('_id').lean()
+  const current = await (Contact as ContactModel)
+    .findOne(scopeFilter)
+    .select('_id email phone')
+    .lean<Pick<ContactLean, '_id' | 'email' | 'phone'> | null>()
   if (!current) {
     throw createError({ statusCode: 404, message: 'Contact not found' })
   }
 
-  const duplicateEmailFilter = mergeTenantOwnerEmailScopeFilter(
-    { email, deletedAt: null, _id: { $ne: objectId } },
-    auth
-  )
-  const existingEmail = await Contact.findOne(duplicateEmailFilter).select('_id').lean()
-  if (existingEmail) {
-    throw createError({ statusCode: 409, message: 'A contact with this email already exists' })
+  // Only conflict when the email/phone is actually changing. Keeping the same
+  // value must remain editable even if older sync/import left duplicate rows.
+  const currentEmail = normalizeMarketingEmail(String(current.email ?? ''))
+  if (email !== currentEmail) {
+    const duplicateEmailFilter = mergeTenantOwnerEmailScopeFilter(
+      { email, deletedAt: null, _id: { $ne: objectId } },
+      auth
+    )
+    const existingEmail = await Contact.findOne(duplicateEmailFilter).select('_id').lean()
+    if (existingEmail) {
+      throw createError({ statusCode: 409, message: 'A contact with this email already exists' })
+    }
   }
 
   if (phone) {
     const phoneDigits = usPhoneDigits(phone)
-    if (phoneDigits.length >= 7) {
+    const currentPhoneDigits = usPhoneDigits(String(current.phone ?? ''))
+    const phoneChanged = phoneDigits !== currentPhoneDigits
+    if (phoneChanged && phoneDigits.length >= 7) {
       const phoneScope = mergeTenantOwnerEmailScopeFilter(
         {
           deletedAt: null,
