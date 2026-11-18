@@ -9,7 +9,7 @@ Tenant-scoped categories for organizing the email template library in **new-mark
 - Assign a category when creating or editing a template (`/tenant/email-templates/add`)
 - Filter the library by category on **Email templates** (dropdown, URL query, or clicking a category badge on a card), alongside the existing subject filter: All templates / With default subject / Without subject
 
-Deleting a category clears `categoryId` on templates that used it (templates become uncategorized).
+Deleting a category clears `categoryId` on templates **and** Custom Flyers that used it (they become uncategorized). Custom Flyers reuses these categories — it does not have a separate category list.
 
 Templates can also be **soft-deleted** from the library (see [email-template-soft-delete.md](./email-template-soft-delete.md)).
 

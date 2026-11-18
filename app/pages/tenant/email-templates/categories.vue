@@ -34,7 +34,7 @@ onMounted(() => {
           Template categories
         </h1>
         <p class="mt-1.5 max-w-2xl text-sm text-slate-500 sm:text-[0.9375rem] sm:leading-relaxed">
-          Create categories to organize email templates. Click a category name to open the library filtered to that category, then assign categories when saving templates.
+          Create categories to organize email templates and Custom Flyers. Click a category name to open the library filtered to that category, then assign categories when saving templates or uploading flyers.
         </p>
       </div>
       <div class="flex items-center gap-2 sm:shrink-0">
@@ -70,7 +70,7 @@ onMounted(() => {
             {{ isEditing ? 'Edit category' : 'Create category' }}
           </h2>
           <p class="mt-1 text-sm text-slate-500">
-            Names must be unique. Deleting a category leaves its templates uncategorized.
+            Names must be unique. Deleting a category leaves its templates and flyers uncategorized.
           </p>
         </div>
         <button

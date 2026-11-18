@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { EmailTemplateCategoryModel } from '@server/types/tenant/emailTemplateCategory.model'
 import type { EmailTemplateModel } from '@server/types/tenant/emailTemplate.model'
+import type { FlyerModel } from '@server/types/tenant/flyer.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 
 export default defineEventHandler(async (event) => {
@@ -11,9 +12,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const conn = await getTenantConnectionFromEvent(event)
-  const { EmailTemplateCategory, EmailTemplate } = getTenantClientModels(conn)
+  const { EmailTemplateCategory, EmailTemplate, Flyer } = getTenantClientModels(conn)
   const categoryModel = EmailTemplateCategory as EmailTemplateCategoryModel
   const templateModel = EmailTemplate as EmailTemplateModel
+  const flyerModel = Flyer as FlyerModel
 
   const existing = await categoryModel.findById(rawId).select('_id').lean()
   if (!existing) {
@@ -21,7 +23,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const categoryObjectId = new mongoose.Types.ObjectId(rawId)
-  const cleared = await templateModel.updateMany(
+  const clearedTemplates = await templateModel.updateMany(
+    { categoryId: categoryObjectId },
+    { $set: { categoryId: null } }
+  )
+  const clearedFlyers = await flyerModel.updateMany(
     { categoryId: categoryObjectId },
     { $set: { categoryId: null } }
   )
@@ -29,6 +35,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     ok: true,
-    templatesCleared: cleared.modifiedCount ?? 0
+    templatesCleared: clearedTemplates.modifiedCount ?? 0,
+    flyersCleared: clearedFlyers.modifiedCount ?? 0
   }
 })
