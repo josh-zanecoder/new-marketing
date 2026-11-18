@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Editor } from 'grapesjs'
 import { deserializeEmailEditorHtml, serializeEmailEditorFragment, serializeEmailEditorHtml } from '~~/shared/utils/emailEditorHtml'
+import { setupGrapesEmailImageRow } from '~~/shared/utils/grapesEmailImageRow'
 import { emailImageBuilderExportHtml } from '~~/shared/utils/emailTemplateHtmlImages'
 import { mergeMustacheTemplate } from '~~/shared/utils/emailTemplateMerge'
 
@@ -976,6 +977,7 @@ watch([isMounted, htmlReady, builderMode, canUseGrapes], async () => {
       }
       limitStyleSectors(editor)
       hardenTextBlocks(editor)
+      setupGrapesEmailImageRow(editor)
       if (initialHtml.value) {
         try {
           editor.setComponents(deserializeEmailEditorHtml(initialHtml.value))
