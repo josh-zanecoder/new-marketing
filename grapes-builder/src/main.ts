@@ -5,6 +5,7 @@ import 'grapesjs/dist/css/grapes.min.css'
 import './style.css'
 import { CHANNEL, isHostMessage, postToHost } from './protocol'
 import { deserializeEmailEditorHtml, serializeEmailEditorHtml } from './emailHtml'
+import { setupGrapesEmailImageRow } from '../../shared/utils/grapesEmailImageRow'
 
 /** CJS/ESM interop: preset may be nested under `.default` a few times. */
 function resolvePluginFn(
@@ -287,6 +288,7 @@ function createEditor(): Editor {
   })
 
   setupSafeImages(editor)
+  setupGrapesEmailImageRow(editor, { placeholderSrc: PLACEHOLDER })
   setCanvasHtml(editor, DEFAULT_HTML)
   return editor
 }
