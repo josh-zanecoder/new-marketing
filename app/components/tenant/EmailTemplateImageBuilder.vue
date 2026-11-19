@@ -17,6 +17,14 @@ import {
   updateEmailTemplateHtmlImageLayout
 } from '~~/shared/utils/emailTemplateHtmlImages'
 import {
+  EMAIL_IMAGE_ALIGN_OPTIONS,
+  type EmailImageAlign
+} from '~~/shared/constants/emailImageAlign'
+import {
+  readEmailTemplateHtmlImageAlign,
+  updateEmailTemplateHtmlImageAlign
+} from '~~/shared/utils/emailTemplateImageAlign'
+import {
   EMAIL_BLOCK_OPTIONS,
   duplicateEmailBlock,
   emailTemplateContentWidth,
@@ -2985,15 +2993,18 @@ function onFramePointerUp(event: PointerEvent) {
       placeResizeHandles(doc, img)
       return
     }
+    const align = readEmailTemplateHtmlImageAlign(props.modelValue, gesture.index)
+    const keepPixelMargins = align === 'left' && live.fromLeft
     paintImageBox(img, {
       width: live.width,
       ...(live.side ? { height: live.height, objectPosition: live.objectPosition } : {}),
-      ...(live.fromLeft ? { marginLeft: live.marginLeft, marginRight: live.marginRight } : {})
+      ...(keepPixelMargins ? { marginLeft: live.marginLeft, marginRight: live.marginRight } : {})
     })
     const next = updateEmailTemplateHtmlImageLayout(props.modelValue, gesture.index, {
       width: live.width,
       ...(live.side ? { height: live.height, objectPosition: live.objectPosition } : {}),
-      ...(live.fromLeft ? { marginLeft: live.marginLeft, marginRight: live.marginRight } : {}),
+      ...(keepPixelMargins ? { marginLeft: live.marginLeft, marginRight: live.marginRight } : {}),
+      align,
       left: 0,
       top: 0
     })
@@ -3793,6 +3804,31 @@ function selectImage(
   nextTick(() => {
     if (source === 'sidebar') scrollTemplateToImage(index)
     else scrollSidebarToImage(index)
+  })
+}
+
+const selectedImageAlign = computed((): EmailImageAlign => {
+  if (selectedIndex.value == null) return 'left'
+  return readEmailTemplateHtmlImageAlign(props.modelValue, selectedIndex.value)
+})
+
+/** Left / center / right using email-safe margins (inbox clients ignore free drag offsets). */
+function setSelectedImageAlign(align: EmailImageAlign) {
+  if (selectedIndex.value == null) return
+  const index = selectedIndex.value
+  const next = updateEmailTemplateHtmlImageAlign(props.modelValue, index, align, {
+    contentWidthPx: emailTemplateContentWidth(props.modelValue)
+  })
+  if (next === props.modelValue) return
+  // Let the iframe reload from model HTML so width lock + margins paint together.
+  skipNextPreviewSync = false
+  selectedIndex.value = index
+  emit('update:modelValue', next)
+  void nextTick(() => {
+    selectedIndex.value = index
+    const doc = frameRef.value?.contentDocument
+    const img = doc ? frameImage(doc, index) : null
+    if (doc && img) placeResizeHandles(doc, img)
   })
 }
 
@@ -5105,24 +5141,56 @@ defineExpose({
         </template>
       </div>
 
-      <div v-if="!templatesOpen && sidePanel !== 'layout' && (selectedIndex != null || canUploadImage)" class="border-t border-slate-200 bg-white p-3">
-        <div v-if="selectedIndex != null" class="flex gap-2">
-          <button
-            v-if="canUploadImage && canReplaceImage"
-            type="button"
-            class="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            :disabled="uploading"
-            @click="startReplace(selectedIndex)"
-          >
-            Change
-          </button>
-          <button
-            type="button"
-            class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-            @click="deleteImage(selectedIndex)"
-          >
-            Remove
-          </button>
+      <div
+        v-if="!templatesOpen && (selectedIndex != null || (sidePanel !== 'layout' && canUploadImage))"
+        class="border-t border-slate-200 bg-white p-3"
+      >
+        <div v-if="selectedIndex != null" class="space-y-3">
+          <div>
+            <p class="text-xs font-medium text-slate-700">Position</p>
+            <div
+              class="mt-1 grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200"
+              role="group"
+              aria-label="Image align"
+            >
+              <button
+                v-for="option in EMAIL_IMAGE_ALIGN_OPTIONS"
+                :key="option.value"
+                type="button"
+                class="px-2 py-1.5 text-xs font-semibold"
+                :class="
+                  selectedImageAlign === option.value
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
+                "
+                :aria-pressed="selectedImageAlign === option.value"
+                @click="setSelectedImageAlign(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <p class="mt-1.5 text-[11px] leading-snug text-slate-500">
+              Align left, center, or right. Full-width photos shrink slightly first so the position is visible. Drag still moves photos between sections.
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button
+              v-if="canUploadImage && canReplaceImage"
+              type="button"
+              class="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              :disabled="uploading"
+              @click="startReplace(selectedIndex)"
+            >
+              Change
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+              @click="deleteImage(selectedIndex)"
+            >
+              Remove
+            </button>
+          </div>
         </div>
         <p v-else class="text-sm text-slate-600">{{ canReplaceImage ? 'Click a photo to change or remove it.' : 'Click a photo to remove it.' }}</p>
 
