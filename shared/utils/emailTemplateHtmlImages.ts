@@ -2,6 +2,8 @@
  * Discover / replace `<img>` tags in email-template HTML without requiring users to edit markup.
  */
 
+import { EMAIL_IMAGE_ALIGN_ATTR } from '../constants/emailImageAlign'
+
 export type EmailTemplateHtmlImage = {
   /** 0-based order of appearance in the HTML. */
   index: number
@@ -111,6 +113,8 @@ export type EmailTemplateImageLayout = {
   marginLeft?: number
   marginRight?: number
   objectPosition?: string
+  /** Prefer email-safe left/center/right over pixel margins when set. */
+  align?: 'left' | 'center' | 'right'
 }
 
 function parseStyleDeclarations(style: string): Map<string, string> {
@@ -368,6 +372,7 @@ export function emailClientSafeImageHtml(html: string): string {
 
 /**
  * Corner resize keeps the photo's shape. Side resize stores a fixed height so only the width changes.
+ * When `align` is set, email-safe left/center/right margins win over pixel offsets.
  */
 export function updateEmailTemplateHtmlImageLayout(
   html: string,
@@ -388,7 +393,16 @@ export function updateEmailTemplateHtmlImageLayout(
   style.set('height', height == null ? 'auto' : `${height}px`)
   style.set('object-fit', height == null ? 'fill' : 'cover')
   if (layout.objectPosition) style.set('object-position', layout.objectPosition)
-  if (layout.marginLeft != null) {
+  if (layout.align === 'center') {
+    style.set('margin-left', 'auto')
+    style.set('margin-right', 'auto')
+  } else if (layout.align === 'right') {
+    style.set('margin-left', 'auto')
+    style.set('margin-right', '0')
+  } else if (layout.align === 'left') {
+    style.set('margin-left', '0')
+    style.set('margin-right', 'auto')
+  } else if (layout.marginLeft != null) {
     style.set('margin-left', `${Math.round(layout.marginLeft)}px`)
     style.set('margin-right', `${Math.round(layout.marginRight ?? 0)}px`)
   }
@@ -397,6 +411,9 @@ export function updateEmailTemplateHtmlImageLayout(
   nextTag = height == null
     ? nextTag.replace(/\s*\bheight\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '')
     : upsertQuotedAttr(nextTag, 'height', String(height))
+  if (layout.align === 'left' || layout.align === 'center' || layout.align === 'right') {
+    nextTag = upsertQuotedAttr(nextTag, EMAIL_IMAGE_ALIGN_ATTR, layout.align)
+  }
   const next = html.slice(0, target.tagStart) + nextTag + html.slice(target.tagEnd)
   return emailClientSafeImageHtml(next)
 }
