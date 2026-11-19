@@ -12,6 +12,12 @@ import {
   SYNC_HEALTH_DATE_PRESET_OPTIONS,
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
+import {
+  filterSyncHealthReportDlq,
+  filterSyncHealthReportEvents,
+  isValidSyncHealthReportCustomRange,
+  syncHealthReportDateLabel
+} from '~~/shared/utils/syncHealthReportDateRange'
 
 definePageMeta({ layout: 'admin' })
 
@@ -105,6 +111,32 @@ const syncHealthDateLabel = computed(() => {
     return 'Custom range'
   }
   return dateRangeLabel.value
+})
+
+/** Independent of the board filter — used only by Generate Report. */
+const {
+  datePreset: reportDatePreset,
+  customDateFrom: reportCustomDateFrom,
+  customDateTo: reportCustomDateTo,
+  effectiveDateRange: reportEffectiveDateRange
+} = useBrevoTrackingDateRange()
+
+reportDatePreset.value = 'all'
+
+const reportDateLabel = computed(() =>
+  syncHealthReportDateLabel({
+    preset: reportDatePreset.value,
+    customFrom: reportCustomDateFrom.value,
+    customTo: reportCustomDateTo.value
+  })
+)
+
+const reportDateRangeValid = computed(() => {
+  if (reportDatePreset.value !== 'custom') return true
+  return isValidSyncHealthReportCustomRange(
+    reportCustomDateFrom.value,
+    reportCustomDateTo.value
+  )
 })
 
 function applyQueryFiltersFromRoute() {
@@ -488,6 +520,10 @@ const reportModalTenants = computed(() => {
 
 const reportSelectedCount = computed(() => reportSelectedDbNames.value.length)
 
+const canGenerateReport = computed(
+  () => reportSelectedCount.value > 0 && reportDateRangeValid.value && !reportPending.value
+)
+
 const reportAllVisibleSelected = computed(() => {
   const visible = reportModalTenants.value
   if (visible.length === 0) return false
@@ -502,6 +538,9 @@ function openReportModal(dbNames?: string[]) {
     dbNames && dbNames.length > 0
       ? [...dbNames]
       : filteredTenants.value.map((row) => row.dbName)
+  reportDatePreset.value = 'all'
+  reportCustomDateFrom.value = ''
+  reportCustomDateTo.value = ''
   reportModalOpen.value = true
 }
 
@@ -550,12 +589,32 @@ function toggleAllVisibleReportTenants() {
   else selectAllReportTenants()
 }
 
+function matchesReportHistorySearch(hay: string): boolean {
+  const q = historySearch.value.trim().toLowerCase()
+  if (!q) return true
+  return hay.toLowerCase().includes(q)
+}
+
 function buildReportPayload() {
   const selected = new Set(reportSelectedDbNames.value)
-  const dateLabel = syncHealthDateLabel.value
+  const range = reportEffectiveDateRange.value
+  const dateLabel = reportDateLabel.value
   const tenants = (data.value?.tenants ?? []).filter((row) => selected.has(row.dbName))
-  const events = filteredHistory.value.filter((log) => !log.dbName || selected.has(log.dbName))
-  const dlq = filteredDlq.value.filter((row) => !row.dbName || selected.has(row.dbName))
+  // Date + tenants from the dialog; Event/Level/Search still follow the board filters.
+  const events = filterSyncHealthReportEvents(data.value?.logs, selected, range).filter((log) => {
+    if (logLevelFilter.value !== 'all' && log.level !== logLevelFilter.value) return false
+    if (!matchesHistoryKind(log.kind, historyKindFilter.value)) return false
+    const tenantLabel = log.dbName ? tenantNameByDb.value.get(log.dbName) || '' : ''
+    return matchesReportHistorySearch(
+      `${log.message} ${log.dbName || ''} ${log.tenantId || ''} ${tenantLabel} ${log.eventType || ''} ${log.contactType || ''} ${log.email || ''} ${log.externalId || ''} ${log.contactName || ''}`
+    )
+  })
+  const dlq = filterSyncHealthReportDlq(data.value?.dlq, selected, range).filter((row) => {
+    const tenantLabel = row.dbName ? tenantNameByDb.value.get(row.dbName) || '' : ''
+    return matchesReportHistorySearch(
+      `${row.error} ${row.dbName || ''} ${row.tenantId || ''} ${tenantLabel} ${row.eventType || ''} ${row.kafkaTopic || ''} ${row.offset || ''}`
+    )
+  })
   const summary: Record<MarketingSyncHealthStatus, number> = {
     ok: 0,
     syncing: 0,
@@ -572,7 +631,7 @@ function reportStamp(iso: string): string {
 }
 
 function generateCsvReport() {
-  if (!data.value || reportPending.value || reportSelectedCount.value === 0) return
+  if (!data.value || !canGenerateReport.value) return
   reportPending.value = true
   reportFormatPending.value = 'csv'
   try {
@@ -679,7 +738,7 @@ function generateCsvReport() {
 }
 
 async function generatePdfReport() {
-  if (!data.value || reportPending.value || reportSelectedCount.value === 0) return
+  if (!data.value || !canGenerateReport.value) return
   reportPending.value = true
   reportFormatPending.value = 'pdf'
   try {
@@ -715,6 +774,7 @@ async function generatePdfReport() {
       `Selected tenants: ${tenants.length}`,
       `Date range: ${dateLabel}`,
       `Event: ${historyKindFilter.value} · Level: ${logLevelFilter.value}`,
+      `History search: ${historySearch.value.trim() || '(none)'}`,
       `Generated: ${formatWhen(generatedAt)}`,
       `Counts: ${tenants.length} tenants · ${events.length} events · ${dlq.length} DLQ`
     ]) {
@@ -1354,12 +1414,30 @@ async function generatePdfReport() {
               Generate report
             </h3>
             <p class="mt-1 text-sm text-slate-600">
-              Choose which tenants to include. Events and DLQ use the board date range
-              ({{ syncHealthDateLabel }}).
+              Choose tenants and a date range. Events and DLQ use this dialog’s range
+              (not the board filter).
             </p>
           </div>
 
           <div class="space-y-3 border-b border-slate-100 px-5 py-3">
+            <div>
+              <p class="mb-1.5 text-xs font-medium text-slate-700">Date range</p>
+              <TenantBrevoTrackingDateRangePicker
+                v-model:preset="reportDatePreset"
+                v-model:custom-from="reportCustomDateFrom"
+                v-model:custom-to="reportCustomDateTo"
+                :preset-options="SYNC_HEALTH_DATE_PRESET_OPTIONS"
+                :label="reportDateLabel"
+                default-preset="all"
+              />
+              <p
+                v-if="!reportDateRangeValid"
+                class="mt-1.5 text-xs font-medium text-rose-600"
+                role="alert"
+              >
+                Start date must be on or before the end date.
+              </p>
+            </div>
             <input
               v-model="reportTenantSearch"
               type="search"
@@ -1372,7 +1450,7 @@ async function generatePdfReport() {
                 <span v-if="reportTenantSearch.trim()">
                   · {{ reportModalTenants.length }} shown
                 </span>
-                · {{ syncHealthDateLabel }}
+                · {{ reportDateLabel }}
               </p>
               <div class="flex items-center gap-2">
                 <button
@@ -1445,7 +1523,7 @@ async function generatePdfReport() {
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="reportPending || reportSelectedCount === 0"
+              :disabled="!canGenerateReport"
               @click="generateCsvReport"
             >
               {{ reportFormatPending === 'csv' ? 'CSV…' : 'Download CSV' }}
@@ -1453,7 +1531,7 @@ async function generatePdfReport() {
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="reportPending || reportSelectedCount === 0"
+              :disabled="!canGenerateReport"
               @click="() => void generatePdfReport()"
             >
               {{ reportFormatPending === 'pdf' ? 'PDF…' : 'Download PDF' }}
