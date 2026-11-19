@@ -2,6 +2,8 @@
 
 Used from Email Templates (and similar flows) via `TenantHostedImagePickerModal` when the tenant Images flag is on.
 
+Library list/delete visibility (per-uploader + optional `visibility=shared`) is documented in `docs/hosted-image-access.md`.
+
 ## Upload vs gallery load
 
 Opening the modal fetches the Images library for browsing/selection. That list fetch can take several seconds.

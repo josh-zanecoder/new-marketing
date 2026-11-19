@@ -271,7 +271,7 @@ export async function listCustomMarketingTenantImages(
   const maxResults = Math.min(500, Math.max(1, opts.maxResults ?? 300))
   const bucket = getGcsBucket()
 
-  // Owner-scoped viewers filter after listing, so keep paging until enough visible images.
+  // Viewers filter after listing (private + shared), so keep paging until enough visible images.
   const files: GetFilesResponse[0] = []
   let visibleCount = 0
   let pageToken: string | undefined
@@ -373,12 +373,10 @@ export async function deleteCustomMarketingTenantImages(
     }
     try {
       const file = bucket.file(objectPath)
-      if (viewer.ownerEmails !== null) {
-        const [meta] = await file.getMetadata()
-        if (!canDeleteHostedImage(hostedImageOwnershipFromGcsMetadata(meta?.metadata), viewer)) {
-          skipped.push(objectPath)
-          continue
-        }
+      const [meta] = await file.getMetadata()
+      if (!canDeleteHostedImage(hostedImageOwnershipFromGcsMetadata(meta?.metadata), viewer)) {
+        skipped.push(objectPath)
+        continue
       }
       await file.delete({ ignoreNotFound: true })
       deleted.push(objectPath)

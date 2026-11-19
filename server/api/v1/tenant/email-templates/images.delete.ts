@@ -34,9 +34,7 @@ export default defineEventHandler(async (event) => {
   if (!result.deleted.length) {
     throw createError({
       statusCode: 404,
-      message: viewer.ownerEmails === null
-        ? 'Image not found or already deleted.'
-        : 'Image not found, or you can only delete images you uploaded.'
+      message: 'Image not found, or you can only delete images you uploaded.'
     })
   }
 

@@ -1,10 +1,13 @@
 /**
  * Who may list / delete hosted tenant images (GCS `custom-marketing/{tenant}/…`).
- * Mirrors email-template ownership: owner-scoped sessions see shared images plus images
- * owned by someone in their scope; tenant-wide sessions see every image in the tenant.
+ *
+ * Images are private to the uploader (and anyone in their CRM owner scope, e.g. manager
+ * downline). Explicitly shared images (`visibility=shared`) are visible to every user in
+ * the same tenant. Sessions never get a “see every private image in the tenant” pass —
+ * that prevented LO isolation when CRM handoff set `tenantWideContacts`.
  */
 
-/** GCS custom metadata value marking an image uploaded by a tenant-wide session. */
+/** GCS custom metadata value marking an image as shared with the whole tenant. */
 export const HOSTED_IMAGE_VISIBILITY_SHARED = 'shared'
 
 /** Custom metadata stored on each uploaded GCS object. */
@@ -14,36 +17,51 @@ export type HostedImageOwnership = {
   uploadedBy?: string
 }
 
-/** `ownerEmails: null` → tenant-wide (no filter); `[]` → shared images only. */
+/**
+ * Emails whose private images this session may see/delete.
+ * Empty → shared images only (no private library).
+ */
 export type HostedImageViewer = {
-  ownerEmails: string[] | null
+  ownerEmails: string[]
 }
 
 function normalizedOwner(meta: HostedImageOwnership | null | undefined): string {
   return String(meta?.ownerEmail ?? '').trim().toLowerCase()
 }
 
+function normalizedUploadedBy(meta: HostedImageOwnership | null | undefined): string {
+  return String(meta?.uploadedBy ?? '').trim().toLowerCase()
+}
+
+function isSharedHostedImage(meta: HostedImageOwnership | null | undefined): boolean {
+  return String(meta?.visibility ?? '').trim() === HOSTED_IMAGE_VISIBILITY_SHARED
+}
+
 /**
- * Untagged (legacy) images have no owner record, so only tenant-wide sessions see them.
+ * Untagged (legacy) images stay out of owner-scoped libraries so personal uploads from
+ * before ownership tagging do not leak across users.
  */
 export function canViewHostedImage(
   meta: HostedImageOwnership | null | undefined,
   viewer: HostedImageViewer
 ): boolean {
-  if (viewer.ownerEmails === null) return true
-  if (String(meta?.visibility ?? '').trim() === HOSTED_IMAGE_VISIBILITY_SHARED) return true
+  if (isSharedHostedImage(meta)) return true
   const owner = normalizedOwner(meta)
   return Boolean(owner) && viewer.ownerEmails.includes(owner)
 }
 
-/** Owner-scoped sessions may only delete images owned by someone in their scope. */
+/**
+ * Delete only when the session owns the image (owner or original uploader in scope).
+ * Shared library images are deletable by the uploader’s scope, not by every tenant user.
+ */
 export function canDeleteHostedImage(
   meta: HostedImageOwnership | null | undefined,
   viewer: HostedImageViewer
 ): boolean {
-  if (viewer.ownerEmails === null) return true
   const owner = normalizedOwner(meta)
-  return Boolean(owner) && viewer.ownerEmails.includes(owner)
+  if (owner && viewer.ownerEmails.includes(owner)) return true
+  const uploadedBy = normalizedUploadedBy(meta)
+  return Boolean(uploadedBy) && viewer.ownerEmails.includes(uploadedBy)
 }
 
 /** Why an uploaded image cannot be deleted yet; empty when nothing uses it. */
@@ -69,7 +87,15 @@ export function hostedImageInUseMessage(usage: {
 export function hostedImageOwnershipFromGcsMetadata(raw: unknown): HostedImageOwnership {
   if (!raw || typeof raw !== 'object') return {}
   const r = raw as Record<string, unknown>
-  const pick = (key: string) => (typeof r[key] === 'string' ? (r[key] as string) : undefined)
+  // GCS / XML paths may normalize key case; match case-insensitively.
+  const pick = (key: string) => {
+    if (typeof r[key] === 'string') return r[key] as string
+    const lower = key.toLowerCase()
+    for (const [k, v] of Object.entries(r)) {
+      if (k.toLowerCase() === lower && typeof v === 'string') return v
+    }
+    return undefined
+  }
   return {
     ownerEmail: pick('ownerEmail'),
     visibility: pick('visibility'),

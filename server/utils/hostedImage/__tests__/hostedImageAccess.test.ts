@@ -39,23 +39,34 @@ const tenantWideAuth = {
   contactOwnerScope: []
 }
 
+const tenantWideUser2Auth = {
+  ...user2Auth,
+  tenantWideContacts: true,
+  contactOwnerScope: []
+}
+
 const user1Image = hostedImageOwnershipFromAuth(user1Auth)
-const sharedImage = hostedImageOwnershipFromAuth(tenantWideAuth)
+const tenantWideUpload = hostedImageOwnershipFromAuth(tenantWideAuth)
+const sharedImage = {
+  uploadedBy: 'admin@myfcltpo.com',
+  visibility: HOSTED_IMAGE_VISIBILITY_SHARED
+}
 const legacyImage = {}
 
 describe('hostedImageOwnershipFromAuth', () => {
-  it('tags owner-scoped uploads as private to the uploader', () => {
+  it('tags every upload as private to the uploader', () => {
     expect(user1Image).toEqual({
       uploadedBy: 'lthompson@myfcltpo.com',
       ownerEmail: 'lthompson@myfcltpo.com'
     })
   })
 
-  it('tags tenant-wide uploads as shared', () => {
-    expect(sharedImage).toEqual({
+  it('does not auto-share uploads from tenant-wide CRM sessions', () => {
+    expect(tenantWideUpload).toEqual({
       uploadedBy: 'admin@myfcltpo.com',
-      visibility: HOSTED_IMAGE_VISIBILITY_SHARED
+      ownerEmail: 'admin@myfcltpo.com'
     })
+    expect(tenantWideUpload.visibility).toBeUndefined()
   })
 })
 
@@ -80,27 +91,45 @@ describe('image visibility', () => {
     expect(canViewHostedImage(user1Image, hostedImageViewerFromAuth(managerAuth))).toBe(true)
   })
 
-  it('shows shared images to everyone but only tenant-wide users may delete them', () => {
+  it('hides private uploads between two tenant-wide CRM users', () => {
+    const user1Private = hostedImageOwnershipFromAuth(tenantWideAuth)
+    expect(canViewHostedImage(user1Private, hostedImageViewerFromAuth(tenantWideUser2Auth))).toBe(
+      false
+    )
+    expect(canDeleteHostedImage(user1Private, hostedImageViewerFromAuth(tenantWideUser2Auth))).toBe(
+      false
+    )
+    expect(canViewHostedImage(user1Private, hostedImageViewerFromAuth(tenantWideAuth))).toBe(true)
+  })
+
+  it('shows shared images to everyone but only the uploader scope may delete them', () => {
     expect(canViewHostedImage(sharedImage, hostedImageViewerFromAuth(user2Auth))).toBe(true)
     expect(canDeleteHostedImage(sharedImage, hostedImageViewerFromAuth(user2Auth))).toBe(false)
     expect(canDeleteHostedImage(sharedImage, hostedImageViewerFromAuth(tenantWideAuth))).toBe(true)
   })
 
-  it('shows untagged legacy images only to tenant-wide users', () => {
+  it('hides untagged legacy images from all sessions (including tenant-wide)', () => {
     expect(canViewHostedImage(legacyImage, hostedImageViewerFromAuth(user1Auth))).toBe(false)
-    expect(canViewHostedImage(legacyImage, hostedImageViewerFromAuth(tenantWideAuth))).toBe(true)
+    expect(canViewHostedImage(legacyImage, hostedImageViewerFromAuth(tenantWideAuth))).toBe(false)
   })
 
-  it('lets tenant-wide users see every image in the tenant', () => {
+  it('scopes tenant-wide sessions to self only for the image library', () => {
     const viewer = hostedImageViewerFromAuth(tenantWideAuth)
-    expect(viewer.ownerEmails).toBeNull()
-    expect(canViewHostedImage(user1Image, viewer)).toBe(true)
+    expect(viewer.ownerEmails).toEqual(['admin@myfcltpo.com'])
+    expect(canViewHostedImage(user1Image, viewer)).toBe(false)
   })
 
-  it('reads ownership from GCS custom metadata and ignores non-string values', () => {
+  it('reads ownership from GCS custom metadata case-insensitively', () => {
     expect(
-      hostedImageOwnershipFromGcsMetadata({ ownerEmail: 'a@b.com', visibility: 7, tenantName: 'Forge' })
+      hostedImageOwnershipFromGcsMetadata({
+        OwnerEmail: 'a@b.com',
+        visibility: 7,
+        tenantName: 'Forge'
+      })
     ).toEqual({ ownerEmail: 'a@b.com', visibility: undefined, uploadedBy: undefined })
+    expect(
+      hostedImageOwnershipFromGcsMetadata({ owneremail: 'c@d.com', UploadedBy: 'c@d.com' })
+    ).toEqual({ ownerEmail: 'c@d.com', visibility: undefined, uploadedBy: 'c@d.com' })
     expect(hostedImageOwnershipFromGcsMetadata(undefined)).toEqual({})
   })
 })

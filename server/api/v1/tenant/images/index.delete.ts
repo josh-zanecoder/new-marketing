@@ -44,9 +44,7 @@ export default defineEventHandler(async (event) => {
   if (!result.deleted.length) {
     throw createError({
       statusCode: 404,
-      message: viewer.ownerEmails === null
-        ? 'No matching images were deleted'
-        : 'No matching images were deleted. You can only delete images you uploaded.'
+      message: 'No matching images were deleted. You can only delete images you uploaded.'
     })
   }
 
