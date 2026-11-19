@@ -12,6 +12,12 @@ import {
   SYNC_HEALTH_DATE_PRESET_OPTIONS,
   useBrevoTrackingDateRange
 } from '~/composables/useBrevoTrackingDateRange'
+import {
+  filterSyncHealthReportDlq,
+  filterSyncHealthReportEvents,
+  isValidSyncHealthReportCustomRange,
+  syncHealthReportDateLabel
+} from '~~/shared/utils/syncHealthReportDateRange'
 
 definePageMeta({ layout: 'admin' })
 
@@ -102,6 +108,32 @@ const syncHealthDateLabel = computed(() => {
   return dateRangeLabel.value
 })
 
+/** Independent of the event-history filter — used only by CSV/PDF report export. */
+const {
+  datePreset: reportDatePreset,
+  customDateFrom: reportCustomDateFrom,
+  customDateTo: reportCustomDateTo,
+  effectiveDateRange: reportEffectiveDateRange
+} = useBrevoTrackingDateRange()
+
+reportDatePreset.value = 'all'
+
+const reportDateLabel = computed(() =>
+  syncHealthReportDateLabel({
+    preset: reportDatePreset.value,
+    customFrom: reportCustomDateFrom.value,
+    customTo: reportCustomDateTo.value
+  })
+)
+
+const reportDateRangeValid = computed(() => {
+  if (reportDatePreset.value !== 'custom') return true
+  return isValidSyncHealthReportCustomRange(
+    reportCustomDateFrom.value,
+    reportCustomDateTo.value
+  )
+})
+
 const {
   data: history,
   pending: historyPending,
@@ -141,6 +173,9 @@ watch(dbName, () => {
   search.value = ''
   resetDateRange()
   datePreset.value = 'all'
+  reportDatePreset.value = 'all'
+  reportCustomDateFrom.value = ''
+  reportCustomDateTo.value = ''
   historyKindFilter.value = 'all'
   logLevelFilter.value = 'all'
 })
@@ -408,26 +443,48 @@ type SyncHealthReportPayload = {
 }
 
 function buildReportPayload(): SyncHealthReportPayload | null {
-  if (!history.value) return null
-  const range = effectiveDateRange.value
+  if (!history.value || !dbName.value) return null
+  const range = reportEffectiveDateRange.value
+  const selected = new Set([dbName.value])
   const generatedAt = new Date().toISOString()
+  const q = search.value.trim().toLowerCase()
+  // Report date range is independent of the event-history board filter.
+  // Event / Level / Search still follow the page filters.
+  const events = filterSyncHealthReportEvents(history.value.logs, selected, range).filter((log) => {
+    if (logLevelFilter.value !== 'all' && log.level !== logLevelFilter.value) return false
+    if (!matchesHistoryKind(log.kind, historyKindFilter.value)) return false
+    if (!q) return true
+    const hay =
+      `${log.message} ${log.eventType || ''} ${log.contactType || ''} ${log.email || ''} ${log.externalId || ''} ${log.contactName || ''} ${log.syncId || ''}`.toLowerCase()
+    return hay.includes(q)
+  })
+  const dlq = filterSyncHealthReportDlq(tenantDlq.value, selected, range).filter((row) => {
+    if (!q) return true
+    const hay =
+      `${row.error} ${row.eventType || ''} ${row.kafkaTopic || ''} ${row.offset || ''}`.toLowerCase()
+    return hay.includes(q)
+  })
   return {
     generatedAt,
     stamp: generatedAt.slice(0, 19).replace(/[:T]/g, '-'),
     runs: (history.value.runs ?? []).filter((run) =>
       isoMatchesBrevoTrackingRange(run.startedAt || run.finishedAt, range)
     ),
-    events: filteredLogs.value,
-    dlq: tenantDlq.value.filter((row) => isoMatchesBrevoTrackingRange(row.at, range))
+    events,
+    dlq
   }
 }
 
 const reportPending = ref(false)
 const reportFormatPending = ref<'csv' | 'pdf' | null>(null)
 
+const canGenerateReport = computed(
+  () => Boolean(history.value) && reportDateRangeValid.value && !reportPending.value && !historyPending.value
+)
+
 function generateCsvReport() {
   const payload = buildReportPayload()
-  if (!payload || reportPending.value) return
+  if (!payload || !canGenerateReport.value) return
   reportPending.value = true
   reportFormatPending.value = 'csv'
   try {
@@ -436,7 +493,7 @@ function generateCsvReport() {
       '# Sync health report',
       `# Tenant,${csvEscape(tenantLabel.value)}`,
       `# dbName,${csvEscape(dbName.value)}`,
-      `# Date range,${csvEscape(syncHealthDateLabel.value)}`,
+      `# Date range,${csvEscape(reportDateLabel.value)}`,
       `# Event filter,${csvEscape(historyKindFilter.value)}`,
       `# Level filter,${csvEscape(logLevelFilter.value)}`,
       `# Search,${csvEscape(search.value.trim() || '(none)')}`,
@@ -541,7 +598,7 @@ function generateCsvReport() {
 
 async function generatePdfReport() {
   const payload = buildReportPayload()
-  if (!payload || reportPending.value) return
+  if (!payload || !canGenerateReport.value) return
   reportPending.value = true
   reportFormatPending.value = 'pdf'
   try {
@@ -574,7 +631,7 @@ async function generatePdfReport() {
     const meta = [
       `Tenant: ${tenantLabel.value}`,
       `Database: ${dbName.value}`,
-      `Date range: ${syncHealthDateLabel.value}`,
+      `Date range: ${reportDateLabel.value}`,
       `Event filter: ${historyKindFilter.value} · Level: ${logLevelFilter.value}`,
       `Search: ${search.value.trim() || '(none)'}`,
       `Generated: ${formatWhen(generatedAt)}`,
@@ -727,28 +784,42 @@ async function generatePdfReport() {
           </span>
         </p>
       </div>
-      <div class="flex shrink-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!tenantRow || actionPending || historyPending || boardPending"
-          @click="() => void clearTenantHealth()"
-        >
-          Clear health
-        </button>
-        <button
-          type="button"
-          class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-          title="docs/marketing-sync-stuck-backlog-runbook.md"
-          @click="showRunbookTips = !showRunbookTips"
-        >
-          Runbook
-        </button>
-        <div class="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!tenantRow || actionPending || historyPending || boardPending"
+            @click="() => void clearTenantHealth()"
+          >
+            Clear health
+          </button>
+          <button
+            type="button"
+            class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            title="docs/marketing-sync-stuck-backlog-runbook.md"
+            @click="showRunbookTips = !showRunbookTips"
+          >
+            Runbook
+          </button>
+          <div class="min-w-0">
+            <p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Report date range
+            </p>
+            <TenantBrevoTrackingDateRangePicker
+              v-model:preset="reportDatePreset"
+              v-model:custom-from="reportCustomDateFrom"
+              v-model:custom-to="reportCustomDateTo"
+              :preset-options="SYNC_HEALTH_DATE_PRESET_OPTIONS"
+              :label="reportDateLabel"
+              default-preset="all"
+            />
+          </div>
+          <div class="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <button
             type="button"
             class="inline-flex items-center gap-2 border-r border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!history || reportPending || historyPending"
+            :disabled="!canGenerateReport"
             @click="generateCsvReport"
           >
             <svg
@@ -770,7 +841,7 @@ async function generatePdfReport() {
           <button
             type="button"
             class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!history || reportPending || historyPending"
+            :disabled="!canGenerateReport"
             @click="() => void generatePdfReport()"
           >
             <svg
@@ -790,12 +861,20 @@ async function generatePdfReport() {
             </svg>
             {{ reportFormatPending === 'pdf' ? 'PDF…' : 'PDF' }}
           </button>
+          </div>
+          <TenantRefreshIconButton
+            label="Refresh tenant history"
+            :pending="historyPending || boardPending"
+            @click="() => void refreshAll()"
+          />
         </div>
-        <TenantRefreshIconButton
-          label="Refresh tenant history"
-          :pending="historyPending || boardPending"
-          @click="() => void refreshAll()"
-        />
+        <p
+          v-if="!reportDateRangeValid"
+          class="text-xs font-medium text-rose-600"
+          role="alert"
+        >
+          Start date must be on or before the end date.
+        </p>
       </div>
     </header>
 
