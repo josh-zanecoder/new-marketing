@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div
         v-if="open && isCompact"
-        class="fixed inset-0 z-[199] bg-zinc-950/40 backdrop-blur-[1px]"
+        class="fixed inset-0 z-[280] bg-zinc-950/40 backdrop-blur-[1px]"
         aria-hidden="true"
         @click="closePanel"
       />
@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
       <div
         v-if="open"
         ref="panelRef"
-        class="brevo-date-panel z-[200] flex flex-col overflow-hidden border border-zinc-200/90 bg-white shadow-2xl shadow-zinc-950/15"
+        class="brevo-date-panel z-[281] flex flex-col overflow-hidden border border-zinc-200/90 bg-white shadow-2xl shadow-zinc-950/15"
         :class="
           isCompact
             ? 'fixed inset-x-0 bottom-0 max-h-[min(92dvh,40rem)] rounded-t-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]'

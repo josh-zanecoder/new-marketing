@@ -198,11 +198,18 @@ export function deriveMarketingSyncHealthStatus(input: {
     Boolean(input.lastError) &&
     Number.isFinite(errAt) &&
     now - errAt <= MARKETING_SYNC_ERROR_FRESH_MS
+
+  // Error is still the freshest signal → hard failure.
   if (hasFreshError && (!Number.isFinite(okAt) || errAt > okAt)) return 'error'
+  // Recovered (success ≥ error) but error was recent → flaky / degraded.
+  if (hasFreshError && Number.isFinite(okAt)) return 'degraded'
   if (Number.isFinite(okAt)) return 'ok'
-  if (hasFreshError) return 'degraded'
   return 'unknown'
 }
+
+/** Admin docs for stuck Kafka backlog / consumer incidents. */
+export const MARKETING_SYNC_STUCK_BACKLOG_RUNBOOK_PATH =
+  '/docs/marketing-sync-stuck-backlog-runbook.md'
 
 export function deriveMarketingSyncWorkerStatus(
   lastHeartbeatAt: string | undefined,

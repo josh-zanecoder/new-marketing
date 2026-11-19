@@ -75,7 +75,7 @@ async function appendMarketingSyncHealthLog(input: {
     externalId: input.externalId || '',
     email: input.email || '',
     contactName: input.contactName || '',
-    createdAt: at
+    createdAt: new Date(at)
   }
 
   await registry.collection(MARKETING_SYNC_HEALTH_LOGS_COLLECTION).insertOne(doc)
@@ -166,20 +166,26 @@ export async function listMarketingSyncHealthLogs(
 export async function listMarketingSyncHealthLogsForTenant(input: {
   dbName: string
   limit?: number
+  /** When true, also include contact + dlq log kinds for the tenant. */
+  includeContacts?: boolean
 }): Promise<MarketingSyncHealthLog[]> {
   const dbName = String(input.dbName || '').trim()
   if (!dbName) return []
 
   const registry = await getRegistryConnection()
-  const take = Math.min(
-    Math.max(1, input.limit ?? MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT),
-    MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT
-  )
+  const kinds = input.includeContacts
+    ? [...MARKETING_SYNC_HISTORY_KINDS, 'contact' as const, 'dlq' as const]
+    : [...MARKETING_SYNC_HISTORY_KINDS]
+  const defaultLimit = input.includeContacts
+    ? MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT + MARKETING_SYNC_TENANT_CONTACT_LOG_LIMIT
+    : MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT
+  const maxLimit = MARKETING_SYNC_TENANT_SYNC_HISTORY_LIMIT + MARKETING_SYNC_TENANT_CONTACT_LOG_LIMIT
+  const take = Math.min(Math.max(1, input.limit ?? defaultLimit), maxLimit)
   const rows = await registry
     .collection(MARKETING_SYNC_HEALTH_LOGS_COLLECTION)
     .find({
       dbName,
-      kind: { $in: [...MARKETING_SYNC_HISTORY_KINDS] }
+      kind: { $in: kinds }
     })
     .sort({ at: -1 })
     .limit(take)
@@ -214,6 +220,139 @@ export async function listMarketingSyncDlqEntries(
     .limit(take)
     .toArray()
   return rows.map((row) => mapDlqRow(row as Record<string, unknown>))
+}
+
+export async function listMarketingSyncDlqEntriesForTenant(input: {
+  dbName: string
+  limit?: number
+}): Promise<MarketingSyncDlqEntry[]> {
+  const dbName = String(input.dbName || '').trim()
+  if (!dbName) return []
+  const registry = await getRegistryConnection()
+  const take = Math.min(Math.max(1, input.limit ?? MARKETING_SYNC_DLQ_LIMIT), MARKETING_SYNC_DLQ_LIMIT)
+  const rows = await registry
+    .collection(MARKETING_SYNC_DLQ_COLLECTION)
+    .find({ dbName })
+    .sort({ at: -1 })
+    .limit(take)
+    .toArray()
+  return rows.map((row) => mapDlqRow(row as Record<string, unknown>))
+}
+
+export async function getMarketingSyncDlqEntry(
+  id: string
+): Promise<MarketingSyncDlqEntry | null> {
+  const key = String(id || '').trim()
+  if (!key) return null
+  const registry = await getRegistryConnection()
+  const row = await registry.collection(MARKETING_SYNC_DLQ_COLLECTION).findOne({ key })
+  if (!row) return null
+  return mapDlqRow(row as Record<string, unknown>)
+}
+
+/** Acknowledge / discard a DLQ row (does not reprocess the payload). */
+export async function ackMarketingSyncDlqEntry(id: string): Promise<boolean> {
+  const key = String(id || '').trim()
+  if (!key) return false
+  const registry = await getRegistryConnection()
+  const result = await registry.collection(MARKETING_SYNC_DLQ_COLLECTION).deleteOne({ key })
+  return (result.deletedCount || 0) > 0
+}
+
+/**
+ * Clear sticky error / stuck-syncing state for a tenant health doc.
+ * Does not delete history logs or DLQ rows.
+ */
+export async function clearMarketingSyncTenantHealth(input: {
+  dbName: string
+  tenantId?: string
+}): Promise<boolean> {
+  const dbName = String(input.dbName || '').trim()
+  if (!dbName) return false
+
+  const registry = await getRegistryConnection()
+  const tenantId = String(input.tenantId || '').trim()
+  const filter = tenantId
+    ? { key: tenantKey(tenantId, dbName) }
+    : { dbName, _kind: { $ne: 'worker' } }
+
+  const at = nowIso()
+  const existing = (await registry
+    .collection(MARKETING_SYNC_HEALTH_COLLECTION)
+    .findOne(filter)) as (MarketingSyncHealthDoc & { tenantId?: string }) | null
+  if (!existing) return false
+
+  const result = await registry.collection(MARKETING_SYNC_HEALTH_COLLECTION).updateMany(filter, {
+    $set: {
+      status: 'unknown',
+      lastError: '',
+      lastErrorAt: '',
+      updatedAt: at
+    }
+  })
+
+  if ((result.matchedCount || 0) === 0) return false
+
+  await appendMarketingSyncHealthLog({
+    level: 'warn',
+    kind: 'worker',
+    message: 'Admin cleared sticky sync health error / syncing state',
+    tenantId: tenantId || existing.tenantId || '',
+    dbName,
+    at
+  })
+  return true
+}
+
+/** Ensure query indexes (+ 90d TTL on createdAt) for sync health collections. */
+export async function ensureMarketingSyncHealthIndexes(): Promise<{
+  health: string[]
+  logs: string[]
+  dlq: string[]
+}> {
+  const registry = await getRegistryConnection()
+  const createSafe = async (
+    collection: string,
+    specs: { key: Record<string, 1 | -1>; unique?: boolean; name: string; expireAfterSeconds?: number }[]
+  ): Promise<string[]> => {
+    try {
+      return await registry.collection(collection).createIndexes(specs)
+    } catch (err) {
+      // Index already exists with different options, etc. — non-fatal for ops board.
+      return [
+        `error:${err instanceof Error ? err.message : String(err)}`.slice(0, 200)
+      ]
+    }
+  }
+
+  const [health, logs, dlq] = await Promise.all([
+    createSafe(MARKETING_SYNC_HEALTH_COLLECTION, [
+      { key: { key: 1 }, unique: true, name: 'key_unique' },
+      { key: { dbName: 1 }, name: 'dbName' },
+      { key: { status: 1, updatedAt: -1 }, name: 'status_updatedAt' }
+    ]),
+    createSafe(MARKETING_SYNC_HEALTH_LOGS_COLLECTION, [
+      { key: { at: -1 }, name: 'at_desc' },
+      { key: { dbName: 1, kind: 1, at: -1 }, name: 'dbName_kind_at' },
+      {
+        key: { createdAt: 1 },
+        name: 'createdAt_ttl_90d',
+        expireAfterSeconds: 90 * 24 * 60 * 60
+      }
+    ]),
+    createSafe(MARKETING_SYNC_DLQ_COLLECTION, [
+      { key: { key: 1 }, unique: true, name: 'key_unique' },
+      { key: { at: -1 }, name: 'at_desc' },
+      { key: { dbName: 1, at: -1 }, name: 'dbName_at' },
+      {
+        key: { createdAt: 1 },
+        name: 'createdAt_ttl_90d',
+        expireAfterSeconds: 90 * 24 * 60 * 60
+      }
+    ])
+  ])
+
+  return { health, logs, dlq }
 }
 
 /**
@@ -253,7 +392,7 @@ export async function recordMarketingSyncDlq(input: {
     partition: typeof input.partition === 'number' ? input.partition : null,
     offset: String(input.offset || ''),
     rawPreview,
-    createdAt: at
+    createdAt: new Date(at)
   })
 
   const overflow = await registry

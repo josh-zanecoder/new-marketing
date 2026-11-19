@@ -35,12 +35,24 @@ describe('deriveMarketingSyncHealthStatus', () => {
     ).toBe('error')
   })
 
-  it('returns ok when success is newer than error', () => {
+  it('returns degraded when success is newer but error is still fresh', () => {
     expect(
       deriveMarketingSyncHealthStatus({
         lastSuccessAt: '2026-11-17T11:30:00.000Z',
         lastErrorAt: '2026-11-17T10:00:00.000Z',
         lastError: 'boom',
+        nowMs
+      })
+    ).toBe('degraded')
+  })
+
+  it('returns ok when success exists and any error is outside the fresh window', () => {
+    const staleErrorAt = new Date(nowMs - MARKETING_SYNC_ERROR_FRESH_MS - 1_000).toISOString()
+    expect(
+      deriveMarketingSyncHealthStatus({
+        lastSuccessAt: '2026-11-17T11:30:00.000Z',
+        lastErrorAt: staleErrorAt,
+        lastError: 'old boom',
         nowMs
       })
     ).toBe('ok')

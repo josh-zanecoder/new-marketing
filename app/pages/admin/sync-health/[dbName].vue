@@ -54,6 +54,7 @@ type AdminTenantSyncHistoryResponse = {
   logCount: number
   logs: MarketingSyncHealthLog[]
   runs: MarketingSyncRunSummary[]
+  dlq?: MarketingSyncDlqEntry[]
 }
 
 type HistoryKindFilter = 'all' | 'sync' | 'contact' | 'error' | 'dlq'
@@ -152,9 +153,92 @@ const tenantLabel = computed(
   () => history.value?.tenantName || tenantRow.value?.tenantName || dbName.value || 'Tenant'
 )
 
-const tenantDlq = computed(() =>
-  (board.value?.dlq ?? []).filter((row) => row.dbName === dbName.value)
-)
+const tenantDlq = computed(() => {
+  if (history.value?.dlq) return history.value.dlq
+  return (board.value?.dlq ?? []).filter((row) => row.dbName === dbName.value)
+})
+
+const actionPending = ref(false)
+const actionError = ref('')
+const dlqActionId = ref<string | null>(null)
+const showRunbookTips = ref(false)
+
+async function clearTenantHealth() {
+  if (!dbName.value || actionPending.value) return
+  if (!window.confirm('Clear sticky error / stuck syncing state for this tenant?')) return
+  actionPending.value = true
+  actionError.value = ''
+  try {
+    await $fetch(`/api/v1/admin/sync-health/${encodeURIComponent(dbName.value)}/clear`, {
+      method: 'POST',
+      credentials: 'include',
+      body: { tenantId: tenantRow.value?.tenantId || history.value?.tenantId || '' }
+    })
+    await Promise.all([refreshHistory(), refreshBoard()])
+  } catch (err) {
+    actionError.value =
+      err && typeof err === 'object' && 'data' in err
+        ? String(
+            (err as { data?: { statusMessage?: string; message?: string } }).data?.statusMessage ||
+              (err as { data?: { message?: string } }).data?.message ||
+              'Clear failed'
+          )
+        : err instanceof Error
+          ? err.message
+          : 'Clear failed'
+  } finally {
+    actionPending.value = false
+  }
+}
+
+async function ackDlqEntry(id: string) {
+  if (!id || actionPending.value) return
+  actionPending.value = true
+  dlqActionId.value = id
+  actionError.value = ''
+  try {
+    await $fetch(`/api/v1/admin/sync-health/dlq/${encodeURIComponent(id)}/ack`, {
+      method: 'POST',
+      credentials: 'include'
+    })
+    await Promise.all([refreshHistory(), refreshBoard()])
+  } catch (err) {
+    actionError.value =
+      err instanceof Error ? err.message : 'Failed to acknowledge DLQ entry'
+  } finally {
+    actionPending.value = false
+    dlqActionId.value = null
+  }
+}
+
+async function replayDlqEntry(id: string) {
+  if (!id || actionPending.value) return
+  if (!window.confirm('Replay this DLQ payload through inbound handlers, then remove it from the queue?')) {
+    return
+  }
+  actionPending.value = true
+  dlqActionId.value = id
+  actionError.value = ''
+  try {
+    await $fetch(`/api/v1/admin/sync-health/dlq/${encodeURIComponent(id)}/replay`, {
+      method: 'POST',
+      credentials: 'include'
+    })
+    await Promise.all([refreshHistory(), refreshBoard()])
+  } catch (err) {
+    const dataMessage =
+      err && typeof err === 'object' && 'data' in err
+        ? (err as { data?: { statusMessage?: string; message?: string } }).data
+        : undefined
+    actionError.value =
+      dataMessage?.statusMessage ||
+      dataMessage?.message ||
+      (err instanceof Error ? err.message : 'Replay failed')
+  } finally {
+    actionPending.value = false
+    dlqActionId.value = null
+  }
+}
 
 const loadError = computed(() => {
   const err = historyError.value
@@ -643,7 +727,23 @@ async function generatePdfReport() {
           </span>
         </p>
       </div>
-      <div class="flex shrink-0 items-center gap-2">
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!tenantRow || actionPending || historyPending || boardPending"
+          @click="() => void clearTenantHealth()"
+        >
+          Clear health
+        </button>
+        <button
+          type="button"
+          class="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          title="docs/marketing-sync-stuck-backlog-runbook.md"
+          @click="showRunbookTips = !showRunbookTips"
+        >
+          Runbook
+        </button>
         <div class="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <button
             type="button"
@@ -706,6 +806,29 @@ async function generatePdfReport() {
       class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
     >
       {{ loadError }}
+    </div>
+
+    <div
+      v-if="actionError"
+      class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+    >
+      {{ actionError }}
+    </div>
+
+    <div
+      v-if="showRunbookTips"
+      class="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-950"
+    >
+      <p class="font-semibold">Stuck backlog checklist</p>
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-amber-900/90">
+        <li>Confirm Kafka consumer is healthy (single instance, no rebalancing storm).</li>
+        <li>Remove dead registry clients whose topics no longer exist.</li>
+        <li>Bump consumer group only when intentionally skipping old backlog.</li>
+        <li>Replay or ack DLQ rows below after fixing the root cause.</li>
+      </ul>
+      <p class="mt-2 text-xs text-amber-800/80">
+        Full write-up: <code>docs/marketing-sync-stuck-backlog-runbook.md</code>
+      </p>
     </div>
 
     <template v-if="history">
@@ -864,14 +987,34 @@ async function generatePdfReport() {
               :key="row.id"
               class="space-y-1.5 border-b border-slate-100 px-4 py-3 last:border-0"
             >
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-slate-500">{{ formatWhen(row.at) }}</span>
-                <span
-                  v-if="row.eventType"
-                  class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700"
-                >
-                  {{ row.eventType }}
-                </span>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs text-slate-500">{{ formatWhen(row.at) }}</span>
+                  <span
+                    v-if="row.eventType"
+                    class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700"
+                  >
+                    {{ row.eventType }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                    :disabled="actionPending || !row.rawPreview"
+                    @click="() => void replayDlqEntry(row.id)"
+                  >
+                    {{ dlqActionId === row.id && actionPending ? 'Replay…' : 'Replay' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                    :disabled="actionPending"
+                    @click="() => void ackDlqEntry(row.id)"
+                  >
+                    Ack
+                  </button>
+                </div>
               </div>
               <p class="break-words text-sm font-medium text-rose-700" :title="row.error">
                 {{ row.error }}
