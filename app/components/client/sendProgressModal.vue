@@ -7,7 +7,13 @@ import type {
 import { useCampaignStore } from '~/store/campaignStore'
 import { useAdminCampaignStore } from '~/store/adminCampaignStore'
 import { useAdminCampaignsApi } from '~/composables/admin/campaigns/useAdminCampaigns'
-import { canRestartSend, canResumeSend, canStopSend } from '~/composables/useCampaignSendFlow'
+import {
+  buildCampaignSendProgress,
+  canRestartSend,
+  canResumeSend,
+  canStopSend
+} from '~/composables/useCampaignSendFlow'
+import { reconcileCampaignSendProgress } from '~~/shared/reconcileCampaignSendProgress'
 
 const props = defineProps<{
   open: boolean
@@ -35,7 +41,7 @@ const emit = defineEmits<{
 }>()
 
 const marketingApi = useTenantMarketingApi({
-  adminTenantDb: computed(() => props.adminTenantDb)
+  adminTenantDb: computed(() => props.adminTenantDb ?? '')
 })
 const adminSendsApi = useAdminCampaignsApi()
 const campaignStore = useCampaignStore()
@@ -56,9 +62,42 @@ const restartConfirmOpen = ref(false)
 
 const adminDb = computed(() => props.adminTenantDb?.trim() || '')
 
+/** Prefer live delivery-report counts when optimistic poll still shows Pending. */
+const displaySendProgress = computed(() => {
+  const progress = props.sendProgress
+  if (!progress || !props.campaignId) return progress
+  const counts = report.value?.counts
+  if (!counts || counts.total <= 0) return progress
+  const reconciled = reconcileCampaignSendProgress({
+    campaignId: props.campaignId,
+    campaignStatus: report.value?.campaignStatus || progress.campaignStatus,
+    poll: {
+      campaignId: props.campaignId,
+      campaignStatus: progress.campaignStatus,
+      pending: progress.remaining,
+      sent: progress.sent,
+      failed: progress.failed,
+      aborted: progress.aborted ?? 0,
+      total: progress.total,
+      done: progress.done
+    },
+    deliveryCounts: {
+      pending: Math.max(0, counts.pending - (counts.sending ?? 0)),
+      sending: counts.sending ?? 0,
+      sent: counts.sent,
+      failed: counts.failed,
+      aborted: counts.aborted,
+      total: counts.total,
+      remaining: counts.pending
+    }
+  })
+  if (!reconciled) return progress
+  return buildCampaignSendProgress(reconciled, props.campaignId) ?? progress
+})
+
 const campaignForSendControl = computed((): Campaign | null => {
   const id = props.campaignId
-  const status = props.sendProgress?.campaignStatus
+  const status = displaySendProgress.value?.campaignStatus
   if (!id || !status) return null
   return {
     id,
@@ -85,17 +124,18 @@ const showRestartSend = computed(
 
 const isActivelySending = computed(
   () =>
-    !!props.sendProgress &&
-    !props.sendProgress.done &&
-    props.sendProgress.campaignStatus === 'Sending'
+    !!displaySendProgress.value &&
+    !displaySendProgress.value.done &&
+    displaySendProgress.value.campaignStatus === 'Sending'
 )
 
 const REPORT_LIMIT = 50
 
 const canSelectRecipients = computed(() => {
-  const status = props.sendProgress?.campaignStatus ?? report.value?.campaignStatus
+  const status =
+    displaySendProgress.value?.campaignStatus ?? report.value?.campaignStatus
   return (
-    !props.sendProgress?.done &&
+    !displaySendProgress.value?.done &&
     (status === 'Sending' || status === 'Paused' || status === 'Stopped')
   )
 })
@@ -295,12 +335,13 @@ function selectTab(tab: CampaignSendRecipientReportStatus) {
 
 function tabCount(tab: CampaignSendRecipientReportStatus): number | null {
   const c = report.value?.counts
-  if (!c && props.sendProgress) {
-    if (tab === 'sent') return props.sendProgress.sent
-    if (tab === 'pending') return props.sendProgress.remaining
-    if (tab === 'failed') return props.sendProgress.failed
-    if (tab === 'aborted') return props.sendProgress.aborted ?? 0
-    if (tab === 'all') return props.sendProgress.total
+  const progress = displaySendProgress.value
+  if (!c && progress) {
+    if (tab === 'sent') return progress.sent
+    if (tab === 'pending') return progress.remaining
+    if (tab === 'failed') return progress.failed
+    if (tab === 'aborted') return progress.aborted ?? 0
+    if (tab === 'all') return progress.total
   }
   if (!c) return null
   if (tab === 'sent') return c.sent
@@ -386,11 +427,11 @@ watch(reportPage, () => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <h3 id="send-progress-modal-title" class="truncate text-lg font-semibold text-slate-900">
-              <template v-if="props.sendProgress?.done">Send finished</template>
-              <template v-else-if="props.sendProgress?.campaignStatus === 'Paused'">
+              <template v-if="displaySendProgress?.done">Send finished</template>
+              <template v-else-if="displaySendProgress?.campaignStatus === 'Paused'">
                 Send paused — {{ props.campaignName || 'campaign' }}
               </template>
-              <template v-else-if="props.sendProgress?.campaignStatus === 'Stopped'">
+              <template v-else-if="displaySendProgress?.campaignStatus === 'Stopped'">
                 Send stopped — {{ props.campaignName || 'campaign' }}
               </template>
               <template v-else>Sending {{ props.campaignName || 'campaign' }}</template>
@@ -412,39 +453,39 @@ watch(reportPage, () => {
           <div v-if="props.sendError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ props.sendError }}
           </div>
-          <div v-else-if="props.sendProgress" class="space-y-5">
+          <div v-else-if="displaySendProgress" class="space-y-5">
             <div>
               <p class="text-base font-medium text-slate-900">
-                <template v-if="props.sendProgress.done">
-                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} processed
+                <template v-if="displaySendProgress.done">
+                  {{ displaySendProgress.processed }} of {{ displaySendProgress.total }} processed
                 </template>
-                <template v-else-if="props.sendProgress.campaignStatus === 'Paused'">
-                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — paused
+                <template v-else-if="displaySendProgress.campaignStatus === 'Paused'">
+                  {{ displaySendProgress.processed }} of {{ displaySendProgress.total }} — paused
                 </template>
-                <template v-else-if="props.sendProgress.campaignStatus === 'Stopped'">
-                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — stopped
+                <template v-else-if="displaySendProgress.campaignStatus === 'Stopped'">
+                  {{ displaySendProgress.processed }} of {{ displaySendProgress.total }} — stopped
                 </template>
                 <template v-else>
-                  {{ props.sendProgress.processed }} of {{ props.sendProgress.total }} — sending
+                  {{ displaySendProgress.processed }} of {{ displaySendProgress.total }} — sending
                 </template>
               </p>
               <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
                 <div
                   class="h-full rounded-full bg-slate-900 transition-all duration-700 ease-out"
-                  :style="{ width: `${props.sendProgress.pct}%` }"
+                  :style="{ width: `${displaySendProgress.pct}%` }"
                 />
               </div>
               <div class="mt-4 grid grid-cols-3 gap-3">
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
-                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.sent }}</div>
+                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ displaySendProgress.sent }}</div>
                   <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Sent</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
-                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.failed }}</div>
+                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ displaySendProgress.failed }}</div>
                   <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">Failed</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
-                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ props.sendProgress.remaining }}</div>
+                  <div class="text-lg font-bold tabular-nums text-slate-900">{{ displaySendProgress.remaining }}</div>
                   <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800">Pending</div>
                 </div>
               </div>

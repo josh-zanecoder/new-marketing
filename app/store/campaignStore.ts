@@ -8,6 +8,10 @@ import {
   CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS,
   CAMPAIGN_SEND_POLL_MAX_MS
 } from '~/constants/campaignSendPolling'
+import {
+  CAMPAIGN_STATUS_FAILED,
+  CAMPAIGN_STATUS_SENT
+} from '~~/shared/constants/campaignTerminalStatus'
 
 export type { Campaign, SendStatus } from '~/types/campaign'
 
@@ -700,8 +704,13 @@ export const useCampaignStore = defineStore('campaigns', () => {
       const res = await fetchSendCampaignStatus(campaignId)
       const status: SendStatus = { ...res, campaignId }
       if (res.done) {
+        stopSendStatusPolling()
+        if (sendingCampaignId.value === campaignId) {
+          sendingCampaignId.value = null
+        }
         await fetchCampaigns({ force: true })
         await onComplete(status)
+        sendStatus.value = null
         return
       }
       sendStatus.value = status
@@ -717,6 +726,36 @@ export const useCampaignStore = defineStore('campaigns', () => {
       sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
       // Still start polling so a transient failure does not leave "loading delivery stats" forever.
       startSendStatusPolling(campaignId, onComplete)
+    }
+  }
+
+  /**
+   * Drop optimistic send modal / poll UI when the campaign detail already shows
+   * Sent/Failed (e.g. Custom Marketing navigated before poll ran, send finished fast).
+   */
+  function releaseSendUiIfCampaignComplete(
+    campaignId: string,
+    campaignStatus: string | null | undefined
+  ): void {
+    const status = String(campaignStatus ?? '').trim()
+    if (status !== CAMPAIGN_STATUS_SENT && status !== CAMPAIGN_STATUS_FAILED) return
+    if (
+      sendingCampaignId.value !== campaignId &&
+      sendStatus.value?.campaignId !== campaignId
+    ) {
+      return
+    }
+    if (sendPollCampaignId.value === campaignId) {
+      stopSendStatusPolling()
+    }
+    if (sendingCampaignId.value === campaignId) {
+      sendingCampaignId.value = null
+    }
+    if (sendStatus.value?.campaignId === campaignId) {
+      sendStatus.value = null
+    }
+    if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+      sendError.value = null
     }
   }
 
@@ -762,6 +801,7 @@ export const useCampaignStore = defineStore('campaigns', () => {
     setSendingCampaignId,
     startSendStatusPolling,
     resumeSendStatusPolling,
+    releaseSendUiIfCampaignComplete,
     stopSendStatusPolling,
     isSendPolling,
     clearSendModal,
