@@ -70,6 +70,11 @@ import {
   type EmailTextDecoration,
   type EmailTextStylePatch
 } from '~~/shared/utils/emailTemplateSections'
+import {
+  selectionClearOnSidePanelChange,
+  toggleSelectionId,
+  type EmailBuilderSidePanel
+} from '~~/shared/utils/emailTemplateBuilderSelection'
 
 const TEXT_ALIGN_OPTIONS: { value: EmailTextAlign; label: string }[] = [
   { value: 'left', label: 'Left' },
@@ -245,14 +250,47 @@ function visibleSectionPart(part: number): number {
   return containers[0]?.part ?? mapped
 }
 
-function selectSectionFromCanvas(part: number) {
-  const visible = visibleSectionPart(part)
-  selectedPart.value = visible
-  // While an upload is selected, clicking the email picks where it goes.
-  if (sidePanel.value === 'uploads' && selectedHosted.value) {
+function clearSectionSelection() {
+  if (selectedPart.value == null && selectedTextIndex.value == null) {
     paintArrangeOutline()
     return
   }
+  selectedPart.value = null
+  selectedTextIndex.value = null
+  const doc = frameRef.value?.contentDocument
+  doc?.getElementById('email-builder-section-resize')?.remove()
+  doc?.getElementById('email-builder-parent-resize')?.remove()
+  paintArrangeOutline()
+}
+
+function clearImageSelection() {
+  if (selectedIndex.value == null && !replacePickerOpen.value) {
+    const doc = frameRef.value?.contentDocument
+    doc?.getElementById('email-builder-handles')?.remove()
+    return
+  }
+  selectedIndex.value = null
+  imageUrl.value = ''
+  replacePickerOpen.value = false
+  markImages()
+}
+
+/** Select a section from the canvas. Pass `toggle: false` after drag so a re-select does not clear. */
+function selectSectionFromCanvas(part: number, options?: { toggle?: boolean }) {
+  const visible = visibleSectionPart(part)
+  // While an upload is selected, clicking the email picks where it goes.
+  if (sidePanel.value === 'uploads' && selectedHosted.value) {
+    selectedPart.value = visible
+    paintArrangeOutline()
+    return
+  }
+  const allowToggle = options?.toggle !== false
+  if (allowToggle && selectedPart.value === visible && sidePanel.value === 'layout') {
+    clearSectionSelection()
+    return
+  }
+  clearImageSelection()
+  selectedPart.value = visible
   sidePanel.value = 'layout'
   templatesOpen.value = false
   void nextTick(() => {
@@ -265,6 +303,7 @@ function selectSectionFromCanvas(part: number) {
 }
 
 function selectTextFromCanvas(index: number) {
+  clearImageSelection()
   selectedTextIndex.value = index
   paintArrangeOutline()
   void nextTick(() => {
@@ -1614,7 +1653,8 @@ function finishSectionDrag(event: PointerEvent) {
   const textEdit = !gesture.moved ? pendingTextEdit : null
   pendingTextEdit = null
   writeDragStyle(gesture.el, gesture.priorStyle)
-  selectSectionFromCanvas(gesture.part)
+  // After a drag, keep the section selected (do not toggle off).
+  selectSectionFromCanvas(gesture.part, { toggle: false })
   if (gesture.free) {
     const result = gesture.moved && gesture.dropTarget
       ? moveEmailBlock(props.modelValue, gesture.part, gesture.dropTarget)
@@ -1633,7 +1673,7 @@ function finishSectionDrag(event: PointerEvent) {
     return
   }
   const result = moveEmailArrangeItemTo(props.modelValue, gesture.part, gesture.targetPart, gesture.place)
-  selectSectionFromCanvas(result.part)
+  selectSectionFromCanvas(result.part, { toggle: false })
   if (result.html !== props.modelValue) emit('update:modelValue', result.html)
   if (doc) keepFrameScroll(doc, gesture.scrollTop)
 }
@@ -1663,7 +1703,7 @@ function beginSectionDrag(doc: Document, el: HTMLElement, part: number, group: s
   }
   doc.body.style.userSelect = 'none'
   doc.body.style.cursor = 'grabbing'
-  selectSectionFromCanvas(part)
+  selectSectionFromCanvas(part, { toggle: false })
   startOutsideTracking()
   keepFrameScroll(doc, scrollTop)
 }
@@ -3176,7 +3216,14 @@ function paintArrangeOutline() {
 
 function focusArrangePart(part: number) {
   commitActiveTextEdit()
-  selectedPart.value = blockPartFor(part)
+  const next = blockPartFor(part)
+  const toggled = toggleSelectionId(selectedPart.value, next)
+  if (toggled == null) {
+    clearSectionSelection()
+    return
+  }
+  clearImageSelection()
+  selectedPart.value = toggled
   const item = arrangeItems.value.find((entry) => entry.part === selectedPart.value)
   const run = selectedTextIndex.value == null ? null : listEmailTextRuns(props.modelValue)[selectedTextIndex.value]
   if (!item || !run || run.start < item.start || run.end > item.end) selectedTextIndex.value = null
@@ -3207,10 +3254,17 @@ const blockVideoDraft = ref<{ part: number; value: string } | null>(null)
 const blockVideoError = ref('')
 let scrollToPartOnLoad: number | null = null
 
-watch(sidePanel, (panel) => {
-  if (panel === 'uploads') return
-  imageBlockPending.value = false
-  pendingBlockTarget = null
+watch(sidePanel, (panel, previous) => {
+  if (panel !== 'uploads') {
+    imageBlockPending.value = false
+    pendingBlockTarget = null
+  }
+  const clear = selectionClearOnSidePanelChange(
+    previous as EmailBuilderSidePanel | undefined,
+    panel as EmailBuilderSidePanel
+  )
+  if (clear.clearSection) clearSectionSelection()
+  if (clear.clearImage) clearImageSelection()
 })
 
 function scrollPreviewToPendingPart(doc: Document) {
@@ -3720,11 +3774,21 @@ function imageFileLabel(src: string, index: number): string {
   return file || 'No file name'
 }
 
-function selectImage(index: number, source: 'sidebar' | 'template' = 'sidebar') {
+function selectImage(
+  index: number,
+  source: 'sidebar' | 'template' = 'sidebar',
+  options?: { toggle?: boolean }
+) {
+  const allowToggle = options?.toggle !== false
+  if (allowToggle && selectedIndex.value === index) {
+    clearImageSelection()
+    return
+  }
+  clearSectionSelection()
   selectedIndex.value = index
   imageUrl.value = previewSrc(images.value[index]?.src || '')
   uploadError.value = ''
-  if (source === 'template') sidePanel.value = 'email'
+  if (source === 'template' || sidePanel.value !== 'email') sidePanel.value = 'email'
   markImages()
   nextTick(() => {
     if (source === 'sidebar') scrollTemplateToImage(index)
@@ -3734,7 +3798,8 @@ function selectImage(index: number, source: 'sidebar' | 'template' = 'sidebar') 
 
 function startReplace(index: number) {
   if (!props.canReplaceImage || !props.canUploadImage || uploading.value) return
-  selectImage(index)
+  // Keep the photo selected while opening the replace picker.
+  selectImage(index, 'sidebar', { toggle: false })
   replacePickerOpen.value = !replacePickerOpen.value
   if (replacePickerOpen.value && !hostedImages.value.length) void loadHostedImages()
 }
