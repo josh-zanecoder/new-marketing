@@ -11,6 +11,10 @@ import {
   CAMPAIGN_SEND_POLL_MAX_CONSECUTIVE_ERRORS,
   CAMPAIGN_SEND_POLL_MAX_MS
 } from '~/constants/campaignSendPolling'
+import {
+  CAMPAIGN_STATUS_FAILED,
+  CAMPAIGN_STATUS_SENT
+} from '~~/shared/constants/campaignTerminalStatus'
 
 export type { AdminCampaign, SendStatus } from '~/types/adminCampaign'
 
@@ -607,8 +611,13 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
       const res = await fetchSendCampaignStatus(tenantDbName, campaignId)
       const status: SendStatus = { ...res, campaignId }
       if (res.done) {
+        stopSendStatusPolling()
+        if (sendingCampaignKey.value === pollKey) {
+          sendingCampaignKey.value = null
+        }
         await fetchCampaigns({ force: true })
         await onComplete(status)
+        sendStatus.value = null
         return
       }
       sendStatus.value = status
@@ -624,6 +633,34 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
       })
       sendError.value = CAMPAIGN_SEND_POLL_ERROR_MESSAGE
       startSendStatusPolling(tenantDbName, campaignId, onComplete)
+    }
+  }
+
+  /**
+   * Drop optimistic send modal / poll UI when admin detail already shows Sent/Failed.
+   */
+  function releaseSendUiIfCampaignComplete(
+    tenantDbName: string,
+    campaignId: string,
+    campaignStatus: string | null | undefined
+  ): void {
+    const status = String(campaignStatus ?? '').trim()
+    if (status !== CAMPAIGN_STATUS_SENT && status !== CAMPAIGN_STATUS_FAILED) return
+    const key = adminCampaignKey({ tenantDbName, id: campaignId })
+    if (sendingCampaignKey.value !== key && sendStatus.value?.campaignId !== campaignId) {
+      return
+    }
+    if (adminSendPollKey.value === key) {
+      stopSendStatusPolling()
+    }
+    if (sendingCampaignKey.value === key) {
+      sendingCampaignKey.value = null
+    }
+    if (sendStatus.value?.campaignId === campaignId) {
+      sendStatus.value = null
+    }
+    if (sendError.value === CAMPAIGN_SEND_POLL_ERROR_MESSAGE) {
+      sendError.value = null
     }
   }
 
@@ -663,6 +700,7 @@ export const useAdminCampaignStore = defineStore('adminCampaigns', () => {
     setSendingCampaignKey,
     startSendStatusPolling,
     resumeSendStatusPolling,
+    releaseSendUiIfCampaignComplete,
     stopSendStatusPolling,
     isSendPolling,
     clearSendModal,

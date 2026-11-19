@@ -5,6 +5,10 @@ import {
   countCampaignRecipientDeliveryStatuses,
   sendStatusFromCampaignRecipients
 } from '~~/shared/campaignRecipientDeliveryCounts'
+import {
+  reconcileCampaignSendProgress,
+  type CampaignSendProgressSnapshot
+} from '~~/shared/reconcileCampaignSendProgress'
 import type { Campaign, CampaignRecipient, SendStatus } from '~/types/campaign'
 import { useCampaignStore } from '~/store/campaignStore'
 
@@ -112,6 +116,44 @@ export function buildCampaignSendProgressFromRecipients(input: {
   return buildCampaignSendProgress(snap, input.campaignId)
 }
 
+/**
+ * Detail/modal progress: merge status-poll with recipient ledger so a finished
+ * send cannot show "0 of N — sending / Pending" while rows already say Sent.
+ */
+export function resolveCampaignSendProgress(input: {
+  campaignId: string
+  campaignStatus?: string | null
+  recipients?: CampaignRecipient[] | null
+  poll: SendStatus | null
+}): CampaignSendProgress | null {
+  const pollSnap: CampaignSendProgressSnapshot | null = input.poll
+    ? {
+        campaignId: input.poll.campaignId || input.campaignId,
+        campaignStatus: input.poll.campaignStatus,
+        pending: input.poll.pending,
+        sent: input.poll.sent,
+        failed: input.poll.failed,
+        aborted: input.poll.aborted ?? 0,
+        total: input.poll.total,
+        done: input.poll.done
+      }
+    : null
+  const reconciled = reconcileCampaignSendProgress({
+    campaignId: input.campaignId,
+    campaignStatus: input.campaignStatus,
+    poll: pollSnap,
+    recipients: input.recipients
+  })
+  if (reconciled) {
+    return buildCampaignSendProgress(reconciled, input.campaignId)
+  }
+  return buildCampaignSendProgressFromRecipients({
+    campaignId: input.campaignId,
+    campaignStatus: input.campaignStatus,
+    recipients: input.recipients
+  })
+}
+
 export { countCampaignRecipientDeliveryStatuses }
 
 /**
@@ -197,6 +239,7 @@ export function useCampaignSendFlow() {
     sendProgress,
     buildCampaignSendProgress,
     buildCampaignSendProgressFromRecipients,
+    resolveCampaignSendProgress,
     countCampaignRecipientDeliveryStatuses,
     startSendStatusPolling,
     resumeSendStatusPolling,

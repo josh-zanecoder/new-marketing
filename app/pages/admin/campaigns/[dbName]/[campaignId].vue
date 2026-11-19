@@ -9,7 +9,7 @@ import {
   canResumeSend,
   canRestartSend,
   buildCampaignSendProgress,
-  buildCampaignSendProgressFromRecipients,
+  resolveCampaignSendProgress,
   countCampaignRecipientDeliveryStatuses
 } from '~/composables/useCampaignSendFlow'
 import { useAdminCampaignSendFlow } from '~/composables/admin/campaigns/useAdminCampaignSendFlow'
@@ -207,6 +207,9 @@ watch(
       startDetailSendRefresh()
     } else {
       stopDetailSendRefresh()
+      if ((status === 'Sent' || status === 'Failed') && tenantDbName.value && id.value) {
+        campaignStore.releaseSendUiIfCampaignComplete(tenantDbName.value, id.value, status)
+      }
     }
     if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
   }
@@ -216,6 +219,17 @@ onMounted(() => {
   tryResumeSendPolling()
   void loadPausedProgress()
   if (campaign.value?.status === 'Sending') startDetailSendRefresh()
+  if (
+    (campaign.value?.status === 'Sent' || campaign.value?.status === 'Failed') &&
+    tenantDbName.value &&
+    id.value
+  ) {
+    campaignStore.releaseSendUiIfCampaignComplete(
+      tenantDbName.value,
+      id.value,
+      campaign.value.status
+    )
+  }
 })
 
 onBeforeUnmount(() => {
@@ -225,14 +239,13 @@ onBeforeUnmount(() => {
 const sendProgressModalOpen = computed(() => sendingCampaignKey.value === currentSendKey.value)
 
 const detailSendProgress = computed(() => {
-  const fromPoll = buildCampaignSendProgress(sendStatus.value, id.value)
-  if (fromPoll) return fromPoll
   const c = campaign.value
-  if (!c) return null
-  return buildCampaignSendProgressFromRecipients({
+  if (!c) return buildCampaignSendProgress(sendStatus.value, id.value)
+  return resolveCampaignSendProgress({
     campaignId: id.value,
     campaignStatus: c.status,
-    recipients: c.recipients
+    recipients: c.recipients,
+    poll: sendStatus.value
   })
 })
 

@@ -41,7 +41,7 @@ const {
   canRestartSend,
   sendProgress,
   buildCampaignSendProgress,
-  buildCampaignSendProgressFromRecipients,
+  resolveCampaignSendProgress,
   countCampaignRecipientDeliveryStatuses,
   startSendStatusPolling,
   resumeSendStatusPolling,
@@ -287,6 +287,9 @@ watch(
       startDetailSendRefresh()
     } else {
       stopDetailSendRefresh()
+      if (status === 'Sent' || status === 'Failed') {
+        campaignStore.releaseSendUiIfCampaignComplete(id, status)
+      }
     }
     if (status === 'Paused' || status === 'Stopped') void loadPausedProgress()
   }
@@ -296,6 +299,9 @@ onMounted(() => {
   tryResumeSendPolling()
   void loadPausedProgress()
   if (campaign.value?.status === 'Sending') startDetailSendRefresh()
+  if (campaign.value?.status === 'Sent' || campaign.value?.status === 'Failed') {
+    campaignStore.releaseSendUiIfCampaignComplete(id, campaign.value.status)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -309,14 +315,13 @@ const recipientDeliveryCounts = computed(() =>
 )
 
 const detailSendProgress = computed(() => {
-  const fromPoll = buildCampaignSendProgress(sendStatus.value, id)
-  if (fromPoll) return fromPoll
   const c = campaign.value
-  if (!c) return null
-  return buildCampaignSendProgressFromRecipients({
+  if (!c) return buildCampaignSendProgress(sendStatus.value, id)
+  return resolveCampaignSendProgress({
     campaignId: id,
     campaignStatus: c.status,
-    recipients: c.recipients
+    recipients: c.recipients,
+    poll: sendStatus.value
   })
 })
 
