@@ -90,7 +90,11 @@ export function emailImageRowHtml(options: EmailImageRowOptions): string {
     return cellHtml(percent, src, spacingPx, align, valign)
   }).join('')
   return (
-    `<table ${EMAIL_IMAGE_ROW_ATTR}="${count}" ${TABLE_ATTRS} ` +
+    `<table ${EMAIL_IMAGE_ROW_ATTR}="${count}" ` +
+    `data-email-image-spacing="${spacingPx}" ` +
+    `data-email-image-align="${align}" ` +
+    `data-email-image-valign="${valign}" ` +
+    `${TABLE_ATTRS} ` +
     `style="width:100%;border-collapse:collapse;table-layout:fixed">` +
     `<tr>${cells}</tr></table>`
   )

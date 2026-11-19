@@ -32,3 +32,33 @@ export const EMAIL_IMAGE_ROW_BLOCK_LABELS = {
   three: '3 Images',
   four: '4 Images'
 } as const
+
+/** Grapes trait / model prop names (synced onto data-* attributes). */
+export const EMAIL_IMAGE_ROW_TRAIT = {
+  spacing: 'emailImageSpacing',
+  align: 'emailImageAlign',
+  valign: 'emailImageValign'
+} as const
+
+/** Per-image width trait (percent of its own cell — never shared across siblings). */
+export const EMAIL_IMAGE_WIDTH_TRAIT = 'emailWidthPct'
+
+export const EMAIL_IMAGE_WIDTH_MIN_PCT = 10
+export const EMAIL_IMAGE_WIDTH_MAX_PCT = 100
+export const EMAIL_IMAGE_WIDTH_DEFAULT_PCT = 100
+
+/**
+ * Pointer anywhere on an image maps to left/right half (0.5 = whole image is
+ * "beside" — Grapes' green above-line is ignored when hovering the photo).
+ */
+export const EMAIL_IMAGE_BESIDE_ZONE_RATIO = 0.5
+
+export const EMAIL_IMAGE_BESIDE_HINT_LABEL = 'Side by side'
+
+/** Shown when dropping beside an image that already sits in a multi-image row. */
+export const EMAIL_IMAGE_BESIDE_ADD_TO_ROW_LABEL = 'Add to row'
+
+/** Class on the canvas body while a beside drop is active (hides the green "above" line). */
+export const EMAIL_IMAGE_BESIDE_BODY_CLASS = 'is-email-image-beside'
+
+export const EMAIL_IMAGE_BESIDE_HINT_ATTR = 'data-email-image-beside-hint'

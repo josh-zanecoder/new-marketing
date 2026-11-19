@@ -20,6 +20,9 @@ describe('emailImageRow', () => {
       valign: 'top'
     })
     expect(html).toContain(`${EMAIL_IMAGE_ROW_ATTR}="2"`)
+    expect(html).toContain('data-email-image-spacing="12"')
+    expect(html).toContain('data-email-image-align="center"')
+    expect(html).toContain('data-email-image-valign="top"')
     expect(html).toContain('role="presentation"')
     expect(html).toContain('table-layout:fixed')
     expect(html.match(new RegExp(EMAIL_IMAGE_ROW_CELL_ATTR, 'g'))).toHaveLength(2)

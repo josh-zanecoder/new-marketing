@@ -5,7 +5,12 @@ import {
   EMAIL_IMAGE_ROW_BLOCK_IDS,
   EMAIL_IMAGE_ROW_BLOCK_LABELS
 } from '../../constants/emailImageRow'
-import { emailImageRowBlockIds, setupGrapesEmailImageRow } from '../grapesEmailImageRow'
+import {
+  emailImageRowBlockIds,
+  rearrangeImageInRow,
+  setupGrapesEmailImageRow,
+  wrapAdjacentImages
+} from '../grapesEmailImageRow'
 
 const root = resolve(__dirname, '../../..')
 
@@ -18,6 +23,8 @@ describe('grapesEmailImageRow wiring', () => {
     ])
     expect(EMAIL_IMAGE_ROW_BLOCK_LABELS.two).toBe('2 Images')
     expect(typeof setupGrapesEmailImageRow).toBe('function')
+    expect(typeof wrapAdjacentImages).toBe('function')
+    expect(typeof rearrangeImageInRow).toBe('function')
   })
 
   it('wires the Grapes iframe builder and email-editor to setupGrapesEmailImageRow', () => {
@@ -28,5 +35,28 @@ describe('grapesEmailImageRow wiring', () => {
     const emailEditor = readFileSync(resolve(root, 'app/pages/tenant/email-editor/index.vue'), 'utf8')
     expect(emailEditor).toContain("from '~~/shared/utils/grapesEmailImageRow'")
     expect(emailEditor).toContain('setupGrapesEmailImageRow(editor)')
+  })
+
+  it('listens for drag end and component add so same-row drop works', () => {
+    const source = readFileSync(resolve(root, 'shared/utils/grapesEmailImageRow.ts'), 'utf8')
+    expect(source).toContain("editor.on('component:drag:end'")
+    expect(source).toContain("editor.on('component:add'")
+    expect(source).toContain('onGrapesEmailImagePlacement')
+    expect(source).toContain('enableGrapesIndependentImageResize')
+    expect(source).toContain('setupGrapesEmailImageBesideDrop')
+
+    const resize = readFileSync(resolve(root, 'shared/utils/grapesEmailImageRowResize.ts'), 'utf8')
+    expect(resize).toContain('emailImageIndependentWidthStyle')
+    expect(resize).toContain('component:resize:end')
+
+    const dnd = readFileSync(resolve(root, 'shared/utils/grapesEmailImageRowDnD.ts'), 'utf8')
+    expect(dnd).toContain('wrapAdjacentImages')
+    expect(dnd).toContain('rearrangeImageInRow')
+    expect(dnd).toContain('applyPendingEmailImageBeside')
+
+    const beside = readFileSync(resolve(root, 'shared/utils/grapesEmailImageRowBeside.ts'), 'utf8')
+    expect(beside).toContain('EMAIL_IMAGE_BESIDE_HINT_LABEL')
+    expect(beside).toContain('EMAIL_IMAGE_BESIDE_BODY_CLASS')
+    expect(beside).toContain('applyPendingEmailImageBeside')
   })
 })
