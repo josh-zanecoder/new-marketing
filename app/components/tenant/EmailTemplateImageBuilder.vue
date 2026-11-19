@@ -146,7 +146,10 @@ const selectedHosted = computed(() =>
 )
 const previewDropActive = ref(false)
 const replacePickerOpen = ref(false)
-const sidePanel = ref<'add' | 'layout' | 'email' | 'uploads'>('layout')
+/** Blank / editable builders open on Add so Title, Paragraph, Button, rows are visible immediately. */
+const sidePanel = ref<'add' | 'layout' | 'email' | 'uploads'>(
+  props.canEditText ? 'add' : 'layout'
+)
 const selectedPart = ref<number | null>(null)
 const selectedTextIndex = ref<number | null>(null)
 const textSplitHint = ref<number | null>(null)

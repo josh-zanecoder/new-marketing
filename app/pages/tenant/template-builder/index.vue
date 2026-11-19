@@ -23,7 +23,6 @@ const unsavedOpen = unsavedGuard.open
 const unsavedBusy = unsavedGuard.busy
 const {
   allowTenantTemplateBuilder,
-  allowTenantEditText,
   allowTenantResizeImage,
   allowTenantReplaceImage,
   loadDefaultCampaignSender,
@@ -385,7 +384,7 @@ onBeforeUnmount(() => {
         :source-html="sourceHtml"
         :has-unsaved-changes="isDirty"
         :can-upload-image="true"
-        :can-edit-text="allowTenantEditText"
+        :can-edit-text="true"
         :can-resize-image="allowTenantResizeImage"
         :can-replace-image="allowTenantReplaceImage"
         @loaded-template="onLoadedTemplate"

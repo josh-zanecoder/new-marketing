@@ -110,7 +110,8 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     key: 'allowTenantTemplateBuilder',
     code: 'email-builder:template',
     label: 'Template builder',
-    description: 'Tenant can edit campaign emails and saved templates in the visual template builder.',
+    description:
+      'Tenant can open Template Builder to create and edit emails from scratch, including Add blocks (text, headings, buttons, rows) and images.',
     group: 'email-builder',
     groupLabel: 'Email builder',
     patchPath: 'allow-tenant-template-builder'
@@ -119,7 +120,8 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     key: 'allowTenantEditText',
     code: 'email-builder:edit-text',
     label: 'Edit text',
-    description: 'Tenant can change the words in the visual template builder.',
+    description:
+      'On Email editor / Add template, unlocks the Add panel (text, headings, buttons, rows) and inline word editing. Template Builder always includes Add blocks.',
     group: 'email-builder',
     groupLabel: 'Email builder',
     patchPath: 'allow-tenant-edit-text'
