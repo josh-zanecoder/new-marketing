@@ -897,6 +897,30 @@ function isInboundPlatformEnvelope(parsed: Record<string, unknown>): boolean {
   )
 }
 
+/**
+ * Re-run inbound handling for a stored DLQ payload (admin replay).
+ * Does not advance Kafka offsets — only re-applies the parsed envelope.
+ */
+export async function replayInboundKafkaRawMessage(
+  raw: string,
+  kafkaTopic?: string
+): Promise<void> {
+  const text = String(raw || '').trim()
+  if (!text) {
+    throw new Error('DLQ raw payload is empty')
+  }
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(text) as Record<string, unknown>
+  } catch {
+    throw new Error('DLQ raw payload is not valid JSON')
+  }
+  if (!isInboundPlatformEnvelope(parsed)) {
+    throw new Error('DLQ raw payload is not a marketing inbound envelope')
+  }
+  await handleInboundKafkaMessage(parsed, undefined, kafkaTopic)
+}
+
 async function handleInboundKafkaMessage(
   parsed: Record<string, unknown>,
   ctx?: InboundMessageContext,

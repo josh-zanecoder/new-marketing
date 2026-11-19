@@ -1,6 +1,7 @@
 import { assertAdminAuth } from '@server/utils/admin/adminCampaigns'
 import { getRegistryConnection } from '@server/lib/mongoose'
 import {
+  ensureMarketingSyncHealthIndexes,
   getMarketingSyncWorkerHealth,
   listMarketingSyncDlqEntries,
   listMarketingSyncHealthDocs,
@@ -28,8 +29,17 @@ export type AdminSyncHealthResponse = {
   dlq: MarketingSyncDlqEntry[]
 }
 
+let indexesEnsured = false
+
 export default defineEventHandler(async (event): Promise<AdminSyncHealthResponse> => {
   assertAdminAuth(event)
+
+  if (!indexesEnsured) {
+    indexesEnsured = true
+    void ensureMarketingSyncHealthIndexes().catch(() => {
+      indexesEnsured = false
+    })
+  }
 
   const registry = await getRegistryConnection()
   const [clients, healthDocs, worker, logs, dlq] = await Promise.all([
