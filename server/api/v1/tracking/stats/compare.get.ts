@@ -1,19 +1,20 @@
-import mongoose from 'mongoose'
 import {
   normalizeCampaignIdQuery,
   normalizeTzOffsetQuery,
   normalizeYmdQuery
 } from '@server/utils/tracking/brevoTenantEvents'
 import { aggregateStoredBrevoSmtpStats } from '@server/utils/tracking/aggregateStoredBrevoSmtpStats'
+import { countCampaignRecipientSent } from '@server/utils/tracking/countCampaignRecipientSent'
 import {
   clampBrevoSmtpDateRange,
-  clampBrevoSmtpStatsRangeToMaxDays,
-  type BrevoSmtpAggregated
+  clampBrevoSmtpStatsRangeToMaxDays
 } from '@server/utils/tracking/fetchBrevoTransactionalStats'
 import { resolveTrackingTenantContext } from '@server/utils/tracking/resolveTrackingTenantContext'
+import { withBrevoSmtpRequestsCount } from '@server/utils/tracking/withBrevoSmtpRequestsCount'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { getTenantConnectionByDbName } from '@server/tenant/connection'
-import { CAMPAIGN_RECIPIENT_STATUS_SENT } from '@server/utils/campaignSend/constants'
+import type { CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
+import { resolveCampaignCompareSentCount } from '~~/shared/utils/resolveCampaignCompareSentCount'
 
 const MAX_COMPARE = 5
 
@@ -42,32 +43,10 @@ function parseCampaignIds(event: Parameters<typeof getQuery>[0]): string[] {
   return out
 }
 
-function pct(num: number, den: number): number {
-  if (den <= 0) return 0
-  return Math.round((num / den) * 10000) / 100
-}
-
-/** Recompute rate percentages after overriding `requests` (Sent). */
-function withRequestsCount(aggregated: BrevoSmtpAggregated, requests: number): BrevoSmtpAggregated {
-  const next = { ...aggregated, requests, rates: { ...aggregated.rates } }
-  next.rates = {
-    deliveredPct: pct(next.delivered, requests),
-    uniqueOpensPct: pct(next.uniqueOpens, requests),
-    opensPct: pct(next.opens, requests),
-    uniqueClicksPct: pct(next.uniqueClicks, requests),
-    hardBouncesPct: pct(next.hardBounces, requests),
-    softBouncesPct: pct(next.softBounces, requests),
-    blockedPct: pct(next.blocked, requests),
-    invalidPct: pct(next.invalid, requests),
-    spamReportsPct: pct(next.spamReports, requests),
-    unsubscribedPct: pct(next.unsubscribed, requests)
-  }
-  return next
-}
-
 /**
  * Side-by-side SMTP aggregates for up to 5 campaigns (client vs prospect, etc.).
- * Sent uses CampaignRecipient `sent` counts (same source as campaign details).
+ * Sent prefers CampaignRecipient `sent` counts (same as campaign details), with SMTP
+ * `requests` as fallback when the recipient ledger has no sent rows.
  */
 export default defineEventHandler(async (event) => {
   const { dbName } = await resolveTrackingTenantContext(event)
@@ -126,10 +105,11 @@ export default defineEventHandler(async (event) => {
     campaignDocs.map((c) => [String(c._id), String(c.name || '').trim() || String(c._id)])
   )
 
+  const recipientModel = CampaignRecipient as CampaignRecipientModel
+
   const campaigns = await Promise.all(
     campaignIds.map(async (campaignId) => {
-      const objectId = new mongoose.Types.ObjectId(campaignId)
-      const [stats, sentCount] = await Promise.all([
+      const [stats, recipientSent] = await Promise.all([
         aggregateStoredBrevoSmtpStats({
           dbName,
           campaignId,
@@ -138,14 +118,14 @@ export default defineEventHandler(async (event) => {
           tzOffsetMinutes,
           skipDateFilter
         }),
-        CampaignRecipient.countDocuments({
-          campaign: objectId,
-          status: CAMPAIGN_RECIPIENT_STATUS_SENT
-        })
+        countCampaignRecipientSent(recipientModel, campaignId)
       ])
 
-      // Campaign details Sent = recipients with status "sent" — keep compare aligned.
-      const aggregated = withRequestsCount(stats.aggregated, sentCount)
+      const sentCount = resolveCampaignCompareSentCount({
+        recipientSent,
+        smtpRequests: stats.aggregated.requests
+      })
+      const aggregated = withBrevoSmtpRequestsCount(stats.aggregated, sentCount)
 
       return {
         campaignId,

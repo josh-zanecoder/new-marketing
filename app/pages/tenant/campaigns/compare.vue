@@ -25,6 +25,8 @@ type CompareRow = {
   campaignId: string
   name: string
   aggregated: BrevoSmtpAggregated
+  /** Resolved Sent (recipient ledger, else SMTP requests). */
+  sentRecipients?: number
 }
 
 const compareRows = ref<CompareRow[]>([])
@@ -116,6 +118,10 @@ const metricDefs = [
 ] as const
 
 function cellCount(row: CompareRow, key: (typeof metricDefs)[number]['key']): number {
+  if (key === 'requests') {
+    const fromRecipients = Number(row.sentRecipients)
+    if (Number.isFinite(fromRecipients) && fromRecipients >= 0) return fromRecipients
+  }
   return Number(row.aggregated[key] ?? 0)
 }
 
