@@ -1,11 +1,9 @@
 import mongoose from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import { deleteCustomMarketingTenantImages } from '@server/services/customMarketingImageUpload.service'
 import type { FlyerModel } from '@server/types/tenant/flyer.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
-import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { requireMarketingFlyersPermission } from '@server/utils/flyer/requireMarketingFlyersPermission'
-import { hostedImageViewerFromAuth } from '@server/utils/hostedImage/hostedImageAccessFromAuth'
+import { softDeleteFlyerById } from '@server/utils/flyer/softDeleteFlyer'
 import { MARKETING_FLYERS_DELETE_PERMISSION } from '~~/shared/constants/marketingFlyersPermissions'
 
 export default defineEventHandler(async (event) => {
@@ -20,25 +18,10 @@ export default defineEventHandler(async (event) => {
   const { Flyer } = getTenantClientModels(conn)
   const flyerModel = Flyer as FlyerModel
 
-  const existing = await flyerModel.findById(rawId).lean()
-  if (!existing) {
+  const result = await softDeleteFlyerById(flyerModel, rawId)
+  if (!result.matched) {
     throw createError({ statusCode: 404, message: 'Flyer not found' })
   }
 
-  const auth = event.context.auth
-  const objectPath = typeof existing.objectPath === 'string' ? existing.objectPath.trim() : ''
-  if (objectPath) {
-    try {
-      const tenantName = await resolveCustomMarketingTenantFolderName(auth)
-      const viewer = hostedImageViewerFromAuth(auth)
-      await deleteCustomMarketingTenantImages(tenantName, [objectPath], viewer)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error('[flyers.delete] GCS object delete failed', { objectPath, error: message })
-    }
-  }
-
-  await flyerModel.deleteOne({ _id: existing._id })
-
-  return { ok: true }
+  return { ok: true, alreadyDeleted: result.alreadyDeleted }
 })

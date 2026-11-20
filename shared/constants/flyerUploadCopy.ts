@@ -16,5 +16,5 @@ export const FLYER_DELETE_CONFIRM_TEXT = 'Delete' as const
 
 export function buildFlyerDeleteConfirmMessage(flyerName: string): string {
   const name = String(flyerName ?? '').trim() || 'this flyer'
-  return `Delete flyer “${name}”? This also removes the hosted file.`
+  return `Delete flyer “${name}”? It will be removed from your Custom Flyers library.`
 }

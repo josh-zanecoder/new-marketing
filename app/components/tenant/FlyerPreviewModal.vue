@@ -6,7 +6,13 @@ import type { FlyerGroupItem } from '~~/shared/utils/groupFlyersByCategory'
 const props = defineProps<{
   open: boolean
   flyer: FlyerGroupItem | null
+  /** Optional PDF file URL override (admin trash). */
+  fileUrl?: string
+  /** Hide print in admin trash (recover / delete forever only). */
+  showPrint?: boolean
 }>()
+
+const canPrint = computed(() => props.showPrint !== false)
 
 const emit = defineEmits<{
   close: []
@@ -88,6 +94,7 @@ onUnmounted(() => {
               :flyer-id="flyer.id"
               :active="pdfPreviewActive"
               :alt="flyer.name"
+              :file-url="fileUrl"
             />
             <template #fallback>
               <div class="flex h-[min(70vh,40rem)] w-full items-center justify-center text-sm text-slate-500">
@@ -109,6 +116,7 @@ onUnmounted(() => {
             Close
           </button>
           <button
+            v-if="canPrint"
             type="button"
             class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700"
             @click="emit('print')"

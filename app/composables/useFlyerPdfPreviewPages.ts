@@ -4,7 +4,8 @@ import { renderFlyerPdfPagesFromBytes } from '~/utils/renderFlyerPdfPages'
 /** Load a flyer PDF and rasterize pages for the chrome-free preview modal. */
 export function useFlyerPdfPreviewPages(
   flyerId: Ref<string>,
-  enabled: Ref<boolean>
+  enabled: Ref<boolean>,
+  fileUrl?: Ref<string | undefined> | Ref<string>
 ) {
   const pages = ref<string[]>([])
   const pending = ref(false)
@@ -13,7 +14,8 @@ export function useFlyerPdfPreviewPages(
 
   async function load() {
     const id = flyerId.value.trim()
-    if (!enabled.value || !id || !import.meta.client) {
+    const url = String(fileUrl?.value ?? '').trim() || buildFlyerFileUrl(id)
+    if (!enabled.value || !id || !url || !import.meta.client) {
       pages.value = []
       return
     }
@@ -24,7 +26,7 @@ export function useFlyerPdfPreviewPages(
     progressLabel.value = 'Loading PDF…'
 
     try {
-      const res = await fetch(buildFlyerFileUrl(id), { credentials: 'include' })
+      const res = await fetch(url, { credentials: 'include' })
       if (!res.ok) throw new Error(`Flyer file HTTP ${res.status}`)
       const bytes = new Uint8Array(await res.arrayBuffer())
       const rendered = await renderFlyerPdfPagesFromBytes(bytes, {
@@ -50,7 +52,7 @@ export function useFlyerPdfPreviewPages(
   }
 
   watch(
-    [flyerId, enabled],
+    [flyerId, enabled, () => fileUrl?.value ?? ''],
     () => {
       void load()
     },

@@ -5,6 +5,7 @@ import type { FlyerModel } from '@server/types/tenant/flyer.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { requireMarketingFlyersPermission } from '@server/utils/flyer/requireMarketingFlyersPermission'
 import { MARKETING_FLYERS_READ_PERMISSION } from '~~/shared/constants/marketingFlyersPermissions'
+import { ACTIVE_FLYER_FILTER } from '~~/shared/utils/flyerActive'
 
 /** Stream a flyer binary (same-origin) so the client can render PDF page thumbnails. */
 export default defineEventHandler(async (event) => {
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Flyer } = getTenantClientModels(conn)
   const flyerModel = Flyer as FlyerModel
-  const existing = await flyerModel.findById(rawId).lean()
+  const existing = await flyerModel.findOne({ _id: rawId, ...ACTIVE_FLYER_FILTER }).lean()
   if (!existing) {
     throw createError({ statusCode: 404, message: 'Flyer not found' })
   }

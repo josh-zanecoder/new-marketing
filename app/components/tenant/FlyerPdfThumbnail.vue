@@ -4,9 +4,14 @@ import { FileText } from 'lucide-vue-next'
 const props = defineProps<{
   flyerId: string
   alt: string
+  /** Optional override (admin trash uses admin file API). */
+  fileUrl?: string
 }>()
 
-const { thumbnailUrl, pending, failed } = useFlyerPdfThumbnail(toRef(props, 'flyerId'))
+const { thumbnailUrl, pending, failed } = useFlyerPdfThumbnail(
+  toRef(props, 'flyerId'),
+  toRef(props, 'fileUrl')
+)
 </script>
 
 <template>
