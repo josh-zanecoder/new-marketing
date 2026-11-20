@@ -21,6 +21,7 @@ const UNCATEGORIZED_KEY = 'uncategorized'
 /**
  * Group flyers into category sections.
  * Named categories keep list sort order; uncategorized is last.
+ * Categories with no uploaded flyers are omitted.
  */
 export function groupFlyersByCategory(
   flyers: ReadonlyArray<FlyerGroupItem>,
@@ -57,8 +58,5 @@ export function groupFlyersByCategory(
     group.items.push(flyer)
   }
 
-  return [...groups.values()].filter((group) => {
-    if (group.key === UNCATEGORIZED_KEY) return group.items.length > 0
-    return true
-  })
+  return [...groups.values()].filter((group) => group.items.length > 0)
 }
