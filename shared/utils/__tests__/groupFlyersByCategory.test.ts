@@ -15,16 +15,19 @@ describe('groupFlyersByCategory', () => {
       ]
     )
 
-    expect(groups.map((g) => g.label)).toEqual(['Events', 'Later', 'Uncategorized'])
+    expect(groups.map((g) => g.label)).toEqual(['Events', 'Uncategorized'])
     expect(groups[0]?.items.map((i) => i.id)).toEqual(['f1'])
-    expect(groups[1]?.items).toEqual([])
-    expect(groups[2]?.items.map((i) => i.id)).toEqual(['f2', 'f3'])
+    expect(groups[1]?.items.map((i) => i.id)).toEqual(['f2', 'f3'])
   })
 
-  it('omits empty uncategorized when unused', () => {
+  it('omits empty named categories and empty uncategorized', () => {
     const groups = groupFlyersByCategory(
       [{ id: 'f1', name: 'A', categoryId: 'c1', imageUrl: '/a.jpg' }],
-      [{ id: 'c1', name: 'Events' }]
+      [
+        { id: 'c1', name: 'Events' },
+        { id: 'c2', name: 'Bank Statement' },
+        { id: 'c3', name: 'DSCR' }
+      ]
     )
     expect(groups.map((g) => g.key)).toEqual(['c1'])
   })
