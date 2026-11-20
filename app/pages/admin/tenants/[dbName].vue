@@ -70,6 +70,14 @@
         <button
           type="button"
           class="tab-btn"
+          :class="{ 'tab-btn--active': tab === 'deletedFlyers' }"
+          @click="tab = 'deletedFlyers'"
+        >
+          {{ deletedFlyersTabLabel }}
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
           :class="{ 'tab-btn--active': tab === 'bulkUnsubscribe' }"
           @click="tab = 'bulkUnsubscribe'"
         >
@@ -1234,6 +1242,10 @@
         <TenantAdminDeletedEmailTemplatesPanel :tenant-id="tenant.tenantId" />
       </TenantTabsDeletedEmailTemplatesTab>
 
+      <TenantTabsDeletedFlyersTab v-show="tab === 'deletedFlyers'">
+        <TenantAdminDeletedFlyersPanel :tenant-id="tenant.tenantId" />
+      </TenantTabsDeletedFlyersTab>
+
       <TenantTabsBulkUnsubscribeTab v-show="tab === 'bulkUnsubscribe'">
         <AdminBulkUnsubscribePanel :tenant-id="tenant.tenantId" />
       </TenantTabsBulkUnsubscribeTab>
@@ -1295,8 +1307,11 @@ import {
   tenantFeaturePermissionStateFrom,
   type TenantFeaturePermissionState
 } from '~~/shared/tenantFeaturePermissions'
+import { ADMIN_DELETED_FLYERS_TAB_LABEL } from '~~/shared/constants/adminDeletedFlyersCopy'
 
 definePageMeta({ layout: 'admin' })
+
+const deletedFlyersTabLabel = ADMIN_DELETED_FLYERS_TAB_LABEL
 
 const mobileRecordFieldCharLimit = MOBILE_RECORD_FIELD_CHAR_LIMIT
 
@@ -1311,6 +1326,7 @@ const TENANT_DETAIL_TABS = [
   'filters',
   'dynamicVariables',
   'deletedTemplates',
+  'deletedFlyers',
   'bulkUnsubscribe',
   'bulkTemplates'
 ] as const

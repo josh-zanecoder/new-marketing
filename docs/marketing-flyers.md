@@ -23,9 +23,36 @@ Custom Flyers **does not** create its own categories. It reuses `email_template_
 | Collection | Purpose |
 | --- | --- |
 | `email_template_categories` | Shared groups for templates + flyers |
-| `flyers` | Flyer docs: `name`, `categoryId` → EmailTemplateCategory, `imageUrl`, `objectPath` |
+| `flyers` | Flyer docs: `name`, `categoryId` → EmailTemplateCategory, `imageUrl`, `objectPath`, `deletedAt` |
 
 Deleting a Template category clears `categoryId` on templates **and** flyers.
+
+### Soft delete
+
+Tenant `DELETE /api/v1/tenant/flyers/:id` is a **soft delete** (same pattern as email templates):
+
+| Behavior | Detail |
+| --- | --- |
+| Persist | Sets `deletedAt` to now; does **not** `deleteOne` the Mongo doc |
+| GCS | Hosted object under `custom-marketing/{tenant}/flyers/…` is **kept** |
+| List / file | `GET` list and `GET …/file` only return docs with `deletedAt: null` |
+| Idempotent | Deleting an already soft-deleted flyer returns `{ ok: true, alreadyDeleted: true }` |
+
+### Superadmin restore
+
+Admin → tenant detail → **Deleted flyers** tab (same pattern as Deleted templates):
+
+| Action | Behavior |
+| --- | --- |
+| Recover | Clears `deletedAt` so the flyer returns to the tenant Custom Flyers library |
+| Delete forever | Hard-deletes the Mongo doc and best-effort deletes the GCS object (soft-deleted only) |
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/v1/admin/tenants/:tenantId/flyers/deleted` | Soft-deleted list |
+| `POST` | `/api/v1/admin/tenants/:tenantId/flyers/:id/recover` | Restore |
+| `DELETE` | `/api/v1/admin/tenants/:tenantId/flyers/:id` | Delete forever |
+| `GET` | `/api/v1/admin/tenants/:tenantId/flyers/:id/file` | Binary for trash PDF preview |
 
 Files are stored in GCS under `custom-marketing/{tenant}/flyers/…` with `Content-Disposition: inline` so PDF/images open in-browser for print.
 
@@ -47,7 +74,7 @@ Max size **15MB**. Gallery cards show image thumbnails; PDFs render **page 1** v
 | `GET` | `/api/v1/tenant/flyers` | read |
 | `GET` | `/api/v1/tenant/flyers/:id/file` | read (binary for PDF thumbnail / open) |
 | `POST` | `/api/v1/tenant/flyers` (`name`, `dataUrl` for PDF/image, optional `categoryId`, `originalFileName`) | add |
-| `DELETE` | `/api/v1/tenant/flyers/:id` | delete |
+| `DELETE` | `/api/v1/tenant/flyers/:id` | delete (soft: sets `deletedAt`) |
 | `GET` | `/api/v1/tenant/email-template-categories` | used for assign/filter dropdowns |
 
 ### UI
@@ -66,9 +93,10 @@ Max size **15MB**. Gallery cards show image thumbnails; PDFs render **page 1** v
 | PDF thumbnail | `app/components/tenant/FlyerPdfThumbnail.vue` + `pdfjs-dist` page-1 raster |
 | Page logic | `app/composables/useMarketingFlyersPage.ts` |
 | API client | `app/composables/useFlyerApi.ts` |
-| Group helper | `shared/utils/groupFlyersByCategory.ts` |
+| Group helper | `shared/utils/groupFlyersByCategory.ts` (only categories with ≥1 flyer) |
+| Admin trash | `useAdminDeletedFlyers.ts`, `TenantAdminDeletedFlyersPanel`, `TenantTabsDeletedFlyersTab` |
 
-Deep-link filter: `/tenant/flyers?category=<id>` or `?category=uncategorized`.
+Deep-link filter: `/tenant/flyers?category=<id>` or `?category=uncategorized`. Empty categories are hidden from the gallery sections (filter dropdown still lists all Template categories). Admin trash: `/admin/tenants/:dbName?tab=deletedFlyers`.
 
 ## Tests
 
@@ -89,6 +117,11 @@ npm run test -- \
   shared/utils/__tests__/flyerFileUrl.test.ts \
   shared/constants/__tests__/flyerUploadCopy.test.ts \
   shared/utils/__tests__/groupFlyersByCategory.test.ts \
+  shared/utils/__tests__/flyerActive.test.ts \
+  shared/constants/__tests__/adminDeletedFlyersCopy.test.ts \
   server/utils/__tests__/marketingSidebarNav.test.ts \
-  server/utils/flyer/__tests__/requireMarketingFlyersPermission.test.ts
+  server/utils/flyer/__tests__/requireMarketingFlyersPermission.test.ts \
+  server/utils/flyer/__tests__/softDeleteFlyer.test.ts \
+  server/utils/flyer/__tests__/recoverFlyer.test.ts \
+  server/utils/flyer/__tests__/hardDeleteFlyer.test.ts
 ```

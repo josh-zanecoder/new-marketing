@@ -3,13 +3,17 @@ const props = defineProps<{
   flyerId: string
   active: boolean
   alt: string
+  /** Optional override (admin trash uses admin file API). */
+  fileUrl?: string
 }>()
 
 const flyerIdRef = toRef(props, 'flyerId')
 const activeRef = toRef(props, 'active')
+const fileUrlRef = toRef(props, 'fileUrl')
 const { pages, pending, failed, progressLabel } = useFlyerPdfPreviewPages(
   flyerIdRef,
-  activeRef
+  activeRef,
+  fileUrlRef
 )
 </script>
 

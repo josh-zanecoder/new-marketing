@@ -19,6 +19,9 @@ describe('flyerUploadCopy', () => {
   it('builds delete confirmation copy', () => {
     expect(FLYER_DELETE_CONFIRM_TITLE.length).toBeGreaterThan(0)
     expect(FLYER_DELETE_CONFIRM_TEXT).toBe('Delete')
-    expect(buildFlyerDeleteConfirmMessage('Christmas Promo')).toContain('Christmas Promo')
+    const message = buildFlyerDeleteConfirmMessage('Christmas Promo')
+    expect(message).toContain('Christmas Promo')
+    expect(message).toContain('Custom Flyers library')
+    expect(message).not.toContain('hosted file')
   })
 })

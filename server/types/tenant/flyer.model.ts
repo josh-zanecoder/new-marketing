@@ -9,6 +9,8 @@ export interface FlyerDoc {
   fileName?: string
   contentType?: string
   size?: number
+  /** Soft-delete timestamp; null = active. */
+  deletedAt?: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
