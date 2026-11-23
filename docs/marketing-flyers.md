@@ -1,4 +1,4 @@
-# Custom Flyers
+# Marketing Flyers
 
 Tenant tab for flyer images grouped by **Template categories** (same categories as Email templates). Visibility and mutations are controlled by **CRM superadmin role permissions**.
 
@@ -6,7 +6,7 @@ Tenant tab for flyer images grouped by **Template categories** (same categories 
 
 | Code | Purpose |
 | --- | --- |
-| `marketing:flyers:read` | Show the **Custom Flyers** tab and list |
+| `marketing:flyers:read` | Show the **Marketing Flyers** tab and list |
 | `marketing:flyers:add` | Upload/add flyers |
 | `marketing:flyers:delete` | Delete flyers |
 

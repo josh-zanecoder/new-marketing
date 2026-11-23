@@ -58,7 +58,7 @@ onMounted(() => {
       <div class="min-w-0 space-y-1">
         <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Content</p>
         <h1 class="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl lg:text-3xl">
-          Custom Flyers
+          Marketing Flyers
         </h1>
         <p class="max-w-2xl text-sm text-zinc-500 sm:text-[15px]">
           Upload flyers and group them with your existing Template categories.
