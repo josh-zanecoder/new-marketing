@@ -31,6 +31,12 @@ export interface RegistryTenantDoc {
    */
   allowTenantEditSender?: unknown
   /**
+   * When true, campaign create/schedule can filter recipients with CRM Contacts
+   * filters (assigned LO, borrower status, contact info, contact type, etc.).
+   * Missing/false → classic recipient-list selection only.
+   */
+  allowTenantAdvancedRecipientFiltering?: unknown
+  /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Missing/false → existing recipient-list behavior only.
    */
@@ -136,6 +142,11 @@ export interface TenantAdminRow {
    * Default false preserves superadmin-only sender management.
    */
   allowTenantEditSender: boolean
+  /**
+   * When true, campaign create/schedule can use Advanced Recipient Filtering.
+   * Default false preserves classic recipient-list selection.
+   */
+  allowTenantAdvancedRecipientFiltering: boolean
   /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Default false preserves existing recipient-list behavior.

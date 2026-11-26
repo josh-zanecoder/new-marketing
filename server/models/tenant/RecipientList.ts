@@ -135,7 +135,20 @@ export const recipientListSchema = new mongoose.Schema(
     excludedContactIds: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Contact' }],
       default: () => []
-    }
+    },
+    /**
+     * Advanced Recipient Filtering: borrower status slugs the audience is limited to (any of).
+     * Empty = no status limit. Applied on top of the filter rows in preview, rebuild and sync.
+     */
+    audienceStatuses: {
+      type: [{ type: String, trim: true, lowercase: true }],
+      default: () => []
+    },
+    /**
+     * Auto-created by Advanced Recipient Filtering as a campaign's own audience.
+     * Hidden from the Recipient lists page and removed with its campaign.
+     */
+    campaignAudience: { type: Boolean, default: false }
   },
   { timestamps: true, collection: 'recipient_lists' }
 )

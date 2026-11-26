@@ -74,7 +74,7 @@ export async function listCampaignSenderCandidates(
   const limitRaw = options?.limit
   const limit =
     typeof limitRaw === 'number' && Number.isFinite(limitRaw)
-      ? Math.min(Math.max(Math.floor(limitRaw), 1), 30)
+      ? Math.min(Math.max(Math.floor(limitRaw), 1), 100)
       : 12
 
   const scopeEmails = marketingAudienceOwnerEmailsFromAuth(auth)

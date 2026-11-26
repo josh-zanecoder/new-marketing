@@ -21,6 +21,12 @@ export interface AdminTenantRow {
    */
   allowTenantEditSender: boolean
   /**
+   * When true, campaign create/schedule can use Advanced Recipient Filtering
+   * (CRM Contacts filters, match count, preview, live audience before send).
+   * Default false = classic recipient-list selection only.
+   */
+  allowTenantAdvancedRecipientFiltering: boolean
+  /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Default false = existing recipient-list behavior only.
    */

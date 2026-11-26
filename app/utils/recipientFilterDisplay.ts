@@ -1,5 +1,6 @@
 import { formatRegistryLabelForDisplay } from '~/utils/registryLabelDisplay'
 import { recipientFilterValueIsRegistryKey } from '~~/shared/utils/recipientFilterPropertyValue'
+import { borrowerStatusLabel } from '~~/shared/utils/borrowerStatusLabel'
 import {
   recipientFilterAddressPropertyTypeOptions,
   recipientFilterContactProfilePropertyTypeOptions,
@@ -66,6 +67,10 @@ export function recipientFilterValueDisplay(
 ): string {
   if (recipientFilterValueIsRegistryKey(property, propertyType)) {
     return formatRegistryLabelForDisplay(raw)
+  }
+  // Borrower status arrives from retail origination as a slug (`active_borrower`).
+  if (normalized(property) === 'status') {
+    return borrowerStatusLabel(raw) || String(raw ?? '').trim()
   }
   return String(raw ?? '').trim()
 }

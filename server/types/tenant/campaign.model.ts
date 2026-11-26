@@ -31,6 +31,8 @@ export interface CampaignLean {
   senderMode?: 'contact_owner' | 'selected'
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
+  /** Prefer live recipient-list membership at send (Advanced Recipient Filtering). */
+  liveListAudience?: boolean
   subject: string
   /** Inbox line under the subject. */
   previewText?: string

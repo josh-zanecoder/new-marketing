@@ -4,6 +4,8 @@ import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { campaignIndexRecipientsCount } from '~~/shared/campaignIndexRecipientsCount'
+import { isCampaignLiveListAudience } from '~~/shared/campaignAdvancedRecipientFilters'
+import { liveListMemberCounts } from '@server/utils/campaign/liveListMemberCounts'
 
 /**
  * Lean campaign index — no recipient email arrays.
@@ -17,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const campaigns = await (Campaign as CampaignModel)
     .find(mergeTenantOwnerEmailScopeFilter({}, event.context.auth))
     .select(
-      '_id name sender recipientsType recipientsListId subject status scheduledAt createdAt updatedAt'
+      '_id name sender recipientsType recipientsListId liveListAudience subject status scheduledAt createdAt updatedAt'
     )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
@@ -34,19 +36,24 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  /** Live-list campaigns: index count comes from current RecipientListMember rows. */
+  const liveMemberCountByList = await liveListMemberCounts(conn, campaigns)
+
   return {
     campaigns: campaigns.map((c) => {
       const id = String(c._id)
-      const recipientsCount = campaignIndexRecipientsCount(
-        c.recipientsType,
-        manualCountByCampaign.get(id) ?? 0
-      )
+      const listId = String(c.recipientsListId ?? '').trim()
+      const storedRows = isCampaignLiveListAudience(c)
+        ? (liveMemberCountByList.get(listId) ?? 0)
+        : (manualCountByCampaign.get(id) ?? 0)
+      const recipientsCount = campaignIndexRecipientsCount(c.recipientsType, storedRows)
       return {
         id,
         name: c.name,
         sender: c.sender,
         recipientsType: c.recipientsType,
         recipientsListId: c.recipientsListId,
+        liveListAudience: c.liveListAudience === true,
         subject: c.subject,
         status: c.status,
         scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString() : undefined,

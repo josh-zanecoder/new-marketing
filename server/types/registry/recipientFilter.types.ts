@@ -29,6 +29,7 @@ export type RecipientFilterPropertyType =
   | 'city'
   | 'county'
   | 'street'
+  | 'zip'
   | 'profile_type'
   | 'profile_subtype'
   | 'partner_email'

@@ -5,6 +5,7 @@ import { isRegisteredTenantAuthContext } from '@server/tenant/registry-auth'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { clearManualRecipientsForCampaignsReferencingLists } from '@server/utils/campaign/clearManualRecipientsForCampaignsReferencingLists'
+import { LIVE_AUDIENCE_PROTECTED_STATUSES } from '~~/shared/campaignAdvancedRecipientFilters'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
@@ -33,6 +34,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const listIdVariants = [...new Set([idStr, rawId.trim()].filter(Boolean))]
+
+  /**
+   * Filter-built campaigns (Advanced Recipient Filtering) have no recipient snapshot — their list
+   * IS the audience. Deleting it would leave an unsent campaign with nobody to send to, so block it.
+   */
+  const unsentLiveCampaigns = await (Campaign as CampaignModel)
+    .find({
+      liveListAudience: true,
+      recipientsListId: { $in: listIdVariants },
+      status: { $in: [...LIVE_AUDIENCE_PROTECTED_STATUSES] }
+    })
+    .select('name')
+    .limit(5)
+    .lean<Array<{ name?: string }>>()
+  if (unsentLiveCampaigns.length) {
+    const names = unsentLiveCampaigns.map((c) => `"${c.name ?? 'Untitled'}"`).join(', ')
+    throw createError({
+      statusCode: 409,
+      message: `This list is the audience of an unsent campaign (${names}). Delete or finish that campaign first.`
+    })
+  }
+
   const manualRecipientsRemoved = await clearManualRecipientsForCampaignsReferencingLists(
     conn,
     listIdVariants
@@ -42,7 +65,7 @@ export default defineEventHandler(async (event) => {
     {
       $or: [{ recipientsListId: idStr }, { recipientsListId: rawId.trim() }]
     },
-    { $set: { recipientsListId: '', recipientsType: 'manual' } }
+    { $set: { recipientsListId: '', recipientsType: 'manual', liveListAudience: false } }
   )
 
   await RecipientListMember.deleteMany({ recipientListId: listId })

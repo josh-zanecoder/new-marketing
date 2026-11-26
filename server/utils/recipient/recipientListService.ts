@@ -31,6 +31,7 @@ import {
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
 import { isAllowedSelectedCampaignSenderEmail } from '@server/utils/campaign/listCampaignSenderCandidates'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
+import { normalizeAudienceStatuses } from '~~/shared/utils/borrowerStatusLabel'
 import { expandLoRecipientListExcludedContactIds } from '@server/utils/recipient/expandLoRecipientListExcludedContactIds'
 import type { ContactModel } from '@server/types/tenant/contact.model'
 
@@ -170,10 +171,17 @@ function listRowFromPatch(
 }
 
 /** Shared body → filters + membership snapshot (create and patch both use this). */
-async function loadWritePayload(
+/** Shared by create/update and audience preview (Advanced Recipient Filtering). */
+export async function loadWritePayload(
   tenantConn: Connection,
   auth: unknown,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  /**
+   * `allowAdvancedAudience` is passed only by routes already gated on
+   * `allowTenantAdvancedRecipientFiltering`; it unlocks `loanOfficerEmails` / `audienceStatuses`
+   * and the `builtin:` contact-field filters.
+   */
+  opts?: { allowAdvancedAudience?: boolean }
 ): Promise<{
   name: string
   filterMode: RecipientListFilterMode
@@ -199,6 +207,8 @@ async function loadWritePayload(
    * Classic recipient lists always keep `false` (unchanged membership behavior).
    */
   dedupeMemberEmails: boolean
+  /** Advanced filtering only; empty otherwise. */
+  audienceStatuses: string[]
 }> {
   requireTenantAuth(auth)
   const name = assertName(body)
@@ -212,7 +222,12 @@ async function loadWritePayload(
     nested,
     persistedFilterGroups,
     groupJoinsToStore
-  } = await resolveRecipientListFiltersFromBody(body, tenantConn, audience)
+  } = await resolveRecipientListFiltersFromBody(
+    body,
+    tenantConn,
+    audience,
+    opts?.allowAdvancedAudience === true
+  )
 
   const joinsToStore =
     criterionJoinsFromBody !== null
@@ -295,6 +310,36 @@ async function loadWritePayload(
     }
   }
 
+  let audienceStatuses: string[] = []
+  if (opts?.allowAdvancedAudience === true) {
+    audienceStatuses = normalizeAudienceStatuses(body?.audienceStatuses)
+
+    // One or more loan officers: contacts owned by any of them. Same validation as the sender picker,
+    // so a scoped user can only choose people inside their own contact scope.
+    const loanOfficerEmails = normalizeLoanOfficerEmails(body?.loanOfficerEmails)
+    if (loanOfficerEmails.length) {
+      if (!isRegisteredTenantAuthContext(auth)) {
+        throw createError({ statusCode: 403, message: 'Tenant access required' })
+      }
+      const { Contact } = getTenantClientModels(tenantConn)
+      for (const email of loanOfficerEmails) {
+        const allowed = await isAllowedSelectedCampaignSenderEmail(
+          Contact as unknown as Parameters<typeof isAllowedSelectedCampaignSenderEmail>[0],
+          auth,
+          email
+        )
+        if (!allowed) {
+          throw createError({
+            statusCode: 400,
+            message: `${email} is not a loan officer you can send on behalf of`
+          })
+        }
+      }
+      membershipScope = 'owner_emails'
+      membershipOwnerEmails = loanOfficerEmails
+    }
+  }
+
   return {
     name,
     filterMode,
@@ -314,17 +359,41 @@ async function loadWritePayload(
     applyAssociatedLoanOfficer,
     excludedContactIds,
     applyExcludedContactIds,
-    dedupeMemberEmails
+    dedupeMemberEmails,
+    audienceStatuses
   }
+}
+
+const MAX_ADVANCED_LOAN_OFFICERS = 50
+
+/** Lowercased, de-duplicated emails from request input. */
+export function normalizeLoanOfficerEmails(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const email = typeof item === 'string' ? item.trim().toLowerCase() : ''
+    if (!email.includes('@') || email.length > 254 || seen.has(email)) continue
+    seen.add(email)
+    out.push(email)
+    if (out.length >= MAX_ADVANCED_LOAN_OFFICERS) break
+  }
+  return out
 }
 
 export async function createRecipientList(params: {
   tenantConn: Connection
   auth: unknown
   body: Record<string, unknown>
+  /** Set only by routes gated on `allowTenantAdvancedRecipientFiltering`. */
+  allowAdvancedAudience?: boolean
+  /** Mark the list as a campaign's own audience (hidden from the Recipient lists page). */
+  campaignAudience?: boolean
 }): Promise<{ list: RecipientListApiRow }> {
   const { tenantConn, auth, body } = params
-  const w = await loadWritePayload(tenantConn, auth, body)
+  const w = await loadWritePayload(tenantConn, auth, body, {
+    allowAdvancedAudience: params.allowAdvancedAudience === true
+  })
   const { RecipientList } = getTenantClientModels(tenantConn)
 
   const created = await RecipientList.create({
@@ -349,6 +418,8 @@ export async function createRecipientList(params: {
         }
       : {}),
     ...(w.applyExcludedContactIds ? { excludedContactIds: w.excludedContactIds } : {}),
+    ...(w.audienceStatuses.length ? { audienceStatuses: w.audienceStatuses } : {}),
+    ...(params.campaignAudience === true ? { campaignAudience: true } : {}),
     ...recipientListOwnershipFromAuth(auth)
   })
 
@@ -383,9 +454,13 @@ export async function updateRecipientList(params: {
   auth: unknown
   listId: Types.ObjectId
   body: Record<string, unknown>
+  /** Set only by routes gated on `allowTenantAdvancedRecipientFiltering`. */
+  allowAdvancedAudience?: boolean
 }): Promise<{ list: RecipientListApiRow }> {
   const { tenantConn, auth, listId, body } = params
-  const w = await loadWritePayload(tenantConn, auth, body)
+  const w = await loadWritePayload(tenantConn, auth, body, {
+    allowAdvancedAudience: params.allowAdvancedAudience === true
+  })
   const { RecipientList } = getTenantClientModels(tenantConn)
 
   const existing = await RecipientList.findOne(
@@ -412,6 +487,10 @@ export async function updateRecipientList(params: {
   }
   if (w.applyExcludedContactIds) {
     updateDoc.excludedContactIds = w.excludedContactIds
+  }
+  // Advanced filtering owns the status limit: an empty selection must clear a previous one.
+  if (params.allowAdvancedAudience === true) {
+    updateDoc.audienceStatuses = w.audienceStatuses
   }
   if (w.criterionJoinsFromBody !== null) {
     updateDoc.criterionJoins = w.criterionJoinsFromBody

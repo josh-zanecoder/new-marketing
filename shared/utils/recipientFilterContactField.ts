@@ -24,6 +24,7 @@ export function recipientFilterContactFieldPath(
   if (prop === 'address') {
     if (type === 'city') return 'address.city'
     if (type === 'county') return 'address.county'
+    if (type === 'zip') return 'address.zip'
     if (type === 'street') return null
     return 'address.state'
   }

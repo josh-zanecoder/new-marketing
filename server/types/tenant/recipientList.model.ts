@@ -47,6 +47,10 @@ export interface RecipientListLean {
   associatedLoanOfficerName?: string
   /** Soft-removed from this list; excluded from rebuild/sync membership. */
   excludedContactIds?: Types.ObjectId[]
+  /** Advanced Recipient Filtering: limit the audience to these borrower status slugs. */
+  audienceStatuses?: string[]
+  /** Auto-created as a filter-built campaign's own audience (hidden from the lists page). */
+  campaignAudience?: boolean
   createdAt?: Date
   updatedAt?: Date
 }

@@ -4,6 +4,7 @@
  */
 export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantEditSender',
+  'allowTenantAdvancedRecipientFiltering',
   'allowTenantLoRecipientLists',
   'allowTenantTemplateApproval',
   'allowTenantImages',
@@ -40,6 +41,16 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     group: 'campaigns',
     groupLabel: 'Campaigns',
     patchPath: 'allow-tenant-edit-sender'
+  },
+  {
+    key: 'allowTenantAdvancedRecipientFiltering',
+    code: 'campaigns:advanced-recipient-filtering',
+    label: 'Advanced recipient filtering',
+    description:
+      'Tenant can filter and select campaign recipients with CRM Contacts filters (assigned LO, borrower status, contact info, contact type), see match counts, preview recipients, and keep audiences live before each send.',
+    group: 'campaigns',
+    groupLabel: 'Campaigns',
+    patchPath: 'allow-tenant-advanced-recipient-filtering'
   },
   {
     key: 'allowTenantLoRecipientLists',
@@ -146,6 +157,7 @@ export type TenantFeaturePermissionGroup = {
 export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionState {
   return {
     allowTenantEditSender: false,
+    allowTenantAdvancedRecipientFiltering: false,
     allowTenantLoRecipientLists: false,
     allowTenantTemplateApproval: false,
     allowTenantImages: false,

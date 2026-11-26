@@ -19,6 +19,7 @@ import { getRegistryConnection } from '@server/lib/mongoose'
 import { resolveDefaultCampaignSenderForDbName } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
 import { emailTemplateOwnershipFromAuth } from '@server/utils/emailTemplate/emailTemplateOwnership'
+import { isCampaignLiveListAudience } from '~~/shared/campaignAdvancedRecipientFilters'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ campaignId: string }>(event)
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
       mergeTenantOwnerEmailScopeFilter({ _id: campaignId }, event.context.auth)
     )
     .select(
-      '_id name sender recipientsType recipientsListId emailTemplate subject previewText mergeUserSnapshot'
+      '_id name sender recipientsType recipientsListId liveListAudience emailTemplate subject previewText mergeUserSnapshot'
     )
     .lean<CampaignLean | null>()
   if (!source) throw createError({ statusCode: 404, message: 'Campaign not found' })
@@ -81,6 +82,8 @@ export default defineEventHandler(async (event) => {
     senderMode: 'contact_owner',
     recipientsType: source.recipientsType,
     recipientsListId: source.recipientsListId || '',
+    // Filter-built campaigns stay live: the copy keeps following the same list, no snapshot.
+    liveListAudience: isCampaignLiveListAudience(source),
     emailTemplate: emailTemplateId,
     subject: source.subject || '',
     previewText: source.previewText?.trim() || '',
@@ -90,7 +93,10 @@ export default defineEventHandler(async (event) => {
     ...ownership
   }).save()
 
-  if (source.recipientsType === 'manual' || source.recipientsType === 'list') {
+  if (
+    !isCampaignLiveListAudience(source) &&
+    (source.recipientsType === 'manual' || source.recipientsType === 'list')
+  ) {
     const manualRecipients = await (ManualRecipient as ManualRecipientModel)
       .find({ campaign: source._id })
       .select('contact')

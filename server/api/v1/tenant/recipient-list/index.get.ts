@@ -15,6 +15,7 @@ import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/co
 import { normalizeRecipientListDoc } from '@server/utils/recipient/recipientListNormalization'
 import { recipientFilterContactValueOptions } from '@server/utils/recipient/recipientFilterContactValues'
 import { recipientListStoredMembershipEmails } from '@server/utils/recipient/recipientListMutation'
+import { EXCLUDE_CAMPAIGN_AUDIENCE_LISTS } from '@server/utils/recipient/campaignAudienceListFilter'
 
 const CONTACT_LIMIT = 3000
 type ContactRow = {
@@ -265,7 +266,9 @@ export default defineEventHandler(async (event) => {
 
   if (scopeNorm === 'index') {
     const [listsRaw, contactTypeDocs, filterDocsRaw] = await Promise.all([
-      RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
+      RecipientList.find(
+        mergeTenantOwnerEmailScopeFilter({ ...EXCLUDE_CAMPAIGN_AUDIENCE_LISTS }, auth)
+      )
         .sort({ updatedAt: -1 })
         .limit(200)
         .lean()
@@ -350,7 +353,9 @@ export default defineEventHandler(async (event) => {
       .limit(CONTACT_LIMIT)
       .lean()
       .exec(),
-    RecipientList.find(mergeTenantOwnerEmailScopeFilter({}, auth))
+    RecipientList.find(
+      mergeTenantOwnerEmailScopeFilter({ ...EXCLUDE_CAMPAIGN_AUDIENCE_LISTS }, auth)
+    )
       .sort({ updatedAt: -1 })
       .limit(200)
       .lean()
