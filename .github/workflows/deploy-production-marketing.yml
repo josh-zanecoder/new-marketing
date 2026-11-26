@@ -22,7 +22,7 @@ env:
   REGION: us-west1
   VPC_CONNECTOR: marketing-run-kafka
   VPC_EGRESS: private-ranges-only
-  WEB_MIN_INSTANCES: 2
+  WEB_MIN_INSTANCES: 1
   WEB_MAX_INSTANCES: 30
   WORKER_MIN_INSTANCES: 1
   WORKER_MAX_INSTANCES: 1
@@ -171,8 +171,8 @@ jobs:
             --vpc-egress=${{ env.VPC_EGRESS }} \
             --min-instances ${{ env.SEND_WORKER_MIN_INSTANCES }} \
             --max-instances ${{ env.SEND_WORKER_MAX_INSTANCES }} \
-            --memory 2Gi \
-            --cpu 2 \
+            --memory 1Gi \
+            --cpu 1 \
             --concurrency 40 \
             --timeout 3600 \
             --port 8080 \
