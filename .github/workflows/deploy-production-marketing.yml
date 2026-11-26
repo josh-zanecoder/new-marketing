@@ -171,8 +171,8 @@ jobs:
             --vpc-egress=${{ env.VPC_EGRESS }} \
             --min-instances ${{ env.SEND_WORKER_MIN_INSTANCES }} \
             --max-instances ${{ env.SEND_WORKER_MAX_INSTANCES }} \
-            --memory 2Gi \
-            --cpu 2 \
+            --memory 1Gi \
+            --cpu 1 \
             --concurrency 40 \
             --timeout 3600 \
             --port 8080 \
