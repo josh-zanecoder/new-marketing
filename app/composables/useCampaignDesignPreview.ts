@@ -6,7 +6,7 @@ export function useCampaignDesignPreview(
   marketingApi: ReturnType<typeof useTenantMarketingApi>,
   savedTemplateHtml: Ref<string | null>,
   form: Ref<{
-    recipientsMode: 'list' | 'manual'
+    recipientsMode: 'list' | 'manual' | 'filters'
     recipientsListId: string
     recipientsManual: string[]
   }>,
@@ -32,8 +32,9 @@ export function useCampaignDesignPreview(
         return
       }
       const res = await marketingApi.fetchEmailMergeContext({
-        recipientsType: form.value.recipientsMode,
-        recipientsListId: form.value.recipientsListId || undefined,
+        // Filter-built audiences are previewed with no list/manual ids (merge tags use sample data).
+        recipientsType: form.value.recipientsMode === 'list' ? 'list' : 'manual',
+        recipientsListId: form.value.recipientsMode === 'list' ? form.value.recipientsListId || undefined : undefined,
         recipientsManual:
           form.value.recipientsMode === 'list'
             ? manualIds

@@ -17,7 +17,8 @@ export const recipientFilterAddressPropertyTypeOptions = [
   { value: 'state', label: 'State' },
   { value: 'city', label: 'City' },
   { value: 'county', label: 'County' },
-  { value: 'street', label: 'Street' }
+  { value: 'street', label: 'Street' },
+  { value: 'zip', label: 'ZIP' }
 ] as const
 
 export const recipientFilterContactProfilePropertyTypeOptions = [

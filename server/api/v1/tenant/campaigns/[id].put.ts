@@ -25,6 +25,16 @@ import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { normalizeEmailPreviewText } from '~~/shared/emailPreviewText'
 import { CAMPAIGN_SENDER_MODE_SELECTED } from '~~/shared/campaignSenderMode'
+import { requireTenantAdvancedRecipientFiltering } from '@server/utils/requireTenantAdvancedRecipientFiltering'
+import { removeCampaignAudienceListIfUnused } from '@server/utils/campaign/removeCampaignAudienceListIfUnused'
+import {
+  createRecipientList,
+  updateRecipientList
+} from '@server/utils/recipient/recipientListService'
+import {
+  advancedFilterListName,
+  isCampaignLiveListAudience
+} from '~~/shared/campaignAdvancedRecipientFilters'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -38,9 +48,11 @@ export default defineEventHandler(async (event) => {
     senderMode?: string
     subject: string
     previewText?: string
-    recipientsType?: 'manual' | 'list'
+    recipientsType?: 'manual' | 'list' | 'filters'
     recipientsListId?: string
     recipientsManual?: string[]
+    /** Advanced Recipient Filtering form values (when `recipientsType` is `filters`). */
+    advancedRecipientFilters?: Record<string, unknown>
     emailTemplateId?: string
     templateHtml?: string
     templateHtmlSource?: 'editor' | 'upload' | 'custom'
@@ -65,12 +77,60 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const recipientsType = body.recipientsType || 'manual'
-  const recipientsListId = body.recipientsListId || ''
+  let recipientsType: 'manual' | 'list' = body.recipientsType === 'list' ? 'list' : 'manual'
+  let recipientsListId = body.recipientsListId || ''
+  let liveListAudience = false
 
   const saveHtmlToLibrary = body.saveHtmlToLibrary === true
 
   const auth = event.context.auth
+
+  // Advanced Recipient Filtering: the campaign keeps owning one dynamic list that follows the
+  // filters. Re-saving updates that list in place (no snapshot), so the audience stays live.
+  if (body.recipientsType === 'filters') {
+    await requireTenantAdvancedRecipientFiltering(event)
+    const filterBody = (body.advancedRecipientFilters ?? {}) as Record<string, unknown>
+    const listBody = {
+      ...filterBody,
+      name: advancedFilterListName(body.name, filterBody.name)
+    }
+    const { RecipientList } = getTenantClientModels(conn)
+    const ownListId = isCampaignLiveListAudience(campaign) ? String(campaign.recipientsListId) : ''
+    // A duplicated campaign shares the list; editing one must not silently retarget the other.
+    const sharedWithOthers =
+      ownListId !== '' &&
+      (await (Campaign as CampaignModel).countDocuments({
+        _id: { $ne: campaign._id },
+        recipientsListId: ownListId
+      })) > 0
+    const ownListExists =
+      ownListId !== '' &&
+      mongoose.isValidObjectId(ownListId) &&
+      !sharedWithOthers &&
+      Boolean(
+        await RecipientList.exists(
+          mergeTenantOwnerEmailScopeFilter({ _id: new mongoose.Types.ObjectId(ownListId) }, auth)
+        )
+      )
+    const saved = ownListExists
+      ? await updateRecipientList({
+          tenantConn: conn,
+          auth,
+          listId: new mongoose.Types.ObjectId(ownListId),
+          body: listBody,
+          allowAdvancedAudience: true
+        })
+      : await createRecipientList({
+          tenantConn: conn,
+          auth,
+          body: listBody,
+          allowAdvancedAudience: true,
+          campaignAudience: true
+        })
+    recipientsType = 'list'
+    recipientsListId = saved.list.id
+    liveListAudience = true
+  }
   const dbName =
     isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
   const tenantName = isRegisteredTenantAuthContext(auth)
@@ -78,6 +138,7 @@ export default defineEventHandler(async (event) => {
     : ''
 
   if (
+    !liveListAudience &&
     recipientsType === 'list' &&
     recipientsListId &&
     recipientsListId !== String(campaign.recipientsListId ?? '')
@@ -134,15 +195,31 @@ export default defineEventHandler(async (event) => {
   }
   campaign.sender = { name: resolvedSender.name, email: resolvedSender.email }
   campaign.set('senderMode', resolvedSender.senderMode)
+  // Remembered so an auto-created audience list is cleaned up if this edit moves off it.
+  const previousLiveListId = isCampaignLiveListAudience(campaign)
+    ? String(campaign.recipientsListId)
+    : ''
   campaign.recipientsType = recipientsType
   campaign.recipientsListId = recipientsListId
+  /**
+   * Classic edits save a ManualRecipient snapshot (below), so the live flag is cleared and send
+   * uses that snapshot. Filter-built edits stay live: send resolves the list at send time.
+   */
+  campaign.set('liveListAudience', liveListAudience)
   campaign.subject = body.subject?.trim() || ''
   campaign.previewText = normalizeEmailPreviewText(body.previewText)
   const editorId = tenantCreatedByFromAuth(event.context.auth)
   if (editorId) campaign.set('updatedBy', editorId)
   await campaign.save()
 
-  if (recipientsType === 'manual') {
+  if (previousLiveListId && previousLiveListId !== recipientsListId) {
+    await removeCampaignAudienceListIfUnused(conn, previousLiveListId)
+  }
+
+  if (liveListAudience) {
+    // No snapshot for a live audience; drop any left over from before it became filter-built.
+    await (ManualRecipient as ManualRecipientModel).deleteMany({ campaign: campaign._id })
+  } else if (recipientsType === 'manual') {
     const deleteRecipientsPromise = (ManualRecipient as ManualRecipientModel).deleteMany({
       campaign: campaign._id
     })

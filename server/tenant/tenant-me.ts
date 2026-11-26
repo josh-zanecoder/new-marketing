@@ -11,6 +11,7 @@ import {
 import { resolveCampaignSenderDefaultsFromDoc } from '@server/utils/campaign/resolveDefaultCampaignSender'
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
+import { parseAllowTenantAdvancedRecipientFiltering } from '~~/shared/allowTenantAdvancedRecipientFiltering'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
@@ -107,6 +108,10 @@ export async function buildTenantMeResponse(event: H3Event) {
     defaultCampaignSenderEmail: senderDefaults.email,
     /** When false/omitted, campaign sender stays superadmin-managed (existing behavior). */
     allowTenantEditSender: parseAllowTenantEditSender(registryDoc?.allowTenantEditSender),
+    /** When false/omitted, campaign recipient selection stays classic lists only. */
+    allowTenantAdvancedRecipientFiltering: parseAllowTenantAdvancedRecipientFiltering(
+      registryDoc?.allowTenantAdvancedRecipientFiltering
+    ),
     /** When false/omitted, recipient lists keep classic UI/behavior. */
     allowTenantLoRecipientLists,
     /** When false/omitted, email templates skip the approval workflow. */

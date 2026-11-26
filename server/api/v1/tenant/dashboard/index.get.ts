@@ -4,6 +4,7 @@ import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.
 import type { CampaignRecipientModel } from '@server/types/tenant/campaignRecipient.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { EXCLUDE_CAMPAIGN_AUDIENCE_LISTS } from '@server/utils/recipient/campaignAudienceListFilter'
 
 export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const { Campaign, CampaignRecipient, RecipientList, Contact } = getTenantClientModels(conn)
 
   const campaignFilter = mergeTenantOwnerEmailScopeFilter({}, auth)
-  const listFilter = mergeTenantOwnerEmailScopeFilter({}, auth)
+  const listFilter = mergeTenantOwnerEmailScopeFilter({ ...EXCLUDE_CAMPAIGN_AUDIENCE_LISTS }, auth)
   const contactFilter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
   const now = new Date()

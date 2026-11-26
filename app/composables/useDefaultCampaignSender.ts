@@ -26,6 +26,7 @@ export type TenantMeCampaignSender = {
   defaultCampaignSenderName?: string
   defaultCampaignSenderEmail?: string
   allowTenantEditSender?: boolean
+  allowTenantAdvancedRecipientFiltering?: boolean
   allowTenantLoRecipientLists?: boolean
   allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean
@@ -59,6 +60,8 @@ export function useDefaultCampaignSender() {
   const defaultSenderEmail = ref(DEFAULT_CAMPAIGN_SENDER_EMAIL)
   /** Superadmin gate; false preserves read-only sender UI. */
   const allowTenantEditSender = ref(false)
+  /** Superadmin gate; false keeps classic campaign recipient-list selection. */
+  const allowTenantAdvancedRecipientFiltering = ref(false)
   /** Superadmin gate; false preserves classic recipient-list UI. */
   const allowTenantLoRecipientLists = ref(false)
   /** Superadmin gate; false disables email template approval workflow. */
@@ -133,6 +136,8 @@ export function useDefaultCampaignSender() {
       const me = unwrapTenantMePayload(res)
       const allow = me?.allowTenantEditSender === true
       allowTenantEditSender.value = allow
+      allowTenantAdvancedRecipientFiltering.value =
+        me?.allowTenantAdvancedRecipientFiltering === true
       allowTenantLoRecipientLists.value = me?.allowTenantLoRecipientLists === true
       allowTenantTemplateApproval.value = me?.allowTenantTemplateApproval === true
       allowTenantImages.value = me?.allowTenantImages === true
@@ -175,6 +180,7 @@ export function useDefaultCampaignSender() {
       }
     } catch {
       allowTenantEditSender.value = false
+      allowTenantAdvancedRecipientFiltering.value = false
       allowTenantLoRecipientLists.value = false
       allowTenantTemplateApproval.value = false
       allowTenantImages.value = false
@@ -199,6 +205,7 @@ export function useDefaultCampaignSender() {
     defaultSenderName,
     defaultSenderEmail,
     allowTenantEditSender,
+    allowTenantAdvancedRecipientFiltering,
     allowTenantLoRecipientLists,
     allowTenantTemplateApproval,
     allowTenantImages,

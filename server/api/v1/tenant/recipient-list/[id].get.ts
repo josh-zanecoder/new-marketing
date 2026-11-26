@@ -38,6 +38,7 @@ function rowCriterionDisplay(
     if (propertyType === 'state') prop = 'state'
     else if (propertyType === 'city') prop = 'city'
     else if (propertyType === 'county') prop = 'county'
+    else if (propertyType === 'zip') prop = 'zip'
     else if (propertyType === 'street') prop = 'street'
   }
   if (property === 'contact_profile') {

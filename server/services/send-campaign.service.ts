@@ -28,6 +28,8 @@ import {
   recipientEmailsForCampaign
 } from '../utils/emailMerge/campaignAudience'
 import { findUnsubscribedNormalizedEmails } from '../utils/contact/marketableContact'
+import { rebuildRecipientListMembershipById } from '../utils/recipient/syncContactRecipientListMembership'
+import { isCampaignLiveListAudience } from '../../shared/campaignAdvancedRecipientFilters'
 import {
   applyDefaultUnsubscribeMergeValue,
   composeEmailMergeRoot,
@@ -492,6 +494,20 @@ export async function beginCampaignSend(
   }
 
   await (CampaignRecipient as CampaignRecipientModel).deleteMany({ campaign: campaignId })
+
+  // Advanced Recipient Filtering: re-evaluate the filters against today's contacts right before
+  // the send, so the audience is current even if a contact-change event was missed or delayed.
+  if (isCampaignLiveListAudience(campaign)) {
+    try {
+      await rebuildRecipientListMembershipById(conn, String(campaign.recipientsListId ?? ''))
+    } catch (err) {
+      logSendWarn('liveAudienceRebuildFailed', {
+        campaignId,
+        dbName,
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
+  }
 
   const emails = await recipientEmailsForCampaign(conn, campaign)
   if (!emails.length) throw createError({ statusCode: 400, message: 'No recipients to send to' })

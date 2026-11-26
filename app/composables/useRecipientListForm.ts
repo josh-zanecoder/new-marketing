@@ -59,7 +59,7 @@ export interface RecipientListFilterGroup {
   joins: RecipientListJoinChoice[]
 }
 
-interface ListDetailForEdit {
+export interface ListDetailForEdit {
   list: {
     name: string
     audience: string
@@ -128,6 +128,10 @@ export type RecipientListFormSharedReturn = {
 export type RecipientListFormCreateReturn = RecipientListFormSharedReturn & {
   load: () => Promise<void>
   submitCreate: () => Promise<void>
+  /** Filter body for POST /recipient-list or campaign advancedRecipientFilters. */
+  buildSaveBody: () => Record<string, unknown>
+  /** Fill the form from saved filter values once `data` has loaded. */
+  hydrateFromSaved: (list: Omit<ListDetailForEdit['list'], 'name'>) => Promise<void>
 }
 
 export type RecipientListFormEditReturn = RecipientListFormSharedReturn & {
@@ -158,6 +162,7 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   city: 'City',
   county: 'County',
   street: 'Street',
+  zip: 'ZIP',
   profile_type: 'Type',
   profile_subtype: 'Sub Type'
 }
@@ -179,8 +184,8 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
   const saving = ref(false)
   const data = ref<RecipientListFormPayload | null>(null)
 
-  const skipAudienceClear =
-    options.mode === 'edit' ? ref(true) : null
+  /** Edit mode keeps saved groups when the audience is set from the list; create mode only while hydrating. */
+  const skipAudienceClear = ref(options.mode === 'edit')
 
   const form = reactive({
     name: '',
@@ -356,6 +361,9 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     }
     if (f.property === 'address' && f.propertyType === 'state') {
       return 'e.g. TX'
+    }
+    if (f.property === 'address' && f.propertyType === 'zip') {
+      return 'e.g. 78701'
     }
     return 'Enter value to match'
   }
@@ -805,6 +813,20 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     rowRegistryValueDisplay
   }
 
+  /**
+   * Fill the form from saved filter values (a filter-built campaign being edited).
+   * Needs `data` loaded first so values resolve against the registry filters.
+   */
+  async function hydrateFromSaved(list: Omit<ListDetailForEdit['list'], 'name'>): Promise<void> {
+    skipAudienceClear.value = true
+    try {
+      hydrateFromList({ ...list, name: form.name })
+      await nextTick()
+    } finally {
+      skipAudienceClear.value = false
+    }
+  }
+
   if (options.mode === 'create') {
     onMounted(() => {
       void load()
@@ -812,7 +834,9 @@ export function useRecipientListForm(options: UseRecipientListFormOptions): Reci
     return {
       ...shared,
       load,
-      submitCreate
+      submitCreate,
+      buildSaveBody,
+      hydrateFromSaved
     }
   }
 

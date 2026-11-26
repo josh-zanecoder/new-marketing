@@ -7,6 +7,8 @@ import type {
   RecipientListMembershipScope
 } from '@server/types/tenant/recipientList.model'
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
+import { builtinFilterDoc } from '~~/shared/campaignBuiltinFilters'
+import { withAudienceStatusScope } from '@server/utils/recipient/audienceStatusScope'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import {
@@ -92,11 +94,14 @@ function criterionGroupsFromFilterRows(
       typeof r.recipientFilterId === 'string' && r.recipientFilterId.trim()
         ? r.recipientFilterId.trim()
         : ''
-    if (!recipientFilterId || !mongoose.isValidObjectId(recipientFilterId)) continue
+    // Advanced Recipient Filtering: `builtin:<field>` rows resolve to standard contact fields.
+    const builtinDoc = builtinFilterDoc(recipientFilterId, audience)
+    if (!recipientFilterId || (!builtinDoc && !mongoose.isValidObjectId(recipientFilterId))) continue
     const listPropertyValue =
       typeof r.listPropertyValue === 'string' ? r.listPropertyValue.trim().slice(0, 2000) : ''
 
-    const filterDoc = filterById.get(recipientFilterId)
+    const filterDoc =
+      (builtinDoc as unknown as FilterDoc | null) ?? filterById.get(recipientFilterId)
     if (!filterDoc || !recipientFilterDocMatchesAudience(filterDoc, audience)) continue
 
     const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
@@ -221,13 +226,18 @@ async function syncContactToList(
   )
   const ownerScopeForSync =
     storedEmails.length > 0 ? storedEmails : listOE ? [listOE] : undefined
-  const scopedQuery =
+  const ownerScopedQuery =
     membershipScope === 'tenant'
       ? baseQuery
       : mergeContactOwnerScopeFilter(
           baseQuery as Record<string, unknown>,
           ownerScopeForSync
         )
+  // Advanced Recipient Filtering: optional borrower-status limit stored on the list.
+  const scopedQuery = withAudienceStatusScope(
+    ownerScopedQuery as Record<string, unknown>,
+    (listDoc as { audienceStatuses?: unknown }).audienceStatuses
+  )
 
   const match = await Contact.findOne({
     $and: [{ _id: contactId }, scopedQuery as Record<string, unknown>]
@@ -344,6 +354,27 @@ async function rebuildOneNonStaticListFromDoc(
     nested,
     { dedupeByEmail }
   )
+}
+
+/**
+ * Re-evaluates one list against the current contacts (full rebuild of its members).
+ * Used right before a filter-built campaign sends so the audience never depends on every
+ * per-contact sync event having arrived. Returns the member count, or null when the list is
+ * missing/static.
+ */
+export async function rebuildRecipientListMembershipById(
+  tenantConn: Connection,
+  listId: string
+): Promise<number | null> {
+  if (!mongoose.isValidObjectId(listId)) return null
+  const { RecipientList } = getTenantClientModels(tenantConn)
+  const listDoc = await RecipientList.findOne({
+    _id: new mongoose.Types.ObjectId(listId),
+    listType: { $nin: ['static'] }
+  }).lean<RecipientListDoc | null>()
+  if (!listDoc) return null
+  const filterById = await loadRecipientFiltersById(tenantConn, [listDoc])
+  return rebuildOneNonStaticListFromDoc(tenantConn, listDoc, filterById)
 }
 
 const REBUILD_LIST_CONCURRENCY_DEFAULT = 4

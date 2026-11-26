@@ -45,6 +45,8 @@ export function legacyFilterToAudienceAndCriteria(
   if (city) filters.push({ property: 'city', value: city })
   const county = take('county')
   if (county) filters.push({ property: 'county', value: county })
+  const zip = take('zip')
+  if (zip) filters.push({ property: 'zip', value: zip })
   const channel = take('channel')
   if (channel) filters.push({ property: 'channel', value: channel })
   const company = take('company')
@@ -139,6 +141,7 @@ export function registryDocToCriteria(doc: {
       if (propertyType === 'state') return tokens.map((value) => ({ property: 'state', value }))
       if (propertyType === 'city') return [{ property: 'city', value: tokens[0] ?? '' }]
       if (propertyType === 'county') return [{ property: 'county', value: tokens[0] ?? '' }]
+      if (propertyType === 'zip') return [{ property: 'zip', value: tokens[0] ?? '' }]
       if (propertyType === 'street') return [{ property: 'street', value: tokens[0] ?? '' }]
       return []
     case 'channel':

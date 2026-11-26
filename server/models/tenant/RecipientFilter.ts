@@ -15,7 +15,8 @@ const propertyEnum = [
   'address.state',
   'address.city',
   'address.county',
-  'address.street'
+  'address.street',
+  'address.zip'
 ] as const
 const propertyTypeEnum = [
   'none',
@@ -23,6 +24,7 @@ const propertyTypeEnum = [
   'city',
   'county',
   'street',
+  'zip',
   'profile_type',
   'profile_subtype',
   'partner_email',

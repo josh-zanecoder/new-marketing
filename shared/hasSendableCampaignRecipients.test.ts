@@ -82,7 +82,10 @@ describe('schedule wizard uses the selected recipients, not the campaign list ro
       const end = source.indexOf('async function loadRecipientLists')
       const fn = source.slice(start, end)
       expect(fn).not.toContain('fromStore')
-      expect(fn).toContain('recipientsCount: selectedIds.length')
+      // Picked contacts count their ids; filter-built audiences count the live match total.
+      expect(fn).toContain('selectedIds.length')
+      expect(fn).toContain('advancedRecipientFilters.value.total')
+      expect(fn).toMatch(/\n\s+recipientsCount,/)
       expect(fn).toContain('contactId: id')
     }
   })

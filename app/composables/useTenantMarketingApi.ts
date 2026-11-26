@@ -4,6 +4,8 @@ import type {
   SendStatus
 } from '~/types/campaign'
 import { ADMIN_TENANT_DB_HEADER } from '~/constants/adminTenantProxy'
+import type { AdvancedRecipientFiltersInitial } from '~~/shared/campaignAdvancedRecipientFilters'
+import type { RegistryFilterRow } from '~/composables/useRecipientListForm'
 import type {
   TenantRecipientListDetailPayload,
   TenantRecipientListMemberRow,
@@ -19,6 +21,10 @@ export interface TenantCampaignDetail {
   senderMode?: 'contact_owner' | 'selected'
   recipientsType: 'manual' | 'list'
   recipientsListId?: string
+  /** Filter-built campaign: audience follows its list at send time. */
+  liveListAudience?: boolean
+  /** Saved filter values, present when `liveListAudience` is true. */
+  advancedRecipientFilters?: AdvancedRecipientFiltersInitial
   subject: string
   /** Inbox line under the subject. */
   previewText?: string
@@ -216,6 +222,38 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     return $fetch<TenantRecipientListDetailResponse>(
       `/api/v1/tenant/recipient-list/${encodeURIComponent(listId)}`,
       tenantFetchInit({ query: { page, limit } })
+    )
+  }
+
+  /** Advanced Recipient Filtering: count + sample for a filter body (no list created). */
+  async function previewRecipientFilters(body: Record<string, unknown>) {
+    return $fetch<{
+      total: number
+      page: number
+      limit: number
+      contacts: { id: string; email: string; name: string; status: string; city: string; state: string }[]
+    }>(
+      '/api/v1/tenant/recipient-list/preview',
+      tenantFetchInit({ method: 'POST', body, timeout: 20000 })
+    )
+  }
+
+  /** Advanced Recipient Filtering pickers: loan officers + borrower statuses on this tenant's contacts. */
+  async function fetchAdvancedAudienceOptions(q = '') {
+    return $fetch<{
+      loanOfficers: { email: string; name: string }[]
+      statuses: { value: string; label: string; count: number }[]
+    }>('/api/v1/tenant/recipient-list/audience-options', {
+      ...tenantFetchInit(),
+      query: { q: q.trim() || undefined }
+    })
+  }
+
+  /** Advanced Recipient Filtering: standard contact fields (state, city, ZIP, …) for one contact type. */
+  async function fetchAdvancedBuiltinFilters(audience: string) {
+    return $fetch<{ filters: RegistryFilterRow[] }>(
+      '/api/v1/tenant/recipient-list/builtin-filters',
+      { ...tenantFetchInit(), query: { audience } }
     )
   }
 
@@ -731,6 +769,9 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     fetchEmailMergeContextOrEmpty,
     fetchRecipientListResource,
     fetchRecipientListById,
+    previewRecipientFilters,
+    fetchAdvancedAudienceOptions,
+    fetchAdvancedBuiltinFilters,
     removeRecipientListMember,
     bulkRemoveRecipientListMembers,
     restoreRecipientListMember,

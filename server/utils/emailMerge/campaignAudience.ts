@@ -10,8 +10,12 @@ import type { ContactLean, ContactModel } from '@server/types/tenant/contact.mod
 import type { ManualRecipientLean, ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import type { RecipientListMemberModel } from '@server/types/tenant/recipientListMember.model'
 import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
+import { isCampaignLiveListAudience } from '~~/shared/campaignAdvancedRecipientFilters'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
-import { withMarketableContactFilter } from '@server/utils/contact/marketableContact'
+import {
+  findUnsubscribedNormalizedEmails,
+  withMarketableContactFilter
+} from '@server/utils/contact/marketableContact'
 import { resolveRecipientListEmails } from '@server/utils/recipient/resolveRecipientListEmails'
 
 /** When two tenant contacts share an email, prefer the most recently updated row (stable tie-break). */
@@ -69,6 +73,23 @@ export async function recipientEmailsForCampaign(
   conn: Connection,
   campaign: CampaignLean
 ): Promise<string[]> {
+  /**
+   * Advanced Recipient Filtering: resolve current list membership (marketable only)
+   * so LO/status/contact changes apply before send — not a frozen ManualRecipient snapshot.
+   */
+  if (isCampaignLiveListAudience(campaign)) {
+    const fromList = await resolveRecipientListEmails(conn, String(campaign.recipientsListId ?? ''))
+    const emails = [
+      ...new Set(
+        fromList.map((e) => normalizeMarketingEmail(e)).filter((e): e is string => !!e)
+      )
+    ]
+    // Same email on another, unsubscribed contact: never send (matches the preview count).
+    const { Contact: LiveContact } = getTenantClientModels(conn)
+    const blocked = await findUnsubscribedNormalizedEmails(LiveContact as ContactModel, emails)
+    return blocked.size ? emails.filter((e) => !blocked.has(e)) : emails
+  }
+
   const { ManualRecipient, Contact } = getTenantClientModels(conn)
   const manualDocs = await (ManualRecipient as ManualRecipientModel)
     .find({ campaign: campaign._id })

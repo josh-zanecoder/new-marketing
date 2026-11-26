@@ -186,7 +186,21 @@
           </button>
           <div v-if="recipientsOpen" class="border-t border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-6 sm:py-6">
             <div class="space-y-5">
-              <div class="grid gap-4 sm:grid-cols-2">
+              <!-- Tenants with Advanced Recipient Filtering: step-by-step flow. -->
+              <TenantCampaignRecipientMethodPicker
+                v-if="allowTenantAdvancedRecipientFiltering"
+                :model-value="recipientsMethod"
+                @update:model-value="selectRecipientsMethod"
+              />
+              <TenantCampaignRecipientStepHeading
+                v-if="allowTenantAdvancedRecipientFiltering && recipientsMethod"
+                :step="2"
+                :title="recipientsStepTwo.title"
+              />
+              <div
+                v-if="!allowTenantAdvancedRecipientFiltering"
+                class="grid gap-4 sm:grid-cols-2"
+              >
                 <button
                   type="button"
                   :class="[
@@ -214,7 +228,21 @@
                   <div class="mt-1.5 text-sm font-normal text-slate-500">Pick recipients from your CRM contacts</div>
                 </button>
               </div>
-              <div v-if="form.recipientsMode === 'list'">
+              <div
+                v-if="allowTenantAdvancedRecipientFiltering && recipientsMethod === 'filters'"
+                class="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5"
+              >
+                <TenantCampaignAdvancedRecipientFilters @update="onAdvancedRecipientFiltersUpdate" />
+              </div>
+              <TenantCampaignRecipientPreviewModal
+                v-if="allowTenantAdvancedRecipientFiltering && (form.recipientsMode === 'list' || form.recipientsMode === 'manual')"
+                :open="recipientPreviewOpen"
+                :title="form.recipientsMode === 'list' ? 'Recipients from this list' : 'Selected recipients'"
+                :load="loadSelectedRecipientsPage"
+                :refresh-key="selectedRecipientsKey"
+                @close="recipientPreviewOpen = false"
+              />
+              <div v-if="showRecipientsAudience && form.recipientsMode === 'list'">
                 <label class="mb-2 block text-sm font-medium text-slate-700">Recipient list</label>
                 <TenantFilterSelect
                   id="campaign-recipient-list"
@@ -266,6 +294,15 @@
                         v-if="listPreviewContacts.length"
                         class="flex flex-wrap gap-2"
                       >
+                        <button
+                          v-if="allowTenantAdvancedRecipientFiltering"
+                          type="button"
+                          class="rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-800 shadow-sm transition hover:bg-primary-100 disabled:opacity-40"
+                          :disabled="listSelectedCount === 0"
+                          @click="recipientPreviewOpen = true"
+                        >
+                          Preview
+                        </button>
                         <button
                           type="button"
                           class="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
@@ -392,7 +429,7 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="space-y-4">
+              <div v-else-if="showRecipientsAudience && form.recipientsMode === 'manual'" class="space-y-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <label class="text-sm font-medium text-slate-700 sm:text-[15px]">Recipients</label>
@@ -400,6 +437,7 @@
                       Add contacts from your CRM in the picker, then review them below.
                     </p>
                   </div>
+                  <div class="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
                     class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 disabled:opacity-50 sm:w-auto"
@@ -408,6 +446,16 @@
                   >
                     Add contacts…
                   </button>
+                  <button
+                    v-if="allowTenantAdvancedRecipientFiltering"
+                    type="button"
+                    class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] transition-colors hover:border-primary-200 hover:bg-primary-50/80 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                    :disabled="!manualRecipientsListed.length"
+                    @click="recipientPreviewOpen = true"
+                  >
+                    Preview
+                  </button>
+                  </div>
                 </div>
 
                 <TenantAddContactInCampaign
@@ -869,6 +917,7 @@ import {
   resolveTypedCampaignSenderName
 } from '~~/shared/resolveTypedCampaignSenderName'
 import { campaignSaveMissingFieldsMessage } from '~~/shared/campaignSaveRequiredFields'
+import { campaignRecipientsTypeForApi } from '~~/shared/campaignAdvancedRecipientFilters'
 import {
   CAMPAIGN_SCHEDULE_FAIL_SCHEDULE,
   CAMPAIGN_SCHEDULE_SUCCESS
@@ -884,6 +933,7 @@ const {
   sessionUser,
   allowTenantEditSender,
   allowTenantLoRecipientLists,
+  allowTenantAdvancedRecipientFiltering,
   allowTenantTemplateApproval,
   allowTenantGrapesBuilder,
   allowTenantTemplateBuilder,
@@ -927,7 +977,7 @@ const form = ref({
   senderMode: 'contact_owner' as 'contact_owner' | 'selected',
   subject: '',
   previewText: '',
-  recipientsMode: 'list' as 'list' | 'manual',
+  recipientsMode: 'list' as 'list' | 'manual' | 'filters',
   recipientsListId: '',
   recipientsManual: [] as string[],
   templateMode: 'scratch' as 'scratch' | 'existing' | 'upload',
@@ -955,6 +1005,46 @@ const {
 } = useSubjectVariableInsert(previewTextField)
 
 const recipientsOpen = ref(false)
+const recipientPreviewOpen = ref(false)
+watch(() => form.value.recipientsMode, () => { recipientPreviewOpen.value = false })
+
+// Advanced Recipient Filtering tenants get a step-by-step recipients flow (pick a method, then
+// define the audience). Everyone else keeps the original screen: step two is always visible.
+const recipientsMethodChosen = ref(false)
+const recipientsMethod = computed(() =>
+  recipientsMethodChosen.value ? form.value.recipientsMode : null
+)
+const showRecipientsAudience = computed(
+  () => !allowTenantAdvancedRecipientFiltering.value || recipientsMethodChosen.value
+)
+function selectRecipientsMethod(method: 'list' | 'manual' | 'filters') {
+  form.value.recipientsMode = method
+  recipientsMethodChosen.value = true
+}
+const recipientsStepTwo = computed(() => {
+  switch (form.value.recipientsMode) {
+    case 'filters':
+      return { title: 'Set your filters' }
+    case 'manual':
+      return { title: 'Pick contacts' }
+    default:
+      return { title: 'Choose a list' }
+  }
+})
+// A restored draft, a ?recipientListId link or an editor return already has an audience: skip step one.
+watch(
+  () =>
+    [
+      form.value.recipientsMode,
+      form.value.recipientsListId,
+      form.value.recipientsManual.length
+    ] as const,
+  ([mode, listId, manualCount]) => {
+    if (mode === 'filters' || listId || manualCount > 0) recipientsMethodChosen.value = true
+  },
+  { immediate: true }
+)
+
 const subjectOpen = ref(false)
 const senderOpen = ref(false)
 const selectedSenderAvatarUrl = ref('')
@@ -1308,18 +1398,23 @@ function buildCampaignForSend(savedId: string): Campaign {
   // Always use the wizard selection — list-index rows report recipientsCount: 0 for
   // list audiences, which falsely blocked Schedule on duplicated campaigns.
   const selectedIds = form.value.recipientsManual.filter(isManualContactIdString)
+  // Filter-built audiences have no picked ids; the server-side match count is the audience size.
+  const recipientsCount =
+    form.value.recipientsMode === 'filters'
+      ? advancedRecipientFilters.value.total
+      : selectedIds.length
   return {
     id: savedId,
     name: form.value.name.trim(),
     sender: { name: form.value.senderName, email: form.value.senderEmail },
     senderMode: resolvedSenderModeForSave(),
-    recipientsType: form.value.recipientsMode,
+    recipientsType: recipientsTypeForApi.value,
     recipientsListId: form.value.recipientsListId || undefined,
     recipients: selectedIds.map((id) => ({
       email: manualRecipientLabels.value[id]?.email?.trim() ?? '',
       contactId: id
     })),
-    recipientsCount: selectedIds.length,
+    recipientsCount,
     subject: form.value.subject,
     status: 'Draft',
     createdAt: '',
@@ -1963,7 +2058,30 @@ function openEditorWithCurrentDesign() {
   navigateTo(`/tenant/email-editor?campaignId=${campaignId}&token=local${templateQuery}`)
 }
 
+/** Advanced Recipient Filtering state from CampaignAdvancedRecipientFilters (flag-gated). */
+const advancedRecipientFilters = ref<{
+  body: Record<string, unknown> | null
+  ready: boolean
+  total: number
+}>({ body: null, ready: false, total: 0 })
+
+function onAdvancedRecipientFiltersUpdate(payload: {
+  body: Record<string, unknown> | null
+  ready: boolean
+  total: number
+}) {
+  advancedRecipientFilters.value = payload
+}
+
 const recipientsDescription = computed(() => {
+  if (allowTenantAdvancedRecipientFiltering.value && !recipientsMethodChosen.value) {
+    return 'Choose how to select recipients'
+  }
+  if (form.value.recipientsMode === 'filters') {
+    if (!advancedRecipientFilters.value.ready) return 'Set up contact filters'
+    const n = advancedRecipientFilters.value.total
+    return `Filtered audience · ${n.toLocaleString()} recipient${n === 1 ? '' : 's'}`
+  }
   if (form.value.recipientsMode === 'manual') {
     const count = form.value.recipientsManual.filter(isManualContactIdString).length
     return count > 0 ? `${count} manual recipient${count === 1 ? '' : 's'}` : 'Add recipients manually'
@@ -1977,7 +2095,15 @@ const recipientsDescription = computed(() => {
   return count > 0 ? `List: ${selected.name} · ${count} recipient${count === 1 ? '' : 's'}` : `List: ${selected.name}`
 })
 
+/** Stored/API recipient type: filter-built audiences persist as a live dynamic list. */
+const recipientsTypeForApi = computed<'manual' | 'list'>(() =>
+  campaignRecipientsTypeForApi(form.value.recipientsMode)
+)
+
 const recipientsComplete = computed(() => {
+  if (form.value.recipientsMode === 'filters') {
+    return advancedRecipientFilters.value.ready && advancedRecipientFilters.value.total > 0
+  }
   if (form.value.recipientsMode === 'list') {
     return (
       !!form.value.recipientsListId &&
@@ -2039,9 +2165,9 @@ function buildTestEmailDraftPayload() {
     senderEmail: form.value.senderEmail,
     senderMode: resolvedSenderModeForSave(),
     templateHtml: savedTemplateHtml.value,
-    recipientsType: form.value.recipientsMode === 'manual' ? 'manual' as const : 'list' as const,
+    recipientsType: recipientsTypeForApi.value,
     recipientsListId: form.value.recipientsMode === 'list' ? form.value.recipientsListId : undefined,
-    recipientsManual
+    recipientsManual: form.value.recipientsMode === 'filters' ? [] : recipientsManual
   }
 }
 
@@ -2100,6 +2226,27 @@ const manualRecipientsListed = computed(() =>
       return { contactId, email, name, displayLine }
     })
 )
+
+/** Who the campaign goes to right now when picked by hand or from a list (checked/unchecked state included). */
+const selectedRecipientsForPreview = computed(() => {
+  if (form.value.recipientsMode === 'list') {
+    return listIncludedContacts.value.map((c) => ({ id: c.id, name: c.name, email: c.email }))
+  }
+  return manualRecipientsListed.value.map((r) => ({ id: r.contactId, name: r.name, email: r.email }))
+})
+const selectedRecipientsKey = computed(() =>
+  selectedRecipientsForPreview.value.map((r) => r.id).join(',')
+)
+async function loadSelectedRecipientsPage(args: { page: number, limit: number, search: string }) {
+  const q = args.search.toLowerCase()
+  const all = q
+    ? selectedRecipientsForPreview.value.filter(
+        (r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q)
+      )
+    : selectedRecipientsForPreview.value
+  const from = (args.page - 1) * args.limit
+  return { total: all.length, contacts: all.slice(from, from + args.limit) }
+}
 
 function removeManualRecipientById(contactId: string) {
   const id = String(contactId ?? '').trim()
@@ -2204,7 +2351,7 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
     name: form.value.name.trim(),
     sender: { name: form.value.senderName, email: form.value.senderEmail },
     senderMode: resolvedSenderModeForSave(),
-    recipientsType: form.value.recipientsMode,
+    recipientsType: recipientsTypeForApi.value,
     recipientsListId: form.value.recipientsListId || undefined,
     subject: form.value.subject,
     previewText: form.value.previewText,
@@ -2220,6 +2367,16 @@ function buildTenantDetailForCache(campaignId: string): TenantCampaignDetail {
 
 function primeCampaignCacheAfterSave(savedId: string) {
   const detail = buildTenantDetailForCache(savedId)
+  if (form.value.recipientsMode === 'filters') {
+    // The audience lives in a list resolved by the server. A cached detail with no recipients would
+    // hide Schedule/Send on the detail page, so let it refetch and only prime the list row's count.
+    campaignStore.removeCampaignDetailCache(savedId)
+    campaignStore.upsertCampaignInList({
+      ...campaignStore.listRowFromDetail(detail),
+      recipientsCount: advancedRecipientFilters.value.total
+    })
+    return
+  }
   campaignStore.setCampaignDetailCache(savedId, detail)
   campaignStore.upsertCampaignInList(campaignStore.listRowFromDetail(detail))
 }
@@ -2237,6 +2394,10 @@ async function persistSavedCampaign(): Promise<string> {
     saveHtmlToLibrary: form.value.saveHtmlToLibrary
   })
 
+  const isFilterAudience = form.value.recipientsMode === 'filters'
+  if (isFilterAudience && !advancedRecipientFilters.value.body) {
+    throw new Error('Complete the contact filters before saving.')
+  }
   const body = {
     name: form.value.name.trim(),
     senderName: form.value.senderName,
@@ -2244,9 +2405,10 @@ async function persistSavedCampaign(): Promise<string> {
     senderMode: resolvedSenderModeForSave(),
     subject: form.value.subject,
     previewText: form.value.previewText,
-    recipientsType: form.value.recipientsMode,
+    recipientsType: isFilterAudience ? 'filters' as const : recipientsTypeForApi.value,
     recipientsListId: form.value.recipientsListId || undefined,
-    recipientsManual,
+    recipientsManual: isFilterAudience ? [] : recipientsManual,
+    ...(isFilterAudience ? { advancedRecipientFilters: advancedRecipientFilters.value.body ?? undefined } : {}),
     ...templateFields
   }
 
@@ -2264,6 +2426,9 @@ function setSaveErrorFromCatch(e: unknown) {
 }
 
 function recipientsReadyForSchedule(): boolean {
+  if (form.value.recipientsMode === 'filters') {
+    return advancedRecipientFilters.value.ready && advancedRecipientFilters.value.total > 0
+  }
   if (form.value.recipientsMode === 'manual') {
     return form.value.recipientsManual.some((id) => isManualContactIdString(String(id ?? '').trim()))
   }

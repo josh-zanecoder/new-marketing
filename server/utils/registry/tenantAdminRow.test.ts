@@ -58,6 +58,25 @@ describe('toTenantAdminRow', () => {
     expect(row?.allowTenantEditSender).toBe(true)
   })
 
+  it('defaults allowTenantAdvancedRecipientFiltering to false when unset', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    })
+    expect(row?.allowTenantAdvancedRecipientFiltering).toBe(false)
+  })
+
+  it('reads allowTenantAdvancedRecipientFiltering true from the registry doc', () => {
+    const row = toTenantAdminRow({
+      name: 'Acme',
+      dbName: 'acme_db',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      allowTenantAdvancedRecipientFiltering: true
+    })
+    expect(row?.allowTenantAdvancedRecipientFiltering).toBe(true)
+  })
+
   it('defaults allowTenantLoRecipientLists to false when unset', () => {
     const row = toTenantAdminRow({
       name: 'Acme',

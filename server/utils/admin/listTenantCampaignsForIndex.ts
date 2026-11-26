@@ -3,6 +3,8 @@ import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import type { CampaignLean, CampaignModel } from '@server/types/tenant/campaign.model'
 import type { ManualRecipientModel } from '@server/types/tenant/manualRecipient.model'
 import { campaignIndexRecipientsCount } from '~~/shared/campaignIndexRecipientsCount'
+import { isCampaignLiveListAudience } from '~~/shared/campaignAdvancedRecipientFilters'
+import { liveListMemberCounts } from '@server/utils/campaign/liveListMemberCounts'
 
 export type TenantCampaignIndexRow = {
   id: string
@@ -43,7 +45,7 @@ export async function listTenantCampaignsForIndex(
   const campaigns = await (Campaign as CampaignModel)
     .find({})
     .select(
-      '_id name sender recipientsType recipientsListId subject status scheduledAt createdAt updatedAt metadata createdBy mergeUserSnapshot'
+      '_id name sender recipientsType recipientsListId liveListAudience subject status scheduledAt createdAt updatedAt metadata createdBy mergeUserSnapshot'
     )
     .sort({ createdAt: -1 })
     .lean<CampaignLean[]>()
@@ -60,11 +62,15 @@ export async function listTenantCampaignsForIndex(
     }
   }
 
+  const liveCountByList = await liveListMemberCounts(conn, campaigns)
+
   return campaigns.map((c) => {
     const id = String(c._id)
     const recipientsCount = campaignIndexRecipientsCount(
       c.recipientsType,
-      manualCountByCampaign.get(id) ?? 0
+      isCampaignLiveListAudience(c)
+        ? (liveCountByList.get(String(c.recipientsListId ?? '').trim()) ?? 0)
+        : (manualCountByCampaign.get(id) ?? 0)
     )
     const snap = c.mergeUserSnapshot
     const creator = snap

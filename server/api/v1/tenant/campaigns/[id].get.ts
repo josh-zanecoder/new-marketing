@@ -16,6 +16,11 @@ import {
 } from '~~/shared/emailTemplateApproval'
 import { resolveRecipientListContactRows } from '@server/utils/recipient/resolveRecipientListEmails'
 import { resolveEmailTemplateHtml } from '~~/shared/utils/emailEditorHtml'
+import { isCampaignLiveListAudience } from '~~/shared/campaignAdvancedRecipientFilters'
+import {
+  advancedRecipientFiltersFromListDoc,
+  type AdvancedRecipientFiltersInitial
+} from '@server/utils/campaign/advancedFiltersFromList'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -28,10 +33,24 @@ export default defineEventHandler(async (event) => {
   const campaign = await (Campaign as CampaignModel)
     .findOne(mergeTenantOwnerEmailScopeFilter({ _id: id }, event.context.auth))
     .select(
-      '_id name sender recipientsType recipientsListId subject previewText status scheduledAt emailTemplate mergeUserSnapshot replyTo metadata createdBy createdAt updatedAt'
+      '_id name sender recipientsType recipientsListId liveListAudience subject previewText status scheduledAt emailTemplate mergeUserSnapshot replyTo metadata createdBy createdAt updatedAt'
     )
     .lean<CampaignLean | null>()
   if (!campaign) throw createError({ statusCode: 404, message: 'Campaign not found' })
+
+  // Filter-built campaigns: hand the edit page the saved filter settings of the campaign's own list.
+  let advancedRecipientFilters: AdvancedRecipientFiltersInitial | undefined
+  if (isCampaignLiveListAudience(campaign)) {
+    const { RecipientList } = getTenantClientModels(conn)
+    const listDoc = await RecipientList.findById(String(campaign.recipientsListId))
+      .select(
+        'audience filterMode criterionJoins filterRows filterGroups groupJoins membershipScope membershipOwnerEmails audienceStatuses'
+      )
+      .lean<Record<string, unknown> | null>()
+    if (listDoc) {
+      advancedRecipientFilters = advancedRecipientFiltersFromListDoc(listDoc, event.context.auth)
+    }
+  }
 
   let recipients: {
     email: string
@@ -150,6 +169,9 @@ export default defineEventHandler(async (event) => {
       senderMode: campaign.senderMode === 'selected' ? 'selected' : 'contact_owner',
       recipientsType: campaign.recipientsType,
       recipientsListId: campaign.recipientsListId,
+      ...(advancedRecipientFilters
+        ? { liveListAudience: true, advancedRecipientFilters }
+        : {}),
       subject: campaign.subject,
       previewText: campaign.previewText?.trim() || '',
       status: campaign.status,

@@ -18,6 +18,7 @@ import {
   mergeTenantOwnerEmailScopeFilter
 } from '@server/utils/contactOwnerFilter'
 import { recipientListExcludedContactIds } from '@server/utils/recipient/recipientListMutation'
+import { withAudienceStatusScope } from '@server/utils/recipient/audienceStatusScope'
 
 const MEMBER_INSERT_BATCH = 1000
 
@@ -140,6 +141,8 @@ function criterionToLeaf(row: RecipientListCriterion): Record<string, unknown> |
       return exactField('address.city', val)
     case 'county':
       return exactField('address.county', val)
+    case 'zip':
+      return exactField('address.zip', val)
     case 'street':
       return {
         'address.street': { $regex: new RegExp(escapeRegex(val), 'i') }
@@ -224,6 +227,9 @@ function buildAndMode(
         break
       case 'county':
         andParts.push(orExactField('address.county', uniq))
+        break
+      case 'zip':
+        andParts.push(orExactField('address.zip', uniq))
         break
       case 'street': {
         const ors = uniq.map((v) => ({
@@ -561,7 +567,7 @@ export async function rebuildRecipientListMembers(
   await RecipientListMember.deleteMany({ recipientListId: listId })
 
   const listLean = await RecipientList.findById(listId)
-    .select('excludedContactIds')
+    .select('excludedContactIds audienceStatuses')
     .lean()
   const excludedIds = recipientListExcludedContactIds(
     (listLean ?? {}) as { excludedContactIds?: unknown }
@@ -598,7 +604,7 @@ export async function rebuildRecipientListMembers(
           groupsForQuery,
           storedCriterionJoins ?? null
         )
-  const scopedContactQuery =
+  const ownerScopedContactQuery =
     membershipScope === 'tenant'
       ? (contactQuery as Record<string, unknown>)
       : membershipOwnerEmails.length > 0
@@ -607,6 +613,11 @@ export async function rebuildRecipientListMembers(
             membershipOwnerEmails
           )
         : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
+  // Advanced Recipient Filtering: optional borrower-status limit stored on the list.
+  const scopedContactQuery = withAudienceStatusScope(
+    ownerScopedContactQuery,
+    (listLean as { audienceStatuses?: unknown } | null)?.audienceStatuses
+  )
 
   type MemberInsert = { recipientListId: typeof listId; contactId: unknown }
   const insertBatch = async (rows: MemberInsert[]) => {

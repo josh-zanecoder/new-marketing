@@ -57,6 +57,11 @@ export const campaignSchema = new mongoose.Schema({
   },
   recipientsType: { type: String, enum: recipientsTypeEnum, default: 'manual' },
   recipientsListId: { type: String, default: '' },
+  /**
+   * When true (Advanced Recipient Filtering), send resolves the live list membership
+   * instead of a ManualRecipient snapshot so contact/filter changes apply before send.
+   */
+  liveListAudience: { type: Boolean, default: false },
   emailTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },
   subject: { type: String, default: '' },
   /** Inbox line shown under the subject. Hidden in the message body. */

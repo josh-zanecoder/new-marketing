@@ -21,6 +21,9 @@ import { resolveCampaignEmailTemplateOnSave } from '@server/utils/emailTemplate/
 import { resolveCustomMarketingTenantFolderName } from '@server/utils/customMarketing/resolveCustomMarketingTenantFolderName'
 import { normalizeEmailPreviewText } from '~~/shared/emailPreviewText'
 import { CAMPAIGN_SENDER_MODE_SELECTED } from '~~/shared/campaignSenderMode'
+import { requireTenantAdvancedRecipientFiltering } from '@server/utils/requireTenantAdvancedRecipientFiltering'
+import { createRecipientList } from '@server/utils/recipient/recipientListService'
+import { advancedFilterListName } from '~~/shared/campaignAdvancedRecipientFilters'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -31,10 +34,20 @@ export default defineEventHandler(async (event) => {
     senderMode?: string
     subject: string
     previewText?: string
-    recipientsType?: 'manual' | 'list'
+    recipientsType?: 'manual' | 'list' | 'filters'
     recipientsListId?: string
     /** Contact `_id` strings (manual audience). */
     recipientsManual?: string[]
+    /**
+     * Advanced Recipient Filtering: same body as POST /recipient-list.
+     * When present with recipientsType `filters`, a dynamic list is created and linked.
+     */
+    advancedRecipientFilters?: Record<string, unknown>
+    /**
+     * Prefer live list membership at send (no ManualRecipient snapshot).
+     * Implied when creating via advancedRecipientFilters.
+     */
+    liveListAudience?: boolean
     /** Link an existing library template without creating a duplicate. */
     emailTemplateId?: string
     templateHtml?: string
@@ -50,14 +63,38 @@ export default defineEventHandler(async (event) => {
   const conn = await getTenantConnectionFromEvent(event)
   const { Campaign, EmailTemplate, ManualRecipient, Contact } = getTenantClientModels(conn)
 
-  const recipientsType = body.recipientsType || 'manual'
-  const recipientsListId = body.recipientsListId || ''
   const auth = event.context.auth
   const dbName =
     isRegisteredTenantAuthContext(auth) && typeof auth.dbName === 'string' ? auth.dbName : ''
   const tenantName = isRegisteredTenantAuthContext(auth)
     ? await resolveCustomMarketingTenantFolderName(auth)
     : ''
+
+  let recipientsType: 'manual' | 'list' =
+    body.recipientsType === 'list' || body.recipientsType === 'filters' ? 'list' : 'manual'
+  let recipientsListId = body.recipientsListId || ''
+  let liveListAudience = body.liveListAudience === true
+
+  if (liveListAudience && body.recipientsType !== 'filters' && !body.advancedRecipientFilters) {
+    await requireTenantAdvancedRecipientFiltering(event)
+  }
+
+  /** Advanced Recipient Filtering: create a dynamic list from CRM filters, then attach it. */
+  if (body.recipientsType === 'filters' || body.advancedRecipientFilters) {
+    await requireTenantAdvancedRecipientFiltering(event)
+    const filterBody = (body.advancedRecipientFilters ?? {}) as Record<string, unknown>
+    const autoName = advancedFilterListName(body.name, filterBody.name)
+    const created = await createRecipientList({
+      tenantConn: conn,
+      auth,
+      body: { ...filterBody, name: autoName },
+      allowAdvancedAudience: true,
+      campaignAudience: true
+    })
+    recipientsType = 'list'
+    recipientsListId = created.list.id
+    liveListAudience = true
+  }
 
   if (recipientsType === 'list' && recipientsListId) {
     await assertRecipientListVisible(conn, recipientsListId, auth)
@@ -83,8 +120,10 @@ export default defineEventHandler(async (event) => {
         .filter((id) => mongoose.isValidObjectId(id))
     )
   ]
-  const resolvedRecipientContactsPromise: Promise<mongoose.Types.ObjectId[]> =
-    recipientsType === 'manual' && manualRecipientIds.length
+  /** Skip resolving contacts when live list membership is used at send time. */
+  const resolvedRecipientContactsPromise: Promise<mongoose.Types.ObjectId[]> = liveListAudience
+    ? Promise.resolve([])
+    : recipientsType === 'manual' && manualRecipientIds.length
       ? (async () => {
           const objectIds = manualRecipientIds.map((id) => new mongoose.Types.ObjectId(id))
           const existing = await (Contact as ContactModel)
@@ -146,6 +185,7 @@ export default defineEventHandler(async (event) => {
     senderMode: resolvedSender.senderMode,
     recipientsType,
     recipientsListId,
+    liveListAudience,
     subject: body.subject?.trim() || '',
     previewText: normalizeEmailPreviewText(body.previewText),
     status: 'Draft',
@@ -158,7 +198,11 @@ export default defineEventHandler(async (event) => {
 
   const campaign = await new Campaign(campaignData).save()
 
-  if (recipientsType === 'manual' || (recipientsType === 'list' && recipientsListId)) {
+  /** Live-list campaigns skip ManualRecipient so send uses current membership. */
+  if (
+    !liveListAudience &&
+    (recipientsType === 'manual' || (recipientsType === 'list' && recipientsListId))
+  ) {
     const contactIds = await resolvedRecipientContactsPromise
     if (contactIds.length) {
       const docs: ManualRecipientInsert[] = contactIds.map((contact) => ({

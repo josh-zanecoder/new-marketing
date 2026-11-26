@@ -29,6 +29,7 @@ const PROPERTY_TYPES = new Set<RecipientFilterPropertyType>([
   'city',
   'county',
   'street',
+  'zip',
   'profile_type',
   'profile_subtype',
   'partner_email',

@@ -9,6 +9,7 @@ import {
   type CampaignFromAddressMode
 } from '~~/shared/campaignFromAddressMode'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
+import { parseAllowTenantAdvancedRecipientFiltering } from '~~/shared/allowTenantAdvancedRecipientFiltering'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
@@ -48,6 +49,12 @@ export function parseRegistryCampaignFromAddressMode(
 
 export function parseRegistryAllowTenantEditSender(doc: RegistryTenantDoc): boolean {
   return parseAllowTenantEditSender(doc.allowTenantEditSender)
+}
+
+export function parseRegistryAllowTenantAdvancedRecipientFiltering(
+  doc: RegistryTenantDoc
+): boolean {
+  return parseAllowTenantAdvancedRecipientFiltering(doc.allowTenantAdvancedRecipientFiltering)
 }
 
 export function parseRegistryAllowTenantLoRecipientLists(doc: RegistryTenantDoc): boolean {
@@ -372,6 +379,8 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     parseRegistryCampaignSenderFields(doc)
   const campaignFromAddressMode = parseRegistryCampaignFromAddressMode(doc)
   const allowTenantEditSender = parseRegistryAllowTenantEditSender(doc)
+  const allowTenantAdvancedRecipientFiltering =
+    parseRegistryAllowTenantAdvancedRecipientFiltering(doc)
   const allowTenantLoRecipientLists = parseRegistryAllowTenantLoRecipientLists(doc)
   const allowTenantTemplateApproval = parseRegistryAllowTenantTemplateApproval(doc)
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
@@ -402,6 +411,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     defaultCampaignSenderName,
     campaignFromAddressMode,
     allowTenantEditSender,
+    allowTenantAdvancedRecipientFiltering,
     allowTenantLoRecipientLists,
     allowTenantTemplateApproval,
     allowTenantImages,

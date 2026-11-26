@@ -9,6 +9,7 @@ import type { NestedFilterGroup } from '@server/utils/recipient/recipientListMem
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import { registryDocToCriteria } from '@server/utils/recipient/recipientListNormalization'
+import { builtinFilterDoc } from '~~/shared/campaignBuiltinFilters'
 
 /**
  * Parse `criterionJoins` from API body. Returns `null` when the field is omitted (PATCH: keep existing).
@@ -123,24 +124,23 @@ type ResolvedFilterRow = {
   persisted: { recipientFilterId: string; listPropertyValue: string }
 }
 
-async function resolveOneFilterRow(
-  row: unknown,
+/**
+ * An enabled registry filter for the audience. With `allowBuiltin` (Advanced Recipient Filtering
+ * only), `builtin:<field>` ids resolve to the standard contact fields without a registry record.
+ */
+async function loadEnabledFilterDoc(
   tenantConn: Connection,
-  audience: string
-): Promise<ResolvedFilterRow | null> {
-  if (!row || typeof row !== 'object') return null
-  const r = row as Record<string, unknown>
-  const recipientFilterId =
-    typeof r.recipientFilterId === 'string' && r.recipientFilterId.trim()
-      ? r.recipientFilterId.trim()
-      : ''
-  if (!recipientFilterId) return null
+  recipientFilterId: string,
+  audience: string,
+  allowBuiltin: boolean
+): Promise<Record<string, unknown>> {
+  if (allowBuiltin) {
+    const builtin = builtinFilterDoc(recipientFilterId, audience)
+    if (builtin) return builtin as unknown as Record<string, unknown>
+  }
   if (!mongoose.isValidObjectId(recipientFilterId)) {
     throw createError({ statusCode: 400, message: 'Invalid recipient filter id' })
   }
-  const listPropertyValue =
-    typeof r.listPropertyValue === 'string' ? r.listPropertyValue.trim().slice(0, 2000) : ''
-
   const { RecipientFilter: FilterModel } = getTenantClientModels(tenantConn)
   const doc = await FilterModel.findOne({
     _id: new mongoose.Types.ObjectId(recipientFilterId),
@@ -156,6 +156,26 @@ async function resolveOneFilterRow(
       message: 'Recipient filter not found, disabled, or does not match the selected audience'
     })
   }
+  return doc as Record<string, unknown>
+}
+
+async function resolveOneFilterRow(
+  row: unknown,
+  tenantConn: Connection,
+  audience: string,
+  allowBuiltin = false
+): Promise<ResolvedFilterRow | null> {
+  if (!row || typeof row !== 'object') return null
+  const r = row as Record<string, unknown>
+  const recipientFilterId =
+    typeof r.recipientFilterId === 'string' && r.recipientFilterId.trim()
+      ? r.recipientFilterId.trim()
+      : ''
+  if (!recipientFilterId) return null
+  const listPropertyValue =
+    typeof r.listPropertyValue === 'string' ? r.listPropertyValue.trim().slice(0, 2000) : ''
+
+  const doc = await loadEnabledFilterDoc(tenantConn, recipientFilterId, audience, allowBuiltin)
 
   const filterDoc = doc as Record<string, unknown>
   const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
@@ -182,7 +202,9 @@ async function resolveOneFilterRow(
 export async function resolveRecipientListFiltersFromBody(
   body: Record<string, unknown>,
   tenantConn: Connection,
-  audience: string
+  audience: string,
+  /** Advanced Recipient Filtering only: accept `builtin:<field>` filter ids. */
+  allowBuiltin = false
 ): Promise<{
   filters: RecipientListCriterion[]
   criterionGroups: RecipientListCriterion[][]
@@ -205,7 +227,7 @@ export async function resolveRecipientListFiltersFromBody(
       const rowGroups: RecipientListCriterion[][] = []
       const persistedRows: PersistedFilterGroup['rows'] = []
       for (const row of requested.rows) {
-        const resolved = await resolveOneFilterRow(row, tenantConn, audience)
+        const resolved = await resolveOneFilterRow(row, tenantConn, audience, allowBuiltin)
         if (!resolved) continue
         persistedRows.push(resolved.persisted)
         if (resolved.criteria.length) {
@@ -244,7 +266,6 @@ export async function resolveRecipientListFiltersFromBody(
   const useFilterRows = Array.isArray(rawRows) && rawRows.length > 0
 
   if (useFilterRows) {
-    const { RecipientFilter: FilterModel } = getTenantClientModels(tenantConn)
     for (const row of rawRows as unknown[]) {
       if (!row || typeof row !== 'object') continue
       const r = row as Record<string, unknown>
@@ -254,28 +275,17 @@ export async function resolveRecipientListFiltersFromBody(
           : ''
       if (!recipientFilterId) continue
 
-      if (!mongoose.isValidObjectId(recipientFilterId)) {
-        throw createError({ statusCode: 400, message: 'Invalid recipient filter id' })
-      }
       const listPropertyValue =
         typeof r.listPropertyValue === 'string'
           ? r.listPropertyValue.trim().slice(0, 2000)
           : ''
 
-      const doc = await FilterModel.findOne({
-        _id: new mongoose.Types.ObjectId(recipientFilterId),
-        enabled: true,
-        ...recipientFilterContactTypeMatch(audience)
-      }).lean().exec()
-
-      if (!doc) {
-        throw createError({
-          statusCode: 404,
-          message: 'Recipient filter not found, disabled, or does not match the selected audience'
-        })
-      }
-
-      const filterDoc = doc as Record<string, unknown>
+      const filterDoc = await loadEnabledFilterDoc(
+        tenantConn,
+        recipientFilterId,
+        audience,
+        allowBuiltin
+      )
       const { property } = canonicalRecipientFilterFieldsFromDoc(filterDoc)
       const registryVal = typeof filterDoc.propertyValue === 'string' ? filterDoc.propertyValue.trim() : ''
       const effectiveValue = listPropertyValue || registryVal
