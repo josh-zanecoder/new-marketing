@@ -1372,6 +1372,7 @@ interface TenantDetail {
   defaultCampaignSenderName: string | null
   allowTenantEditSender?: boolean
   allowTenantAdvancedRecipientFiltering?: boolean
+  allowTenantLendingQbStatus?: boolean
   allowTenantLoRecipientLists?: boolean
   allowTenantTemplateApproval?: boolean
   allowTenantImages?: boolean

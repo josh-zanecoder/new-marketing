@@ -14,6 +14,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type TestContact = {
   _id: mongoose.Types.ObjectId
   status: string
+  /** Normalized LendingQB loan status (only when the CRM synced one). */
+  loanStatusKey?: string
   ownerEmail: string
   deletedAt: Date | null
   isUnsubscribe: boolean
@@ -26,13 +28,36 @@ const state = {
   contact: null as TestContact | null,
   members: new Set<string>(),
   queries: [] as Record<string, unknown>[],
-  lists: [] as Record<string, unknown>[]
+  lists: [] as Record<string, unknown>[],
+  /** Tenant's LendingQB loan-status toggle. */
+  lendingQb: false
 }
+
+vi.mock('@server/utils/recipient/lendingQbStatusFeature', () => ({
+  isLendingQbStatusEnabledForConnection: async () => state.lendingQb,
+  isLendingQbStatusEnabledForDb: async () => state.lendingQb,
+  invalidateLendingQbStatusFeatureCache: () => {}
+}))
 
 /** Applies the owner-scope ($expr) and status clauses; the audience base query is not under test. */
 function matches(query: Record<string, unknown>, contact: TestContact): boolean {
   if (Array.isArray(query.$and)) {
     return (query.$and as Record<string, unknown>[]).every((q) => matches(q, contact))
+  }
+  if (Array.isArray(query.$or)) {
+    return (query.$or as Record<string, unknown>[]).some((q) => matches(q, contact))
+  }
+  if ('loanStatusKey' in query) {
+    const cond = query.loanStatusKey as
+      | null
+      | string
+      | { $exists?: boolean; $in?: string[] }
+    const key = contact.loanStatusKey
+    if (cond === null) return key == null
+    if (typeof cond === 'string') return key === cond
+    if (cond.$exists === false) return key === undefined
+    if (cond.$in) return key !== undefined && cond.$in.includes(key)
+    return false
   }
   if (query.$expr) {
     const $in = (query.$expr as { $in: [unknown, string[]] }).$in
@@ -102,6 +127,7 @@ describe('syncContactRecipientListMembership — loan officer + status audience'
     state.queries.length = 0
     state.members.clear()
     state.contact = null
+    state.lendingQb = false
     state.lists = [
       {
         _id: LIST_ID,
@@ -167,5 +193,40 @@ describe('syncContactRecipientListMembership — loan officer + status audience'
     state.lists = [{ ...state.lists[0]!, audienceStatuses: ['category:past_clients'] }]
     expect(await sync(contact({ status: 'past_borrower' }))).toBe(true)
     expect(await sync(contact({ status: 'new_lead' }))).toBe(false)
+  })
+
+  describe('LendingQB loan status toggle', () => {
+    beforeEach(() => {
+      state.lists = [{ ...state.lists[0]!, audienceStatuses: ['category:past_clients'] }]
+    })
+
+    it('toggle OFF: ignores the loan status and keeps the keyword rule on status', async () => {
+      state.lendingQb = false
+      expect(await sync(contact({ status: 'new_lead', loanStatusKey: 'funded' }))).toBe(false)
+      expect(await sync(contact({ status: 'past_borrower', loanStatusKey: 'loan open' }))).toBe(true)
+    })
+
+    it('toggle ON: a LendingQB status decides the category, not the borrower status', async () => {
+      state.lendingQb = true
+      expect(await sync(contact({ status: 'new_lead', loanStatusKey: 'funded' }))).toBe(true)
+      expect(await sync(contact({ status: 'past_borrower', loanStatusKey: 'loan open' }))).toBe(false)
+    })
+
+    it('toggle ON: moves the contact when the loan status changes (e.g. Funded -> On Hold)', async () => {
+      state.lendingQb = true
+      expect(await sync(contact({ status: 'x', loanStatusKey: 'loan funded' }))).toBe(true)
+      expect(await sync(contact({ status: 'x', loanStatusKey: 'loan on hold' }))).toBe(false)
+    })
+
+    it('toggle ON: an unmapped LendingQB status matches no category', async () => {
+      state.lendingQb = true
+      expect(await sync(contact({ status: 'past_borrower', loanStatusKey: 'legacy record' }))).toBe(false)
+    })
+
+    it('toggle ON: contacts with no LendingQB status do not fall back to the hardcoded borrower status', async () => {
+      state.lendingQb = true
+      expect(await sync(contact({ status: 'past_borrower' }))).toBe(false)
+      expect(await sync(contact({ status: 'new_lead' }))).toBe(false)
+    })
   })
 })

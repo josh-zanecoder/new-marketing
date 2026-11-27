@@ -40,6 +40,11 @@ export interface ContactLean {
   company?: string
   status?: string
   stage?: string
+  /** LendingQB loan status exactly as reported by the LOS (never rewritten). */
+  loanStatus?: string
+  /** Normalized `loanStatus` used for marketing-category matching. */
+  loanStatusKey?: string
+  loanStatusUpdatedAt?: Date | null
   /** Optional structured segment (type + subtypes), e.g. synced from retail partners. */
   contactProfile?: ContactProfile | null
   /** CRM / Kafka idempotency; optional until integrations land. */

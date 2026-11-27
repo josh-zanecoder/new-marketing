@@ -18,12 +18,12 @@ import {
 import { resolveDefaultContactTypeKey } from '@server/utils/contact/resolveDefaultContactTypeKey'
 import { resolveMarketingInboundSyncUpsertBatchSize } from '../inboundSyncConstants'
 import {
-  collapseInboundContactsByEmail,
-  type InboundContactCollection
-} from '@server/utils/contact/collapseInboundContactsByEmail'
-
-/** Stable id for Mongo upserts; do not rename without a migration. */
-const KAFKA_INBOUND_CONTACT_SOURCE = 'crm-kafka'
+  readInboundLoanStatusFields,
+  type InboundLoanStatusFields
+} from '@server/utils/contact/inboundLoanStatus'
+import type { InboundContactCollection } from '@server/utils/contact/collapseInboundContactsByEmail'
+import { collapseInboundContactsForTenant } from '@server/utils/contact/collapseInboundContactsForTenant'
+import { KAFKA_INBOUND_CONTACT_SOURCE } from '@server/utils/contact/inboundContactSource'
 
 function readContactProfileFromInboundPayload(
   payload: Record<string, unknown>
@@ -144,6 +144,9 @@ type SyncSnapshotContact = {
   contactTypes?: string[]
   channel?: string
   metadata?: Record<string, unknown>
+  /** Optional LendingQB loan status (see ContactPayload). */
+  loanStatus?: string
+  loanStatusUpdatedAt?: string
 }
 
 type SyncSnapshotUpsertRow = {
@@ -163,6 +166,7 @@ type SyncSnapshotUpsertRow = {
   ownerPhone: string
   status: string
   stage: string
+  loanStatusFields: InboundLoanStatusFields
   /** Normalized keys written to `contactType` on the tenant contact. */
   contactTypeKeys: string[]
   partnerRelationships: {
@@ -179,7 +183,8 @@ async function persistInboundContact(
   setDoc: Record<string, unknown>
 ): Promise<void> {
   const models = getTenantClientModels(tenantConn)
-  const { keptIds, retiredIds } = await collapseInboundContactsByEmail({
+  const { keptIds, retiredIds } = await collapseInboundContactsForTenant({
+    tenantConn,
     Contact: models.Contact as unknown as InboundContactCollection,
     source: KAFKA_INBOUND_CONTACT_SOURCE,
     rows: [
@@ -231,7 +236,12 @@ export async function createContactFromCreatedEvent(contactEvent: ContactEventEn
     metadata: {
       ...payloadMetadata,
       ...ownerFieldsForContactMetadata(payloadMetadata)
-    }
+    },
+    // Only present when the CRM sent a LendingQB loan status; otherwise the stored one is kept.
+    ...readInboundLoanStatusFields(
+      contactEvent.payload as unknown as Record<string, unknown>,
+      contactEvent.occurredAt
+    )
   }
   const fromMulti = normalizeContactTypeInput(p.contactTypes)
   const fromSingle = normalizeContactTypeInput(p.contactType)
@@ -286,7 +296,12 @@ export async function updateContactFromUpdatedEvent(contactEvent: ContactEventEn
     metadata: {
       ...payloadMetadata,
       ...ownerFieldsForContactMetadata(payloadMetadata)
-    }
+    },
+    // Only present when the CRM sent a LendingQB loan status; otherwise the stored one is kept.
+    ...readInboundLoanStatusFields(
+      contactEvent.payload as unknown as Record<string, unknown>,
+      contactEvent.occurredAt
+    )
   }
   const fromMultiU = normalizeContactTypeInput(pU.contactTypes)
   const fromSingleU = normalizeContactTypeInput(pU.contactType)
@@ -442,6 +457,10 @@ async function upsertContactSyncSlice(
         ownerPhone: ownerFields.ownerPhone,
         status,
         stage,
+        loanStatusFields: readInboundLoanStatusFields(
+          c as unknown as Record<string, unknown>,
+          occurredAt
+        ),
         contactTypeKeys,
         partnerRelationships: readPartnerRelationshipsFromMetadata(payloadMetadata)
       }
@@ -479,7 +498,8 @@ async function upsertContactSyncSlice(
           ...(r.partnerRelationships ? { relationships: r.partnerRelationships } : {}),
           syncOccurredAt: occurredAt
         },
-        contactType: r.contactTypeKeys
+        contactType: r.contactTypeKeys,
+        ...r.loanStatusFields
       }
 
       await applyContactTypeFieldsToSetDoc(snapSet, tenantConn)
@@ -491,7 +511,8 @@ async function upsertContactSyncSlice(
     })
   )
 
-  await collapseInboundContactsByEmail({
+  await collapseInboundContactsForTenant({
+    tenantConn,
     Contact: models.Contact as unknown as InboundContactCollection,
     source: KAFKA_INBOUND_CONTACT_SOURCE,
     rows: snapDocs.map(({ row, snapSet }) => ({

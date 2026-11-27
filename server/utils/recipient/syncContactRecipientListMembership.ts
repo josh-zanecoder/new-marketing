@@ -8,7 +8,7 @@ import type {
 } from '@server/types/tenant/recipientList.model'
 import { mergeContactOwnerScopeFilter } from '@server/utils/contactOwnerFilter'
 import { builtinFilterDoc } from '~~/shared/campaignBuiltinFilters'
-import { withAudienceStatusScope } from '@server/utils/recipient/audienceStatusScope'
+import { withAudienceStatusScopeForTenant } from '@server/utils/recipient/audienceStatusScope'
 import { canonicalRecipientFilterFieldsFromDoc } from '@server/utils/recipient/recipientFilterValidation'
 import { recipientFilterContactTypeMatch } from '@server/utils/recipient/recipientListAudience'
 import {
@@ -145,6 +145,7 @@ function nestedGroupsFromListDoc(
 }
 
 async function syncContactToList(
+  tenantConn: Connection,
   models: ReturnType<typeof getTenantClientModels>,
   contactId: mongoose.Types.ObjectId,
   listDoc: RecipientListDoc,
@@ -234,7 +235,8 @@ async function syncContactToList(
           ownerScopeForSync
         )
   // Advanced Recipient Filtering: optional borrower-status limit stored on the list.
-  const scopedQuery = withAudienceStatusScope(
+  const scopedQuery = await withAudienceStatusScopeForTenant(
+    tenantConn,
     ownerScopedQuery as Record<string, unknown>,
     (listDoc as { audienceStatuses?: unknown }).audienceStatuses
   )
@@ -283,7 +285,7 @@ export async function syncContactRecipientListMembership(
 
   const filterById = await loadRecipientFiltersById(tenantConn, lists)
   await Promise.all(
-    lists.map((listDoc) => syncContactToList(models, contactId, listDoc, filterById))
+    lists.map((listDoc) => syncContactToList(tenantConn, models, contactId, listDoc, filterById))
   )
 }
 

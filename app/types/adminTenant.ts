@@ -27,6 +27,11 @@ export interface AdminTenantRow {
    */
   allowTenantAdvancedRecipientFiltering: boolean
   /**
+   * When true, borrower-status categories use the LendingQB loan status synced from the CRM.
+   * Default false = existing keyword rules on the borrower status.
+   */
+  allowTenantLendingQbStatus: boolean
+  /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Default false = existing recipient-list behavior only.
    */

@@ -14,7 +14,8 @@ export const TENANT_FEATURE_PERMISSION_KEYS = [
   'allowTenantBeefreeBuilder',
   'allowTenantTemplateBuilder',
   'allowTenantEditText',
-  'allowTenantResizeImage'
+  'allowTenantResizeImage',
+  'allowTenantLendingQbStatus'
 ] as const
 
 export type TenantFeaturePermissionKey = (typeof TENANT_FEATURE_PERMISSION_KEYS)[number]
@@ -145,6 +146,16 @@ export const TENANT_FEATURE_PERMISSIONS: readonly TenantFeaturePermission[] = [
     group: 'email-builder',
     groupLabel: 'Email builder',
     patchPath: 'allow-tenant-resize-image'
+  },
+  {
+    key: 'allowTenantLendingQbStatus',
+    code: 'integrations:lendingqb-status',
+    label: 'LendingQB loan status',
+    description:
+      'Borrower-status categories (New & Active Leads, Active Borrowers, Past Clients, Inactive Leads, On Hold) use the LendingQB loan status synced from the CRM. Original LendingQB statuses are never changed. When off, categories use the existing borrower-status rules.',
+    group: 'integrations',
+    groupLabel: 'Integrations',
+    patchPath: 'allow-tenant-lendingqb-status'
   }
 ]
 
@@ -167,7 +178,8 @@ export function emptyTenantFeaturePermissionState(): TenantFeaturePermissionStat
     allowTenantBeefreeBuilder: false,
     allowTenantTemplateBuilder: false,
     allowTenantEditText: false,
-    allowTenantResizeImage: false
+    allowTenantResizeImage: false,
+    allowTenantLendingQbStatus: false
   }
 }
 

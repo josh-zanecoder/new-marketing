@@ -21,7 +21,7 @@ import {
 import { buildPreviewAudiencePipeline, previewSearchClause } from '@server/utils/recipient/previewAudiencePipeline'
 import { pickJoinsForQuery } from '@server/utils/recipient/recipientListMutation'
 import { loadWritePayload } from '@server/utils/recipient/recipientListService'
-import { withAudienceStatusScope } from '@server/utils/recipient/audienceStatusScope'
+import { withAudienceStatusScopeForTenant } from '@server/utils/recipient/audienceStatusScope'
 import { formatPersonDisplayName } from '~~/shared/formatPersonDisplayName'
 import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 
@@ -106,7 +106,8 @@ export async function previewRecipientListAudience(params: {
           )
         : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
 
-  const statusScoped = withAudienceStatusScope(
+  const statusScoped = await withAudienceStatusScopeForTenant(
+    tenantConn,
     scoped as Record<string, unknown>,
     w.audienceStatuses
   )

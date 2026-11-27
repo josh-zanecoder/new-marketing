@@ -45,6 +45,11 @@ export const contactSchema = new mongoose.Schema(
     channel: { type: String, default: '', trim: true },
     status: { type: String, default: '', trim: true },
     stage: { type: String, default: '', trim: true },
+    /** LendingQB loan status exactly as reported by the LOS (never rewritten). */
+    loanStatus: { type: String, trim: true },
+    /** Normalized `loanStatus` used for marketing-category matching (see lendingQbStatusCategories). */
+    loanStatusKey: { type: String, trim: true },
+    loanStatusUpdatedAt: { type: Date },
     contactProfile: { type: contactProfileSchema, default: undefined },
     metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     isUnsubscribe: { type: Boolean, default: false },
@@ -59,6 +64,7 @@ contactSchema.index({ externalId: 1, source: 1 }, { sparse: true })
 contactSchema.index({ company: 1 })
 contactSchema.index({ deletedAt: 1 })
 contactSchema.index({ isUnsubscribe: 1, deletedAt: 1 })
+contactSchema.index({ loanStatusKey: 1, deletedAt: 1 }, { sparse: true })
 contactSchema.index({ 'contactProfile.typeKey': 1, deletedAt: 1 })
 contactSchema.index({ 'contactProfile.subtypeKeys': 1, deletedAt: 1 })
 contactSchema.index({ 'metadata.relationships.partnerExternalIds': 1, deletedAt: 1 })
