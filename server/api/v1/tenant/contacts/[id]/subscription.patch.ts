@@ -8,6 +8,8 @@ import {
 } from '@server/utils/contact/contactSubscriptionEffects'
 import { normalizeMarketingEmail } from '@server/helpers/marketingEmail'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { publishRatesheetUnsubscribedToKafka } from '@server/kafka/publishRatesheetUnsubscribed'
+import { logger } from '@server/utils/logger'
 
 type SubscriptionPatchLean = Pick<ContactLean, 'isUnsubscribe' | 'updatedAt'>
 
@@ -55,6 +57,30 @@ export default defineEventHandler(async (event) => {
       await onContactSubscribed(conn, doc._id)
     } else {
       await onContactUnsubscribed(conn, doc._id)
+    }
+  }
+
+  if (!body.subscribed && email) {
+    const authRecord =
+      auth && typeof auth === 'object' ? (auth as Record<string, unknown>) : null
+    const tenantDbName =
+      typeof authRecord?.dbName === 'string' ? authRecord.dbName.trim() : ''
+    const tenantId =
+      typeof authRecord?.tenantId === 'string' ? authRecord.tenantId.trim() : undefined
+    if (tenantDbName) {
+      void publishRatesheetUnsubscribedToKafka({
+        tenantDbName,
+        tenantId,
+        email,
+        reason: 'marketing_unsubscribe',
+        source: 'new-marketing-subscription-patch'
+      }).catch((err) => {
+        logger.warn('Failed to publish ratesheet.unsubscribed after subscription patch', {
+          tenantDbName,
+          email,
+          err: err instanceof Error ? err.message : String(err)
+        })
+      })
     }
   }
 

@@ -12,7 +12,9 @@ export const AUTO_UNSUBSCRIBE_TRACKING_EVENTS = new Set([
   'hardBounces',
   'bounces',
   'bounced',
-  'spam'
+  'spam',
+  /** CRM ratesheet delivery bounce → marketing campaign unsubscribe (Kafka contact.unsubscribed). */
+  'ratesheet_bounce'
 ])
 
 export function shouldAutoUnsubscribeOnTrackingEvent(event: string): boolean {

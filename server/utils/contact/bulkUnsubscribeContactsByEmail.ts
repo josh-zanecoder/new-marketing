@@ -1,6 +1,10 @@
 import type { Connection, Types } from 'mongoose'
 import { getTenantClientModels } from '@server/models/tenant/tenantClientModels'
 import { onContactUnsubscribed } from '@server/utils/contact/contactSubscriptionEffects'
+import { publishRatesheetUnsubscribedToKafka } from '@server/kafka/publishRatesheetUnsubscribed'
+import { getRegistryConnection } from '@server/lib/mongoose'
+import { findRegistryTenantByDbName } from '@server/tenant/registry-auth'
+import { logger } from '@server/utils/logger'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const BULK_UNSUBSCRIBE_MAX_EMAILS = 10_000
@@ -27,7 +31,8 @@ export function normalizeBulkUnsubscribeEmail(raw: unknown): string | null {
  */
 export async function bulkUnsubscribeContactsByEmail(
   tenantConn: Connection,
-  emailsInput: unknown[]
+  emailsInput: unknown[],
+  options?: { tenantId?: string; tenantDbName?: string }
 ): Promise<BulkUnsubscribeByEmailResult> {
   const invalid: string[] = []
   const unique = new Set<string>()
@@ -58,6 +63,7 @@ export async function bulkUnsubscribeContactsByEmail(
   }>
 
   const foundEmails = new Set<string>()
+  const newlyUnsubscribedEmails: string[] = []
   let updated = 0
   let alreadyUnsubscribed = 0
 
@@ -73,6 +79,41 @@ export async function bulkUnsubscribeContactsByEmail(
     await Contact.updateOne({ _id: contact._id }, { $set: { isUnsubscribe: true } })
     await onContactUnsubscribed(tenantConn, contact._id)
     updated += 1
+    if (email) newlyUnsubscribedEmails.push(email)
+  }
+
+  const tenantDbName =
+    options?.tenantDbName?.trim() ||
+    (typeof tenantConn.name === 'string' ? tenantConn.name.trim() : '')
+  if (tenantDbName && newlyUnsubscribedEmails.length > 0) {
+    let tenantId = options?.tenantId?.trim() || undefined
+    if (!tenantId) {
+      try {
+        const registry = await getRegistryConnection()
+        const row = await findRegistryTenantByDbName(registry, tenantDbName)
+        if (row?.tenantId) tenantId = row.tenantId
+      } catch (err) {
+        logger.warn('bulk unsubscribe ratesheet.unsubscribed tenantId lookup failed', {
+          tenantDbName,
+          err: err instanceof Error ? err.message : String(err)
+        })
+      }
+    }
+    for (const email of newlyUnsubscribedEmails) {
+      void publishRatesheetUnsubscribedToKafka({
+        tenantDbName,
+        tenantId,
+        email,
+        reason: 'marketing_bulk_unsubscribe',
+        source: 'new-marketing-bulk-unsubscribe'
+      }).catch((err) => {
+        logger.warn('Failed to publish ratesheet.unsubscribed after bulk unsub', {
+          tenantDbName,
+          email,
+          err: err instanceof Error ? err.message : String(err)
+        })
+      })
+    }
   }
 
   return {

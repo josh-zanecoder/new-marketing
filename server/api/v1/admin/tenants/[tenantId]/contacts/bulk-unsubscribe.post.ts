@@ -43,6 +43,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Tenant not found' })
   }
 
-  const result = await bulkUnsubscribeContactsByEmail(tenantConn, body.emails)
+  const result = await bulkUnsubscribeContactsByEmail(tenantConn, body.emails, {
+    tenantId,
+    tenantDbName: tenantConn.name
+  })
   return { ok: true, ...result }
 })

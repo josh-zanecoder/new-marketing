@@ -3,8 +3,11 @@ import {
   namesFromContactPayload,
   type ContactDeletedEventEnvelope,
   type ContactEventEnvelope,
-  type ContactPayload
+  type ContactPayload,
+  type ContactUnsubscribedEventEnvelope
 } from '../schemas/events/contactEvents'
+import { unsubscribeContactsOnBounce } from '@server/utils/contact/unsubscribeContactsOnBounce'
+import { logger } from '../../utils/logger'
 import { getTenantClientModels } from '../../models/tenant/tenantClientModels'
 import { getTenantConnectionForInboundEvent } from '../tenantConnection'
 import {
@@ -519,4 +522,41 @@ export async function finalizeInboundSyncRecipientLists(params: {
   return rebuildAllNonStaticRecipientListsForTenant(tenantConn as Connection, {
     heartbeat: params.heartbeat
   })
+}
+
+/**
+ * CRM ratesheet bounce unsubscribe → flip marketing Contact.isUnsubscribe by email.
+ * Idempotent; no-ops when the email is unknown or already unsubscribed.
+ */
+export async function unsubscribeContactFromUnsubscribedEvent(
+  event: ContactUnsubscribedEventEnvelope
+): Promise<{ updated: number; alreadyUnsubscribed: number; notFound: boolean; skipped: boolean }> {
+  const tenantConn = await getTenantConnectionForInboundEvent(event.tenantId, {
+    eventType: event.eventType,
+    dBname: event.dBname
+  })
+  if (!tenantConn) {
+    logger.warn('contact.unsubscribed skipped (tenant connection not found)', {
+      tenantId: event.tenantId,
+      dBname: event.dBname,
+      email: event.payload.email
+    })
+    return { updated: 0, alreadyUnsubscribed: 0, notFound: true, skipped: true }
+  }
+
+  const reason = String(event.payload.reason || 'ratesheet_bounce').trim() || 'ratesheet_bounce'
+  const result = await unsubscribeContactsOnBounce(tenantConn, {
+    email: event.payload.email,
+    reason,
+    messageId: event.payload.messageId
+  })
+  logger.info('contact.unsubscribed applied', {
+    tenantId: event.tenantId,
+    dBname: event.dBname,
+    email: event.payload.email,
+    reason,
+    source: event.payload.source || '',
+    ...result
+  })
+  return result
 }

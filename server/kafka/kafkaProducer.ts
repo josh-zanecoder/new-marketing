@@ -24,7 +24,8 @@ import {
   CONTACT_EVENT_TYPES,
   namesFromContactPayload,
   parseContactDeletedEventEnvelope,
-  parseContactEventEnvelope
+  parseContactEventEnvelope,
+  parseContactUnsubscribedEventEnvelope
 } from './schemas/events/contactEvents'
 import { formatContactFullName } from '../utils/contactPersonName'
 import {
@@ -37,6 +38,7 @@ import {
   createContactFromCreatedEvent,
   finalizeInboundSyncRecipientLists,
   softDeleteContactFromDeletedEvent,
+  unsubscribeContactFromUnsubscribedEvent,
   updateContactFromUpdatedEvent,
   upsertContactsFromSyncSnapshot
 } from './handlers/inboundContacts'
@@ -1105,6 +1107,24 @@ async function handleInboundKafkaMessage(
         dBname: emailTplDeleted.dBname,
         externalId: emailTplDeleted.payload.externalId
       })
+      break
+    }
+    case CONTACT_EVENT_TYPES.UNSUBSCRIBED: {
+      const unsubEvent = parseContactUnsubscribedEventEnvelope(parsed)
+      if (!unsubEvent) {
+        logger.warn('Invalid contact.unsubscribed schema', { parsed })
+        break
+      }
+      logger.info('Kafka inbound contact.unsubscribed', {
+        occurredAt: unsubEvent.occurredAt,
+        dBname: unsubEvent.dBname,
+        tenantId: unsubEvent.tenantId,
+        email: unsubEvent.payload.email,
+        reason: unsubEvent.payload.reason || '',
+        source: unsubEvent.payload.source || '',
+        event: unsubEvent.payload.event || ''
+      })
+      await unsubscribeContactFromUnsubscribedEvent(unsubEvent)
       break
     }
     default:

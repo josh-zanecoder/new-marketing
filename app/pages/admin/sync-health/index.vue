@@ -47,6 +47,7 @@ type AdminSyncHealthResponse = {
   tenants: AdminSyncHealthTenantRow[]
   logs: MarketingSyncHealthLog[]
   dlq: MarketingSyncDlqEntry[]
+  alertEmails?: string[]
 }
 
 type HistoryKindFilter = 'all' | 'sync' | 'contact' | 'error' | 'dlq'
@@ -87,6 +88,10 @@ const showRunbookTips = ref(false)
 const actionPending = ref(false)
 const actionError = ref('')
 const dlqActionId = ref<string | null>(null)
+const alertEmailsInput = ref('')
+const alertEmailsSaving = ref(false)
+const alertEmailsMessage = ref('')
+const alertEmailsError = ref('')
 
 const {
   datePreset,
@@ -153,6 +158,46 @@ const { data, pending, error, refresh } = await useAsyncData('admin-sync-health'
     credentials: 'include'
   })
 })
+
+watch(
+  () => data.value?.alertEmails,
+  (emails) => {
+    if (alertEmailsSaving.value) return
+    alertEmailsInput.value = (emails ?? []).join(', ')
+  },
+  { immediate: true }
+)
+
+async function saveAlertEmails() {
+  if (alertEmailsSaving.value) return
+  alertEmailsSaving.value = true
+  alertEmailsMessage.value = ''
+  alertEmailsError.value = ''
+  try {
+    const res = await $fetch<{ alertEmails: string[] }>('/api/v1/admin/sync-health/alert-emails', {
+      method: 'PUT',
+      credentials: 'include',
+      body: { emails: alertEmailsInput.value }
+    })
+    alertEmailsInput.value = (res.alertEmails ?? []).join(', ')
+    if (data.value) data.value.alertEmails = res.alertEmails ?? []
+    alertEmailsMessage.value =
+      (res.alertEmails?.length || 0) > 0
+        ? `Saved ${res.alertEmails.length} recipient${res.alertEmails.length === 1 ? '' : 's'}.`
+        : 'Cleared alert recipients.'
+  } catch (err) {
+    const dataMessage =
+      err && typeof err === 'object' && 'data' in err
+        ? (err as { data?: { statusMessage?: string; message?: string } }).data
+        : undefined
+    alertEmailsError.value =
+      dataMessage?.statusMessage ||
+      dataMessage?.message ||
+      (err instanceof Error ? err.message : 'Failed to save alert emails')
+  } finally {
+    alertEmailsSaving.value = false
+  }
+}
 
 watch(
   [statusFilter, tenantSearch, historySearch, historyKindFilter, logLevelFilter, datePreset, customDateFrom, customDateTo, autoRefresh],
@@ -864,6 +909,42 @@ async function generatePdfReport() {
       class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
     >
       {{ actionError }}
+    </div>
+
+    <div class="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 sm:px-5">
+      <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-900">Failure alert emails</h2>
+          <p class="mt-0.5 text-xs text-slate-500">
+            Comma-separated. Notified on sync errors, DLQ, and worker failures (max once/hour per
+            similar failure).
+          </p>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          v-model="alertEmailsInput"
+          type="text"
+          placeholder="ops@example.com, alerts@example.com"
+          class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2"
+          :disabled="alertEmailsSaving || pending"
+          @keydown.enter.prevent="() => void saveAlertEmails()"
+        >
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="alertEmailsSaving || pending"
+          @click="() => void saveAlertEmails()"
+        >
+          {{ alertEmailsSaving ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+      <p v-if="alertEmailsMessage" class="mt-2 text-xs font-medium text-emerald-700">
+        {{ alertEmailsMessage }}
+      </p>
+      <p v-if="alertEmailsError" class="mt-2 text-xs font-medium text-rose-700">
+        {{ alertEmailsError }}
+      </p>
     </div>
 
     <div

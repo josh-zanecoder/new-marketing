@@ -2,6 +2,7 @@ export const CONTACT_EVENT_TYPES = {
   CREATED: 'contact.created',
   UPDATED: 'contact.updated',
   DELETED: 'contact.deleted',
+  UNSUBSCRIBED: 'contact.unsubscribed',
 } as const
 
 export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[keyof typeof CONTACT_EVENT_TYPES]
@@ -71,6 +72,25 @@ export type ContactDeletedEventEnvelope = {
   payload: ContactDeletedPayload
 }
 
+/** CRM ratesheet bounce (or similar) — unsubscribe marketing contacts by email. */
+export type ContactUnsubscribedPayload = {
+  email: string
+  tenantId: string
+  dBname: string
+  reason?: string
+  source?: string
+  event?: string
+  messageId?: string
+}
+
+export type ContactUnsubscribedEventEnvelope = {
+  eventType: typeof CONTACT_EVENT_TYPES.UNSUBSCRIBED
+  occurredAt: string
+  dBname: string
+  tenantId: string
+  payload: ContactUnsubscribedPayload
+}
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
 }
@@ -87,6 +107,22 @@ export function parseContactDeletedEventEnvelope(input: unknown): ContactDeleted
   if (typeof p.tenantId !== 'string') return null
   if (typeof p.dBname !== 'string') return null
   return input as ContactDeletedEventEnvelope
+}
+
+export function parseContactUnsubscribedEventEnvelope(
+  input: unknown
+): ContactUnsubscribedEventEnvelope | null {
+  if (!isObject(input)) return null
+  if (input.eventType !== CONTACT_EVENT_TYPES.UNSUBSCRIBED) return null
+  if (typeof input.occurredAt !== 'string') return null
+  if (typeof input.dBname !== 'string') return null
+  if (typeof input.tenantId !== 'string') return null
+  if (!isObject(input.payload)) return null
+  const p = input.payload
+  if (typeof p.email !== 'string' || !p.email.trim()) return null
+  if (typeof p.tenantId !== 'string') return null
+  if (typeof p.dBname !== 'string') return null
+  return input as ContactUnsubscribedEventEnvelope
 }
 
 export function parseContactEventEnvelope(input: unknown): ContactEventEnvelope | null {

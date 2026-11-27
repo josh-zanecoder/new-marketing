@@ -79,6 +79,7 @@ const handoffResponseExample = `{
 const crmEventTypes = `contact.created
 contact.updated
 contact.deleted
+contact.unsubscribed
 marketing.email_template.created
 marketing.email_template.updated
 marketing.email_template.deleted
@@ -199,6 +200,7 @@ const syncRequestedExample = `{
         <ul>
           <li><code>contact.created</code> / <code>contact.updated</code> — full row in <code>payload</code></li>
           <li><code>contact.deleted</code> — <code>externalId</code>, <code>tenantId</code>, <code>dBname</code>; optional <code>metadata</code></li>
+          <li><code>contact.unsubscribed</code> — <code>email</code>, <code>tenantId</code>, <code>dBname</code>; optional <code>reason</code> / <code>source</code> / <code>messageId</code> (e.g. CRM ratesheet bounce → campaign opt-out)</li>
         </ul>
         <p class="mt-2">
           Payload fields include <code>externalId</code>, name parts, <code>email</code>, <code>phone</code>, <code>company</code>,

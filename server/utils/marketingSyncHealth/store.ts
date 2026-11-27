@@ -418,6 +418,16 @@ export async function recordMarketingSyncDlq(input: {
     kafkaTopic,
     at
   })
+
+  const { voidNotifyMarketingSyncHealthFailure } = await import('./notifyFailure')
+  voidNotifyMarketingSyncHealthFailure({
+    kind: 'dlq',
+    error,
+    tenantId,
+    dbName,
+    eventType,
+    kafkaTopic
+  })
 }
 
 export async function recordMarketingSyncProgress(input: {
@@ -707,6 +717,13 @@ export async function recordMarketingSyncError(input: {
       kafkaTopic: input.kafkaTopic,
       at
     })
+    const { voidNotifyMarketingSyncHealthFailure } = await import('./notifyFailure')
+    voidNotifyMarketingSyncHealthFailure({
+      kind: 'worker',
+      error,
+      eventType: input.eventType,
+      kafkaTopic: input.kafkaTopic
+    })
     return
   }
 
@@ -760,6 +777,16 @@ export async function recordMarketingSyncError(input: {
     kafkaTopic,
     at
   })
+
+  const { voidNotifyMarketingSyncHealthFailure } = await import('./notifyFailure')
+  voidNotifyMarketingSyncHealthFailure({
+    kind: 'error',
+    error,
+    tenantId,
+    dbName,
+    eventType,
+    kafkaTopic
+  })
 }
 
 export async function touchMarketingSyncWorkerHeartbeat(extra?: {
@@ -793,7 +820,7 @@ export async function listMarketingSyncHealthDocs(): Promise<MarketingSyncHealth
   const registry = await getRegistryConnection()
   const rows = await registry
     .collection(MARKETING_SYNC_HEALTH_COLLECTION)
-    .find({ _kind: { $ne: 'worker' } })
+    .find({ _kind: { $nin: ['worker', 'settings'] } })
     .toArray()
 
   const syncingStaleMs = 2 * 60 * 60 * 1000
