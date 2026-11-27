@@ -243,6 +243,10 @@ export function useTenantMarketingApi(options?: { adminTenantDb?: MaybeRef<strin
     return $fetch<{
       loanOfficers: { email: string; name: string }[]
       statuses: { value: string; label: string; count: number }[]
+      /** `lendingqb` when the tenant's LendingQB loan-status toggle drives the categories. */
+      source?: 'lendingqb' | 'borrower-status'
+      /** LendingQB statuses that match no category (only with the toggle ON). */
+      unmappedLoanStatuses?: { status: string; count: number }[]
     }>('/api/v1/tenant/recipient-list/audience-options', {
       ...tenantFetchInit(),
       query: { q: q.trim() || undefined }

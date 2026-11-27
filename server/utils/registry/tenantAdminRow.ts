@@ -10,6 +10,7 @@ import {
 } from '~~/shared/campaignFromAddressMode'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantAdvancedRecipientFiltering } from '~~/shared/allowTenantAdvancedRecipientFiltering'
+import { parseAllowTenantLendingQbStatus } from '~~/shared/allowTenantLendingQbStatus'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
@@ -55,6 +56,10 @@ export function parseRegistryAllowTenantAdvancedRecipientFiltering(
   doc: RegistryTenantDoc
 ): boolean {
   return parseAllowTenantAdvancedRecipientFiltering(doc.allowTenantAdvancedRecipientFiltering)
+}
+
+export function parseRegistryAllowTenantLendingQbStatus(doc: RegistryTenantDoc): boolean {
+  return parseAllowTenantLendingQbStatus(doc.allowTenantLendingQbStatus)
 }
 
 export function parseRegistryAllowTenantLoRecipientLists(doc: RegistryTenantDoc): boolean {
@@ -381,6 +386,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
   const allowTenantEditSender = parseRegistryAllowTenantEditSender(doc)
   const allowTenantAdvancedRecipientFiltering =
     parseRegistryAllowTenantAdvancedRecipientFiltering(doc)
+  const allowTenantLendingQbStatus = parseRegistryAllowTenantLendingQbStatus(doc)
   const allowTenantLoRecipientLists = parseRegistryAllowTenantLoRecipientLists(doc)
   const allowTenantTemplateApproval = parseRegistryAllowTenantTemplateApproval(doc)
   const allowTenantImages = parseRegistryAllowTenantImages(doc)
@@ -412,6 +418,7 @@ export function toTenantAdminRow(doc: RegistryTenantDoc): TenantAdminRow | null 
     campaignFromAddressMode,
     allowTenantEditSender,
     allowTenantAdvancedRecipientFiltering,
+    allowTenantLendingQbStatus,
     allowTenantLoRecipientLists,
     allowTenantTemplateApproval,
     allowTenantImages,

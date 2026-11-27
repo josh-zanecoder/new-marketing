@@ -37,6 +37,14 @@ export type ContactPayload = {
   status?: string
   /** Optional stage from source system (pipeline stage, etc.). */
   stage?: string
+  /**
+   * LendingQB loan status exactly as the LOS reports it (never rewritten). Optional and only sent
+   * when the CRM learns a new loan status; ordinary contact updates omit it. Invalid values are
+   * ignored by the consumer instead of rejecting the whole event.
+   */
+  loanStatus?: string
+  /** ISO time the loan status changed in the CRM. Used to ignore out-of-order events. */
+  loanStatusUpdatedAt?: string
   channel: string | null
 }
 

@@ -102,6 +102,14 @@
           class="w-full shrink-0 lg:w-[14rem]"
         />
         <TenantFilterSelect
+          v-if="showLoanStatusColumn"
+          id="contacts-loan-status-filter"
+          v-model="loanStatusFilter"
+          label="Loan status"
+          :options="loanStatusFilterOptions"
+          class="w-full shrink-0 lg:w-[14rem]"
+        />
+        <TenantFilterSelect
           v-if="brokerRoleFilterOptions.length > 1"
           id="contacts-broker-role-filter"
           v-model="brokerRoleFilter"
@@ -252,6 +260,23 @@
             {{ row.primaryTypeLabel }}
           </span>
 
+          <div
+            v-if="showLoanStatusColumn"
+            class="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3"
+          >
+            <span class="text-xs font-medium text-slate-500">Loan status</span>
+            <span
+              v-if="row.loanStatus"
+              class="inline-flex max-w-[14rem] items-center gap-1.5 truncate rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset"
+              :class="loanStatusBadgeClass(row.loanStatusCategory)"
+              :title="loanStatusTitle(row)"
+            >
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="loanStatusDotClass(row.loanStatusCategory)" />
+              <span class="truncate">{{ row.loanStatus }}</span>
+            </span>
+            <span v-else class="text-xs text-slate-400">—</span>
+          </div>
+
           <div class="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
             <span class="text-xs font-medium text-slate-500">Subscription</span>
             <div class="flex items-center gap-2">
@@ -288,21 +313,32 @@
             <tr>
               <th
                 scope="col"
-                class="w-[18%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pl-5"
+                :class="showLoanStatusColumn ? 'w-[15%]' : 'w-[18%]'"
+                class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:pl-5"
               >
                 Name
               </th>
               <th
                 scope="col"
-                class="w-[24%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                :class="showLoanStatusColumn ? 'w-[18%]' : 'w-[24%]'"
+                class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
               >
                 Email
               </th>
               <th
                 scope="col"
-                class="w-[16%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                :class="showLoanStatusColumn ? 'w-[11%]' : 'w-[16%]'"
+                class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
               >
                 Types
+              </th>
+              <th
+                v-if="showLoanStatusColumn"
+                scope="col"
+                class="w-[22%] min-w-[11rem] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                data-testid="contacts-loan-status-header"
+              >
+                Loan status
               </th>
               <th
                 scope="col"
@@ -313,7 +349,8 @@
               </th>
               <th
                 scope="col"
-                class="hidden w-[14%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell"
+                :class="showLoanStatusColumn ? 'w-[9%]' : 'w-[14%]'"
+                class="hidden px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 xl:table-cell"
               >
                 Company
               </th>
@@ -325,7 +362,8 @@
               </th>
               <th
                 scope="col"
-                class="hidden w-[12%] px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 2xl:table-cell"
+                :class="showLoanStatusColumn ? 'w-[8%]' : 'w-[12%]'"
+                class="hidden px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 2xl:table-cell"
               >
                 Broker role
               </th>
@@ -375,6 +413,28 @@
                 >
                   {{ row.primaryTypeLabel }}
                 </span>
+              </td>
+              <td v-if="showLoanStatusColumn" class="px-3 py-3" data-testid="contacts-loan-status-cell">
+                <div v-if="row.loanStatus" class="flex min-w-0 flex-col items-start gap-0.5">
+                  <span
+                    class="inline-flex max-w-full items-center gap-1.5 rounded-2xl px-2.5 py-0.5 text-[11px] font-semibold leading-tight tracking-wide ring-1 ring-inset"
+                    :class="loanStatusBadgeClass(row.loanStatusCategory)"
+                    :title="loanStatusTitle(row)"
+                  >
+                    <span
+                      class="h-1.5 w-1.5 shrink-0 rounded-full"
+                      :class="loanStatusDotClass(row.loanStatusCategory)"
+                    />
+                    <span class="min-w-0 break-words">{{ row.loanStatusCategoryLabel || row.loanStatus }}</span>
+                  </span>
+                  <span
+                    v-if="row.loanStatusCategoryLabel"
+                    class="max-w-full break-words pl-1 text-[10px] font-medium leading-tight text-slate-400"
+                  >
+                    {{ row.loanStatus }}
+                  </span>
+                </div>
+                <span v-else class="text-slate-400">—</span>
               </td>
               <td class="px-3 py-3">
                 <div class="flex items-center gap-1.5">
@@ -590,7 +650,33 @@
                     CRM details
                   </h3>
                   <dl class="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div v-if="hasDetailValue(viewContactDetail.status)">
+                    <div v-if="showLoanStatusColumn">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Loan status (LendingQB)</dt>
+                      <dd v-if="hasDetailValue(viewContactDetail.loanStatus)" class="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900">
+                        <span
+                          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset"
+                          :class="loanStatusBadgeClass(viewContactDetail.loanStatusCategory)"
+                        >
+                          <span
+                            class="h-1.5 w-1.5 shrink-0 rounded-full"
+                            :class="loanStatusDotClass(viewContactDetail.loanStatusCategory)"
+                          />
+                          {{ viewContactDetail.loanStatusCategoryLabel || viewContactDetail.loanStatus }}
+                        </span>
+                        <span
+                          v-if="viewContactDetail.loanStatusCategoryLabel"
+                          class="text-xs font-medium text-slate-500"
+                        >
+                          {{ viewContactDetail.loanStatus }}
+                        </span>
+                      </dd>
+                      <dd v-else class="mt-1 text-sm text-slate-400">—</dd>
+                    </div>
+                    <div v-if="showLoanStatusColumn && viewContactDetail.loanStatusUpdatedAt">
+                      <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Loan status updated</dt>
+                      <dd class="mt-1 text-sm font-medium text-slate-900">{{ formatDate(viewContactDetail.loanStatusUpdatedAt) }}</dd>
+                    </div>
+                    <div v-if="!showLoanStatusColumn && hasDetailValue(viewContactDetail.status)">
                       <dt class="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-slate-400">Status</dt>
                       <dd class="mt-1 text-sm font-medium text-slate-900">{{ viewContactDetail.status }}</dd>
                     </div>
@@ -1100,6 +1186,7 @@
 
 <script setup lang="ts">
 import { brokerRoleLabels } from '~~/shared/utils/recipientFilterContactField'
+import { MARKETING_STATUS_CATEGORIES } from '~~/shared/marketingStatusCategories'
 import { contactTypeKeyBadgeClass } from '~~/shared/utils/contactTypeBadgeClass'
 import { normalizeContactCounty, formatContactAddress } from '~~/shared/utils/contactAddress'
 import { formatUsPhoneInput, formatUsPhoneNumber, isUsPhoneInputKeyAllowed } from '~~/shared/utils/usNumberFormatter'
@@ -1516,6 +1603,62 @@ const contactTypeFilter = ref('all')
 const subscriptionFilter = ref<'all' | 'subscribed' | 'unsubscribed'>('all')
 const brokerRoleFilter = ref('all')
 const ownerFilter = ref('all')
+/** `'all'`, a LendingQB category key, or `'__none__'`. */
+const loanStatusFilter = ref('all')
+
+const showLoanStatusColumn = computed(() => data.value?.lendingQbEnabled === true)
+
+const LOAN_STATUS_FILTER_NONE = '__none__'
+
+const loanStatusFilterOptions = computed(() => {
+  const options: { value: string; label: string }[] = [{ value: 'all', label: 'All loan statuses' }]
+  for (const cat of MARKETING_STATUS_CATEGORIES) {
+    options.push({ value: cat.key, label: cat.label })
+  }
+  options.push({ value: LOAN_STATUS_FILTER_NONE, label: 'No loan status' })
+  return options
+})
+
+function loanStatusBadgeClass(category: string | null | undefined): string {
+  switch (category) {
+    case 'new_active_leads':
+      return 'bg-sky-50 text-sky-800 ring-sky-200/80'
+    case 'active_borrowers':
+      return 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+    case 'past_clients':
+      return 'bg-violet-50 text-violet-800 ring-violet-200/80'
+    case 'inactive_leads':
+      return 'bg-slate-100 text-slate-700 ring-slate-200/80'
+    case 'on_hold':
+      return 'bg-amber-50 text-amber-800 ring-amber-200/80'
+    default:
+      return 'bg-amber-50/70 text-amber-900 ring-amber-200/80'
+  }
+}
+
+function loanStatusDotClass(category: string | null | undefined): string {
+  switch (category) {
+    case 'new_active_leads':
+      return 'bg-sky-500'
+    case 'active_borrowers':
+      return 'bg-emerald-500'
+    case 'past_clients':
+      return 'bg-violet-500'
+    case 'inactive_leads':
+      return 'bg-slate-400'
+    case 'on_hold':
+      return 'bg-amber-500'
+    default:
+      return 'bg-amber-400'
+  }
+}
+
+function loanStatusTitle(row: TenantContactListRow): string {
+  if (!row.loanStatus) return ''
+  return row.loanStatusCategoryLabel
+    ? `${row.loanStatus} · ${row.loanStatusCategoryLabel}`
+    : row.loanStatus
+}
 
 const brokerRoleFilterOptions = computed(() => {
   const roles = [...new Set((data.value?.contacts ?? []).flatMap((row) => brokerRoleLabels(row.brokerRole)))]
@@ -1657,6 +1800,14 @@ const filteredContacts = computed(() => {
     const owner = ownerFilter.value.toLowerCase()
     list = list.filter((row) => String(row.ownerEmail ?? '').trim().toLowerCase() === owner)
   }
+  if (showLoanStatusColumn.value && loanStatusFilter.value !== 'all') {
+    const target = loanStatusFilter.value
+    if (target === LOAN_STATUS_FILTER_NONE) {
+      list = list.filter((row) => !row.loanStatus)
+    } else {
+      list = list.filter((row) => row.loanStatusCategory === target)
+    }
+  }
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((row) => {
@@ -1670,6 +1821,7 @@ const filteredContacts = computed(() => {
       row.priority,
       row.brokerRole,
       row.ownerEmail,
+      ...(showLoanStatusColumn.value ? [row.loanStatus, row.loanStatusCategoryLabel] : []),
       row.primaryTypeLabel,
       ...(row.contactType ?? []),
       ...(row.contactTypeLabels ?? []),
@@ -1719,7 +1871,7 @@ const paginationMeta = computed(() => {
   return { from, to, total }
 })
 
-watch([searchQuery, contactTypeFilter, subscriptionFilter, brokerRoleFilter, ownerFilter], () => {
+watch([searchQuery, contactTypeFilter, subscriptionFilter, brokerRoleFilter, ownerFilter, loanStatusFilter], () => {
   currentPage.value = 1
 })
 
@@ -2064,7 +2216,8 @@ function normalizeContactsPayload(res: TenantContactsListPayload): TenantContact
     contacts,
     contactTypes: res.contactTypes ?? [],
     total: res.total ?? 0,
-    truncated: res.truncated ?? false
+    truncated: res.truncated ?? false,
+    lendingQbEnabled: res.lendingQbEnabled === true
   }
 }
 
@@ -2085,6 +2238,9 @@ function applyContactsPayload(res: TenantContactsListPayload) {
     contactTypeFilter.value === KIND_FILTER_NONE
   ) {
     contactTypeFilter.value = 'all'
+  }
+  if (!data.value.lendingQbEnabled && loanStatusFilter.value !== 'all') {
+    loanStatusFilter.value = 'all'
   }
 }
 

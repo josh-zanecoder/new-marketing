@@ -4,6 +4,9 @@ import type { ContactLean } from '@server/types/tenant/contact.model'
 import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { isLendingQbStatusEnabledForConnection } from '@server/utils/recipient/lendingQbStatusFeature'
+import { lendingQbCategoryOf, lendingQbCategoryOfKey } from '~~/shared/lendingQbStatusCategories'
+import { marketingStatusCategoryLabel } from '~~/shared/marketingStatusCategories'
 
 type ContactTypeLean = {
   key?: string
@@ -43,11 +46,12 @@ export default defineEventHandler(async (event) => {
     auth
   )
 
-  const [doc, typeDocs] = await Promise.all([
+  const [doc, typeDocs, lendingQbEnabled] = await Promise.all([
     Contact.findOne(filter).lean<ContactLean | null>(),
     ContactType.find({ enabled: { $ne: false } })
       .sort({ sortOrder: 1, key: 1 })
-      .lean<ContactTypeLean[]>()
+      .lean<ContactTypeLean[]>(),
+    isLendingQbStatusEnabledForConnection(conn)
   ])
 
   if (!doc) {
@@ -68,6 +72,13 @@ export default defineEventHandler(async (event) => {
     doc.metadata && typeof doc.metadata === 'object' && !Array.isArray(doc.metadata)
       ? (doc.metadata as Record<string, unknown>)
       : {}
+  const loanStatus = lendingQbEnabled && typeof doc.loanStatus === 'string' ? doc.loanStatus.trim() : ''
+  const loanStatusCategory = loanStatus
+    ? (lendingQbCategoryOfKey(doc.loanStatusKey) ?? lendingQbCategoryOf(loanStatus))
+    : null
+  const loanStatusCategoryLabel = loanStatusCategory
+    ? marketingStatusCategoryLabel(loanStatusCategory)
+    : ''
 
   return {
     contact: {
@@ -86,6 +97,14 @@ export default defineEventHandler(async (event) => {
       channel: doc.channel ?? '',
       status: doc.status ?? '',
       stage: doc.stage ?? '',
+      ...(lendingQbEnabled
+        ? {
+            loanStatus,
+            loanStatusCategory,
+            loanStatusCategoryLabel,
+            loanStatusUpdatedAt: doc.loanStatusUpdatedAt?.toISOString?.() ?? null
+          }
+        : {}),
       contactProfile: doc.contactProfile ?? null,
       address: {
         street: doc.address?.street ?? '',

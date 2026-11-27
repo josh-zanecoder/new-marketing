@@ -3,6 +3,9 @@ import { getTenantConnectionFromEvent } from '@server/tenant/connection'
 import { dedupeContactsByEmail } from '@server/utils/contact/dedupeContactsByEmail'
 import { contactFirstLastFromDoc, formatContactFullName } from '@server/utils/contactPersonName'
 import { mergeTenantOwnerEmailScopeFilter } from '@server/utils/contactOwnerFilter'
+import { isLendingQbStatusEnabledForConnection } from '@server/utils/recipient/lendingQbStatusFeature'
+import { lendingQbCategoryOf, lendingQbCategoryOfKey } from '~~/shared/lendingQbStatusCategories'
+import { marketingStatusCategoryLabel } from '~~/shared/marketingStatusCategories'
 
 type ContactDoc = {
   _id: unknown
@@ -17,6 +20,9 @@ type ContactDoc = {
   phone?: string
   company?: string
   channel?: string
+  loanStatus?: string
+  loanStatusKey?: string
+  loanStatusUpdatedAt?: Date
   metadata?: Record<string, unknown>
   isUnsubscribe?: boolean
   address?: {
@@ -59,7 +65,7 @@ export default defineEventHandler(async (event) => {
   const auth = event.context.auth as unknown
   const filter = mergeTenantOwnerEmailScopeFilter({ deletedAt: null }, auth)
 
-  const [total, raw, typeDocs] = await Promise.all([
+  const [total, raw, typeDocs, lendingQbEnabled] = await Promise.all([
     Contact.countDocuments(filter),
     Contact.find(filter)
       .sort({ updatedAt: -1 })
@@ -68,7 +74,8 @@ export default defineEventHandler(async (event) => {
     ContactType.find({ enabled: { $ne: false } })
       .sort({ sortOrder: 1, key: 1 })
       .lean()
-      .exec()
+      .exec(),
+    isLendingQbStatusEnabledForConnection(conn)
   ])
 
   const labelByKey = new Map<string, string>()
@@ -90,6 +97,13 @@ export default defineEventHandler(async (event) => {
     const { firstName, lastName } = contactFirstLastFromDoc(c)
     const typeKeys = effectiveContactTypeKeys(c)
     const primaryKey = typeKeys[0] || ''
+    const loanStatus = lendingQbEnabled && typeof c.loanStatus === 'string' ? c.loanStatus.trim() : ''
+    const loanStatusCategory = loanStatus
+      ? (lendingQbCategoryOfKey(c.loanStatusKey) ?? lendingQbCategoryOf(loanStatus))
+      : null
+    const loanStatusCategoryLabel = loanStatusCategory
+      ? marketingStatusCategoryLabel(loanStatusCategory)
+      : ''
     return {
     id: String(c._id),
     externalId: c.externalId ?? '',
@@ -108,6 +122,14 @@ export default defineEventHandler(async (event) => {
     ownerEmail: ownerRaw,
     priority: typeof meta.priority === 'string' ? meta.priority.trim() : '',
     brokerRole: typeof meta.brokerRole === 'string' ? meta.brokerRole.trim() : '',
+    ...(lendingQbEnabled
+      ? {
+          loanStatus,
+          loanStatusCategory,
+          loanStatusCategoryLabel,
+          loanStatusUpdatedAt: c.loanStatusUpdatedAt?.toISOString?.() ?? null
+        }
+      : {}),
     address: {
       street: c.address?.street ?? '',
       unit: c.address?.unit ?? '',
@@ -127,6 +149,7 @@ export default defineEventHandler(async (event) => {
     contacts,
     contactTypes,
     total: loadedAll ? contacts.length : total,
-    truncated: !loadedAll
+    truncated: !loadedAll,
+    lendingQbEnabled
   }
 })

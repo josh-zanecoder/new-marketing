@@ -35,6 +35,14 @@ export interface TenantContactListRow {
   priority?: string
   /** Member broker roles from CRM, comma-separated when there is more than one. */
   brokerRole?: string
+  /** LendingQB loan status (exact value from LOS); populated when LendingQB integration is ON. */
+  loanStatus?: string
+  /** Mapped marketing category key for `loanStatus`, or null when unmapped / absent. */
+  loanStatusCategory?: string | null
+  /** Display label for `loanStatusCategory` (empty when unmapped / absent). */
+  loanStatusCategoryLabel?: string
+  /** ISO timestamp when `loanStatus` was last updated. */
+  loanStatusUpdatedAt?: string | null
   is_unsubscribe: boolean
   address: {
     street: string
@@ -69,6 +77,8 @@ export interface TenantContactsListPayload {
   contactTypes?: TenantContactTypeOption[]
   total: number
   truncated: boolean
+  /** True when the tenant's LendingQB loan-status integration toggle is ON. */
+  lendingQbEnabled?: boolean
 }
 
 /** Contact row from GET `/api/v1/tenant/recipient-list` (picker / catalog). */

@@ -12,6 +12,7 @@ import { resolveCampaignSenderDefaultsFromDoc } from '@server/utils/campaign/res
 import type { RegistryTenantDoc } from '@server/types/registry/registryTenant.types'
 import { parseAllowTenantEditSender } from '~~/shared/allowTenantEditSender'
 import { parseAllowTenantAdvancedRecipientFiltering } from '~~/shared/allowTenantAdvancedRecipientFiltering'
+import { parseAllowTenantLendingQbStatus } from '~~/shared/allowTenantLendingQbStatus'
 import { parseAllowTenantLoRecipientLists } from '~~/shared/allowTenantLoRecipientLists'
 import { parseAllowTenantTemplateApproval } from '~~/shared/allowTenantTemplateApproval'
 import { parseAllowTenantImages } from '~~/shared/allowTenantImages'
@@ -111,6 +112,10 @@ export async function buildTenantMeResponse(event: H3Event) {
     /** When false/omitted, campaign recipient selection stays classic lists only. */
     allowTenantAdvancedRecipientFiltering: parseAllowTenantAdvancedRecipientFiltering(
       registryDoc?.allowTenantAdvancedRecipientFiltering
+    ),
+    /** When false/omitted, borrower-status categories keep the keyword rules. */
+    allowTenantLendingQbStatus: parseAllowTenantLendingQbStatus(
+      registryDoc?.allowTenantLendingQbStatus
     ),
     /** When false/omitted, recipient lists keep classic UI/behavior. */
     allowTenantLoRecipientLists,

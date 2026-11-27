@@ -446,6 +446,7 @@ async function fetchTenants() {
         campaignFromAddressMode?: 'default' | 'contact_owner'
         allowTenantEditSender?: boolean
         allowTenantAdvancedRecipientFiltering?: boolean
+        allowTenantLendingQbStatus?: boolean
         allowTenantLoRecipientLists?: boolean
         allowTenantTemplateApproval?: boolean
         allowTenantImages?: boolean
@@ -487,6 +488,7 @@ async function fetchTenants() {
         t.campaignFromAddressMode === 'contact_owner' ? 'contact_owner' : 'default',
       allowTenantEditSender: t.allowTenantEditSender === true,
       allowTenantAdvancedRecipientFiltering: t.allowTenantAdvancedRecipientFiltering === true,
+      allowTenantLendingQbStatus: t.allowTenantLendingQbStatus === true,
       allowTenantLoRecipientLists: t.allowTenantLoRecipientLists === true,
       allowTenantTemplateApproval: t.allowTenantTemplateApproval === true,
       allowTenantImages: t.allowTenantImages === true,

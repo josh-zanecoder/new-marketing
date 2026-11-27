@@ -37,6 +37,11 @@ export interface RegistryTenantDoc {
    */
   allowTenantAdvancedRecipientFiltering?: unknown
   /**
+   * When true, marketing borrower-status categories use the LendingQB loan status synced from
+   * the CRM. Missing/false → existing keyword rules on the borrower status.
+   */
+  allowTenantLendingQbStatus?: unknown
+  /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Missing/false → existing recipient-list behavior only.
    */
@@ -147,6 +152,11 @@ export interface TenantAdminRow {
    * Default false preserves classic recipient-list selection.
    */
   allowTenantAdvancedRecipientFiltering: boolean
+  /**
+   * When true, marketing borrower-status categories use the LendingQB loan status.
+   * Default false preserves the existing keyword rules.
+   */
+  allowTenantLendingQbStatus: boolean
   /**
    * When true, retail/tenant marketing may create LO-scoped recipient lists.
    * Default false preserves existing recipient-list behavior.

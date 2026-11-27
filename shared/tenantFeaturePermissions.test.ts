@@ -12,8 +12,12 @@ describe('tenant feature permissions', () => {
       'recipient-lists',
       'email-templates',
       'images',
-      'email-builder'
+      'email-builder',
+      'integrations'
     ])
+    expect(
+      groups.find((group) => group.key === 'integrations')?.permissions.map((permission) => permission.key)
+    ).toEqual(['allowTenantLendingQbStatus'])
     expect(
       groups.find((group) => group.key === 'campaigns')?.permissions.map((permission) => permission.key)
     ).toEqual(['allowTenantEditSender', 'allowTenantAdvancedRecipientFiltering'])
@@ -55,7 +59,9 @@ describe('tenant feature permissions', () => {
       allowTenantBeefreeBuilder: false,
       allowTenantTemplateBuilder: false,
       allowTenantEditText: false,
-      allowTenantResizeImage: false
+      allowTenantResizeImage: false,
+      allowTenantLendingQbStatus: false
     })
+    expect(tenantFeaturePermissionStateFrom({ allowTenantLendingQbStatus: true }).allowTenantLendingQbStatus).toBe(true)
   })
 })

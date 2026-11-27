@@ -101,6 +101,9 @@ const selectedLoanOfficers = ref<{ email: string; name: string }[]>([])
 const selectedStatuses = ref<string[]>([])
 
 const statusChoices = ref<{ value: string; label: string; count: number }[]>([])
+/** True when the tenant's LendingQB loan-status toggle drives the category counts and filter. */
+const statusFromLendingQb = ref(false)
+const unmappedLoanStatusCount = ref(0)
 const loanOfficerChoices = ref<{ email: string; name: string }[]>([])
 const loanOfficerSearch = ref('')
 let loanOfficerSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -125,6 +128,11 @@ async function loadAudienceOptions() {
   try {
     const res = await marketingApi.fetchAdvancedAudienceOptions()
     statusChoices.value = res.statuses
+    statusFromLendingQb.value = res.source === 'lendingqb'
+    unmappedLoanStatusCount.value = (res.unmappedLoanStatuses ?? []).reduce(
+      (sum, row) => sum + row.count,
+      0
+    )
     loanOfficerChoices.value = res.loanOfficers
     rememberLoanOfficers(res.loanOfficers)
   } catch {
@@ -606,6 +614,17 @@ onBeforeUnmount(() => {
         <p class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <TenantCampaignFilterIcon name="status" class="h-4 w-4 text-slate-400" />
           Borrower status
+        </p>
+        <p
+          v-if="statusFromLendingQb"
+          class="mb-2 text-xs text-slate-500"
+          data-testid="lendingqb-status-note"
+        >
+          Based on each borrower's LendingQB loan status.
+          <template v-if="unmappedLoanStatusCount > 0">
+            {{ unmappedLoanStatusCount.toLocaleString() }} contacts have a LendingQB status that is
+            not in any category yet.
+          </template>
         </p>
         <div class="flex flex-wrap gap-2">
           <button

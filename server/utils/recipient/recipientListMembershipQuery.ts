@@ -18,7 +18,7 @@ import {
   mergeTenantOwnerEmailScopeFilter
 } from '@server/utils/contactOwnerFilter'
 import { recipientListExcludedContactIds } from '@server/utils/recipient/recipientListMutation'
-import { withAudienceStatusScope } from '@server/utils/recipient/audienceStatusScope'
+import { withAudienceStatusScopeForTenant } from '@server/utils/recipient/audienceStatusScope'
 
 const MEMBER_INSERT_BATCH = 1000
 
@@ -614,7 +614,8 @@ export async function rebuildRecipientListMembers(
           )
         : mergeTenantOwnerEmailScopeFilter(contactQuery as Record<string, unknown>, auth)
   // Advanced Recipient Filtering: optional borrower-status limit stored on the list.
-  const scopedContactQuery = withAudienceStatusScope(
+  const scopedContactQuery = await withAudienceStatusScopeForTenant(
+    tenantConn,
     ownerScopedContactQuery,
     (listLean as { audienceStatuses?: unknown } | null)?.audienceStatuses
   )

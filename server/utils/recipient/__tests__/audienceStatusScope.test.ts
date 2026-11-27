@@ -43,6 +43,46 @@ describe('normalizeLoanOfficerEmails', () => {
   })
 })
 
+describe('audienceStatusClause with the LendingQB toggle', () => {
+  it('is unchanged when the toggle is off', () => {
+    expect(audienceStatusClause(['category:on_hold'], { lendingQb: false })).toEqual(
+      audienceStatusClause(['category:on_hold'])
+    )
+    expect(audienceStatusClause(['category:on_hold'])).toHaveProperty('status')
+  })
+
+  it('matches a category strictly by loanStatusKey list (no fallback to hardcoded status)', () => {
+    const clause = audienceStatusClause(['category:on_hold'], { lendingQb: true }) as {
+      $or: Array<{ loanStatusKey: { $in: string[] } }>
+    }
+    const [keyBranch] = clause.$or
+    expect(keyBranch!.loanStatusKey.$in).toEqual(
+      expect.arrayContaining(['on hold', 'loan on hold', 'suspended', 'loan suspended'])
+    )
+    expect(keyBranch!.loanStatusKey.$in).not.toContain('funded')
+    expect(JSON.stringify(clause)).not.toContain('"status"')
+  })
+
+  it('keeps exact status slugs as a plain status branch next to LendingQB categories', () => {
+    const clause = audienceStatusClause(['pre_approved', 'category:past_clients'], {
+      lendingQb: true
+    }) as { $or: Array<Record<string, unknown>> }
+    expect(clause.$or).toHaveLength(2)
+    const slug = (clause.$or[0] as { status: { $in: RegExp[] } }).status.$in[0]!
+    expect(slug.test('pre_approved')).toBe(true)
+    expect(slug.test('pre_approved_plus')).toBe(false)
+  })
+
+  it('withAudienceStatusScope ANDs the LendingQB clause onto the query', () => {
+    const base = { contactType: 'borrower' }
+    const out = withAudienceStatusScope(base, ['category:past_clients'], { lendingQb: true }) as {
+      $and: unknown[]
+    }
+    expect(out.$and[0]).toBe(base)
+    expect(out.$and[1]).toHaveProperty('$or')
+  })
+})
+
 describe('audienceStatusClause with marketing categories', () => {
   const matches = (statuses: string[], status: string) => {
     const clause = audienceStatusClause(statuses) as { status: { $in: RegExp[] } }
